@@ -1,0 +1,222 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% load static %}
+
+{% block title %}Store Analytics - {{ store.name }}{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.css" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="mb-4">Analytics for {{ store.name }}</h1>
+    
+    <!-- Period Selection -->
+    <div class="mb-4">
+        <form method="get" class="d-flex gap-2">
+            <select name="period" class="form-select" style="width: auto;" onchange="this.form.submit()">
+                <option value="24h" {% if period == '24h' %}selected{% endif %}>Last 24 Hours</option>
+                <option value="7d" {% if period == '7d' %}selected{% endif %}>Last 7 Days</option>
+                <option value="30d" {% if period == '30d' %}selected{% endif %}>Last 30 Days</option>
+                <option value="all" {% if period == 'all' %}selected{% endif %}>All Time</option>
+            </select>
+        </form>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-subtitle text-muted">Total Revenue</h6>
+                    <h2 class="card-title mb-0">KSh {{ revenue|intcomma }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-subtitle text-muted">Total Orders</h6>
+                    <h2 class="card-title mb-0">{{ orders_count|intcomma }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-subtitle text-muted">Active Listings</h6>
+                    <h2 class="card-title mb-0">{{ active_listings|intcomma }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-subtitle text-muted">Avg Order Value</h6>
+                    <h2 class="card-title mb-0">KSh {{ avg_order_value|intcomma }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Revenue Trend</h5>
+                    <canvas id="revenueTrend"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Top Categories</h5>
+                    <canvas id="categoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Metrics -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Top Performing Products</h5>
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Sales</th>
+                                    <th>Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in top_products %}
+                                <tr>
+                                    <td>{{ product.title }}</td>
+                                    <td>{{ product.sales_count }}</td>
+                                    <td>KSh {{ product.revenue|intcomma }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Recent Activity</h5>
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for activity in recent_activity %}
+                                <tr>
+                                    <td>{{ activity.timestamp|date:"M d, H:i" }}</td>
+                                    <td>{{ activity.type }}</td>
+                                    <td>{{ activity.description }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer Insights -->
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Customer Demographics</h5>
+                    <canvas id="demographicsChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Customer Locations</h5>
+                    <canvas id="locationsChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Revenue Trend Chart
+    new Chart(document.getElementById('revenueTrend'), {
+        type: 'line',
+        data: {{ revenue_trend_data|safe }},
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'top' }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+
+    // Categories Chart
+    new Chart(document.getElementById('categoryChart'), {
+        type: 'doughnut',
+        data: {{ category_data|safe }},
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+
+    // Demographics Chart
+    new Chart(document.getElementById('demographicsChart'), {
+        type: 'bar',
+        data: {{ demographics_data|safe }},
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'top' }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+
+    // Locations Chart
+    new Chart(document.getElementById('locationsChart'), {
+        type: 'pie',
+        data: {{ locations_data|safe }},
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,391 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Checkout - HomaBay Souq{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'view_cart' %}">Cart</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Checkout</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-lg border-0 mb-4">
+                <div class="card-header bg-gradient-primary text-white py-3">
+                    <h4 class="mb-0"><i class="bi bi-truck me-2"></i> Shipping Details</h4>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="checkoutForm">
+                        {% csrf_token %}
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                {{ form.non_field_errors }}
+                            </div>
+                        {% endif %}
+                        
+                        <!-- Quick Actions -->
+                        {% if has_previous_orders %}
+                        <div class="alert alert-info mb-4">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="bi bi-clock-history fs-4 me-2"></i>
+                                <div>
+                                    <h6 class="mb-0">Use Previous Shipping Address?</h6>
+                                    <p class="small mb-0">We've found your last delivery details</p>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-outline-primary btn-sm me-2" id="useLastAddress">
+                                    <i class="bi bi-check-circle me-1"></i> Use Last Address
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="enterNewAddress">
+                                    <i class="bi bi-pencil me-1"></i> Enter New Address
+                                </button>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Shipping Options -->
+                        <div class="mb-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="useAlternateShipping" name="use_alternate_shipping" {% if use_alternate_shipping %}checked{% endif %}>
+                                <label class="form-check-label" for="useAlternateShipping">
+                                    Ship to a different address?
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Personal Info Section -->
+                        <div id="personalInfoSection" {% if use_alternate_shipping %}style="display: none;"{% endif %}>
+                            <div class="alert alert-success mb-4">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-person-circle fs-4 me-2"></i>
+                                    <div>
+                                        <h6 class="mb-1">Your Account Details</h6>
+                                        <p class="mb-0 small">We'll use your account information for shipping</p>
+                                    </div>
+                                </div>
+                                <hr>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <strong>{{ request.user.get_full_name }}</strong>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>{{ request.user.email }}</strong>
+                                    </div>
+                                    <div class="col-12">
+                                        <strong>{{ request.user.phone_number|default:"No phone number" }}</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Shipping Form (Hidden by default unless alternate shipping) -->
+                        <div id="shippingFormSection" {% if not use_alternate_shipping %}style="display: none;"{% endif %}>
+                            <h6 class="mb-3">Shipping Details</h6>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    {{ form.first_name|as_crispy_field }}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    {{ form.last_name|as_crispy_field }}
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    {{ form.email|as_crispy_field }}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    {{ form.phone_number|as_crispy_field }}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Address Section (Always visible) -->
+                        <div id="addressSection" class="mt-4">
+                            <h6 class="mb-3">Delivery Address</h6>
+                            
+                            <div class="mb-3">
+                                {{ form.shipping_address|as_crispy_field }}
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    {{ form.city|as_crispy_field }}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    {{ form.postal_code|as_crispy_field }}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info mb-4">
+                            <h6><i class="bi bi-info-circle me-2"></i>Payment Information</h6>
+                            <p class="mb-0">You will be redirected to our secure payment page after placing your order. We support M-Pesa, credit/debit cards, and cash on delivery.</p>
+                        </div>
+                        
+                        <div class="form-check mb-4">
+                            <input class="form-check-input" type="checkbox" id="terms" required>
+                            <label class="form-check-label" for="terms">
+                                I agree to the <a href="#" class="text-primary">Terms of Service</a> and <a href="#" class="text-primary">Privacy Policy</a>
+                            </label>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary w-100 rounded-pill py-2" id="placeOrderBtn">
+                            <i class="bi bi-lock-fill me-2"></i> Place Order - KSh {{ cart.get_total_price }}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card shadow-lg border-0 sticky-top" style="top: 100px;">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0">Order Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="order-items mb-3">
+                        {% for item in cart.items.all %}
+                        <div class="d-flex align-items-center mb-3 pb-3 border-bottom">
+                            <img src="{{ item.listing.get_image_url }}" 
+                                 alt="{{ item.listing.title }}"
+                                 class="rounded me-3"
+                                 width="50"
+                                 height="50"
+                                 style="object-fit: cover;"
+                                 onerror="this.src='https://placehold.co/50x50/c2c2c2/1f1f1f?text=HS'">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">{{ item.listing.title }}</h6>
+                                <small class="text-muted">Qty: {{ item.quantity }}</small>
+                            </div>
+                            <span class="fw-bold text-primary">KSh {{ item.get_total_price }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Subtotal:</span>
+                        <span>KSh {{ cart.get_total_price }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Shipping:</span>
+                        <span class="text-success">Free</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3">
+                        <span>Tax:</span>
+                        <span>KSh 0.00</span>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between mb-3">
+                        <strong>Total:</strong>
+                        <strong class="text-primary fs-5">KSh {{ cart.get_total_price }}</strong>
+                    </div>
+                    
+                    <div class="alert alert-info small">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Free shipping within Homabay County. Orders are processed within 24 hours.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card shadow-sm border-0 mt-4">
+                <div class="card-body">
+                    <h6 class="mb-3">Need Help?</h6>
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="bi bi-telephone text-primary me-2"></i>
+                        <small>+254 700 123 456</small>
+                    </div>
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="bi bi-envelope text-primary me-2"></i>
+                        <small>support@homabaysouq.com</small>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-clock text-primary me-2"></i>
+                        <small>Mon-Fri: 8AM-6PM</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.bg-gradient-primary {
+    background: linear-gradient(135deg, var(--primary-gemini) 0%, #0d47a1 100%) !important;
+}
+
+.sticky-top {
+    z-index: 10;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkoutForm = document.getElementById('checkoutForm');
+    const placeOrderBtn = document.getElementById('placeOrderBtn');
+    const useAlternateShipping = document.getElementById('useAlternateShipping');
+    const personalInfoSection = document.getElementById('personalInfoSection');
+    const shippingFormSection = document.getElementById('shippingFormSection');
+    const useLastAddress = document.getElementById('useLastAddress');
+    const enterNewAddress = document.getElementById('enterNewAddress');
+    
+    // Handle shipping toggle
+    if (useAlternateShipping) {
+        useAlternateShipping.addEventListener('change', function() {
+            personalInfoSection.style.display = this.checked ? 'none' : 'block';
+            shippingFormSection.style.display = this.checked ? 'block' : 'none';
+            
+            if (!this.checked) {
+                // Reset shipping form to account info
+                const userInfo = {
+                    'id_first_name': '{{ request.user.first_name }}',
+                    'id_last_name': '{{ request.user.last_name }}',
+                    'id_email': '{{ request.user.email }}',
+                    'id_phone_number': '{{ request.user.phone_number|default:"" }}'
+                };
+                
+                Object.keys(userInfo).forEach(id => {
+                    const field = document.getElementById(id);
+                    if (field) field.value = userInfo[id];
+                });
+            }
+        });
+    }
+    
+    // Handle quick actions
+    if (useLastAddress) {
+        useLastAddress.addEventListener('click', function() {
+            // Fill in saved address
+            const savedAddress = {
+                'id_shipping_address': '{{ form.initial.shipping_address|escapejs }}',
+                'id_city': '{{ form.initial.city|escapejs }}',
+                'id_postal_code': '{{ form.initial.postal_code|escapejs }}'
+            };
+            
+            Object.keys(savedAddress).forEach(id => {
+                const field = document.getElementById(id);
+                if (field) {
+                    field.value = savedAddress[id];
+                    field.classList.remove('is-invalid');
+                }
+            });
+            
+            showToast('Previous shipping address loaded', 'success');
+        });
+    }
+    
+    if (enterNewAddress) {
+        enterNewAddress.addEventListener('click', function() {
+            // Clear address fields
+            ['id_shipping_address', 'id_city', 'id_postal_code'].forEach(id => {
+                const field = document.getElementById(id);
+                if (field) field.value = '';
+            });
+            
+            // Focus on address field
+            document.getElementById('id_shipping_address').focus();
+            showToast('Enter your new shipping address', 'info');
+        });
+    }
+    
+    checkoutForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        if (!document.getElementById('terms').checked) {
+            showToast('Please agree to the Terms of Service and Privacy Policy', 'error');
+            return;
+        }
+        
+        // Validate required fields based on shipping mode
+        let fieldsToValidate;
+        if (useAlternateShipping && useAlternateShipping.checked) {
+            fieldsToValidate = checkoutForm.querySelectorAll('[required]');
+        } else {
+            // Only validate address fields if using account info
+            fieldsToValidate = checkoutForm.querySelectorAll('#addressSection [required]');
+        }
+        
+        let isValid = true;
+        fieldsToValidate.forEach(field => {
+            if (!field.value.trim()) {
+                field.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                field.classList.remove('is-invalid');
+            }
+        });
+        
+        if (!isValid) {
+            showToast('Please fill in all required fields', 'error');
+            return;
+        }
+        
+        // Show loading state
+        placeOrderBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i> Processing...';
+        placeOrderBtn.disabled = true;
+        
+        // Submit form
+        this.submit();
+    });
+    
+    // Real-time form validation
+    const inputs = checkoutForm.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+        input.addEventListener('blur', function() {
+            if (this.value.trim() === '' && this.hasAttribute('required')) {
+                this.classList.add('is-invalid');
+            } else {
+                this.classList.remove('is-invalid');
+            }
+        });
+        
+        input.addEventListener('input', function() {
+            if (this.value.trim() !== '' && this.hasAttribute('required')) {
+                this.classList.remove('is-invalid');
+            }
+        });
+    });
+    
+    // Toast function
+    function showToast(message, type = 'info') {
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body d-flex align-items-center">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        
+        // Add to container
+        const container = document.querySelector('.toast-container');
+        container.appendChild(toast);
+        
+        // Show toast
+        const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 3000 });
+        bsToast.show();
+        
+        // Remove after hide
+        toast.addEventListener('hidden.bs.toast', () => {
+            toast.remove();
+        });
+    }
+});
+</script>
+{% endblock %}

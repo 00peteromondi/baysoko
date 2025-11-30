@@ -1,0 +1,592 @@
+{% extends 'base.html' %}
+{% load static crispy_forms_tags %}
+
+{% block title %}Login - HomaBay Souq{% endblock %}
+
+{% block extra_css %}
+<style>
+    .auth-container {
+        min-height: calc(100vh - 200px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1rem;
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.03) 0%, rgba(139, 92, 246, 0.03) 100%);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .auth-container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" preserveAspectRatio="none"><path d="M0,0 L1000,0 L1000,1000 Z" fill="rgba(59,130,246,0.02)"/></svg>');
+        background-size: cover;
+        z-index: -1;
+    }
+
+    .auth-card {
+        background: var(--card-bg);
+        border-radius: 2rem;
+        box-shadow: 0 25px 60px rgba(0, 0, 0, 0.15);
+        border: 1px solid var(--border-color);
+        overflow: hidden;
+        width: 100%;
+        max-width: 450px;
+        position: relative;
+        backdrop-filter: blur(10px);
+    }
+
+    .auth-header {
+        background: linear-gradient(135deg, var(--vibrant-blue), var(--vibrant-purple));
+        color: white;
+        padding: 3rem 2rem 2rem;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .auth-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,0 L100,0 L100,100 Z" fill="rgba(255,255,255,0.1)"/></svg>');
+        background-size: cover;
+    }
+
+    .auth-logo {
+        width: 80px;
+        height: 80px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+        backdrop-filter: blur(10px);
+        border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .auth-logo i {
+        font-size: 2.5rem;
+        color: white;
+    }
+
+    .auth-title {
+        font-size: 2rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+        font-family: 'Poppins', sans-serif;
+    }
+
+    .auth-subtitle {
+        opacity: 0.9;
+        font-size: 1.1rem;
+        font-weight: 500;
+    }
+
+    .auth-body {
+        padding: 2.5rem 2rem;
+    }
+
+    .form-group-modern {
+        margin-bottom: 1.5rem;
+        position: relative;
+    }
+
+    .form-label-modern {
+        display: block;
+        margin-bottom: 0.75rem;
+        font-weight: 600;
+        color: var(--text-color);
+        font-size: 0.95rem;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .input-group-modern {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .input-modern {
+        width: 100%;
+        padding: 1rem 1.25rem;
+        border: 2px solid rgba(var(--border-color-rgb), 0.3);
+        border-radius: 12px;
+        background: var(--input-bg);
+        color: var(--text-color);
+        font-size: 1rem;
+        transition: all 0.3s ease;
+        outline: none;
+        font-family: 'Inter', sans-serif;
+        padding-right: 3rem;
+    }
+
+    .input-modern:focus {
+        border-color: var(--vibrant-blue);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        transform: translateY(-1px);
+    }
+
+    .input-icon {
+        position: absolute;
+        right: 1rem;
+        color: var(--text-muted);
+        font-size: 1.1rem;
+        cursor: pointer;
+        transition: color 0.3s ease;
+        z-index: 2;
+    }
+
+    .input-icon:hover {
+        color: var(--vibrant-blue);
+    }
+
+    .password-toggle {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 0.5rem;
+        border-radius: 6px;
+        transition: all 0.3s ease;
+    }
+
+    .password-toggle:hover {
+        color: var(--vibrant-blue);
+        background: rgba(59, 130, 246, 0.1);
+    }
+
+    .form-options {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .remember-me {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        cursor: pointer;
+    }
+
+    .checkbox-modern {
+        width: 20px;
+        height: 20px;
+        border: 2px solid rgba(var(--border-color-rgb), 0.5);
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+        background: var(--input-bg);
+    }
+
+    .checkbox-modern.checked {
+        background: var(--vibrant-blue);
+        border-color: var(--vibrant-blue);
+        color: white;
+    }
+
+    .forgot-password {
+        color: var(--vibrant-blue);
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.95rem;
+        transition: color 0.3s ease;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .forgot-password:hover {
+        color: var(--vibrant-purple);
+        text-decoration: underline;
+    }
+
+    .btn-modern {
+        padding: 1rem 2rem;
+        border-radius: 12px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        border: none;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        text-decoration: none;
+        font-size: 1rem;
+        font-family: 'Inter', sans-serif;
+        width: 100%;
+    }
+
+    .btn-primary-modern {
+        background: linear-gradient(135deg, var(--vibrant-blue), var(--vibrant-purple));
+        color: white;
+        box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-primary-modern:hover {
+        background: linear-gradient(135deg, var(--vibrant-purple), var(--vibrant-pink));
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+        color: white;
+    }
+
+    .divider {
+        text-align: center;
+        margin: 2rem 0;
+        position: relative;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .divider::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: var(--border-color);
+    }
+
+    .divider span {
+        background: var(--card-bg);
+        padding: 0 1rem;
+        position: relative;
+        z-index: 1;
+    }
+
+    .social-buttons {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .social-btn {
+        padding: 0.875rem 1rem;
+        border-radius: 12px;
+        font-weight: 600;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        transition: all 0.3s ease;
+        border: 2px solid var(--border-color);
+        background: var(--input-bg);
+        color: var(--text-color);
+        font-family: 'Inter', sans-serif;
+    }
+
+    .social-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+        text-decoration: none;
+        color: var(--text-color);
+    }
+
+    .social-btn-google:hover {
+        border-color: var(--vibrant-red);
+        background: rgba(239, 68, 68, 0.05);
+    }
+
+    .social-btn-facebook:hover {
+        border-color: var(--vibrant-blue);
+        background: rgba(59, 130, 246, 0.05);
+    }
+
+    .auth-footer {
+        text-align: center;
+        padding-top: 2rem;
+        border-top: 1px solid var(--border-color);
+        color: var(--text-muted);
+        font-family: 'Inter', sans-serif;
+    }
+
+    .auth-footer a {
+        color: var(--vibrant-blue);
+        text-decoration: none;
+        font-weight: 600;
+        transition: color 0.3s ease;
+    }
+
+    .auth-footer a:hover {
+        color: var(--vibrant-purple);
+        text-decoration: underline;
+    }
+
+    .error-message {
+        color: var(--vibrant-red);
+        font-size: 0.85rem;
+        margin-top: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    @media (max-width: 576px) {
+        .auth-container {
+            padding: 1rem;
+        }
+
+        .auth-header {
+            padding: 2rem 1.5rem 1.5rem;
+        }
+
+        .auth-body {
+            padding: 2rem 1.5rem;
+        }
+
+        .auth-title {
+            font-size: 1.75rem;
+        }
+
+        .social-buttons {
+            grid-template-columns: 1fr;
+        }
+
+        .form-options {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+
+    /* Animation */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .auth-card {
+        animation: fadeInUp 0.6s ease-out;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <!-- Header -->
+        <div class="auth-header">
+            <div class="auth-logo">
+                <i class="bi bi-shield-lock"></i>
+            </div>
+            <h1 class="auth-title">Welcome Back</h1>
+            <p class="auth-subtitle">Sign in to your account</p>
+        </div>
+
+        <!-- Body -->
+        <div class="auth-body">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <form method="post" novalidate>
+                {% csrf_token %}
+                
+                <!-- Username/Email Field -->
+                <div class="form-group-modern">
+                    <label class="form-label-modern" for="id_username">Email or Username</label>
+                    <div class="input-group-modern">
+                        <input type="text" 
+                               name="username" 
+                               class="input-modern {% if form.username.errors %}error{% endif %}" 
+                               id="id_username" 
+                               placeholder="Enter your email or username"
+                               value="{{ form.username.value|default:'' }}"
+                               required>
+                        <i class="bi bi-person input-icon"></i>
+                    </div>
+                    {% if form.username.errors %}
+                        <div class="error-message">
+                            <i class="bi bi-exclamation-circle"></i>
+                            {{ form.username.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Password Field -->
+                <div class="form-group-modern">
+                    <label class="form-label-modern" for="id_password">Password</label>
+                    <div class="input-group-modern">
+                        <input type="password" 
+                               name="password" 
+                               class="input-modern {% if form.password.errors %}error{% endif %}" 
+                               id="id_password" 
+                               placeholder="Enter your password"
+                               required>
+                        <button type="button" class="password-toggle input-icon" id="togglePassword">
+                            <i class="bi bi-eye" id="passwordIcon"></i>
+                        </button>
+                    </div>
+                    {% if form.password.errors %}
+                        <div class="error-message">
+                            <i class="bi bi-exclamation-circle"></i>
+                            {{ form.password.errors }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Form Options -->
+                <div class="form-options">
+                    <div class="remember-me" id="rememberMe">
+                        <div class="checkbox-modern" id="rememberCheckbox">
+                            <i class="bi bi-check" style="font-size: 0.875rem;"></i>
+                        </div>
+                        <span>Remember me</span>
+                        <input type="checkbox" name="remember" id="rememberInput" style="display: none;">
+                    </div>
+                    <a href="{% url 'password_reset' %}" class="forgot-password">Forgot password?</a>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" class="btn-modern btn-primary-modern">
+                    <i class="bi bi-box-arrow-in-right"></i>
+                    Sign In
+                </button>
+                <!-- Social Login -->
+                <div class="divider">
+                    <span>Or continue with</span>
+                </div>
+
+                <div class="social-buttons">
+                    <a href="{% url 'google_login' %}" class="social-btn social-btn-google">
+                            <i class="bi bi-google" style="color: var(--accent-red);"></i>
+                        Google
+                    </a>
+                    <a href="{% url 'facebook_login' %}" class="social-btn social-btn-facebook">
+                            <i class="bi bi-facebook" style="color: var(--facebook-blue);"></i>
+                        Facebook
+                    </a>
+                </div>
+
+                <!-- Footer -->
+                <div class="auth-footer">
+                    <small>
+                        Don't have an account? <a href="{% url 'register' %}">Sign up</a>
+                    </small>
+                </div>
+            </form>
+
+            
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Password toggle functionality
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('id_password');
+        const passwordIcon = document.getElementById('passwordIcon');
+
+        if (togglePassword && passwordInput) {
+            togglePassword.addEventListener('click', function() {
+                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                passwordInput.setAttribute('type', type);
+                
+                // Toggle icon
+                if (type === 'text') {
+                    passwordIcon.classList.remove('bi-eye');
+                    passwordIcon.classList.add('bi-eye-slash');
+                } else {
+                    passwordIcon.classList.remove('bi-eye-slash');
+                    passwordIcon.classList.add('bi-eye');
+                }
+            });
+        }
+
+        // Remember me functionality
+        const rememberMe = document.getElementById('rememberMe');
+        const rememberCheckbox = document.getElementById('rememberCheckbox');
+        const rememberInput = document.getElementById('rememberInput');
+
+        if (rememberMe && rememberCheckbox && rememberInput) {
+            rememberMe.addEventListener('click', function() {
+                const isChecked = rememberInput.checked;
+                rememberInput.checked = !isChecked;
+                
+                if (!isChecked) {
+                    rememberCheckbox.classList.add('checked');
+                } else {
+                    rememberCheckbox.classList.remove('checked');
+                }
+            });
+
+            // Check if remember me was previously checked
+            const savedRemember = localStorage.getItem('rememberMe');
+            if (savedRemember === 'true') {
+                rememberInput.checked = true;
+                rememberCheckbox.classList.add('checked');
+            }
+        }
+
+        // Form submission - save remember me preference
+        const form = document.querySelector('form');
+        if (form) {
+            form.addEventListener('submit', function() {
+                if (rememberInput) {
+                    localStorage.setItem('rememberMe', rememberInput.checked);
+                }
+            });
+        }
+
+        // Auto-focus first input
+        const firstInput = document.getElementById('id_username');
+        if (firstInput) {
+            firstInput.focus();
+        }
+
+        // Input validation styling
+        const inputs = document.querySelectorAll('.input-modern');
+        inputs.forEach(input => {
+            input.addEventListener('blur', function() {
+                if (this.value.trim() === '' && this.hasAttribute('required')) {
+                    this.style.borderColor = 'var(--vibrant-red)';
+                } else {
+                    this.style.borderColor = '';
+                }
+            });
+            
+            input.addEventListener('input', function() {
+                this.style.borderColor = '';
+            });
+        });
+
+        // Enhanced error display
+        const errorMessages = document.querySelectorAll('.error-message');
+        errorMessages.forEach(error => {
+            const input = error.previousElementSibling?.querySelector('.input-modern');
+            if (input) {
+                input.style.borderColor = 'var(--vibrant-red)';
+            }
+        });
+    });
+</script>
+{% endblock %}

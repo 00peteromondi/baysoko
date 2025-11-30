@@ -1,0 +1,790 @@
+{% extends 'base.html' %}
+
+{% block title %}Shopping Cart - HomaBay Souq{% endblock %}
+
+{% block extra_css %}
+<style>
+    .cart-container {
+        min-height: 70vh;
+    }
+    
+    .cart-item {
+        transition: all 0.3s ease;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    
+    .cart-item:hover {
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        transform: translateY(-2px);
+    }
+    
+    .quantity-controls {
+        display: flex;
+        align-items: center;
+    }
+    
+    .quantity-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #dee2e6;
+        background: white;
+        transition: all 0.2s ease;
+    }
+    
+    .quantity-btn:hover {
+        background-color: #f8f9fa;
+        border-color: var(--primary-gemini);
+    }
+    
+    .quantity-input {
+        width: 60px;
+        text-align: center;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        margin: 0 8px;
+        height: 36px;
+    }
+    
+    .stock-info {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+    
+    .stock-low {
+        color: #dc3545;
+        font-weight: 500;
+    }
+    
+    .item-actions {
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .cart-item:hover .item-actions {
+        opacity: 1;
+    }
+    
+    .summary-card {
+        position: sticky;
+        top: 120px;
+        border-radius: 16px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+    }
+    
+    .empty-cart {
+        padding: 4rem 2rem;
+        text-align: center;
+    }
+    
+    .empty-cart-icon {
+        font-size: 4rem;
+        color: #dee2e6;
+        margin-bottom: 1rem;
+    }
+    
+    .product-image {
+        width: 100px;
+        height: 100px;
+        object-fit: cover;
+        border-radius: 12px;
+    }
+    
+    @media (max-width: 768px) {
+        .product-image {
+            width: 80px;
+            height: 80px;
+        }
+        
+        .quantity-controls {
+            justify-content: center;
+            margin: 10px 0;
+        }
+        
+        .item-actions {
+            opacity: 1;
+            justify-content: center;
+            margin-top: 10px;
+        }
+    }
+    
+    .price-highlight {
+        font-weight: 600;
+        color: var(--primary-gemini);
+    }
+    
+    .cart-badge {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        background: var(--danger-gemini);
+        color: white;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        font-size: 0.7rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: inherit;
+        z-index: 10;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+    }
+    
+    .loading-overlay.active {
+        opacity: 1;
+        visibility: visible;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4 cart-container">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Shopping Cart</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white border-0 py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0"><i class="bi bi-cart3 me-2 text-primary"></i> Your Shopping Cart</h4>
+                        <span class="badge bg-primary rounded-pill" id="cart-item-count">{{ cart.items.count }} item{{ cart.items.count|pluralize }}</span>
+                    </div>
+                </div>
+                
+                <div class="card-body p-0">
+                    {% if cart.items.all %}
+                    <div class="cart-items-container">
+                        {% for item in cart.items.all %}
+                        <div class="cart-item p-3 border-bottom position-relative" data-item-id="{{ item.id }}">
+                            <div class="loading-overlay">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                            
+                            <div class="row align-items-center">
+                                <div class="col-md-2 col-4">
+                                    <img src="{{ item.listing.get_image_url }}" 
+                                         alt="{{ item.listing.title }}"
+                                         class="product-image"
+                                         onerror="this.src='https://placehold.co/100x100/c2c2c2/1f1f1f?text=HS'">
+                                </div>
+                                <div class="col-md-4 col-8">
+                                    <h6 class="mb-1">{{ item.listing.title }}</h6>
+                                    <small class="text-muted d-block">{{ item.listing.category.name }}</small>
+                                    <small class="stock-info {% if item.quantity > item.listing.stock %}stock-low{% endif %}" 
+                                            data-stock="{{ item.listing.stock }}">
+                                        {% if item.quantity > item.listing.stock %}
+                                        Only {{ item.listing.stock }} in stock
+                                        {% else %}
+                                        {{ item.listing.stock }} in stock
+                                        {% endif %}
+                                    </small>
+                                    <div class="mt-2 d-md-none">
+                                        <span class="fw-bold price-highlight item-price" data-price="{{ item.listing.price }}">
+                                            KSh {{ item.listing.price }}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="col-md-2 d-none d-md-block text-center">
+                                    <span class="fw-bold price-highlight item-price" data-price="{{ item.listing.price }}">
+                                        KSh {{ item.listing.price }}
+                                    </span>
+                                </div>
+                                <div class="col-md-2 col-6">
+                                    <div class="quantity-controls d-flex justify-content-center align-items-center">
+                                        <button type="button" class="btn quantity-btn quantity-decrease" 
+                                                {% if item.quantity <= 1 %}disabled{% endif %}>
+                                            <i class="bi bi-dash"></i>
+                                        </button>
+                                        <input type="number" 
+                                               class="form-control quantity-input"
+                                               value="{{ item.quantity }}" 
+                                               min="1" 
+                                               max="{{ item.listing.stock }}"
+                                               data-item-id="{{ item.id }}">
+                                        <button type="button" class="btn quantity-btn quantity-increase"
+                                                {% if item.quantity >= item.listing.stock %}disabled{% endif %}>
+                                            <i class="bi bi-plus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-2 col-4 text-center">
+                                    <span class="fw-bold price-highlight item-total" data-item-id="{{ item.id }}">
+                                        KSh {{ item.get_total_price }}
+                                    </span>
+                                </div>
+                                <div class="col-md-2 col-2 text-end">
+                                    <div class="item-actions d-flex justify-content-end">
+                                        <button class="btn btn-sm btn-outline-danger remove-item" 
+                                                data-item-id="{{ item.id }}"
+                                                data-bs-toggle="tooltip" 
+                                                title="Remove item">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="empty-cart">
+                        <i class="bi bi-cart-x empty-cart-icon"></i>
+                        <h4 class="mt-3 text-muted">Your cart is empty</h4>
+                        <p class="text-muted mb-4">Start shopping to add items to your cart</p>
+                        <a href="{% url 'all-listings' %}" class="btn btn-primary rounded-pill px-4">
+                            <i class="bi bi-grid me-2"></i> Browse Listings
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            {% if cart.items.all %}
+            <div class="d-flex justify-content-between flex-wrap gap-2 mb-4">
+                <a href="{% url 'all-listings' %}" class="btn btn-outline-primary rounded-pill">
+                    <i class="bi bi-arrow-left me-2"></i> Continue Shopping
+                </a>
+                <button class="btn btn-outline-danger rounded-pill" id="clear-cart">
+                    <i class="bi bi-trash me-2"></i> Clear Cart
+                </button>
+            </div>
+            {% endif %}
+        </div>
+        
+        {% if cart.items.all %}
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 summary-card">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0"><i class="bi bi-receipt me-2"></i> Order Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Subtotal ({{ cart.items.count }} item{{ cart.items.count|pluralize }}):</span>
+                        <span class="fw-bold" id="summary-subtotal">KSh {{ cart.get_total_price }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Shipping:</span>
+                        <span class="text-success">Free</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3">
+                        <span>Tax:</span>
+                        <span>KSh 0.00</span>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between mb-3">
+                        <strong>Total:</strong>
+                        <strong class="text-primary fs-5" id="summary-total">KSh {{ cart.get_total_price }}</strong>
+                    </div>
+                    
+                    <a href="{% url 'checkout' %}" class="btn btn-primary w-100 rounded-pill py-2 mb-3" id="checkout-btn">
+                        <i class="bi bi-lock-fill me-2"></i> Proceed to Checkout
+                    </a>
+                    
+                    <div class="text-center">
+                        <small class="text-muted">
+                            <i class="bi bi-shield-check me-1"></i> Secure checkout guaranteed
+                        </small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card shadow-sm border-0 mt-4">
+                <div class="card-body text-center">
+                    <h6 class="mb-2">Need Help?</h6>
+                    <p class="text-muted small mb-3">Our support team is here to help</p>
+                    <a href="#" class="btn btn-outline-secondary btn-sm rounded-pill">
+                        <i class="bi bi-chat-dots me-1"></i> Contact Support
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1055;"></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get CSRF token function
+    function getCSRFToken() {
+        const name = 'csrftoken';
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Show loading state for cart item
+    function showItemLoading(itemId, show) {
+        const itemElement = document.querySelector(`.cart-item[data-item-id="${itemId}"]`);
+        if (itemElement) {
+            const loadingOverlay = itemElement.querySelector('.loading-overlay');
+            if (loadingOverlay) {
+                if (show) {
+                    loadingOverlay.classList.add('active');
+                } else {
+                    loadingOverlay.classList.remove('active');
+                }
+            }
+        }
+    }
+
+    // Calculate item total on client side - FIXED VERSION
+    function calculateItemTotal(itemId, quantity) {
+        const itemElement = document.querySelector(`.cart-item[data-item-id="${itemId}"]`);
+        if (itemElement) {
+            const priceElement = itemElement.querySelector('.item-price');
+            if (priceElement) {
+                // Get price from data-price attribute or parse from text content
+                let price = parseFloat(priceElement.getAttribute('data-price'));
+                if (isNaN(price)) {
+                    // Fallback: parse from text content
+                    const priceText = priceElement.textContent.replace('KSh', '').replace(',', '').trim();
+                    price = parseFloat(priceText);
+                }
+                
+                if (!isNaN(price)) {
+                    return (price * quantity).toFixed(2);
+                }
+            }
+        }
+        return '0.00';
+    }
+
+    // Update item quantity
+    function updateCartItem(itemId, quantity) {
+        showItemLoading(itemId, true);
+        
+        const formData = new FormData();
+        formData.append('quantity', quantity);
+        formData.append('csrfmiddlewaretoken', getCSRFToken());
+
+        fetch(`/cart/update/${itemId}/`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            showItemLoading(itemId, false);
+            
+            if (data.success) {
+                // Calculate and update individual item total on client side
+                const itemTotal = calculateItemTotal(itemId, quantity);
+                const itemTotalElement = document.querySelector(`.item-total[data-item-id="${itemId}"]`);
+                if (itemTotalElement) {
+                    itemTotalElement.textContent = `KSh ${itemTotal}`;
+                }
+
+                // Update all totals from server response
+                updateCartTotals(data.cart_total, data.item_count);
+                
+                // Update quantity input max value based on stock
+                const quantityInput = document.querySelector(`.quantity-input[data-item-id="${itemId}"]`);
+                const stockInfo = document.querySelector(`.cart-item[data-item-id="${itemId}"] .stock-info`);
+                
+                if (stockInfo) {
+                    const stock = parseInt(stockInfo.getAttribute('data-stock'));
+                    if (quantity > stock) {
+                        stockInfo.classList.add('stock-low');
+                        stockInfo.textContent = `Only ${stock} in stock`;
+                    } else {
+                        stockInfo.classList.remove('stock-low');
+                        stockInfo.textContent = `${stock} in stock`;
+                    }
+                }
+                
+                // Update buttons state
+                updateQuantityButtons(itemId, quantity);
+                
+                // Check stock availability for checkout
+                checkStockAvailability();
+                
+                // Show success message
+                showToast('Cart updated successfully!', 'success');
+            } else {
+                showToast('Error updating cart', 'error');
+            }
+        })
+        .catch(error => {
+            showItemLoading(itemId, false);
+            console.error('Error:', error);
+            showToast('Error updating cart', 'error');
+        });
+    }
+
+    // Update item quantity
+    function updateCartItem(itemId, quantity) {
+        showItemLoading(itemId, true);
+        
+        const formData = new FormData();
+        formData.append('quantity', quantity);
+        formData.append('csrfmiddlewaretoken', getCSRFToken());
+
+        fetch(`/cart/update/${itemId}/`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            showItemLoading(itemId, false);
+            
+            if (data.success) {
+                // Calculate and update individual item total on client side
+                const itemTotal = calculateItemTotal(itemId, quantity);
+                const itemTotalElement = document.querySelector(`.item-total[data-item-id="${itemId}"]`);
+                if (itemTotalElement) {
+                    itemTotalElement.textContent = `KSh ${itemTotal}`;
+                }
+
+                // Update all totals from server response
+                updateCartTotals(data.cart_total, data.item_count);
+                
+                // Update quantity input max value based on stock
+                const quantityInput = document.querySelector(`.quantity-input[data-item-id="${itemId}"]`);
+                const stockInfo = document.querySelector(`.cart-item[data-item-id="${itemId}"] .stock-info`);
+                
+                if (stockInfo) {
+                    const stock = parseInt(stockInfo.getAttribute('data-stock'));
+                    if (quantity > stock) {
+                        stockInfo.classList.add('stock-low');
+                        stockInfo.textContent = `Only ${stock} in stock`;
+                    } else {
+                        stockInfo.classList.remove('stock-low');
+                        stockInfo.textContent = `${stock} in stock`;
+                    }
+                }
+                
+                // Update buttons state
+                updateQuantityButtons(itemId, quantity);
+                
+                // Check stock availability for checkout
+                checkStockAvailability();
+                
+                // Show success message
+                showToast('Cart updated successfully!', 'success');
+            } else {
+                showToast('Error updating cart', 'error');
+            }
+        })
+        .catch(error => {
+            showItemLoading(itemId, false);
+            console.error('Error:', error);
+            showToast('Error updating cart', 'error');
+        });
+    }
+
+    // Update quantity buttons state
+    function updateQuantityButtons(itemId, quantity) {
+        const decreaseBtn = document.querySelector(`.cart-item[data-item-id="${itemId}"] .quantity-decrease`);
+        const increaseBtn = document.querySelector(`.cart-item[data-item-id="${itemId}"] .quantity-increase`);
+        const stockInfo = document.querySelector(`.cart-item[data-item-id="${itemId}"] .stock-info`);
+        const stock = stockInfo ? parseInt(stockInfo.getAttribute('data-stock')) : 10;
+        
+        if (decreaseBtn) {
+            decreaseBtn.disabled = quantity <= 1;
+            decreaseBtn.innerHTML = quantity <= 1 ? 
+                '<i class="bi bi-dash text-muted"></i>' : 
+                '<i class="bi bi-dash"></i>';
+        }
+        
+        if (increaseBtn) {
+            increaseBtn.disabled = quantity >= stock;
+            increaseBtn.innerHTML = quantity >= stock ? 
+                '<i class="bi bi-plus text-muted"></i>' : 
+                '<i class="bi bi-plus"></i>';
+        }
+    }
+
+    // Update all cart totals
+    function updateCartTotals(cartTotal, itemCount) {
+        // Update summary totals
+        const formattedTotal = parseFloat(cartTotal).toFixed(2);
+        document.getElementById('summary-subtotal').textContent = `KSh ${formattedTotal}`;
+        document.getElementById('summary-total').textContent = `KSh ${formattedTotal}`;
+        
+        // Update cart item count badge
+        document.getElementById('cart-item-count').textContent = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
+        
+        // Update navbar cart count
+        updateNavbarCartCount(itemCount);
+    }
+
+    // Update navbar cart count
+    function updateNavbarCartCount(count) {
+        const cartBadge = document.querySelector('.navbar .cart-badge');
+        const cartLink = document.querySelector('.navbar a[href="{% url 'view_cart' %}"]');
+        
+        if (count > 0) {
+            if (cartBadge) {
+                cartBadge.textContent = count;
+            } else {
+                const newBadge = document.createElement('span');
+                newBadge.className = 'cart-badge';
+                newBadge.textContent = count;
+                cartLink.appendChild(newBadge);
+            }
+        } else {
+            if (cartBadge) {
+                cartBadge.remove();
+            }
+        }
+    }
+
+    // Show toast message
+    function showToast(message, type = 'info') {
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : type === 'warning' ? 'warning' : 'info'} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body d-flex align-items-center">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        
+        // Add to container
+        const container = document.getElementById('toast-container');
+        container.appendChild(toast);
+        
+        // Show toast
+        const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 3000 });
+        bsToast.show();
+        
+        // Remove after hide
+        toast.addEventListener('hidden.bs.toast', () => {
+            toast.remove();
+        });
+    }
+
+    // Quantity controls
+    document.querySelectorAll('.quantity-increase').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const input = this.parentNode.querySelector('.quantity-input');
+            const itemId = input.getAttribute('data-item-id');
+            const currentValue = parseInt(input.value);
+            const maxValue = parseInt(input.getAttribute('max'));
+            
+            if (currentValue < maxValue) {
+                input.value = currentValue + 1;
+                updateCartItem(itemId, input.value);
+            } else {
+                showToast(`Maximum quantity of ${maxValue} reached`, 'warning');
+            }
+        });
+    });
+    
+    document.querySelectorAll('.quantity-decrease').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const input = this.parentNode.querySelector('.quantity-input');
+            const itemId = input.getAttribute('data-item-id');
+            const currentValue = parseInt(input.value);
+            const minValue = parseInt(input.getAttribute('min'));
+            
+            if (currentValue > minValue) {
+                input.value = currentValue - 1;
+                updateCartItem(itemId, input.value);
+            }
+        });
+    });
+
+    // Input change event
+    document.querySelectorAll('.quantity-input').forEach(input => {
+        input.addEventListener('change', function() {
+            const itemId = this.getAttribute('data-item-id');
+            let quantity = parseInt(this.value);
+            const minValue = parseInt(this.getAttribute('min'));
+            const maxValue = parseInt(this.getAttribute('max'));
+            
+            if (isNaN(quantity) || quantity < minValue) {
+                quantity = minValue;
+                this.value = minValue;
+            }
+            
+            if (quantity > maxValue) {
+                quantity = maxValue;
+                this.value = maxValue;
+                showToast(`Maximum quantity of ${maxValue} reached`, 'warning');
+            }
+            
+            updateCartItem(itemId, quantity);
+        });
+    });
+
+    // Remove item from cart
+    document.querySelectorAll('.remove-item').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const itemId = this.getAttribute('data-item-id');
+            const itemElement = document.querySelector(`.cart-item[data-item-id="${itemId}"]`);
+            
+            if (confirm('Are you sure you want to remove this item from your cart?')) {
+                showItemLoading(itemId, true);
+                
+                fetch(`/cart/remove/${itemId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCSRFToken(),
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Remove item with animation
+                        itemElement.style.opacity = '0';
+                        itemElement.style.transform = 'translateX(100px)';
+                        setTimeout(() => {
+                            itemElement.remove();
+                            updateCartTotals(data.cart_total, data.item_count);
+                            
+                            // Reload if cart is empty
+                            if (data.item_count === 0) {
+                                location.reload();
+                            }
+                        }, 300);
+                        
+                        showToast('Item removed from cart', 'success');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Error removing item', 'error');
+                });
+            }
+        });
+    });
+
+    // Clear cart
+    document.getElementById('clear-cart')?.addEventListener('click', function() {
+        if (confirm('Are you sure you want to clear your entire cart?')) {
+            fetch('{% url "clear_cart" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCSRFToken(),
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Error clearing cart', 'error');
+            });
+        }
+    });
+
+    // Check if any items have insufficient stock
+    function checkStockAvailability() {
+        let hasInsufficientStock = false;
+        const checkoutBtn = document.getElementById('checkout-btn');
+        
+        document.querySelectorAll('.cart-item').forEach(item => {
+            const quantityInput = item.querySelector('.quantity-input');
+            const stockInfo = item.querySelector('.stock-info');
+            
+            if (quantityInput && stockInfo) {
+                const quantity = parseInt(quantityInput.value);
+                const stock = parseInt(stockInfo.getAttribute('data-stock'));
+                
+                if (quantity > stock) {
+                    hasInsufficientStock = true;
+                    stockInfo.classList.add('stock-low');
+                }
+            }
+        });
+        
+        if (hasInsufficientStock && checkoutBtn) {
+            checkoutBtn.disabled = true;
+            checkoutBtn.title = "Some items have insufficient stock. Please adjust quantities.";
+            checkoutBtn.classList.add('disabled');
+            checkoutBtn.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i> Adjust Quantities to Checkout';
+        } else if (checkoutBtn) {
+            checkoutBtn.disabled = false;
+            checkoutBtn.title = "";
+            checkoutBtn.classList.remove('disabled');
+            checkoutBtn.innerHTML = '<i class="bi bi-lock-fill me-2"></i> Proceed to Checkout';
+        }
+    }
+    
+    // Initialize stock check and button states
+    document.querySelectorAll('.cart-item').forEach(item => {
+        const itemId = item.getAttribute('data-item-id');
+        const quantityInput = item.querySelector('.quantity-input');
+        if (quantityInput) {
+            const quantity = parseInt(quantityInput.value);
+            updateQuantityButtons(itemId, quantity);
+        }
+    });
+    checkStockAvailability();
+
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>
+{% endblock %}

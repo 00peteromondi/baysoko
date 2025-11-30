@@ -1,0 +1,505 @@
+[file name]: store_form.html
+[file content begin]
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% if creating_store %}Create New Store{% else %}Edit {{ store.name }}{% endif %} - HomaBay Souq{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="fw-bold mb-2">
+                {% if creating_store %}
+                <i class="bi bi-plus-circle me-2"></i>Create New Store
+                {% else %}
+                <i class="bi bi-pencil-square me-2"></i>Edit Store
+                {% endif %}
+            </h1>
+            <p class="text-muted mb-0">
+                {% if creating_store %}
+                Start your selling journey on HomaBay Souq
+                {% else %}
+                Update your store information and settings
+                {% endif %}
+            </p>
+        </div>
+        <a href="{% url 'storefront:seller_dashboard' %}" class="btn btn-outline-secondary rounded-pill">
+            <i class="bi bi-arrow-left me-2"></i>
+            Back to Dashboard
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-lg">
+                <div class="card-header bg-gradient-primary text-white py-3">
+                    <h5 class="mb-0">
+                        <i class="bi bi-shop me-2"></i>
+                        {% if creating_store %}Store Setup{% else %}Store Information{% endif %}
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                                <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                                    {% if form.non_field_errors %}
+                                    <div class="alert alert-danger">
+                                        {{ form.non_field_errors }}
+                                    </div>
+                                    {% endif %}
+
+                                    <!-- Inline messages (also shown as toasts via base.html) -->
+                                    {% if messages %}
+                                    <div class="mb-3">
+                                        {% for message in messages %}
+                                        <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+                                            {{ message }}
+                                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                        
+                        <!-- Store Basic Information -->
+                        <div class="row">
+                            <div class="col-md-8 mb-3">
+                                {{ form.name|as_crispy_field }}
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                {{ form.slug|as_crispy_field }}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            {{ form.description|as_crispy_field }}
+                        </div>
+                        
+                        <!-- Store Images -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Store Logo *</label>
+                                <input type="file" class="form-control" name="logo" accept="image/jpeg,image/png,image/gif">
+                                <div class="form-text">
+                                    <ul class="mb-0 ps-3 small">
+                                        <li>Allowed formats: JPG, PNG, GIF</li>
+                                        <li>Maximum size: 10MB</li>
+                                        <li>Recommended dimensions: 200x200px</li>
+                                        <li>Will be displayed as a square image</li>
+                                    </ul>
+                                </div>
+                                
+                                <!-- Current Logo Preview -->
+                                {% if not creating_store and store.logo %}
+                                <div class="mt-3">
+                                    <label class="form-label fw-bold">Current Logo</label>
+                                    <div class="d-flex align-items-center">
+                                        <img src="{{ store.logo.url }}" 
+                                             alt="{{ store.name }} logo"
+                                             class="rounded-circle me-3"
+                                             style="width: 60px; height: 60px; object-fit: cover;">
+                                        <div>
+                                            <small class="text-muted d-block">Upload new image to replace</small>
+                                            <a href="#" class="text-danger small" data-bs-toggle="modal" data-bs-target="#deleteLogoModal">
+                                                <i class="bi bi-trash me-1"></i>Remove logo
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Store Cover Image</label>
+                                <input type="file" class="form-control" name="cover_image" accept="image/jpeg,image/png,image/gif">
+                                <div class="form-text">
+                                    <ul class="mb-0 ps-3 small">
+                                        <li>Allowed formats: JPG, PNG, GIF</li>
+                                        <li>Maximum size: 10MB</li>
+                                        <li>Recommended dimensions: 1200x300px</li>
+                                        <li>Will be displayed as a banner image</li>
+                                    </ul>
+                                </div>
+                                
+                                <!-- Current Cover Preview -->
+                                {% if not creating_store and store.cover_image %}
+                                <div class="mt-3">
+                                    <label class="form-label fw-bold">Current Cover</label>
+                                    <div>
+                                        <img src="{{ store.cover_image.url }}" 
+                                             alt="{{ store.name }} cover"
+                                             class="rounded mb-2"
+                                             style="width: 100%; height: 80px; object-fit: cover;">
+                                        <a href="#" class="text-danger small" data-bs-toggle="modal" data-bs-target="#deleteCoverModal">
+                                            <i class="bi bi-trash me-1"></i>Remove cover
+                                        </a>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Store Details -->
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {% if form.category %}
+                                    {{ form.category|as_crispy_field }}
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {% if form.location %}
+                                    {{ form.location|as_crispy_field }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Contact Information -->
+                        <div class="mb-4">
+                            <h6 class="fw-bold mb-3 border-bottom pb-2">Contact Information</h6>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    {% if form.contact_email %}
+                                        {{ form.contact_email|as_crispy_field }}
+                                    {% else %}
+                                        <label class="form-label">Contact Email</label>
+                                        <input type="email" class="form-control" name="contact_email" value="{{ store.contact_email|default:'' }}" placeholder="store@youremail.com">
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    {% if form.contact_phone %}
+                                        {{ form.contact_phone|as_crispy_field }}
+                                    {% else %}
+                                        <label class="form-label">Contact Phone</label>
+                                        <input type="tel" class="form-control" name="contact_phone" value="{{ store.contact_phone|default:'' }}" placeholder="2547XXXXXXXX">
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Store Policies -->
+                        <div class="mb-4">
+                            <h6 class="fw-bold mb-3 border-bottom pb-2">Store Policies</h6>
+                            <div class="mb-3">
+                                {% if form.return_policy %}
+                                    {{ form.return_policy|as_crispy_field }}
+                                {% endif %}
+                            </div>
+                            <div class="mb-3">
+                                {% if form.shipping_policy %}
+                                    {{ form.shipping_policy|as_crispy_field }}
+                                {% endif %}
+                            </div>
+                            <div class="mb-3">
+                                {% if form.payment_methods %}
+                                    {{ form.payment_methods|as_crispy_field }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Social Media -->
+                        <div class="mb-4">
+                            <h6 class="fw-bold mb-3 border-bottom pb-2">Social Media Links</h6>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Facebook URL</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-facebook text-white">
+                                            <i class="bi bi-facebook"></i>
+                                        </span>
+                                        {% if form.facebook_url %}
+                                            {{ form.facebook_url|as_crispy_field }}
+                                        {% else %}
+                                            <input type="url" class="form-control" name="facebook_url" 
+                                                   value="{{ store.facebook_url|default:'' }}"
+                                                   placeholder="https://facebook.com/yourstore">
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Instagram URL</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-instagram text-white">
+                                            <i class="bi bi-instagram"></i>
+                                        </span>
+                                        {% if form.instagram_url %}
+                                            {{ form.instagram_url|as_crispy_field }}
+                                        {% else %}
+                                            <input type="url" class="form-control" name="instagram_url"
+                                                   value="{{ store.instagram_url|default:'' }}"
+                                                   placeholder="https://instagram.com/yourstore">
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="d-flex gap-3 mt-4">
+                            <button type="submit" class="btn btn-accent-blue rounded-pill px-5 py-3">
+                                <i class="bi bi-check-circle me-2"></i>
+                                {% if creating_store %}Create Store{% else %}Update Store{% endif %}
+                            </button>
+                            <a href="{% url 'storefront:seller_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 py-3">
+                                <i class="bi bi-x-circle me-2"></i>
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tips Sidebar -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm sticky-top" style="top: 100px;">
+                <div class="card-header bg-light py-3">
+                    <h6 class="mb-0 fw-bold">
+                        <i class="bi bi-lightbulb me-2"></i>
+                        Store Setup Tips
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if creating_store %}
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-primary">🏪 Choose a Memorable Name</h6>
+                        <p class="small text-muted mb-0">Pick a name that reflects your brand and is easy to remember.</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-success">📝 Clear Description</h6>
+                        <p class="small text-muted mb-0">Describe what makes your store unique and what products you offer.</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-warning">🖼️ Professional Branding</h6>
+                        <p class="small text-muted mb-0">Use high-quality logo and cover images to build trust.</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-info">📍 Accurate Location</h6>
+                        <p class="small text-muted mb-0">Set your correct location to attract local customers.</p>
+                    </div>
+                    {% else %}
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-primary">📈 Keep Information Updated</h6>
+                        <p class="small text-muted mb-0">Regularly update your store details to maintain customer trust.</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-success">🔄 Refresh Your Look</h6>
+                        <p class="small text-muted mb-0">Update images and descriptions to keep your store fresh.</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-warning">📞 Clear Communication</h6>
+                        <p class="small text-muted mb-0">Ensure contact information is current for customer inquiries.</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-info">⭐ Consider Premium</h6>
+                        <p class="small text-muted mb-0">Upgrade to premium for better visibility and features.</p>
+                    </div>
+                    {% endif %}
+                    
+                    <hr>
+                    
+                    <!-- Premium CTA -->
+                    {% if not creating_store and not store.is_premium %}
+                    <div class="text-center">
+                        <h6 class="fw-bold text-warning mb-2">Ready to Grow?</h6>
+                        <p class="small text-muted mb-3">Upgrade to Premium for advanced features</p>
+                        <a href="{% url 'storefront:upgrade' slug=store.slug %}" class="btn btn-warning btn-sm rounded-pill w-100">
+                            <i class="bi bi-lightning-charge me-1"></i>
+                            Upgrade to Premium
+                        </a>
+                    </div>
+                    {% elif not creating_store and store.is_premium %}
+                    <div class="text-center">
+                        <span class="badge bg-warning text-dark mb-2">
+                            <i class="bi bi-star-fill me-1"></i>Premium Store
+                        </span>
+                        <p class="small text-success mb-0">You're enjoying premium features!</p>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="alert alert-info small mt-3">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Need help?</strong> Contact our support team for assistance.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Logo Modal -->
+{% if not creating_store and store.logo %}
+<div class="modal fade" id="deleteLogoModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Remove Logo</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <i class="bi bi-trash text-danger display-6 mb-3"></i>
+                <p class="mb-3">Are you sure you want to remove your store logo?</p>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <form method="post" action="{% url 'storefront:delete_logo' slug=store.slug %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger btn-sm">Remove Logo</button>
+                </form>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Delete Cover Modal -->
+{% if not creating_store and store.cover_image %}
+<div class="modal fade" id="deleteCoverModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Remove Cover</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <i class="bi bi-trash text-danger display-6 mb-3"></i>
+                <p class="mb-3">Are you sure you want to remove your store cover image?</p>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <form method="post" action="{% url 'storefront:delete_cover' slug=store.slug %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger btn-sm">Remove Cover</button>
+                </form>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<style>
+.bg-gradient-primary {
+    background: linear-gradient(135deg, var(--primary-gemini) 0%, #0d47a1 100%) !important;
+}
+
+.bg-facebook {
+    background-color: var(--facebook-blue) !important;
+}
+
+.bg-instagram {
+    background: linear-gradient(45deg, #405DE6, #5851DB, #833AB4, #C13584, #E1306C, #FD1D1D) !important;
+}
+
+.sticky-top {
+    z-index: 10;
+}
+
+.form-text {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* Improve form field styling */
+.form-control:focus {
+    border-color: var(--primary-gemini);
+    box-shadow: 0 0 0 0.2rem rgba(66, 133, 244, 0.25);
+}
+
+/* Style for file inputs */
+.form-control[type="file"] {
+    padding: 0.5rem;
+}
+
+.form-control[type="file"]::file-selector-button {
+    background: var(--primary-gemini);
+    color: white;
+    border: none;
+    padding: 0.375rem 0.75rem;
+    margin-right: 0.75rem;
+    border-radius: 0.375rem;
+    transition: all 0.3s ease;
+}
+
+.form-control[type="file"]::file-selector-button:hover {
+    background: var(--primary-gemini-hover);
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-generate slug from store name
+    const nameField = document.querySelector('input[name="name"]');
+    const slugField = document.querySelector('input[name="slug"]');
+    
+    if (nameField && slugField) {
+        nameField.addEventListener('input', function() {
+            if (!slugField.value || slugField.dataset.manual !== 'true') {
+                const slug = this.value
+                    .toLowerCase()
+                    .trim()
+                    .replace(/[^\w\s-]/g, '')
+                    .replace(/[\s_-]+/g, '-')
+                    .replace(/^-+|-+$/g, '');
+                slugField.value = slug;
+            }
+        });
+        
+        // Mark slug as manually edited
+        slugField.addEventListener('input', function() {
+            this.dataset.manual = 'true';
+        });
+    }
+    
+    // Image preview functionality
+    const logoInput = document.querySelector('input[name="logo"]');
+    const coverInput = document.querySelector('input[name="cover_image"]');
+    
+    function previewImage(input, previewElement) {
+        if (input && input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                previewElement.src = e.target.result;
+            }
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+    
+    // Add real-time validation
+    const forms = document.querySelectorAll('form');
+    forms.forEach(form => {
+        form.addEventListener('submit', function(e) {
+            const requiredFields = form.querySelectorAll('[required]');
+            let isValid = true;
+            
+            requiredFields.forEach(field => {
+                if (!field.value.trim()) {
+                    field.classList.add('is-invalid');
+                    isValid = false;
+                } else {
+                    field.classList.remove('is-invalid');
+                }
+            });
+            
+            if (!isValid) {
+                e.preventDefault();
+                // Show toast message
+                const toast = document.createElement('div');
+                toast.className = 'toast align-items-center text-white bg-danger border-0';
+                toast.innerHTML = `
+                    <div class="d-flex">
+                        <div class="toast-body d-flex align-items-center">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Please fill in all required fields
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                `;
+                document.querySelector('.toast-container').appendChild(toast);
+                new bootstrap.Toast(toast, { delay: 5000 }).show();
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
+[file content end]

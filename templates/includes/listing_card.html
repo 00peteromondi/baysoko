@@ -1,0 +1,54 @@
+{% load humanize %}
+<div class="item-card">
+    <div class="item-image-container">
+        <img src="{{ listing.get_image_url }}" class="item-image" alt="{{ listing.title }}">
+        {% if badge_text %}
+        <span class="item-badge" style="--category-color: var(--{{ badge_color|default:'vibrant-blue' }})">
+            {{ badge_text }}
+        </span>
+        {% endif %}
+        
+        <button type="button" class="item-favorite-btn like-btn {% if listing.id in user_favorites %}favorited{% endif %}" 
+                data-listing-id="{{ listing.id }}">
+            <i class="bi bi-heart{% if listing.id in user_favorites %}-fill{% endif %}"></i>
+        </button>
+    </div>
+    <div class="item-content">
+        <h3 class="item-title">{{ listing.title }}</h3>
+        <div class="item-price">
+            {% if listing.discount_price %}
+            <span class="text-decoration-line-through text-muted me-2">KSh {{ listing.price|intcomma }}</span>
+            <span>KSh {{ listing.discount_price|intcomma }}</span>
+            {% else %}
+            KSh {{ listing.price|intcomma }}
+            {% endif %}
+        </div>
+        <div class="item-meta">
+            <span class="item-location">{{ listing.get_location_display }}</span>
+            <span class="item-stock {% if listing.stock > 10 %}in-stock{% elif listing.stock > 0 %}low-stock{% else %}out-of-stock{% endif %}">
+                {% if listing.stock > 10 %}
+                    In Stock
+                {% elif listing.stock > 0 %}
+                    Low Stock
+                {% else %}
+                    Out of Stock
+                {% endif %}
+            </span>
+        </div>
+        <div class="item-actions">
+            <a href="{% url 'listing-detail' listing.pk %}" class="action-btn view-btn">
+                <i class="bi bi-eye"></i>
+                <span>View</span>
+            </a>
+            {% if user.is_authenticated and listing.stock > 0 and listing.seller != user %}
+            <form action="{% url 'add_to_cart' listing.id %}" method="post" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="action-btn cart-btn">
+                    <i class="bi bi-cart-plus"></i>
+                    <span>Cart</span>
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>

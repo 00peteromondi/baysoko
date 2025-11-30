@@ -1,0 +1,1339 @@
+<!-- templates/listings/listing_form.html -->
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block title %}
+    {% if form.instance.pk %}Edit Listing{% else %}Create New Listing{% endif %} - HomaBay Souq
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Modern Form Styles */
+.listing-form-wrapper {
+    max-width: 1000px;
+    margin: 0 auto;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 2.5rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border-color);
+}
+
+.form-header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.form-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-color);
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+}
+
+.form-subtitle {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    max-width: 600px;
+    margin: 0 auto;
+    line-height: 1.6;
+}
+
+/* Form Progress Steps */
+.form-progress {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 3rem;
+    position: relative;
+}
+
+.form-progress::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--border-color);
+    transform: translateY(-50%);
+    z-index: 1;
+}
+
+.progress-step {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.step-indicator {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--card-bg-hover);
+    border: 2px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    color: var(--text-muted);
+    transition: all 0.3s ease;
+}
+
+.step-label {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    text-align: center;
+}
+
+.progress-step.active .step-indicator {
+    background: var(--primary-gemini);
+    border-color: var(--primary-gemini);
+    color: white;
+}
+
+.progress-step.active .step-label {
+    color: var(--primary-gemini);
+    font-weight: 600;
+}
+
+/* Form Sections */
+.form-section {
+    margin-bottom: 2.5rem;
+    padding: 2rem;
+    background: var(--card-bg-hover);
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+}
+
+.form-section:hover {
+    border-color: var(--primary-gemini);
+    box-shadow: 0 5px 20px rgba(66, 133, 244, 0.1);
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.section-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: var(--primary-gemini);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.25rem;
+}
+
+.section-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--text-color);
+    margin: 0;
+}
+
+.section-description {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    margin-top: 0.25rem;
+    line-height: 1.4;
+}
+
+/* Form Grid Layout */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-label {
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 0.75rem;
+    font-size: 0.95rem;
+    display: block;
+}
+
+.required-field::after {
+    content: " *";
+    color: #ef4444;
+}
+
+/* Form Controls */
+.form-control, .form-select {
+    width: 100%;
+    padding: 1rem 1.25rem;
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    background: var(--card-bg);
+    color: var(--text-color);
+    font-family: inherit;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--primary-gemini);
+    box-shadow: 0 0 0 4px rgba(66, 133, 244, 0.1);
+    outline: none;
+}
+
+/* Price Input */
+.price-input-wrapper {
+    position: relative;
+}
+
+.price-prefix {
+    position: absolute;
+    left: 1.25rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-weight: 600;
+    z-index: 2;
+}
+
+.price-input-wrapper .form-control {
+    padding-left: 4rem;
+}
+
+/* Image Upload Sections */
+.image-upload-section {
+    margin-bottom: 2rem;
+}
+
+.upload-area {
+    border: 3px dashed var(--border-color);
+    border-radius: 16px;
+    padding: 3rem 2rem;
+    text-align: center;
+    transition: all 0.3s ease;
+    background: var(--card-bg);
+    cursor: pointer;
+    margin-bottom: 1.5rem;
+}
+
+.upload-area:hover, .upload-area.drag-over {
+    border-color: var(--primary-gemini);
+    background: rgba(66, 133, 244, 0.05);
+}
+
+.upload-icon {
+    font-size: 3rem;
+    color: var(--primary-gemini);
+    margin-bottom: 1rem;
+}
+
+.upload-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 0.5rem;
+}
+
+.upload-subtitle {
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+}
+
+.upload-requirements {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+}
+
+.upload-btn {
+    background: var(--primary-gemini);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.upload-btn:hover {
+    background: #3367d6;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(66, 133, 244, 0.3);
+}
+
+/* Image Previews */
+.image-previews-container {
+    margin-top: 1.5rem;
+}
+
+.preview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.preview-item {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid var(--border-color);
+    aspect-ratio: 1;
+    transition: all 0.3s ease;
+}
+
+.preview-item:hover {
+    border-color: var(--primary-gemini);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.preview-item.main-image {
+    border-color: var(--primary-gemini);
+    border-width: 3px;
+}
+
+.preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.preview-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.preview-item:hover .preview-overlay {
+    opacity: 1;
+}
+
+.preview-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.preview-action-btn {
+    background: rgba(255, 255, 255, 0.9);
+    border: none;
+    border-radius: 6px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.preview-action-btn:hover {
+    background: white;
+    transform: scale(1.1);
+}
+
+.preview-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: var(--primary-gemini);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* Character Counters */
+.char-counter {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    text-align: right;
+    margin-top: 0.5rem;
+}
+
+.char-counter.near-limit {
+    color: #f59e0b;
+}
+
+.char-counter.over-limit {
+    color: #ef4444;
+}
+
+/* Form Actions */
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2.5rem;
+    padding-top: 2rem;
+    border-top: 2px solid var(--border-color);
+}
+
+.btn {
+    padding: 1rem 2rem;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 140px;
+    justify-content: center;
+}
+
+.btn-primary {
+    background: var(--primary-gemini);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #3367d6;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(66, 133, 244, 0.3);
+}
+
+.btn-secondary {
+    background: transparent;
+    color: var(--text-color);
+    border: 2px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    border-color: var(--primary-gemini);
+    color: var(--primary-gemini);
+    transform: translateY(-2px);
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+/* Error States */
+.form-control.error, .form-select.error {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1);
+}
+
+.error-message {
+    color: #ef4444;
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Success States */
+.form-control.success, .form-select.success {
+    border-color: #10b981;
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
+}
+
+/* Loading State */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.loading-overlay.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.loading-spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-top: 4px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .listing-form-wrapper {
+        padding: 1.5rem;
+        margin: 1rem;
+        border-radius: 16px;
+    }
+    
+    .form-title {
+        font-size: 1.5rem;
+    }
+    
+    .form-progress {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+    
+    .form-progress::before {
+        display: none;
+    }
+    
+    .progress-step {
+        flex-direction: row;
+        gap: 1rem;
+    }
+    
+    .form-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .form-section {
+        padding: 1.5rem;
+    }
+    
+    .section-header {
+        flex-direction: column;
+        text-align: center;
+        gap: 0.75rem;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+    
+    .btn {
+        width: 100%;
+    }
+    
+    .upload-area {
+        padding: 2rem 1rem;
+    }
+    
+    .preview-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .listing-form-wrapper {
+        padding: 1rem;
+        margin: 0.5rem;
+    }
+    
+    .form-section {
+        padding: 1rem;
+    }
+    
+    .preview-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="listing-form-wrapper">
+        <!-- Form Header -->
+        <div class="form-header">
+            <h1 class="form-title">
+                <i class="bi bi-{% if form.instance.pk %}pencil-square{% else %}plus-circle{% endif %}"></i>
+                {% if form.instance.pk %}
+                    Edit Your Listing
+                {% else %}
+                    Create New Listing
+                {% endif %}
+            </h1>
+            <p class="form-subtitle">
+                {% if form.instance.pk %}
+                    Update your item details to keep your listing fresh and attractive to buyers
+                {% else %}
+                    Sell your item quickly with our easy-to-use listing form. Fill in the details below to get started.
+                {% endif %}
+            </p>
+        </div>
+
+        <!-- Inline messages (visible immediately on this page) -->
+        {% if messages %}
+        <div class="mb-3">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Progress Steps -->
+        <div class="form-progress">
+            <div class="progress-step active">
+                <div class="step-indicator">1</div>
+                <span class="step-label">Item Details</span>
+            </div>
+            <div class="progress-step">
+                <div class="step-indicator">2</div>
+                <span class="step-label">Pricing & Location</span>
+            </div>
+            <div class="progress-step">
+                <div class="step-indicator">3</div>
+                <span class="step-label">Photos</span>
+            </div>
+            <div class="progress-step">
+                <div class="step-indicator">4</div>
+                <span class="step-label">Review</span>
+            </div>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" id="listing-form" novalidate>
+            {% csrf_token %}
+            
+            <!-- Basic Information Section -->
+            <div class="form-section">
+                <div class="section-header">
+                    <div class="section-icon">
+                        <i class="bi bi-tag"></i>
+                    </div>
+                    <div>
+                        <h2 class="section-title">Item Information</h2>
+                        <p class="section-description">Tell buyers what you're selling with clear and descriptive details</p>
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <!-- Title Field -->
+                    <div class="form-group full-width">
+                        <label for="{{ form.title.id_for_label }}" class="form-label required-field">
+                            Listing Title
+                        </label>
+                        <input type="text" 
+                               name="{{ form.title.name }}" 
+                               id="{{ form.title.id_for_label }}" 
+                               class="form-control {% if form.title.errors %}error{% endif %}"
+                               value="{{ form.title.value|default:'' }}"
+                               placeholder="e.g., Brand New iPhone 13 Pro Max 256GB - Unlocked"
+                               maxlength="200"
+                               required>
+                        <div class="char-counter" id="title-counter">0/200 characters</div>
+                        {% if form.title.errors %}
+                            <div class="error-message">
+                                <i class="bi bi-exclamation-circle"></i>
+                                {{ form.title.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Category Field -->
+                    <div class="form-group">
+                        <label for="{{ form.category.id_for_label }}" class="form-label required-field">
+                            Category
+                        </label>
+                        <select name="{{ form.category.name }}" 
+                                id="{{ form.category.id_for_label }}" 
+                                class="form-select {% if form.category.errors %}error{% endif %}"
+                                required>
+                            <option value="">Choose a category</option>
+                            {% for category in categories %}
+                                <option value="{{ category.id }}" 
+                                        {% if form.category.value == category.id %}selected{% endif %}>
+                                    {{ category.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        {% if form.category.errors %}
+                            <div class="error-message">
+                                <i class="bi bi-exclamation-circle"></i>
+                                {{ form.category.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    <!-- Store Selector (when user has multiple stores) -->
+                    {% if stores %}
+                    <div class="form-group">
+                        <label for="id_store" class="form-label">Store</label>
+                        {% if stores|length == 1 %}
+                        <input type="hidden" name="store" value="{{ stores.0.id }}">
+                        <div class="form-control">{{ stores.0.name }}</div>
+                        {% else %}
+                        <select name="store" id="id_store" class="form-select {% if form.store.errors %}error{% endif %}">
+                            <option value="">Select store (optional)</option>
+                            {% for store in stores %}
+                                <option value="{{ store.id }}" {% if form.store.value == store.id %}selected{% endif %}>{{ store.name }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if form.store.errors %}
+                            <div class="error-message">
+                                <i class="bi bi-exclamation-circle"></i>
+                                {{ form.store.errors.0 }}
+                            </div>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Informational note about stores / Pro requirement -->
+                    <div class="form-group">
+                        <p class="text-muted small mb-0">
+                            Note: Creating more than one storefront requires a Pro subscription. 
+                            If you need to create additional stores, please <a href="{% url 'storefront:seller_dashboard' %}">upgrade from your dashboard</a>.
+                        </p>
+                    </div>
+                    
+                    <!-- Condition Field -->
+                    <div class="form-group">
+                        <label for="{{ form.condition.id_for_label }}" class="form-label required-field">
+                            Condition
+                        </label>
+                        <select name="{{ form.condition.name }}" 
+                                id="{{ form.condition.id_for_label }}" 
+                                class="form-select {% if form.condition.errors %}error{% endif %}"
+                                required>
+                            <option value="">Select condition</option>
+                            {% for value, text in form.condition.field.choices %}
+                                {% if value %}
+                                    <option value="{{ value }}" 
+                                            {% if form.condition.value == value %}selected{% endif %}>
+                                        {{ text }}
+                                    </option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                        {% if form.condition.errors %}
+                            <div class="error-message">
+                                <i class="bi bi-exclamation-circle"></i>
+                                {{ form.condition.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Description Field -->
+                    <div class="form-group full-width">
+                        <label for="{{ form.description.id_for_label }}" class="form-label required-field">
+                            Description
+                        </label>
+                        <textarea name="{{ form.description.name }}" 
+                                  id="{{ form.description.id_for_label }}" 
+                                  class="form-control {% if form.description.errors %}error{% endif %}"
+                                  placeholder="Describe your item in detail. Include features, specifications, and any relevant information that would help buyers make a decision..."
+                                  rows="6"
+                                  maxlength="2000"
+                                  required>{{ form.description.value|default:'' }}</textarea>
+                        <div class="char-counter" id="description-counter">0/2000 characters</div>
+                        {% if form.description.errors %}
+                            <div class="error-message">
+                                <i class="bi bi-exclamation-circle"></i>
+                                {{ form.description.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pricing & Location Section -->
+            <div class="form-section">
+                <div class="section-header">
+                    <div class="section-icon">
+                        <i class="bi bi-geo-alt"></i>
+                    </div>
+                    <div>
+                        <h2 class="section-title">Pricing & Location</h2>
+                        <p class="section-description">Set your price and let buyers know where they can get the item</p>
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <!-- Price Field -->
+                    <div class="form-group">
+                        <label for="{{ form.price.id_for_label }}" class="form-label required-field">
+                            Price (KSh)
+                        </label>
+                        <div class="price-input-wrapper">
+                            <span class="price-prefix">KSh</span>
+                            <input type="number" 
+                                   name="{{ form.price.name }}" 
+                                   id="{{ form.price.id_for_label }}" 
+                                   class="form-control {% if form.price.errors %}error{% endif %}"
+                                   value="{{ form.price.value|default:'' }}"
+                                   placeholder="0.00"
+                                   min="0"
+                                   step="0.01"
+                                   required>
+                        </div>
+                        {% if form.price.errors %}
+                            <div class="error-message">
+                                <i class="bi bi-exclamation-circle"></i>
+                                {{ form.price.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Stock Field -->
+                    <div class="form-group">
+                        <label for="{{ form.stock.id_for_label }}" class="form-label required-field">
+                            Stock Quantity
+                        </label>
+                        <input type="number" 
+                               name="{{ form.stock.name }}" 
+                               id="{{ form.stock.id_for_label }}" 
+                               class="form-control {% if form.stock.errors %}error{% endif %}"
+                               value="{{ form.stock.value|default:'1' }}"
+                               placeholder="1"
+                               min="1"
+                               required>
+                        {% if form.stock.errors %}
+                            <div class="error-message">
+                                <i class="bi bi-exclamation-circle"></i>
+                                {{ form.stock.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Location Field -->
+                    <div class="form-group">
+                        <label for="{{ form.location.id_for_label }}" class="form-label required-field">
+                            Location
+                        </label>
+                        <select name="{{ form.location.name }}" 
+                                id="{{ form.location.id_for_label }}" 
+                                class="form-select {% if form.location.errors %}error{% endif %}"
+                                required>
+                            <option value="">Select your location</option>
+                            {% for value, text in form.location.field.choices %}
+                                {% if value %}
+                                    <option value="{{ value }}" 
+                                            {% if form.location.value == value %}selected{% endif %}>
+                                        {{ text }}
+                                    </option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                        {% if form.location.errors %}
+                            <div class="error-message">
+                                <i class="bi bi-exclamation-circle"></i>
+                                {{ form.location.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Delivery Option Field -->
+                    <div class="form-group">
+                        <label for="{{ form.delivery_option.id_for_label }}" class="form-label required-field">
+                            Delivery Option
+                        </label>
+                        <select name="{{ form.delivery_option.name }}" 
+                                id="{{ form.delivery_option.id_for_label }}" 
+                                class="form-select {% if form.delivery_option.errors %}error{% endif %}"
+                                required>
+                            <option value="">Choose delivery method</option>
+                            {% for value, text in form.delivery_option.field.choices %}
+                                {% if value %}
+                                    <option value="{{ value }}" 
+                                            {% if form.delivery_option.value == value %}selected{% endif %}>
+                                        {{ text }}
+                                    </option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                        {% if form.delivery_option.errors %}
+                            <div class="error-message">
+                                <i class="bi bi-exclamation-circle"></i>
+                                {{ form.delivery_option.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Images Section -->
+            <div class="form-section">
+                <div class="section-header">
+                    <div class="section-icon">
+                        <i class="bi bi-camera"></i>
+                    </div>
+                    <div>
+                        <h2 class="section-title">Photos</h2>
+                        <p class="section-description">Add clear photos of your item. Good photos help your item sell faster!</p>
+                    </div>
+                </div>
+
+                <!-- Main Image Upload -->
+                <div class="image-upload-section">
+                    <h4 class="form-label required-field">Main Photo</h4>
+                    <p class="section-description" style="margin-top: -0.5rem; margin-bottom: 1rem;">
+                        This will be the primary image displayed in search results
+                    </p>
+                    
+                    <div class="upload-area" id="main-image-upload-area">
+                        <div class="upload-icon">
+                            <i class="bi bi-cloud-arrow-up"></i>
+                        </div>
+                        <h3 class="upload-title">Upload Main Photo</h3>
+                        <p class="upload-subtitle">Drag & drop your image here or click to browse</p>
+                        <p class="upload-requirements">
+                            <i class="bi bi-info-circle"></i>
+                            Recommended: Square ratio, high quality, good lighting
+                        </p>
+                        <input type="file" 
+                               name="image" 
+                               id="id_image" 
+                               accept="image/*" 
+                               style="display: none;"
+                               required>
+                        <button type="button" class="upload-btn" onclick="document.getElementById('id_image').click()">
+                            <i class="bi bi-folder2-open"></i> Choose Main Photo
+                        </button>
+                    </div>
+                    
+                    <div class="image-previews-container">
+                        <div id="main-image-preview" class="preview-grid">
+                            {% if form.instance.pk and form.instance.image %}
+                            <div class="preview-item main-image">
+                                <img src="{{ form.instance.get_image_url }}" class="preview-img" alt="Main image">
+                                <div class="preview-overlay">
+                                    <div class="preview-actions">
+                                        <!-- Button to remove main image: posts back to this edit view -->
+                                        <form method="post" action="{% url 'storefront:product_edit' form.instance.pk %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="remove_main_image" value="1">
+                                            <button type="submit" title="Remove main image" class="preview-action-btn">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                                <div class="preview-badge">Main</div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    {% if form.image.errors %}
+                        <div class="error-message">
+                            <i class="bi bi-exclamation-circle"></i>
+                            {{ form.image.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Additional Images Upload -->
+                <div class="image-upload-section">
+                    <h4 class="form-label">Additional Photos</h4>
+                    <p class="section-description" style="margin-top: -0.5rem; margin-bottom: 1rem;">
+                        Add more photos from different angles (up to 9 additional images)
+                    </p>
+                    
+                    <div class="upload-area" id="additional-images-upload-area">
+                        <div class="upload-icon">
+                            <i class="bi bi-images"></i>
+                        </div>
+                        <h3 class="upload-title">Add More Photos</h3>
+                        <p class="upload-subtitle">Drag & drop multiple images or click to browse</p>
+                        <p class="upload-requirements">
+                            <i class="bi bi-info-circle"></i>
+                            You can select up to 9 additional images
+                        </p>
+                        <input type="file" 
+                               name="images" 
+                               id="id_images" 
+                               accept="image/*" 
+                               multiple 
+                               style="display: none;">
+                        <button type="button" class="upload-btn" onclick="document.getElementById('id_images').click()">
+                            <i class="bi bi-folder2-open"></i> Choose Additional Photos
+                        </button>
+                    </div>
+                    
+                    <div class="image-previews-container">
+                        <div id="additional-images-preview" class="preview-grid">
+                            {% if form.instance.pk %}
+                                {% for img in form.instance.images.all %}
+                                <div class="preview-item">
+                                    <img src="{{ img.get_image_url }}" class="preview-img" alt="{{ img.caption|default:'Image' }}">
+                                    <div class="preview-overlay">
+                                        <div class="preview-actions">
+                                            <!-- Delete gallery image -->
+                                            <form method="post" action="{% url 'storefront:image_delete' img.pk %}">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="next" value="{% url 'storefront:product_edit' form.instance.pk %}">
+                                                <button type="submit" title="Delete image" class="preview-action-btn">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="form-actions">
+                <a href="{% if form.instance.pk %}{% url 'listing-detail' form.instance.pk %}{% else %}{% url 'home' %}{% endif %}" 
+                   class="btn btn-secondary">
+                    <i class="bi bi-arrow-left"></i> Cancel
+                </a>
+                <button type="submit" class="btn btn-primary" id="submit-btn">
+                    {% if form.instance.pk %}
+                        <i class="bi bi-check-lg"></i> Update Listing
+                    {% else %}
+                        <i class="bi bi-plus-lg"></i> Create Listing
+                    {% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loading-overlay">
+    <div class="loading-spinner"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Use a JS boolean for edit mode (rendered by Django)
+const isEditMode = {% if form.instance.pk %}true{% else %}false{% endif %};
+document.addEventListener('DOMContentLoaded', function() {
+    // Form elements
+    const form = document.getElementById('listing-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    
+    // Image upload elements
+    const mainImageInput = document.getElementById('id_image');
+    const additionalImagesInput = document.getElementById('id_images');
+    const mainImagePreview = document.getElementById('main-image-preview');
+    const additionalImagesPreview = document.getElementById('additional-images-preview');
+    const mainImageUploadArea = document.getElementById('main-image-upload-area');
+    const additionalImagesUploadArea = document.getElementById('additional-images-upload-area');
+    
+    // Character counters
+    const titleInput = document.getElementById('{{ form.title.id_for_label }}');
+    const descriptionInput = document.getElementById('{{ form.description.id_for_label }}');
+    const titleCounter = document.getElementById('title-counter');
+    const descriptionCounter = document.getElementById('description-counter');
+    
+    // Track uploaded files
+    let mainImageFile = null;
+    let additionalImageFiles = [];
+    const maxAdditionalImages = 9;
+
+    // Initialize character counters
+    function initCharacterCounters() {
+        function updateCounter(input, counter, maxLength) {
+            const length = input.value.length;
+            const percentage = (length / maxLength) * 100;
+            counter.textContent = `${length}/${maxLength} characters`;
+            
+            // Update counter color based on usage
+            counter.classList.remove('near-limit', 'over-limit');
+            if (percentage >= 90) {
+                counter.classList.add('over-limit');
+            } else if (percentage >= 75) {
+                counter.classList.add('near-limit');
+            }
+        }
+
+        if (titleInput) {
+            titleInput.addEventListener('input', () => updateCounter(titleInput, titleCounter, 200));
+            updateCounter(titleInput, titleCounter, 200);
+        }
+
+        if (descriptionInput) {
+            descriptionInput.addEventListener('input', () => updateCounter(descriptionInput, descriptionCounter, 2000));
+            updateCounter(descriptionInput, descriptionCounter, 2000);
+        }
+    }
+
+    // Initialize drag and drop functionality
+    function initDragAndDrop() {
+        function setupDragDrop(uploadArea, input) {
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, () => {
+                    uploadArea.classList.add('drag-over');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, () => {
+                    uploadArea.classList.remove('drag-over');
+                }, false);
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    if (input === mainImageInput) {
+                        handleMainImageUpload(files[0]);
+                    } else {
+                        handleAdditionalImagesUpload(files);
+                    }
+                }
+            }, false);
+        }
+
+        setupDragDrop(mainImageUploadArea, mainImageInput);
+        setupDragDrop(additionalImagesUploadArea, additionalImagesInput);
+    }
+
+    // Handle main image upload
+    function handleMainImageUpload(file) {
+        if (!file || !file.type.match('image.*')) {
+            showError('Please select a valid image file.');
+            return;
+        }
+
+        // Validate file size (10MB limit)
+        if (file.size > 10 * 1024 * 1024) {
+            showError('Image file is too large. Maximum size is 10MB.');
+            return;
+        }
+
+        mainImageFile = file;
+        displayImagePreview(file, mainImagePreview, true);
+        mainImageInput.files = createFileList([file]);
+    }
+
+    // Handle additional images upload
+    function handleAdditionalImagesUpload(files) {
+        const validFiles = Array.from(files).filter(file => 
+            file.type.match('image.*') && file.size <= 10 * 1024 * 1024
+        );
+
+        if (validFiles.length === 0) {
+            showError('Please select valid image files (max 10MB each).');
+            return;
+        }
+
+        // Check if we're exceeding the limit
+        const currentCount = additionalImageFiles.length;
+        const newCount = currentCount + validFiles.length;
+
+        if (newCount > maxAdditionalImages) {
+            showError(`Maximum ${maxAdditionalImages} additional images allowed. You have ${currentCount} and tried to add ${validFiles.length} more.`);
+            return;
+        }
+
+        // Add new files
+        validFiles.forEach(file => {
+            additionalImageFiles.push(file);
+            displayImagePreview(file, additionalImagesPreview, false);
+        });
+
+        // Update the file input
+        additionalImagesInput.files = createFileList(additionalImageFiles);
+    }
+
+    // Display image preview
+    function displayImagePreview(file, container, isMain) {
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            const previewItem = document.createElement('div');
+            previewItem.className = `preview-item ${isMain ? 'main-image' : ''}`;
+            
+            const img = document.createElement('img');
+            img.src = e.target.result;
+            img.className = 'preview-img';
+            img.alt = 'Preview';
+            
+            const overlay = document.createElement('div');
+            overlay.className = 'preview-overlay';
+            
+            const actions = document.createElement('div');
+            actions.className = 'preview-actions';
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'preview-action-btn';
+            removeBtn.innerHTML = '<i class="bi bi-trash"></i>';
+            removeBtn.title = 'Remove image';
+            removeBtn.onclick = function() {
+                previewItem.remove();
+                if (isMain) {
+                    mainImageFile = null;
+                    mainImageInput.value = '';
+                } else {
+                    const index = additionalImageFiles.findIndex(f => f.name === file.name);
+                    if (index > -1) {
+                        additionalImageFiles.splice(index, 1);
+                        additionalImagesInput.files = createFileList(additionalImageFiles);
+                    }
+                }
+            };
+            
+            if (isMain) {
+                const badge = document.createElement('div');
+                badge.className = 'preview-badge';
+                badge.textContent = 'Main';
+                previewItem.appendChild(badge);
+            }
+            
+            actions.appendChild(removeBtn);
+            overlay.appendChild(actions);
+            previewItem.appendChild(img);
+            previewItem.appendChild(overlay);
+            
+            if (isMain) {
+                container.innerHTML = '';
+            }
+            container.appendChild(previewItem);
+        };
+        
+        reader.readAsDataURL(file);
+    }
+
+    // Helper function to create FileList (simulated)
+    function createFileList(files) {
+        const dt = new DataTransfer();
+        files.forEach(file => dt.items.add(file));
+        return dt.files;
+    }
+
+    // Show error message
+    function showError(message) {
+        // You can replace this with a more sophisticated notification system
+        alert(message);
+    }
+
+    // Form submission handler
+    function initFormSubmission() {
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                // Basic validation
+                if (!mainImageFile && !isEditMode) {
+                    e.preventDefault();
+                    showError('Please upload a main image for your listing.');
+                    mainImageUploadArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
+                // Show loading overlay
+                loadingOverlay.classList.add('show');
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
+            });
+        }
+    }
+
+    // Price input formatting
+    function initPriceFormatting() {
+        const priceInput = document.getElementById('{{ form.price.id_for_label }}');
+        if (priceInput) {
+            priceInput.addEventListener('blur', function() {
+                if (this.value) {
+                    this.value = parseFloat(this.value).toFixed(2);
+                }
+            });
+        }
+    }
+
+    // Initialize file input event listeners
+    function initFileInputListeners() {
+        if (mainImageInput) {
+            mainImageInput.addEventListener('change', function(e) {
+                if (this.files.length > 0) {
+                    handleMainImageUpload(this.files[0]);
+                }
+            });
+        }
+
+        if (additionalImagesInput) {
+            additionalImagesInput.addEventListener('change', function(e) {
+                if (this.files.length > 0) {
+                    handleAdditionalImagesUpload(this.files);
+                }
+            });
+        }
+    }
+
+    // Initialize all functionality
+    function init() {
+        initCharacterCounters();
+        initDragAndDrop();
+        initFileInputListeners();
+        initFormSubmission();
+        initPriceFormatting();
+        
+        // Load existing images for edit mode
+        {% if form.instance.pk %}
+            loadExistingImages();
+        {% endif %}
+    }
+
+    // Load existing images for edit mode
+    function loadExistingImages() {
+        // This would typically be populated from your backend
+        // For now, we'll assume the form handles existing images
+        console.log('Edit mode - existing images would be loaded here');
+    }
+
+    // Initialize the application
+    init();
+});
+</script>
+{% endblock %}

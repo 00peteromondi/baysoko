@@ -1,0 +1,386 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Favorites - HomaBay Souq{% endblock %}
+
+{% block extra_css %}
+<style>
+    .favorites-container {
+        padding: 2rem 0;
+    }
+    
+    .page-header {
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+    
+    .page-header h1 {
+        font-weight: 700;
+        color: var(--text-color);
+        margin-bottom: 0.5rem;
+    }
+    
+    .page-header p {
+        color: var(--text-muted);
+        font-size: 1.1rem;
+    }
+    
+    .favorites-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .favorite-card {
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 1rem;
+        overflow: hidden;
+        box-shadow: var(--shadow);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .favorite-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-hover);
+    }
+    
+    .favorite-image {
+        position: relative;
+        height: 200px;
+        overflow: hidden;
+    }
+    
+    .favorite-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.5s ease;
+    }
+    
+    .favorite-card:hover .favorite-image img {
+        transform: scale(1.05);
+    }
+    
+    .favorite-badges {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    .favorite-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+    }
+    
+    .favorite-actions {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        display: flex;
+        gap: 5px;
+    }
+    
+    .favorite-actions .btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
+        border: none;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+    }
+    
+    .favorite-actions .btn:hover {
+        transform: scale(1.1);
+        background-color: white;
+    }
+    
+    .favorite-actions .btn-remove {
+        color: var(--danger-gemini);
+    }
+    
+    .favorite-content {
+        padding: 1.25rem;
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .favorite-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        line-height: 1.4;
+        color: var(--text-color);
+    }
+    
+    .favorite-description {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+        flex-grow: 1;
+    }
+    
+    .favorite-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .favorite-price {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--primary-gemini);
+    }
+    
+    .favorite-location {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+    
+    .favorite-footer {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .favorite-footer .btn {
+        flex: 1;
+        border-radius: 0.5rem;
+        font-weight: 500;
+        padding: 0.5rem;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: var(--text-muted);
+    }
+    
+    .empty-state-icon {
+        font-size: 4rem;
+        margin-bottom: 1.5rem;
+        opacity: 0.5;
+    }
+    
+    .empty-state h3 {
+        margin-bottom: 1rem;
+        color: var(--text-color);
+    }
+    
+    .empty-state p {
+        margin-bottom: 2rem;
+        max-width: 500px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    .filters-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    
+    .sort-options {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .sort-select {
+        background-color: var(--input-bg);
+        border: 1px solid var(--border-color);
+        color: var(--text-color);
+        border-radius: 0.5rem;
+        padding: 0.5rem 0.75rem;
+    }
+    
+    .results-count {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+    }
+    
+    @media (max-width: 768px) {
+        .favorites-grid {
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        }
+        
+        .filters-bar {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        
+        .sort-options {
+            justify-content: space-between;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container favorites-container">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'profile' user.pk %}">Profile</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Favorites</li>
+        </ol>
+    </nav>
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1>My Favorites</h1>
+        <p>Items you've saved for later</p>
+    </div>
+
+    <!-- Filters and Sort Bar -->
+    <div class="filters-bar">
+        <div class="results-count">
+            {% if favorites %}
+                Showing {{ favorites|length }} favorite item{{ favorites|length|pluralize }}
+            {% else %}
+                No favorites yet
+            {% endif %}
+        </div>
+        <div class="sort-options">
+            <label for="sort-favorites" class="form-label mb-0">Sort by:</label>
+            <select class="sort-select" id="sort-favorites">
+                <option value="date_added">Date Added</option>
+                <option value="price_low">Price: Low to High</option>
+                <option value="price_high">Price: High to Low</option>
+                <option value="name">Name A-Z</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Favorites Grid -->
+    {% if favorites %}
+    <div class="favorites-grid">
+        {% for favorite in favorites %}
+        <div class="favorite-card" data-price="{{ favorite.listing.price }}" data-date="{{ favorite.date_added|date:'Y-m-d' }}" data-name="{{ favorite.listing.title }}">
+            <div class="favorite-image">
+                <img src="{{ favorite.listing.get_image_url }}" alt="{{ favorite.listing.title }}">
+                <div class="favorite-badges">
+                    {% if favorite.listing.is_sold %}
+                    <span class="favorite-badge bg-danger">Sold</span>
+                    {% else %}
+                    <span class="favorite-badge bg-success">Available</span>
+                    {% endif %}
+                    <span class="favorite-badge bg-info">{{ favorite.listing.category.name }}</span>
+                </div>
+                <div class="favorite-actions">
+                    <form action="{% url 'toggle_favorite' favorite.listing.id %}" method="post" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-remove" title="Remove from favorites">
+                            <i class="bi bi-heart-fill"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+            <div class="favorite-content">
+                <h3 class="favorite-title">{{ favorite.listing.title }}</h3>
+                <p class="favorite-description">{{ favorite.listing.description|truncatewords:15 }}</p>
+                <div class="favorite-meta">
+                    <span class="favorite-price">KSh {{ favorite.listing.price }}</span>
+                    <span class="favorite-location">
+                        <i class="bi bi-geo-alt"></i> {{ favorite.listing.get_location_display }}
+                    </span>
+                </div>
+                <div class="favorite-footer">
+                    <a href="{% url 'listing-detail' favorite.listing.pk %}" class="btn btn-primary">View Details</a>
+                    {% if user.is_authenticated and favorite.listing.stock > 0 and not favorite.listing.is_sold %}
+                    <form method="post" action="{% url 'add_to_cart' favorite.listing.id %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-primary">Add to Cart</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <!-- Empty State -->
+    <div class="empty-state">
+        <div class="empty-state-icon">
+            <i class="bi bi-heart"></i>
+        </div>
+        <h3>No favorites yet</h3>
+        <p>You haven't added any items to your favorites. Start browsing our listings and save items you love for easy access later.</p>
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
+            <a href="{% url 'all-listings' %}" class="btn btn-primary">Browse Listings</a>
+            <a href="{% url 'home' %}" class="btn btn-outline-primary">Back to Home</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const sortSelect = document.getElementById('sort-favorites');
+        const favoritesGrid = document.querySelector('.favorites-grid');
+        
+        if (sortSelect && favoritesGrid) {
+            sortSelect.addEventListener('change', function() {
+                const sortValue = this.value;
+                const favoriteCards = Array.from(favoritesGrid.querySelectorAll('.favorite-card'));
+                
+                favoriteCards.sort((a, b) => {
+                    switch(sortValue) {
+                        case 'price_low':
+                            return parseFloat(a.dataset.price) - parseFloat(b.dataset.price);
+                        case 'price_high':
+                            return parseFloat(b.dataset.price) - parseFloat(a.dataset.price);
+                        case 'name':
+                            return a.dataset.name.localeCompare(b.dataset.name);
+                        case 'date_added':
+                        default:
+                            return new Date(b.dataset.date) - new Date(a.dataset.date);
+                    }
+                });
+                
+                // Clear the grid
+                favoritesGrid.innerHTML = '';
+                
+                // Append sorted cards
+                favoriteCards.forEach(card => {
+                    favoritesGrid.appendChild(card);
+                });
+            });
+        }
+        
+        // Add confirmation for removing favorites
+        const removeButtons = document.querySelectorAll('.favorite-actions .btn-remove');
+        removeButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                if (!confirm('Are you sure you want to remove this item from your favorites?')) {
+                    e.preventDefault();
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

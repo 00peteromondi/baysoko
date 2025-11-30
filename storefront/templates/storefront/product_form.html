@@ -1,0 +1,194 @@
+[file name]: product_form.html
+[file content begin]
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% if product %}Edit {{ product.title }}{% else %}Create New Product{% endif %} - HomaBay Souq{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="fw-bold mb-2">
+                {% if product %}
+                <i class="bi bi-pencil-square me-2"></i>Edit Product
+                {% else %}
+                <i class="bi bi-plus-circle me-2"></i>Create New Product
+                {% endif %}
+            </h1>
+            <p class="text-muted mb-0">
+                {% if product %}
+                Update your product details and images
+                {% else %}
+                Add a new product to your store
+                {% endif %}
+            </p>
+        </div>
+        <a href="{% url 'storefront:seller_dashboard' %}" class="btn btn-outline-secondary rounded-pill">
+            <i class="bi bi-arrow-left me-2"></i>
+            Back to Dashboard
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-lg">
+                <div class="card-header bg-gradient-primary text-white py-3">
+                    <h5 class="mb-0">
+                        <i class="bi bi-box-seam me-2"></i>
+                        Product Information
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {{ form.non_field_errors }}
+                        </div>
+                        {% endif %}
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {{ form.title|as_crispy_field }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {{ form.price|as_crispy_field }}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            {{ form.description|as_crispy_field }}
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {{ form.category|as_crispy_field }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {{ form.condition|as_crispy_field }}
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {% if form.brand %}
+                                    {{ form.brand|as_crispy_field }}
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {% if form.color %}
+                                    {{ form.color|as_crispy_field }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Main Image Upload -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Main Product Image *</label>
+                            <input type="file" class="form-control" name="image" accept="image/*">
+                            <div class="form-text">
+                                This will be the primary image displayed for your product
+                            </div>
+                        </div>
+                        
+                        <!-- Additional Images -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Additional Images</label>
+                            <input type="file" class="form-control" name="images" multiple accept="image/*">
+                            <div class="form-text">
+                                Upload multiple images to create a product gallery (max 5 images)
+                            </div>
+                        </div>
+                        
+                        <!-- Preview of existing images -->
+                        {% if product and product.images.all %}
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Current Images</label>
+                            <div class="row g-2">
+                                {% for img in product.images.all %}
+                                <div class="col-3">
+                                    <div class="position-relative">
+                                        <img src="{{ img.get_image_url }}" 
+                                             alt="Product image"
+                                             class="img-fluid rounded"
+                                             style="height: 100px; object-fit: cover; width: 100%;">
+                                        <a href="{% url 'storefront:image_delete' pk=img.pk %}" 
+                                           class="position-absolute top-0 end-0 btn btn-sm btn-danger rounded-circle"
+                                           style="transform: translate(30%, -30%);">
+                                            <i class="bi bi-x"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="d-flex gap-3 mt-4">
+                            <button type="submit" class="btn btn-accent-blue rounded-pill px-5 py-3">
+                                <i class="bi bi-check-circle me-2"></i>
+                                {% if product %}Update Product{% else %}Create Product{% endif %}
+                            </button>
+                            <a href="{% url 'storefront:seller_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 py-3">
+                                <i class="bi bi-x-circle me-2"></i>
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tips Sidebar -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm sticky-top" style="top: 100px;">
+                <div class="card-header bg-light py-3">
+                    <h6 class="mb-0 fw-bold">
+                        <i class="bi bi-lightbulb me-2"></i>
+                        Product Tips
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-primary">📸 Quality Images</h6>
+                        <p class="small text-muted mb-0">Use clear, well-lit photos from multiple angles to attract buyers.</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-success">📝 Detailed Descriptions</h6>
+                        <p class="small text-muted mb-0">Include specifications, condition, and unique features.</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-warning">💰 Competitive Pricing</h6>
+                        <p class="small text-muted mb-0">Research similar products to set a fair price.</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-info">🏷️ Proper Categorization</h6>
+                        <p class="small text-muted mb-0">Choose the right category to reach interested buyers.</p>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="alert alert-info small">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Need help?</strong> Contact support for assistance with creating your product listing.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.bg-gradient-primary {
+    background: linear-gradient(135deg, var(--primary-gemini) 0%, #0d47a1 100%) !important;
+}
+
+.sticky-top {
+    z-index: 10;
+}
+</style>
+{% endblock %}
+[file content end]

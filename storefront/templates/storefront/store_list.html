@@ -1,0 +1,194 @@
+[file name]: store_list.html
+[file content begin]
+{% extends 'base.html' %}
+
+{% block title %}Stores - HomaBay Souq{% endblock %}
+
+{% block content %}
+<div class="apple-container py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="fw-bold mb-2">Browse Stores</h1>
+            <p class="text-muted mb-0">Discover amazing local stores in Homabay County</p>
+        </div>
+        <div class="d-flex gap-2">
+            <div class="dropdown">
+                <button class="apple-btn apple-btn-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                    <i class="bi bi-filter me-2"></i>Filter
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="?sort=popular">Most Popular</a></li>
+                    <li><a class="dropdown-item" href="?sort=newest">Newest First</a></li>
+                    <li><a class="dropdown-item" href="?sort=premium">Premium Stores</a></li>
+                    <li><a class="dropdown-item" href="?sort=rating">Highest Rated</a></li>
+                </ul>
+            </div>
+            {% if user.is_authenticated %}
+            <a href="{% url 'storefront:store_create' %}" class="apple-btn apple-btn-primary">
+                <i class="bi bi-plus-circle me-2"></i>Create Store
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Search and Stats -->
+    <div class="row mb-4">
+        <div class="col-lg-6">
+            <form class="apple-search-form" role="search">
+                <input class="apple-search-input" name="q" type="search" placeholder="Search stores...">
+                <button class="apple-search-button" type="submit"><i class="bi bi-search"></i></button>
+            </form>
+        </div>
+        <div class="col-lg-6 text-lg-end">
+            <p class="text-muted mb-0 mt-2 mt-lg-0">
+                Showing <strong>{{ stores.count }}</strong> stores in Homabay County
+            </p>
+        </div>
+    </div>
+
+    <!-- Stores Grid -->
+    {% if stores %}
+    <div class="row g-4">
+        {% for store in stores %}
+        <div class="col-md-6 col-lg-4">
+            <div class="apple-card store-card h-100">
+                <div class="position-relative">
+                    <!-- Store Cover Image -->
+                    <div class="store-cover" {% if store.cover_image %} style="height:120px; background-image: linear-gradient(rgba(0,0,0,0.22), rgba(0,0,0,0.06)), url('{{ store.cover_image.url }}'); background-size: cover; background-position: center; border-radius: var(--apple-radius-lg) var(--apple-radius-lg) 0 0;" {% else %} style="height:120px; background: linear-gradient(135deg, var(--accent-blue) 0%, var(--apple-purple) 100%); border-radius: var(--apple-radius-lg) var(--apple-radius-lg) 0 0;" {% endif %}>
+                    </div>
+                    
+                    <!-- Store Logo -->
+                    <div class="position-absolute top-100 start-50 translate-middle">
+                    <img src="{{ store.get_logo_url|default:'https://placehold.co/80x80/c2c2c2/1f1f1f?text=Store' }}"
+                        data-default="https://placehold.co/80x80/c2c2c2/1f1f1f?text=Store"
+                        alt="{{ store.name }}"
+                        class="rounded-circle border-4 border-white shadow-sm"
+                        style="width: 80px; height: 80px; object-fit: cover;"
+                        onerror="this.onerror=null;this.src=this.getAttribute('data-default');">
+                    </div>
+                    
+                    <!-- Premium Badge -->
+                    {% if store.is_premium %}
+                    <span class="position-absolute top-0 end-0 bg-warning text-dark px-3 py-1 m-3 rounded-pill small">
+                        <i class="bi bi-star-fill me-1"></i>Premium
+                    </span>
+                    {% endif %}
+                </div>
+                
+                <div class="card-body pt-5 text-center">
+                    <h5 class="card-title fw-bold mb-2">{{ store.name }}</h5>
+                    <p class="card-text text-muted small line-clamp-2 mb-3">{{ store.description|default:"No description provided" }}</p>
+                    
+                    <!-- Store Stats -->
+                    <div class="row text-center mb-3">
+                        <div class="col-4">
+                            <h6 class="fw-bold text-primary mb-1">{{ store.listings.count }}</h6>
+                            <small class="text-muted">Products</small>
+                        </div>
+                        <div class="col-4">
+                            <h6 class="fw-bold text-success mb-1">{{ store.get_rating|default:"4.5" }}</h6>
+                            <small class="text-muted">Rating</small>
+                        </div>
+                        <div class="col-4">
+                            <h6 class="fw-bold text-info mb-1">{{ store.get_sales_count|default:"50" }}+</h6>
+                            <small class="text-muted">Sales</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Store Tags -->
+                    <div class="mb-3">
+                        {% if store.is_premium %}
+                        <span class="badge bg-warning text-dark me-1">Verified</span>
+                        {% endif %}
+                        <span class="badge bg-light text-dark me-1">Local</span>
+                        <span class="badge bg-light text-dark">Homabay</span>
+                    </div>
+                </div>
+                
+                <div class="card-footer bg-transparent border-0 pt-0">
+                    <a href="{% url 'storefront:store_detail' slug=store.slug %}" 
+                       class="apple-btn apple-btn-primary w-100">
+                        <i class="bi bi-eye me-1"></i>Visit Store
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-shop display-1 text-muted mb-3"></i>
+        <h3 class="text-muted mb-3">No Stores Found</h3>
+        <p class="text-muted mb-4">There are no stores matching your search criteria.</p>
+        {% if user.is_authenticated %}
+        <a href="{% url 'storefront:store_create' %}" class="apple-btn apple-btn-primary px-4">
+            <i class="bi bi-plus-circle me-2"></i>
+            Create the First Store
+        </a>
+        {% else %}
+        <a href="{% url 'register' %}" class="apple-btn apple-btn-primary px-4">
+            <i class="bi bi-person-plus me-2"></i>
+            Join to Create a Store
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Pagination -->
+    {% if is_paginated %}
+    <nav aria-label="Store pagination" class="mt-5">
+        <ul class="apple-pagination">
+            {% if page_obj.has_previous %}
+            <li class="apple-page-item">
+                <a class="apple-page-button" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+            </li>
+            {% endif %}
+            
+            {% for num in page_obj.paginator.page_range %}
+            <li class="apple-page-item {% if page_obj.number == num %}active{% endif %}">
+                <a class="apple-page-button" href="?page={{ num }}">{{ num }}</a>
+            </li>
+            {% endfor %}
+            
+            {% if page_obj.has_next %}
+            <li class="apple-page-item">
+                <a class="apple-page-button" href="?page={{ page_obj.next_page_number }}">Next</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<style>
+.store-card {
+    transition: var(--apple-transition);
+}
+
+.store-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--apple-shadow-lg);
+}
+
+.store-cover {
+    transition: var(--apple-transition);
+}
+
+.store-card:hover .store-cover {
+    transform: scale(1.02);
+}
+
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.border-4 {
+    border-width: 4px !important;
+}
+</style>
+{% endblock %}
+[file content end]

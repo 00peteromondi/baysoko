@@ -1,0 +1,672 @@
+{% extends 'base.html' %}
+
+{% block title %}Payment - Order #{{ order.id }} - HomaBay Souq{% endblock %}
+
+{% block extra_css %}
+<style>
+    .payment-container {
+        min-height: 70vh;
+    }
+    
+    .payment-card {
+        border-radius: 16px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+    }
+    
+    .payment-header {
+        background: linear-gradient(135deg, var(--primary-gemini) 0%, var(--brand-dark-700) 100%);
+        color: white;
+        padding: 2rem;
+    }
+    
+    .payment-method-card {
+    border: 2px solid var(--muted-border);
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    .payment-method-card:hover {
+        border-color: var(--primary-gemini);
+        transform: translateY(-2px);
+    }
+    
+    .payment-method-card.selected {
+        border-color: var(--primary-gemini);
+        background-color: rgba(var(--primary-gemini-rgb), 0.05);
+    }
+    
+    .payment-status {
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        font-weight: 600;
+    }
+    
+    .status-pending {
+        background-color: var(--status-pending-bg, #fff3cd);
+        color: var(--status-pending-text, #856404);
+    }
+
+    .status-initiated {
+        background-color: var(--status-initiated-bg, #d1edff);
+        color: var(--status-initiated-text, #0c5460);
+    }
+
+    .status-completed {
+        background-color: var(--status-completed-bg, #d4edda);
+        color: var(--status-completed-text, #155724);
+    }
+
+    .status-failed {
+        background-color: var(--status-failed-bg, #f8d7da);
+        color: var(--status-failed-text, #721c24);
+    }
+    
+    .mpesa-simulation {
+        background: linear-gradient(135deg, var(--mpesa-green) 0%, var(--mpesa-green-dark) 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+    }
+    
+    .payment-timeline {
+        position: relative;
+        padding-left: 2rem;
+    }
+    
+    .payment-timeline::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--muted-border);
+    }
+    
+    .timeline-step {
+        position: relative;
+        margin-bottom: 2rem;
+    }
+    
+    .timeline-step::before {
+        content: '';
+        position: absolute;
+        left: -2rem;
+        top: 0.25rem;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--muted-700);
+        margin-left: -5px;
+    }
+    
+    .timeline-step.active::before {
+        background: var(--primary-gemini);
+        box-shadow: 0 0 0 3px rgba(var(--primary-gemini-rgb), 0.2);
+    }
+    
+    .timeline-step.completed::before {
+        background: var(--status-completed-text, #28a745);
+    }
+    
+    .security-badge {
+        background: var(--surface-100);
+        border: 1px solid var(--muted-border);
+        border-radius: 8px;
+        padding: 1rem;
+    }
+    
+    @media (max-width: 768px) {
+        .payment-header {
+            padding: 1.5rem 1rem;
+        }
+        
+        .payment-timeline {
+            padding-left: 1.5rem;
+        }
+        
+        .timeline-step::before {
+            left: -1.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4 payment-container">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'view_cart' %}">Cart</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'checkout' %}">Checkout</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Payment</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card payment-card mb-4">
+                <div class="payment-header text-center">
+                    <h2 class="mb-2"><i class="bi bi-lock-fill me-2"></i>Secure Payment</h2>
+                    <p class="mb-0">Complete your purchase for Order #{{ order.id }}</p>
+                </div>
+                
+                <div class="card-body p-4">
+                    <!-- Payment Status -->
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h4 class="mb-0">Payment Details</h4>
+                        <span class="payment-status status-{{ order.payment.status }}">
+                            {{ order.payment.get_status_display }}
+                        </span>
+                    </div>
+                    
+                    <!-- Payment Method Selection (Only show if payment is pending) -->
+                    {% if order.payment.status == 'pending' %}
+                    <div class="mb-4">
+                        <h5 class="mb-3">Choose Payment Method</h5>
+                        
+                        <!-- M-Pesa Option -->
+                        <div class="payment-method-card" data-method="mpesa">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="payment_method" id="mpesa" value="mpesa" checked>
+                                <label class="form-check-label w-100" for="mpesa">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-phone fs-1 text-success me-3"></i>
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1">M-Pesa</h6>
+                                            <p class="mb-0 text-muted">Pay instantly via M-Pesa. You'll receive a prompt on your phone.</p>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Card Option -->
+                        <div class="payment-method-card" data-method="card">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="payment_method" id="card" value="card">
+                                <label class="form-check-label w-100" for="card">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-credit-card fs-1 text-primary me-3"></i>
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1">Credit/Debit Card</h6>
+                                            <p class="mb-0 text-muted">Pay securely with your credit or debit card.</p>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Cash on Delivery Option -->
+                        <div class="payment-method-card" data-method="cash">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="payment_method" id="cash" value="cash">
+                                <label class="form-check-label w-100" for="cash">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-cash-coin fs-1 text-warning me-3"></i>
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1">Cash on Delivery</h6>
+                                            <p class="mb-0 text-muted">Pay with cash when your order is delivered.</p>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Payment Form (Dynamic based on selection) -->
+                    <div id="paymentFormContainer">
+                        <!-- M-Pesa Payment Form -->
+                        <div class="payment-method-form" id="mpesaForm">
+                            <div class="mpesa-simulation mb-4">
+                                <div class="text-center mb-3">
+                                    <i class="bi bi-phone display-4 mb-2"></i>
+                                    <h4>M-Pesa Payment</h4>
+                                    <p>You will receive a prompt on your phone to complete payment</p>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="mpesaNumber" class="form-label">M-Pesa Phone Number</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">+254</span>
+                                        <input type="tel" class="form-control" id="mpesaNumber" 
+                                               placeholder="7XX XXX XXX" 
+                                               value="{% if order.phone_number %}{{ order.phone_number|slice:'3:' }}{% endif %}">
+                                    </div>
+                                    <small class="text-white-50">Enter your M-Pesa registered phone number</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Card Payment Form -->
+                        <div class="payment-method-form" id="cardForm" style="display: none;">
+                            <div class="alert alert-info">
+                                <h6><i class="bi bi-credit-card me-2"></i>Card Payment</h6>
+                                <p class="mb-0">Your card payment will be processed securely. Click "Complete Payment" to proceed.</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Cash on Delivery Info -->
+                        <div class="payment-method-form" id="cashForm" style="display: none;">
+                            <div class="alert alert-warning">
+                                <h6><i class="bi bi-cash-coin me-2"></i>Cash on Delivery</h6>
+                                <p class="mb-0">You will pay with cash when your order is delivered. Our delivery agent will contact you to arrange the delivery time.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Payment Action Button -->
+                    <button type="button" class="btn btn-primary w-100 py-3" id="processPaymentBtn">
+                        <i class="bi bi-lock-fill me-2"></i>Complete Payment - KSh {{ order.total_price }}
+                    </button>
+                    {% endif %}
+                    
+                    <!-- Payment Processing Section -->
+                    <div id="paymentProcessingSection" {% if order.payment.status != 'initiated' %}style="display: none;"{% endif %}>
+                        <div class="alert alert-info text-center">
+                            <i class="bi bi-phone display-4 text-info mb-3"></i>
+                            <h5>Check Your Phone</h5>
+                            <p class="mb-2">Enter your M-Pesa PIN to complete payment of</p>
+                            <h4 class="text-info mb-3">KSh {{ order.total_price }}</h4>
+                            <div class="spinner-border text-info mb-3" role="status">
+                                <span class="visually-hidden">Processing...</span>
+                            </div>
+                            <p class="small text-muted mb-2">Waiting for payment confirmation...</p>
+                            <button type="button" class="btn btn-outline-info btn-sm" id="checkStatusBtn">
+                                <i class="bi bi-arrow-clockwise me-1"></i> Check Status
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Payment Success Section -->
+                    <div id="paymentSuccessSection" {% if order.payment.status != 'completed' %}style="display: none;"{% endif %}>
+                        <div class="alert alert-success text-center">
+                            <i class="bi bi-check-circle display-4 text-success mb-3"></i>
+                            <h5>Payment Successful!</h5>
+                            <p class="mb-2">Your payment has been processed successfully.</p>
+                            {% if order.payment.transaction_id %}
+                            <p class="mb-2"><strong>Transaction ID:</strong> {{ order.payment.transaction_id }}</p>
+                            {% endif %}
+                            <a href="{% url 'order_detail' order.id %}" class="btn btn-success mt-2">
+                                <i class="bi bi-eye me-2"></i> View Order Details
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <!-- Security Badge -->
+                    <div class="security-badge mt-4">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-shield-check text-success fs-4 me-3"></i>
+                            <div>
+                                <h6 class="mb-1">Secure Payment</h6>
+                                <p class="mb-0 small">Your payment information is encrypted and secure. We do not store your M-Pesa PIN or card details.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <!-- Order Summary -->
+            <div class="card payment-card sticky-top" style="top: 100px;">
+                <div class="card-header bg-light py-3">
+                    <h5 class="mb-0"><i class="bi bi-receipt me-2"></i>Order Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="order-items mb-3">
+                        {% for item in order.order_items.all %}
+                        <div class="d-flex align-items-center mb-3 pb-3 border-bottom">
+                            <img src="{{ item.listing.get_image_url }}" 
+                                 alt="{{ item.listing.title }}"
+                                 class="rounded me-3"
+                                 width="50"
+                                 height="50"
+                                 style="object-fit: cover;"
+                                 onerror="this.src='https://placehold.co/50x50/c2c2c2/1f1f1f?text=HS'">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">{{ item.listing.title }}</h6>
+                                <small class="text-muted">Qty: {{ item.quantity }}</small>
+                            </div>
+                            <span class="fw-bold text-primary">KSh {{ item.get_total_price }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Subtotal:</span>
+                        <span>KSh {{ order.total_price }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Shipping:</span>
+                        <span class="text-success">Free</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3">
+                        <span>Tax:</span>
+                        <span>KSh 0.00</span>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between mb-3">
+                        <strong>Total:</strong>
+                        <strong class="text-primary fs-5">KSh {{ order.total_price }}</strong>
+                    </div>
+                    
+                    <!-- Shipping Information -->
+                    <div class="mt-4">
+                        <h6 class="mb-3">Shipping Information</h6>
+                        <div class="small">
+                            <p class="mb-1"><strong>Name:</strong> {{ order.first_name }} {{ order.last_name }}</p>
+                            <p class="mb-1"><strong>Phone:</strong> {{ order.phone_number }}</p>
+                            <p class="mb-1"><strong>Address:</strong> {{ order.shipping_address }}</p>
+                            <p class="mb-0"><strong>City:</strong> {{ order.city }}, {{ order.postal_code }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Support Card -->
+            <div class="card border-0 shadow-sm mt-4">
+                <div class="card-body text-center">
+                    <h6 class="mb-2">Need Help with Payment?</h6>
+                    <p class="text-muted small mb-3">Our support team is here to assist you</p>
+                    <div class="d-flex flex-column gap-2">
+                        <a href="tel:+254700123456" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-telephone me-1"></i> Call Support
+                        </a>
+                        <a href="mailto:support@homabaysouq.com" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-envelope me-1"></i> Email Us
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const processPaymentBtn = document.getElementById('processPaymentBtn');
+    const checkStatusBtn = document.getElementById('checkStatusBtn');
+    const paymentMethodCards = document.querySelectorAll('.payment-method-card');
+    const paymentForms = document.querySelectorAll('.payment-method-form');
+    
+    let statusCheckInterval;
+    
+    // Payment method selection
+    paymentMethodCards.forEach(card => {
+        card.addEventListener('click', function() {
+            const radio = this.querySelector('input[type="radio"]');
+            radio.checked = true;
+            
+            // Update UI
+            paymentMethodCards.forEach(c => c.classList.remove('selected'));
+            this.classList.add('selected');
+            
+            updatePaymentFormDisplay();
+        });
+    });
+    
+    function updatePaymentFormDisplay() {
+        const selectedMethod = document.querySelector('input[name="payment_method"]:checked').value;
+        
+        // Hide all forms
+        paymentForms.forEach(form => {
+            form.style.display = 'none';
+        });
+        
+        // Show selected form
+        const selectedForm = document.getElementById(selectedMethod + 'Form');
+        if (selectedForm) {
+            selectedForm.style.display = 'block';
+        }
+    }
+    
+    // Initialize form display
+    updatePaymentFormDisplay();
+    
+    // Format phone number input
+    const phoneInput = document.getElementById('mpesaNumber');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function() {
+            let value = this.value.replace(/\D/g, '');
+            if (value.length > 9) value = value.substring(0, 9);
+            
+            // Format as 7XX XXX XXX
+            if (value.length > 3) {
+                value = value.substring(0, 3) + ' ' + value.substring(3);
+            }
+            if (value.length > 7) {
+                value = value.substring(0, 7) + ' ' + value.substring(7);
+            }
+            
+            this.value = value;
+        });
+    }
+    
+    // Process payment
+    if (processPaymentBtn) {
+        processPaymentBtn.addEventListener('click', function() {
+            const selectedMethod = document.querySelector('input[name="payment_method"]:checked').value;
+            
+            // Validate form based on method
+            if (selectedMethod === 'mpesa') {
+                const mpesaNumber = document.getElementById('mpesaNumber').value.replace(/\s/g, '');
+                if (!mpesaNumber || mpesaNumber.length !== 9) {
+                    showToast('Please enter a valid M-Pesa phone number (9 digits without country code)', 'error');
+                    return;
+                }
+                
+                // Initiate M-Pesa payment via AJAX
+                initiateMpesaPayment(mpesaNumber);
+            } else {
+                // For card and cash, submit the form directly
+                processOtherPayment(selectedMethod);
+            }
+        });
+    }
+    
+    function initiateMpesaPayment(phoneNumber) {
+        // Disable button and show loading
+        processPaymentBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i> Initiating Payment...';
+        processPaymentBtn.disabled = true;
+        
+        // Send AJAX request to initiate payment
+        fetch(`/orders/{{ order.id }}/initiate-mpesa/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': getCSRFToken(),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: `phone_number=${encodeURIComponent(phoneNumber)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message, 'success');
+                
+                // Switch to processing view
+                document.getElementById('paymentFormContainer').style.display = 'none';
+                document.getElementById('paymentProcessingSection').style.display = 'block';
+                processPaymentBtn.style.display = 'none';
+                
+                // Start checking payment status
+                startStatusChecking();
+            } else {
+                showToast(data.error, 'error');
+                
+                // Re-enable button
+                processPaymentBtn.innerHTML = '<i class="bi bi-lock-fill me-2"></i> Complete Payment - KSh {{ order.total_price }}';
+                processPaymentBtn.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('An error occurred while initiating payment. Please try again.', 'error');
+            
+            // Re-enable button
+            processPaymentBtn.innerHTML = '<i class="bi bi-lock-fill me-2"></i> Complete Payment - KSh {{ order.total_price }}';
+            processPaymentBtn.disabled = false;
+        });
+    }
+    
+    function processOtherPayment(method) {
+        // Create form and submit
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = window.location.href;
+        
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrfmiddlewaretoken';
+        csrfInput.value = getCSRFToken();
+        form.appendChild(csrfInput);
+        
+        const methodInput = document.createElement('input');
+        methodInput.type = 'hidden';
+        methodInput.name = 'payment_method';
+        methodInput.value = method;
+        form.appendChild(methodInput);
+        
+        // For card, we might need additional data, but for now just submit
+        document.body.appendChild(form);
+        form.submit();
+    }
+    
+    // Handle manual status check
+    if (checkStatusBtn) {
+        checkStatusBtn.addEventListener('click', function() {
+            checkPaymentStatus();
+        });
+    }
+    
+    function startStatusChecking() {
+        // Check immediately
+        checkPaymentStatus();
+        
+        // Then check every 5 seconds
+        statusCheckInterval = setInterval(checkPaymentStatus, 5000);
+    }
+    
+    function checkPaymentStatus() {
+        fetch(`/order/{{ order.id }}/check-payment-status/`, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (data.payment_status === 'completed') {
+                    // Payment completed successfully
+                    clearInterval(statusCheckInterval);
+                    showPaymentSuccess();
+                } else if (data.payment_status === 'failed') {
+                    // Payment failed
+                    clearInterval(statusCheckInterval);
+                    showPaymentFailed(data.result_desc || 'Payment failed');
+                }
+                // If still initiated, continue checking
+            } else {
+                console.error('Status check failed:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Status check error:', error);
+        });
+    }
+    
+    function showPaymentSuccess() {
+        document.getElementById('paymentProcessingSection').style.display = 'none';
+        document.getElementById('paymentSuccessSection').style.display = 'block';
+        
+        showToast('Payment completed successfully!', 'success');
+        
+        // Redirect to order details after a delay
+        setTimeout(() => {
+            window.location.href = "{% url 'order_detail' order.id %}";
+        }, 3000);
+    }
+    
+    function showPaymentFailed(reason) {
+        document.getElementById('paymentProcessingSection').style.display = 'none';
+        document.getElementById('paymentFormContainer').style.display = 'block';
+        processPaymentBtn.style.display = 'block';
+        processPaymentBtn.innerHTML = '<i class="bi bi-lock-fill me-2"></i> Complete Payment - KSh {{ order.total_price }}';
+        processPaymentBtn.disabled = false;
+        
+        showToast('Payment failed: ' + reason, 'error');
+    }
+    
+    // CSRF token function
+    function getCSRFToken() {
+        const name = 'csrftoken';
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    // Toast function
+    function showToast(message, type = 'info') {
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body d-flex align-items-center">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        
+        // Add to container
+        const container = document.querySelector('.toast-container');
+        container.appendChild(toast);
+        
+        // Show toast
+        const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 5000 });
+        bsToast.show();
+        
+        // Remove after hide
+        toast.addEventListener('hidden.bs.toast', () => {
+            toast.remove();
+        });
+    }
+    
+    // Initial setup based on current payment status
+    const currentStatus = '{{ order.payment.status }}';
+    if (currentStatus === 'initiated') {
+        document.getElementById('paymentFormContainer').style.display = 'none';
+        document.getElementById('paymentProcessingSection').style.display = 'block';
+        processPaymentBtn.style.display = 'none';
+        startStatusChecking();
+    } else if (currentStatus === 'completed') {
+        document.getElementById('paymentFormContainer').style.display = 'none';
+        document.getElementById('paymentSuccessSection').style.display = 'block';
+        processPaymentBtn.style.display = 'none';
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Conversation - HomaBay Souq{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="card shadow-lg border-0">
+        <div class="card-header bg-gradient-primary text-white d-flex align-items-center py-3">
+            <a href="{% url 'inbox' %}" class="btn btn-sm btn-light me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div class="d-flex align-items-center">
+                {% for participant in conversation.participants.all %}
+                    {% if participant != user %}
+                    <img src="{{ participant.profile.get_profile_picture_url }}" 
+                         alt="{{ participant.username }}" 
+                         class="rounded-circle me-3" 
+                         width="48" 
+                         height="48"
+                         onerror="this.src='https://placehold.co/40x40/c2c2c2/1f1f1f?text=HS'">
+                    <div>
+                        <h5 class="mb-0">{{ participant.username }}</h5>
+                        <small class="text-white-50">
+                            {% if participant.is_verified %}
+                            <span class="verified-badge"><i class="bi bi-patch-check-fill me-1"></i> Verified Seller</span>
+                            {% else %}
+                            Active {{ participant.date_joined|timesince }} ago
+                            {% endif %}
+                        </small>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <div class="ms-auto">
+                {% if conversation.listing %}
+                <a href="{% url 'listing-detail' conversation.listing.pk %}" class="btn btn-light btn-sm">
+                    <i class="bi bi-eye me-1"></i> View Listing
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card-body chat-body p-0" style="height: 500px; overflow-y: auto;">
+            <div class="p-4" id="messages-container">
+                {% for message in conversation.messages.all %}
+                <div class="d-flex mb-4 {% if message.sender == user %}justify-content-end{% endif %}">
+                    <div class="{% if message.sender == user %}bg-primary text-white{% else %}bg-light{% endif %} rounded-3 p-3 position-relative" 
+                         style="max-width: 70%; border-bottom-left-radius: {% if message.sender != user %}0{% endif %} !important; border-bottom-right-radius: {% if message.sender == user %}0{% endif %} !important;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong class="{% if message.sender == user %}text-white{% endif %}">
+                                {{ message.sender.username }}
+                            </strong>
+                            <small class="{% if message.sender == user %}text-white-50{% else %}text-muted{% endif %}">
+                                {{ message.timestamp|date:"M j, g:i A" }}
+                            </small>
+                        </div>
+                        <p class="mb-0">{{ message.content }}</p>
+                        
+                        {% if message.sender == user %}
+                        <div class="position-absolute bottom-0 end-0 translate-middle">
+                            <i class="bi bi-check2-all text-white-50"></i>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center py-5">
+                    <i class="bi bi-chat-heart display-1 text-muted"></i>
+                    <h4 class="mt-3 text-muted">No messages yet</h4>
+                    <p class="text-muted">Start the conversation by sending a message!</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <div class="card-footer bg-transparent border-0 p-3">
+            <form method="post" class="message-form" action="{% url 'conversation-detail' conversation.pk %}">
+                {% csrf_token %}
+                <div class="input-group input-group-lg shadow-sm">
+                    <textarea name="content" class="form-control" placeholder="Type your message..." rows="1" required></textarea>
+                    <button type="submit" class="btn btn-primary rounded-end">
+                        <i class="bi bi-send-fill me-1"></i> Send
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.chat-body {
+    background: linear-gradient(135deg, var(--body-bg) 0%, rgba(162, 210, 255, 0.1) 100%);
+    scroll-behavior: smooth;
+}
+
+.message-form .form-control {
+    border-radius: 0.75rem 0 0 0.75rem;
+    border: 1px solid var(--border-color);
+    border-right: none;
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    resize: none;
+    height: 56px;
+}
+
+.message-form .form-control:focus {
+    box-shadow: none;
+    border-color: var(--primary-gemini);
+}
+
+.bg-gradient-primary {
+    background: linear-gradient(135deg, var(--primary-gemini) 0%, #0d47a1 100%) !important;
+}
+
+/* Custom scrollbar for chat */
+.chat-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-body::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+}
+
+.chat-body::-webkit-scrollbar-thumb {
+    background-color: var(--primary-gemini);
+    border-radius: 10px;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const chatBody = document.querySelector('.chat-body');
+    const messageForm = document.querySelector('.message-form');
+    const messageInput = messageForm.querySelector('textarea');
+    const messagesContainer = document.getElementById('messages-container');
+    
+    // Scroll to bottom
+    chatBody.scrollTop = chatBody.scrollHeight;
+    
+    // Auto-refresh messages every 5 seconds
+    setInterval(loadNewMessages, 5000);
+    
+    function loadNewMessages() {
+        fetch(`{% url 'conversation-detail' conversation.pk %}?ajax=true`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.messages) {
+                    messagesContainer.innerHTML = data.messages;
+                    chatBody.scrollTop = chatBody.scrollHeight;
+                    updateUnreadCounts();
+                }
+            })
+            .catch(error => console.error('Error loading messages:', error));
+    }
+    
+    // Message form submission
+    messageForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        
+        fetch(this.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                messageInput.value = '';
+                loadNewMessages(); // Reload messages to show the new one
+            }
+        })
+        .catch(error => console.error('Error sending message:', error));
+    });
+});
+
+function updateUnreadCounts() {
+    // Update messages count
+    fetch('/chats/unread-messages-count/')
+        .then(response => response.json())
+        .then(data => {
+            const msgBadge = document.querySelector('.nav-link[href="{% url 'inbox' %}"] .badge');
+            if (data.count > 0) {
+                if (msgBadge) {
+                    msgBadge.textContent = data.count;
+                } else {
+                    const link = document.querySelector('.nav-link[href="{% url 'inbox' %}"]');
+                    if (link) {
+                        link.innerHTML += `<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">${data.count}</span>`;
+                    }
+                }
+            } else if (msgBadge) {
+                msgBadge.remove();
+            }
+        });
+}
+</script>
+{% endblock %}

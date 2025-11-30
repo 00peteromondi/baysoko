@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Subscription - {{ store.name }} - HomaBay Souq{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <!-- Subscription Status Card -->
+        <div class="col-lg-8 mx-auto">
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h4 class="mb-0">Subscription Status</h4>
+                        {% if subscription.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% elif subscription.status == 'trialing' %}
+                            <span class="badge bg-info">Trial Period</span>
+                        {% elif subscription.status == 'past_due' %}
+                            <span class="badge bg-warning">Payment Due</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inactive</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="row g-3">
+                        <!-- Subscription Details -->
+                        <div class="col-md-6">
+                            <div class="p-3 border rounded bg-light">
+                                <h6 class="mb-2">Plan Details</h6>
+                                <p class="mb-1"><strong>Plan:</strong> {{ subscription.plan|title }}</p>
+                                <p class="mb-1"><strong>Status:</strong> {{ subscription.get_status_display }}</p>
+                                <p class="mb-0"><strong>Started:</strong> {{ subscription.started_at|date:"M d, Y" }}</p>
+                            </div>
+                        </div>
+
+                        <!-- Important Dates -->
+                        <div class="col-md-6">
+                            <div class="p-3 border rounded bg-light">
+                                <h6 class="mb-2">Important Dates</h6>
+                                {% if subscription.trial_ends_at %}
+                                <p class="mb-1"><strong>Trial Ends:</strong> {{ subscription.trial_ends_at|date:"M d, Y" }}</p>
+                                {% endif %}
+                                {% if subscription.next_billing_date %}
+                                <p class="mb-1"><strong>Next Billing:</strong> {{ subscription.next_billing_date|date:"M d, Y" }}</p>
+                                {% endif %}
+                                {% if subscription.cancelled_at %}
+                                <p class="mb-0"><strong>Cancelled:</strong> {{ subscription.cancelled_at|date:"M d, Y" }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Payments -->
+                    <div class="mt-4">
+                        <h5 class="mb-3">Recent Payments</h5>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Amount</th>
+                                        <th>Status</th>
+                                        <th>Phone Number</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for payment in recent_payments %}
+                                    <tr>
+                                        <td>{{ payment.transaction_date|date:"M d, Y" }}</td>
+                                        <td>KSh {{ payment.amount }}</td>
+                                        <td>
+                                            {% if payment.status == 'completed' %}
+                                                <span class="badge bg-success">Completed</span>
+                                            {% elif payment.status == 'pending' %}
+                                                <span class="badge bg-warning">Pending</span>
+                                            {% else %}
+                                                <span class="badge bg-danger">Failed</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ payment.phone_number }}</td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted">No payment history available</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="mt-4 d-flex gap-3">
+                        {% if subscription.status == 'past_due' %}
+                        <form method="post" action="{% url 'storefront:retry_payment' store.slug %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-warning">
+                                <i class="bi bi-arrow-repeat me-2"></i>
+                                Retry Payment
+                            </button>
+                        </form>
+                        {% endif %}
+
+                        {% if subscription.is_active and not subscription.cancelled_at %}
+                        <form method="post" action="{% url 'storefront:cancel_subscription' store.slug %}" 
+                              onsubmit="return confirm('Are you sure you want to cancel your subscription? This will disable premium features at the end of your current billing period.')">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-danger">
+                                <i class="bi bi-x-circle me-2"></i>
+                                Cancel Subscription
+                            </button>
+                        </form>
+                        {% endif %}
+
+                        {% if not subscription.is_active and not subscription.is_in_trial %}
+                        <a href="{% url 'storefront:store_upgrade' store.slug %}" class="btn btn-success">
+                            <i class="bi bi-arrow-up-circle me-2"></i>
+                            Reactivate Subscription
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Premium Features -->
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-4">
+                    <h5 class="mb-3">Premium Features</h5>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-shop-window text-primary fs-4 me-3"></i>
+                                <div>
+                                    <h6 class="mb-1">Multiple Stores</h6>
+                                    <p class="mb-0 text-muted small">Create and manage multiple storefronts</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-graph-up text-success fs-4 me-3"></i>
+                                <div>
+                                    <h6 class="mb-1">Advanced Analytics</h6>
+                                    <p class="mb-0 text-muted small">Detailed insights and reports</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,874 @@
+[file name]: product_detail.html
+[file content begin]
+{% extends 'base.html' %}
+
+{% block title %}{{ product.title }} - {{ store.name }} - HomaBay Souq{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'storefront:store_list' %}">Stores</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'storefront:store_detail' slug=store.slug %}">{{ store.name }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ product.title }}</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Product Images -->
+        <div class="col-lg-6 mb-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-3">
+                    <!-- Main Image -->
+                    <div class="text-center mb-3">
+                        <img src="{{ product.get_image_url }}" 
+                             alt="{{ product.title }}"
+                             class="img-fluid rounded product-main-image"
+                             style="max-height: 400px; object-fit: contain;"
+                             onerror="this.src='https://placehold.co/500x400/c2c2c2/1f1f1f?text=Product+Image'">
+                    </div>
+                    
+                    <!-- Thumbnail Gallery -->
+                    {% if product.images.all %}
+                    <div class="row g-2">
+                        {% for img in product.images.all %}
+                        <div class="col-3">
+                            <img src="{{ img.get_image_url }}" 
+                                 alt="{{ product.title }}"
+                                 class="img-fluid rounded cursor-pointer thumbnail"
+                                 style="height: 80px; object-fit: cover; width: 100%;"
+                                 onclick="setMainImage(this.src)"
+                                 onerror="this.src='https://placehold.co/100x80/c2c2c2/1f1f1f?text=Thumb'">
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Product Details -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <!-- Store Info -->
+                    <div class="d-flex align-items-center mb-3">
+                    <img src="{{ store.get_logo_url|default:'https://placehold.co/40x40/c2c2c2/1f1f1f?text=Store' }}"
+                        data-default="https://placehold.co/40x40/c2c2c2/1f1f1f?text=Store"
+                        alt="{{ store.name }}"
+                        class="rounded-circle me-2"
+                        style="width: 60px; height: 60px; object-fit: cover;"
+                        onerror="this.onerror=null;this.src=this.getAttribute('data-default');">
+                        <div>
+                            <h6 class="mb-0 fw-bold fs-4">{{ store.name }}</h6>
+                            <small class="text-muted">
+                                {% if store.is_premium %}
+                                <span class="badge bg-warning text-dark me-1 mt-1">
+                                    <i class="bi bi-star-fill me-1"></i>Premium Seller
+                                </span>
+                                {% endif %}
+                                <br>
+                                <a href="{% url 'storefront:store_detail' slug=store.slug %}" class="text-decoration-none mt-2 d-inline-block">
+                                    <i class="bi bi-shop me-1"></i>View Store
+                                </a>
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <!-- Product Title and Price -->
+                    <h1 class="h2 fw-bold mb-2 listing-title">{{ product.title }}</h1>
+                    <div class="d-flex align-items-center mb-3">
+                        <h2 class="listing-price me-3">KSh {{ product.price }}</h2>
+                        {% if product.original_price and product.original_price > product.price %}
+                        <div class="price-history">
+                            <div class="price-trend trend-down">
+                                <i class="bi bi-arrow-down me-1"></i>
+                                <span class="text-muted text-decoration-line-through">KSh {{ product.original_price }}</span>
+                                <span class="ms-1">Save {{ product.get_discount_percentage }}%</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Product Meta Tags -->
+                    <div class="listing-meta">
+                        {% if product.brand %}
+                        <span class="meta-tag">
+                            <i class="bi bi-tag"></i>
+                            {{ product.brand }}
+                        </span>
+                        {% endif %}
+                        {% if product.model %}
+                        <span class="meta-tag">
+                            <i class="bi bi-box"></i>
+                            {{ product.model }}
+                        </span>
+                        {% endif %}
+                        <span class="meta-tag">
+                            <i class="bi bi-grid"></i>
+                            {{ product.category.name }}
+                        </span>
+                        <span class="meta-tag">
+                            <i class="bi bi-check2-circle"></i>
+                            {{ product.get_condition_display }}
+                        </span>
+                        <span class="meta-tag">
+                            <i class="bi bi-truck"></i>
+                            {{ product.get_delivery_option_display }}
+                        </span>
+                    </div>
+                    
+                    <!-- Product Description -->
+                    <div class="listing-description">
+                        {{ product.description|linebreaks }}
+                    </div>
+                    
+                    <!-- Product Specifications -->
+                    {% if product.brand or product.model or product.color or product.dimensions or product.weight or product.material %}
+                    <section class="specifications">
+                        <h5 class="mb-3">Product Specifications</h5>
+                        <div class="specs-table">
+                            {% if product.brand %}
+                            <div class="spec-row">
+                                <span class="spec-label">Brand</span>
+                                <span class="spec-value">{{ product.brand }}</span>
+                            </div>
+                            {% endif %}
+                            {% if product.model %}
+                            <div class="spec-row">
+                                <span class="spec-label">Model</span>
+                                <span class="spec-value">{{ product.model }}</span>
+                            </div>
+                            {% endif %}
+                            {% if product.color %}
+                            <div class="spec-row">
+                                <span class="spec-label">Color</span>
+                                <span class="spec-value">{{ product.color }}</span>
+                            </div>
+                            {% endif %}
+                            {% if product.dimensions %}
+                            <div class="spec-row">
+                                <span class="spec-label">Dimensions</span>
+                                <span class="spec-value">{{ product.dimensions }}</span>
+                            </div>
+                            {% endif %}
+                            {% if product.weight %}
+                            <div class="spec-row">
+                                <span class="spec-label">Weight</span>
+                                <span class="spec-value">{{ product.weight }}</span>
+                            </div>
+                            {% endif %}
+                            {% if product.material %}
+                            <div class="spec-row">
+                                <span class="spec-label">Material</span>
+                                <span class="spec-value">{{ product.material }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </section>
+                    {% endif %}
+                    
+                    <!-- Action Buttons -->
+                    <div class="listing-actions">
+                        {% if user.is_authenticated and not product.is_sold and product.stock > 0 %}
+                        <form action="{% url 'add_to_cart' product.id %}" method="post" class="flex-fill">
+                            {% csrf_token %}
+                            <button type="submit" class="action-button primary">
+                                <i class="bi bi-cart-plus me-2"></i>
+                                Add to Cart
+                            </button>
+                        </form>
+                        <form action="{% url 'toggle_favorite' product.id %}" method="post" class="favorite-form">
+                            {% csrf_token %}
+                            <button type="submit" class="action-button {% if product.id in user_favorites %}primary{% else %}secondary{% endif %}">
+                                <i class="bi bi-heart{% if product.id in user_favorites %}-fill{% endif %}"></i>
+                                {% if product.id in user_favorites %}Liked{% else %}Like{% endif %}
+                                ({{ product.favorites.count }})
+                            </button>
+                        </form>
+                        {% elif not user.is_authenticated %}
+                        <a href="{% url 'login' %}?next={{ request.path }}" class="action-button primary">
+                            <i class="bi bi-box-arrow-in-right me-2"></i>Login to Purchase
+                        </a>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Stock Status -->
+                    <div class="mb-4">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="fw-bold">Stock Status:</span>
+                            <span class="stock-badge {% if product.stock > 10 %}in-stock{% elif product.stock > 0 %}low-stock{% else %}out-of-stock{% endif %}">
+                                {% if product.stock > 10 %}
+                                    In Stock ({{ product.stock }} available)
+                                {% elif product.stock > 0 %}
+                                    Low Stock (Only {{ product.stock }} left)
+                                {% else %}
+                                    Out of Stock
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <!-- Shipping Information -->
+                    <div class="shipping-info alert alert-info">
+                        <div class="shipping-option">
+                            <i class="bi bi-truck me-2"></i>
+                            <strong>{{ product.get_delivery_option_display }}</strong>
+                            <br>
+                            <small class="text-muted ms-4">Orders processed within 24 hours</small>
+                        </div>
+                        <div class="shipping-time">
+                            <i class="bi bi-clock-history me-2"></i>
+                            <strong>Estimated Delivery:</strong> 2-5 business days
+                        </div>
+                        <div class="shipping-cost">
+                            <i class="bi bi-credit-card me-2"></i>
+                            <strong>Shipping Cost:</strong>
+                            {% if product.delivery_option == 'pickup' %}
+                            Free pickup at meeting point
+                            {% else %}
+                            Calculated at checkout based on location
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Stock Status -->
+                    <div class="mb-4">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="fw-bold">Stock Status:</span>
+                            <span class="stock-badge {% if product.stock > 10 %}in-stock{% elif product.stock > 0 %}low-stock{% else %}out-of-stock{% endif %}">
+                                {% if product.stock > 10 %}
+                                    In Stock ({{ product.stock }} available)
+                                {% elif product.stock > 0 %}
+                                    Low Stock (Only {{ product.stock }} left)
+                                {% else %}
+                                    Out of Stock
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Contact Seller -->
+                    {% if user.is_authenticated and user != product.seller %}
+                    <div class="mb-4">
+                        <a href="{% url 'start-conversation' product.id product.seller.id %}" class="btn btn-outline-primary rounded-pill w-100">
+                            <i class="bi bi-chat-dots me-2"></i>
+                            Contact Seller
+                        </a>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Safety Tips -->
+                    <div class="alert alert-warning">
+                        <h6 class="fw-bold"><i class="bi bi-shield-check me-2"></i>Safety Tips</h6>
+                        <ul class="list-unstyled mb-0">
+                            <li><i class="bi bi-check2 me-2"></i>Meet in a safe public place</li>
+                            <li><i class="bi bi-check2 me-2"></i>Inspect the item before buying</li>
+                            <li><i class="bi bi-check2 me-2"></i>Use secure payment methods</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Gallery Section -->
+    {% if product.images.all %}
+    <section class="similar-listings mt-4">
+        <h4 class="section-title">
+            <i class="bi bi-images me-2"></i>
+            Product Gallery
+        </h4>
+        <div class="row g-3">
+            {% for img in product.images.all %}
+            <div class="col-6 col-md-3">
+                <div class="similar-card h-100">
+                    <img src="{{ img.get_image_url }}" 
+                         alt="{{ product.title }}"
+                         class="img-fluid rounded cursor-pointer gallery-image w-100"
+                         style="height: 200px; object-fit: cover;"
+                         onclick="openLightbox(this.src)"
+                         onerror="this.src='https://placehold.co/300x200/c2c2c2/1f1f1f?text=Gallery'">
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+    
+    <!-- Safety Tips Section -->
+    <section class="similar-listings mt-4">
+        <h4 class="section-title">
+            <i class="bi bi-shield-check me-2"></i>
+            Safety Guidelines
+        </h4>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="info-card h-100">
+                    <h6 class="mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i>Do's</h6>
+                    <ul class="info-list">
+                        <li>
+                            <i class="bi bi-check-lg"></i>
+                            Meet in a public, well-lit location for transactions
+                        </li>
+                        <li>
+                            <i class="bi bi-check-lg"></i>
+                            Inspect the item thoroughly before purchase
+                        </li>
+                        <li>
+                            <i class="bi bi-check-lg"></i>
+                            Use secure payment methods through our platform
+                        </li>
+                        <li>
+                            <i class="bi bi-check-lg"></i>
+                            Keep all communication within our messaging system
+                        </li>
+                        <li>
+                            <i class="bi bi-check-lg"></i>
+                            Report any suspicious behavior immediately
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="info-card h-100">
+                    <h6 class="mb-3"><i class="bi bi-x-circle-fill text-danger me-2"></i>Don'ts</h6>
+                    <ul class="info-list">
+                        <li>
+                            <i class="bi bi-x-lg"></i>
+                            Never send money before receiving the item
+                        </li>
+                        <li>
+                            <i class="bi bi-x-lg"></i>
+                            Don't share personal financial information
+                        </li>
+                        <li>
+                            <i class="bi bi-x-lg"></i>
+                            Avoid meeting at private residences
+                        </li>
+                        <li>
+                            <i class="bi bi-x-lg"></i>
+                            Don't use payment methods outside our platform
+                        </li>
+                        <li>
+                            <i class="bi bi-x-lg"></i>
+                            Never rush into a transaction under pressure
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<!-- Lightbox Modal -->
+<div class="modal fade" id="lightboxModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0">
+            <div class="modal-header border-0">
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="lightboxImage" src="" class="img-fluid rounded" alt="Product image">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const mainImage = document.querySelector('.product-main-image');
+    const thumbnails = document.querySelectorAll('.thumbnail, .gallery-image');
+    const zoomToggle = document.querySelector('.zoom-toggle');
+    let isZoomed = false;
+
+    // Enhanced Image Zoom
+    if (mainImage) {
+        mainImage.addEventListener('click', function() {
+            if (isZoomed) {
+                this.style.transform = 'scale(1)';
+                this.style.cursor = 'zoom-in';
+            } else {
+                this.style.transform = 'scale(1.5)';
+                this.style.cursor = 'zoom-out';
+            }
+            isZoomed = !isZoomed;
+        });
+
+        // Mouse move handling for zoomed image
+        mainImage.addEventListener('mousemove', function(e) {
+            if (isZoomed) {
+                const bounds = this.getBoundingClientRect();
+                const x = (e.clientX - bounds.left) / bounds.width;
+                const y = (e.clientY - bounds.top) / bounds.height;
+                
+                this.style.transformOrigin = `${x * 100}% ${y * 100}%`;
+            }
+        });
+    }
+
+    // Image Carousel and Lightbox
+    function setMainImage(src) {
+        if (mainImage) {
+            mainImage.style.transform = 'scale(1)';
+            mainImage.src = src;
+            isZoomed = false;
+            
+            // Update active thumbnail
+            thumbnails.forEach(thumb => {
+                thumb.classList.toggle('active', thumb.src === src);
+            });
+        }
+    }
+
+    function openLightbox(src) {
+        // Create fullscreen lightbox
+        const lightbox = document.createElement('div');
+        lightbox.className = 'image-fullscreen';
+        lightbox.innerHTML = `
+            <button class="fullscreen-close">
+                <i class="bi bi-x-lg"></i>
+            </button>
+            <img src="${src}" class="fullscreen-image" alt="Fullscreen view">
+            <button class="fullscreen-nav fullscreen-prev">
+                <i class="bi bi-chevron-left"></i>
+            </button>
+            <button class="fullscreen-nav fullscreen-next">
+                <i class="bi bi-chevron-right"></i>
+            </button>
+            <div class="fullscreen-counter"></div>
+        `;
+        
+        document.body.appendChild(lightbox);
+        document.body.style.overflow = 'hidden';
+        
+        // Get all image sources
+        const images = Array.from(document.querySelectorAll('.thumbnail img, .gallery-image')).map(img => img.src);
+        let currentIndex = images.indexOf(src);
+        
+        // Update counter
+        const updateCounter = () => {
+            lightbox.querySelector('.fullscreen-counter').textContent = `${currentIndex + 1} / ${images.length}`;
+        };
+        updateCounter();
+        
+        // Navigation handlers
+        lightbox.querySelector('.fullscreen-prev').addEventListener('click', () => {
+            currentIndex = (currentIndex - 1 + images.length) % images.length;
+            lightbox.querySelector('.fullscreen-image').src = images[currentIndex];
+            updateCounter();
+        });
+        
+        lightbox.querySelector('.fullscreen-next').addEventListener('click', () => {
+            currentIndex = (currentIndex + 1) % images.length;
+            lightbox.querySelector('.fullscreen-image').src = images[currentIndex];
+            updateCounter();
+        });
+        
+        // Close handler
+        const closeHandler = () => {
+            lightbox.remove();
+            document.body.style.overflow = '';
+        };
+        
+        lightbox.querySelector('.fullscreen-close').addEventListener('click', closeHandler);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeHandler();
+            if (e.key === 'ArrowLeft') lightbox.querySelector('.fullscreen-prev').click();
+            if (e.key === 'ArrowRight') lightbox.querySelector('.fullscreen-next').click();
+        });
+    }
+
+    // Thumbnail hover effects and click handlers
+    thumbnails.forEach(thumb => {
+        thumb.style.cursor = 'pointer';
+        
+        // Hover animations
+        thumb.addEventListener('mouseenter', function() {
+            this.style.transform = 'scale(1.05)';
+            this.style.transition = 'transform 0.3s ease';
+        });
+        
+        thumb.addEventListener('mouseleave', function() {
+            this.style.transform = 'scale(1)';
+        });
+        
+        // Click handlers
+        thumb.addEventListener('click', function() {
+            if (this.classList.contains('gallery-image')) {
+                openLightbox(this.src);
+            } else {
+                setMainImage(this.src);
+            }
+        });
+    });
+
+    // Social sharing functionality
+    window.shareOnFacebook = function() {
+        const url = encodeURIComponent(window.location.href);
+        const title = encodeURIComponent(document.title);
+        window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${title}`, '_blank');
+    };
+
+    window.shareOnTwitter = function() {
+        const url = encodeURIComponent(window.location.href);
+        const title = encodeURIComponent(document.title);
+        window.open(`https://twitter.com/intent/tweet?url=${url}&text=${title}`, '_blank');
+    };
+
+    window.shareOnWhatsApp = function() {
+        const url = encodeURIComponent(window.location.href);
+        const title = encodeURIComponent(document.title);
+        window.open(`https://wa.me/?text=${title} ${url}`, '_blank');
+    };
+
+    window.copyListingLink = function() {
+        const button = document.querySelector('.social-share-btn.link');
+        const originalHTML = button.innerHTML;
+        
+        navigator.clipboard.writeText(window.location.href)
+            .then(() => {
+                button.innerHTML = '<i class="bi bi-check-lg"></i>';
+                button.style.background = 'var(--accent-green)';
+                
+                setTimeout(() => {
+                    button.innerHTML = originalHTML;
+                    button.style.background = '';
+                }, 2000);
+            })
+            .catch(err => {
+                console.error('Failed to copy: ', err);
+                button.innerHTML = '<i class="bi bi-x-lg"></i>';
+                button.style.background = 'var(--danger-color)';
+                
+                setTimeout(() => {
+                    button.innerHTML = originalHTML;
+                    button.style.background = '';
+                }, 2000);
+            });
+    };
+
+    // Favorite button AJAX functionality
+    const favoriteForm = document.querySelector('.favorite-form');
+    if (favoriteForm) {
+        favoriteForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const button = this.querySelector('button');
+            const icon = button.querySelector('i');
+            
+            // Click animation
+            button.style.transform = 'scale(0.95)';
+            
+            fetch(this.action, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Reset animation
+                setTimeout(() => button.style.transform = 'scale(1)', 150);
+                
+                if (data.is_favorited) {
+                    button.classList.remove('secondary');
+                    button.classList.add('primary');
+                    icon.classList.remove('bi-heart');
+                    icon.classList.add('bi-heart-fill');
+                    button.innerHTML = `<i class="bi bi-heart-fill"></i> Liked (${data.favorite_count})`;
+                } else {
+                    button.classList.remove('primary');
+                    button.classList.add('secondary');
+                    icon.classList.remove('bi-heart-fill');
+                    icon.classList.add('bi-heart');
+                    button.innerHTML = `<i class="bi bi-heart"></i> Like (${data.favorite_count})`;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                button.style.transform = 'scale(1)';
+            });
+        });
+    }
+});
+</script>
+
+<style>
+.listing-hero {
+    background: var(--card-bg);
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    margin-bottom: 2rem;
+}
+
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.product-main-image {
+    transition: transform 0.3s ease;
+    background: var(--card-bg);
+}
+
+.product-main-image:hover {
+    transform: scale(1.02);
+}
+
+/* Theme-aware text colors */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-color-dark);
+}
+
+[data-theme="light"] h1,
+[data-theme="light"] h2,
+[data-theme="light"] h3,
+[data-theme="light"] h4,
+[data-theme="light"] h5,
+[data-theme="light"] h6 {
+    color: var(--text-color-light);
+}
+
+.text-muted {
+    color: var(--text-muted-dark) !important;
+}
+
+[data-theme="light"] .text-muted {
+    color: var(--text-muted-light) !important;
+}
+
+/* Image placeholder handling */
+img[src*="placehold.co"] {
+    background: var(--card-bg-hover);
+    border: 1px solid var(--border-color);
+    padding: 0.5rem;
+}
+
+/* Stock badges */
+.stock-badge {
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.stock-badge.in-stock {
+    background: rgba(52, 168, 83, 0.1);
+    color: var(--accent-green);
+    border: 1px solid rgba(52, 168, 83, 0.2);
+}
+
+.stock-badge.low-stock {
+    background: rgba(251, 188, 5, 0.1);
+    color: var(--warning-color);
+    border: 1px solid rgba(251, 188, 5, 0.2);
+}
+
+.stock-badge.out-of-stock {
+    background: rgba(234, 67, 53, 0.1);
+    color: var(--danger-color);
+    border: 1px solid rgba(234, 67, 53, 0.2);
+}
+
+/* Safety tips */
+.alert-warning {
+    background: rgba(251, 188, 5, 0.1);
+    border: 1px solid rgba(251, 188, 5, 0.2);
+    color: var(--warning-color);
+}
+
+.alert-warning .bi {
+    color: var(--warning-color);
+}
+
+.alert-warning ul li {
+    margin-bottom: 0.5rem;
+}
+
+.alert-warning ul li:last-child {
+    margin-bottom: 0;
+}
+
+/* Enhanced Listing Styles */
+.listing-title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: var(--text-color);
+}
+
+.listing-price {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--primary-gemini);
+    margin-bottom: 1rem;
+}
+
+.price-history {
+    margin-bottom: 1rem;
+}
+
+.price-trend {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.price-trend.trend-up {
+    background: rgba(52, 168, 83, 0.1);
+    color: var(--accent-green);
+    border: 1px solid rgba(52, 168, 83, 0.2);
+}
+
+.price-trend.trend-down {
+    background: rgba(234, 67, 53, 0.1);
+    color: var(--danger-color);
+    border: 1px solid rgba(234, 67, 53, 0.2);
+}
+
+.listing-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.meta-tag {
+    background: var(--card-bg-hover);
+    border: 1px solid var(--border-color);
+    padding: 0.5rem 1rem;
+    border-radius: 15px;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-color);
+}
+
+.listing-description {
+    font-size: 1.1rem;
+    line-height: 1.7;
+    color: var(--text-color);
+    margin-bottom: 2rem;
+}
+
+.listing-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+}
+
+.action-button {
+    padding: 1rem 2rem;
+    border: none;
+    border-radius: 15px;
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    text-align: center;
+    justify-content: center;
+}
+
+.action-button.primary {
+    background: var(--primary-gemini);
+    color: white;
+}
+
+.action-button.primary:hover {
+    background: var(--primary-gemini-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(66, 133, 244, 0.3);
+}
+
+.action-button.secondary {
+    background: transparent;
+    color: var(--text-color);
+    border: 2px solid var(--border-color);
+}
+
+.action-button.secondary:hover {
+    border-color: var(--primary-gemini);
+    color: var(--primary-gemini);
+    transform: translateY(-2px);
+}
+
+/* Specifications Table */
+.specifications {
+    margin-bottom: 2rem;
+}
+
+.specs-table {
+    background: var(--card-bg-hover);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.spec-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.spec-row:last-child {
+    border-bottom: none;
+}
+
+.spec-label {
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.spec-value {
+    color: var(--text-muted);
+}
+
+/* Shipping Information */
+.shipping-info {
+    background: rgba(66, 133, 244, 0.1);
+    border: 1px solid rgba(66, 133, 244, 0.2);
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.shipping-option, .shipping-time, .shipping-cost {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(66, 133, 244, 0.2);
+    color: var(--text-color);
+}
+
+.shipping-option:last-child,
+.shipping-time:last-child, 
+.shipping-cost:last-child {
+    border-bottom: none;
+}
+
+.shipping-info i {
+    color: var(--primary-gemini);
+    font-size: 1.25rem;
+}
+</style>
+{% endblock %}
+[file content end]

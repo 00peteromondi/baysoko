@@ -1,0 +1,201 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% if form.instance.pk %}Edit{% else %}Create{% endif %} Blog Post - HomaBay Souq{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-hero {
+        background: linear-gradient(135deg, 
+                        rgba(26, 115, 232, 0.9) 0%, 
+                        rgba(13, 71, 161, 0.9) 100%);
+        color: white;
+        padding: 3rem 0;
+        margin: -2rem -1rem 3rem;
+        border-radius: 0 0 2rem 2rem;
+    }
+
+    .blog-form-container {
+        background: var(--navbar-bg);
+        backdrop-filter: blur(10px);
+        border-radius: 1.5rem;
+        padding: 3rem;
+        margin-bottom: 3rem;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    .form-actions {
+        background: var(--navbar-bg);
+        backdrop-filter: blur(10px);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        position: sticky;
+        bottom: 2rem;
+        z-index: 100;
+    }
+
+    @media (max-width: 768px) {
+        .form-hero {
+            padding: 2rem 0;
+        }
+        
+        .blog-form-container {
+            padding: 2rem;
+        }
+        
+        .form-actions {
+            position: static;
+            margin-top: 2rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Form Hero Section -->
+<section class="form-hero">
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 mx-auto text-center">
+                <h1 class="display-5 fw-bold mb-3">
+                    {% if form.instance.pk %}
+                    Edit Blog Post
+                    {% else %}
+                    Create New Blog Post
+                    {% endif %}
+                </h1>
+                <p class="lead">
+                    {% if form.instance.pk %}
+                    Make changes to your blog post
+                    {% else %}
+                    Share your knowledge with the HomaBay Souq community
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="blog-form-container">
+                <form method="post" enctype="multipart/form-data" novalidate>
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-8">
+                            {{ form.title|as_crispy_field }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.slug|as_crispy_field }}
+                        </div>
+                    </div>
+
+                    {{ form.excerpt|as_crispy_field }}
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            {{ form.category|as_crispy_field }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.image|as_crispy_field }}
+                        </div>
+                    </div>
+
+                    {{ form.content|as_crispy_field }}
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-check form-switch mb-3">
+                                {{ form.featured }}
+                                <label class="form-check-label" for="{{ form.featured.id_for_label }}">
+                                    Featured Post
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.status|as_crispy_field }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.allow_comments|as_crispy_field }}
+                        </div>
+                    </div>
+
+                    <div class="form-actions mt-4">
+                        <div class="d-flex gap-2 justify-content-between">
+                            <div>
+                                <a href="{% if form.instance.pk %}{{ form.instance.get_absolute_url }}{% else %}{% url 'blog:post-list' %}{% endif %}" 
+                                   class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left me-2"></i>Cancel
+                                </a>
+                            </div>
+                            <div class="d-flex gap-2">
+                                {% if form.instance.pk %}
+                                <a href="{% url 'blog:post-delete' form.instance.slug %}" class="btn btn-outline-danger">
+                                    <i class="bi bi-trash me-2"></i>Delete
+                                </a>
+                                {% endif %}
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-{% if form.instance.pk %}check-lg{% else %}plus-lg{% endif %} me-2"></i>
+                                    {% if form.instance.pk %}Update Post{% else %}Create Post{% endif %}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Form Tips -->
+            <div class="card border-0 shadow-sm" style="background: var(--navbar-bg); backdrop-filter: blur(10px);">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-lightbulb me-2"></i>Writing Tips</h5>
+                    <ul class="list-unstyled mb-0">
+                        <li><i class="bi bi-check text-success me-2"></i> Write a clear and descriptive title</li>
+                        <li><i class="bi bi-check text-success me-2"></i> Add a compelling excerpt to hook readers</li>
+                        <li><i class="bi bi-check text-success me-2"></i> Use high-quality images</li>
+                        <li><i class="bi bi-check text-success me-2"></i> Break content into sections with headings</li>
+                        <li><i class="bi bi-check text-success me-2"></i> Proofread before publishing</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Auto-generate slug from title
+    document.addEventListener('DOMContentLoaded', function() {
+        const titleField = document.getElementById('id_title');
+        const slugField = document.getElementById('id_slug');
+        
+        if (titleField && slugField) {
+            titleField.addEventListener('blur', function() {
+                if (!slugField.value) {
+                    const slug = titleField.value
+                        .toLowerCase()
+                        .replace(/[^a-z0-9 -]/g, '')
+                        .replace(/\s+/g, '-')
+                        .replace(/-+/g, '-');
+                    slugField.value = slug;
+                }
+            });
+        }
+        
+        // Preview image filename
+        const imageField = document.getElementById('id_image');
+        if (imageField) {
+            imageField.addEventListener('change', function() {
+                const fileName = this.files[0]?.name || 'No file chosen';
+                const label = this.nextElementSibling;
+                if (label && label.classList.contains('custom-file-label')) {
+                    label.textContent = fileName;
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

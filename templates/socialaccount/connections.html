@@ -1,0 +1,123 @@
+<!-- connections.html -->
+{% extends 'base.html' %}
+{% load crispy_forms_tags static %}
+
+{% block title %}Account Connections - HomaBay Souq{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow" style="border-radius: 1.5rem; border: 1px solid var(--border-color);">
+                <div class="card-header bg-light py-3" style="border-radius: 1.5rem 1.5rem 0 0;">
+                    <h2 class="h4 mb-0">Account Connections</h2>
+                    <p class="text-muted mb-0 small">Manage your connected social accounts</p>
+                </div>
+                <div class="card-body p-3">
+                    
+                    {% if form.accounts %}
+                    <div class="mb-4">
+                        <h3 class="h5 mb-2">Connected Accounts</h3>
+                        <p class="text-muted small">You can sign in to your account using any of the following third party accounts:</p>
+                        
+                        <form method="post" action="{% url 'socialaccount_connections' %}">
+                            {% csrf_token %}
+                            
+                            {% for base_account in form.accounts %}
+                            {% with base_account.get_provider_account as account %}
+                            <div class="card mb-2 border">
+                                <div class="card-body py-2">
+                                    <div class="row align-items-center">
+                                        <div class="col-auto">
+                                            <i class="bi bi-{{ account.get_brand.name|lower }} fs-4 text-{{ account.get_brand.name|lower }}"></i>
+                                        </div>
+                                        <div class="col">
+                                            <h6 class="mb-1 small">{{ account.get_brand.name }}</h6>
+                                            <p class="mb-0 text-muted small">{{ account.account.extra_data.email|default:account.account.uid }}</p>
+                                        </div>
+                                        <div class="col-auto">
+                                            <div class="form-check">
+                                                <input id="id_account_{{ base_account.id }}" type="radio" name="account" value="{{ base_account.id }}" class="form-check-input">
+                                                <label for="id_account_{{ base_account.id }}" class="form-check-label small">Remove</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endwith %}
+                            {% endfor %}
+                            
+                            <div class="alert alert-warning small mt-3">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                <strong>Warning:</strong> Removing the last connected social account may lock you out of your account if you don't have a password set.
+                            </div>
+                            
+                            <button type="submit" class="btn btn-danger btn-sm">
+                                <i class="bi bi-trash me-1"></i> Remove Selected Connection
+                            </button>
+                        </form>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-3">
+                        <div class="mb-2">
+                            <i class="bi bi-link-45deg text-muted" style="font-size: 2.5rem;"></i>
+                        </div>
+                        <h3 class="h5">No Social Accounts Connected</h3>
+                        <p class="text-muted small">You haven't connected any social accounts yet.</p>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mt-4 pt-3 border-top">
+                        <h3 class="h5 mb-2">Add Social Account</h3>
+                        <p class="text-muted small mb-3">Connect another social account to your HomaBay Souq account</p>
+                        
+                        <div class="row g-2">
+                            {% include "socialaccount/snippets/provider_list.html" with process="connect" %}
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3 pt-3 border-top">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <a href="{% url 'profile' user.pk %}" class="btn btn-outline-secondary btn-sm">
+                                <i class="bi bi-arrow-left me-1"></i> Back to Profile
+                            </a>
+                            <a href="{% url 'account_change_password' %}" class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-shield-lock me-1"></i> Password Settings
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    @media (max-width: 576px) {
+        .container {
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+        }
+        
+        .card-body {
+            padding: 1rem !important;
+        }
+    }
+    
+    @media (max-width: 350px) {
+        .container {
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+        }
+        
+        .card-body {
+            padding: 0.75rem !important;
+        }
+        
+        .btn-sm {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.8rem;
+        }
+    }
+</style>
+{% endblock %}

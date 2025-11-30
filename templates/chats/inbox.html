@@ -1,0 +1,245 @@
+{% extends 'base.html' %}
+
+{% block title %}Messages - HomaBay Souq{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="h3 mb-1">Messages</h2>
+            <p class="text-muted mb-0">Manage your conversations with buyers and sellers</p>
+        </div>
+        <button class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#newMessageModal">
+            <i class="bi bi-plus-circle me-2"></i> New Message
+        </button>
+    </div>
+    
+    <div class="card shadow-lg border-0">
+        <div class="card-header bg-light py-3">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <h5 class="mb-0">Conversations</h5>
+                </div>
+                <div class="col-md-6 text-end">
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-secondary btn-sm active">All</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm">Unread</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm">Archived</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card-body p-0">
+            {% if conversations %}
+            <div class="list-group list-group-flush">
+                {% for conversation in conversations %}
+                <a href="{% url 'conversation-detail' conversation.pk %}" 
+                   class="list-group-item list-group-item-action border-0 py-4 {% if not conversation.messages.last.is_read and conversation.messages.last.sender != user %}bg-light{% endif %}">
+                    <div class="d-flex align-items-center">
+                        {% for participant in conversation.participants.all %}
+                            {% if participant != user %}
+                            <div class="position-relative me-3">
+                              <img src="{{ participant.get_profile_picture_url }}" 
+                                     alt="{{ participant.username }}" 
+                                     class="rounded-circle"
+                                     width="56" 
+                                     height="56"
+                                     onerror="this.src='https://placehold.co/50x50/c2c2c2/1f1f1f?text=HS'">
+                                {% if participant.profile.is_verified %}
+                                <span class="position-absolute bottom-0 end-0 bg-primary rounded-circle p-1">
+                                    <i class="bi bi-patch-check-fill text-white" style="font-size: 0.6rem;"></i>
+                                </span>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        <div class="flex-grow-1 me-3">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <h6 class="mb-0">
+                                    {% for participant in conversation.participants.all %}
+                                        {% if participant != user %}
+                                        {{ participant.username }}
+                                        {% endif %}
+                                    {% endfor %}
+                                </h6>
+                                <small class="text-muted">{{ conversation.messages.last.timestamp|timesince }} ago</small>
+                            </div>
+                            <p class="text-muted mb-1 text-truncate">
+                                {% if conversation.messages.last.sender == user %}
+                                <i class="bi bi-check2-all text-primary me-1"></i> You: {{ conversation.messages.last.content|truncatewords:8 }}
+                                {% else %}
+                                {{ conversation.messages.last.content|truncatewords:8 }}
+                                {% endif %}
+                            </p>
+                            {% if conversation.listing %}
+                            <small class="text-primary">
+                                <i class="bi bi-tag me-1"></i> {{ conversation.listing.title }}
+                            </small>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="text-end">
+                            {% if conversation.messages.last.sender != user and not conversation.messages.last.is_read %}
+                            <span class="badge bg-primary rounded-pill px-2 py-1">New</span>
+                            {% endif %}
+                            <button class="btn btn-sm btn-outline-secondary mt-2" 
+                                    data-bs-toggle="dropdown" 
+                                    aria-expanded="false">
+                                <i class="bi bi-three-dots"></i>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="#"><i class="bi bi-archive me-2"></i>Archive</a></li>
+                                <li><a class="dropdown-item text-danger" href="#"><i class="bi bi-trash me-2"></i>Delete</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-chat-dots display-1 text-muted"></i>
+                <h4 class="mt-3 text-muted">No conversations yet</h4>
+                <p class="text-muted mb-4">Start a conversation by contacting a seller about their listing.</p>
+                <a href="{% url 'all-listings' %}" class="btn btn-primary rounded-pill">
+                    <i class="bi bi-grid me-2"></i> Browse Listings
+                </a>
+            </div>
+            {% endif %}
+        </div>
+        
+        {% if conversations.has_other_pages %}
+        <div class="card-footer bg-transparent border-0">
+            <nav aria-label="Conversations pagination">
+                <ul class="pagination justify-content-center mb-0">
+                    {% if conversations.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ conversations.previous_page_number }}">Previous</a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for i in conversations.paginator.page_range %}
+                    <li class="page-item {% if conversations.number == i %}active{% endif %}">
+                        <a class="page-link" href="?page={{ i }}">{{ i }}</a>
+                    </li>
+                    {% endfor %}
+                    
+                    {% if conversations.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ conversations.next_page_number }}">Next</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- New Message Modal -->
+<div class="modal fade" id="newMessageModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-gradient-primary text-white">
+                <h5 class="modal-title">New Message</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="newMessageForm">
+                    <div class="mb-3">
+                        <label for="recipientSearch" class="form-label">To</label>
+                        <input type="text" class="form-control" id="recipientSearch" placeholder="Search for a user...">
+                        <div class="form-text">Start typing to find users</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="listingSelect" class="form-label">About Listing (Optional)</label>
+                        <select class="form-select" id="listingSelect">
+                            <option value="">Select a listing...</option>
+                            <!-- Populate with user's listings or recent viewed -->
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="messageText" class="form-label">Message</label>
+                        <textarea class="form-control" id="messageText" rows="4" placeholder="Type your message here..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="sendNewMessage">Send Message</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.list-group-item:hover {
+    background-color: var(--light-bg) !important;
+    transform: translateX(5px);
+    transition: all 0.3s ease;
+}
+
+.bg-gradient-primary {
+    background: linear-gradient(135deg, var(--primary-gemini) 0%, #0d47a1 100%) !important;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Real-time updates for inbox
+    setInterval(() => {
+        updateUnreadCounts();
+        
+        // Refresh conversation list every 30 seconds
+        fetch(window.location.href + '?partial=true')
+            .then(response => response.text())
+            .then(html => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const newList = doc.querySelector('.list-group');
+                if (newList) {
+                    document.querySelector('.list-group').innerHTML = newList.innerHTML;
+                }
+            });
+    }, 30000);
+    
+    // New message modal functionality
+    const newMessageModal = document.getElementById('newMessageModal');
+    if (newMessageModal) {
+        newMessageModal.addEventListener('shown.bs.modal', function() {
+            document.getElementById('recipientSearch').focus();
+        });
+        
+        document.getElementById('sendNewMessage').addEventListener('click', function() {
+            const recipient = document.getElementById('recipientSearch').value;
+            const message = document.getElementById('messageText').value;
+            
+            if (recipient && message) {
+                // Send message via AJAX
+                fetch('/api/send-message/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({
+                        recipient: recipient,
+                        message: message
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        bootstrap.Modal.getInstance(newMessageModal).hide();
+                        // Refresh or redirect to new conversation
+                        window.location.href = data.conversation_url;
+                    }
+                });
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

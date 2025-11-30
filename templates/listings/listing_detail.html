@@ -1,0 +1,1938 @@
+<!-- templates/listings/listing_detail.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ listing.title }} - Baysoko Marketplace{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/gallery.css' %}">
+<style>
+    /* Enhanced Listing Detail Styles */
+    .listing-hero {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-lg);
+        margin-bottom: var(--spacing-xl);
+        border: 1px solid var(--border-color);
+    }
+
+    /* Enhanced Image Gallery Styles */
+    .listing-gallery-container {
+        position: relative;
+        height: 500px;
+        overflow: hidden;
+        border-radius: var(--radius-lg);
+    }
+
+    .main-image-container {
+        position: relative;
+        height: 100%;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+    }
+
+    .main-image {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        transition: transform 0.3s ease;
+        background: white;
+        cursor: zoom-in;
+    }
+
+    .main-image.zoomed {
+        cursor: zoom-out;
+        transform: scale(1.5);
+    }
+
+    .image-actions {
+        position: absolute;
+        bottom: 15px;
+        right: 15px;
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .image-actions .btn {
+        background: rgba(255, 255, 255, 0.9);
+        border: none;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(10px);
+        color: var(--text-primary);
+    }
+
+    .thumbnail-gallery {
+        position: relative;
+        display: flex;
+        align-items: center;
+        margin-top: 1rem;
+    }
+
+    .thumbnail-scroll-container {
+        display: flex;
+        gap: 0.5rem;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        flex: 1;
+        padding: 0.5rem 0;
+    }
+
+    .thumbnail-scroll-container::-webkit-scrollbar {
+        display: none;
+    }
+
+    .thumbnail {
+        width: 80px;
+        height: 80px;
+        border-radius: 8px;
+        overflow: hidden;
+        cursor: pointer;
+        border: 2px solid transparent;
+        opacity: 0.7;
+        transition: var(--transition);
+        flex-shrink: 0;
+        background: white;
+    }
+
+    .thumbnail.active,
+    .thumbnail:hover {
+        opacity: 1;
+        border-color: var(--primary);
+    }
+
+    .thumbnail img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .thumbnail-nav {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: var(--transition);
+        flex-shrink: 0;
+        color: var(--text-primary);
+    }
+
+    .thumbnail-nav:hover {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+
+    .thumbnail-prev {
+        margin-right: 0.5rem;
+    }
+
+    .thumbnail-next {
+        margin-left: 0.5rem;
+    }
+
+    .image-counter {
+        text-align: center;
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        font-weight: 500;
+        margin-top: 0.5rem;
+    }
+
+    /* Fullscreen modal for images */
+    .image-fullscreen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.95);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        padding: 2rem;
+    }
+
+    .fullscreen-image {
+        max-width: 90%;
+        max-height: 80%;
+        object-fit: contain;
+    }
+
+    .fullscreen-close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        color: white;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        backdrop-filter: blur(10px);
+        font-size: 1.2rem;
+    }
+
+    .fullscreen-nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        color: white;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        backdrop-filter: blur(10px);
+        font-size: 1.5rem;
+    }
+
+    .fullscreen-prev {
+        left: 20px;
+    }
+
+    .fullscreen-next {
+        right: 20px;
+    }
+
+    .fullscreen-counter {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: white;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-weight: 500;
+        font-size: 1rem;
+    }
+
+    .listing-badges {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .status-badge {
+        padding: 0.5rem 1rem;
+        border-radius: 25px;
+        font-weight: 600;
+        font-size: 0.875rem;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .status-badge.available {
+        background: rgba(52, 168, 83, 0.9);
+        color: white;
+    }
+
+    .status-badge.sold {
+        background: rgba(234, 67, 53, 0.9);
+        color: white;
+    }
+
+    .status-badge.stock {
+        background: rgba(66, 133, 244, 0.9);
+        color: white;
+    }
+
+    .listing-info {
+        padding: var(--spacing-xl);
+    }
+
+    .listing-header {
+        margin-bottom: 1.5rem;
+    }
+
+    .listing-title {
+        font-size: 2rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+        color: var(--text-primary);
+    }
+
+    .listing-price {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: var(--primary);
+        margin-bottom: 1rem;
+    }
+
+    .price-history {
+        margin-bottom: 1rem;
+    }
+
+    .price-trend {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .price-trend.trend-up {
+        background: rgba(52, 168, 83, 0.1);
+        color: var(--success);
+        border: 1px solid rgba(52, 168, 83, 0.2);
+    }
+
+    .price-trend.trend-down {
+        background: rgba(234, 67, 53, 0.1);
+        color: var(--danger);
+        border: 1px solid rgba(234, 67, 53, 0.2);
+    }
+
+    .price-trend.trend-stable {
+        background: rgba(66, 133, 244, 0.1);
+        color: var(--primary);
+        border: 1px solid rgba(66, 133, 244, 0.2);
+    }
+
+    .listing-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .meta-tag {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        padding: 0.5rem 1rem;
+        border-radius: 15px;
+        font-size: 0.875rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--text-primary);
+    }
+
+    .listing-description {
+        font-size: 1.1rem;
+        line-height: 1.7;
+        color: var(--text-primary);
+        margin-bottom: 2rem;
+    }
+
+    .listing-actions {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .action-button {
+        padding: 1rem 2rem;
+        border: none;
+        border-radius: var(--radius-md);
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: var(--transition);
+        cursor: pointer;
+        text-align: center;
+        justify-content: center;
+    }
+
+    .action-button.primary {
+        background: var(--primary);
+        color: white;
+    }
+
+    .action-button.primary:hover {
+        background: var(--primary-dark);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(255, 107, 53, 0.3);
+    }
+
+    .action-button.secondary {
+        background: transparent;
+        color: var(--text-primary);
+        border: 2px solid var(--border-color);
+    }
+
+    .action-button.secondary:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+        transform: translateY(-2px);
+    }
+
+    /* Enhanced Seller Card Styles */
+    .seller-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-lg);
+        box-shadow: var(--shadow-lg);
+        margin-bottom: var(--spacing-xl);
+        border: 1px solid var(--border-color);
+    }
+
+    .seller-avatar {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid var(--primary);
+        margin-bottom: 1rem;
+    }
+
+    .seller-name {
+        font-size: 1.3rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+        color: var(--text-primary);
+    }
+
+    .seller-username {
+        color: var(--text-secondary);
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
+    }
+
+    .seller-bio {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        line-height: 1.5;
+        margin-bottom: 1.5rem;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .verified-badge {
+        background: var(--success);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .seller-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+        margin: 1.5rem 0;
+    }
+
+    .stat-item {
+        text-align: center;
+        padding: 0.75rem;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+    }
+
+    .stat-value {
+        font-size: 1.2rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .stat-value.listings { color: var(--primary); }
+    .stat-value.reviews { color: var(--success); }
+    .stat-value.rating { color: var(--warning); }
+
+    .stat-label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+
+    .action-buttons-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
+    }
+
+    /* Specifications Table */
+    .specifications {
+        margin: 2rem 0;
+    }
+
+    .specs-table {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+    }
+
+    .spec-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .spec-row:last-child {
+        border-bottom: none;
+    }
+
+    .spec-label {
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .spec-value {
+        color: var(--text-secondary);
+    }
+
+    /* Reviews Section */
+    .reviews-section {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        box-shadow: var(--shadow-lg);
+        margin-bottom: var(--spacing-xl);
+    }
+
+    .section-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 1.5rem;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .rating-overview {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 3rem;
+        margin-bottom: 2rem;
+        align-items: center;
+    }
+
+    .rating-score {
+        text-align: center;
+    }
+
+    .rating-number {
+        font-size: 4rem;
+        font-weight: 700;
+        color: var(--primary);
+        line-height: 1;
+    }
+
+    .rating-stars {
+        color: var(--warning);
+        font-size: 1.5rem;
+        margin: 0.5rem 0;
+    }
+
+    .rating-count {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+    }
+
+    .rating-bars {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .rating-bar {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .rating-label {
+        width: 20px;
+        text-align: center;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .rating-progress {
+        flex: 1;
+        height: 8px;
+        background: var(--bg-secondary);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .rating-progress-fill {
+        height: 100%;
+        background: var(--warning);
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+
+    .rating-count-small {
+        width: 30px;
+        text-align: right;
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+    }
+
+    .review-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .review-item {
+        padding: 1.5rem;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+    }
+
+    .review-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 1rem;
+    }
+
+    .reviewer-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .reviewer-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+
+    .reviewer-details h4 {
+        margin: 0;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .reviewer-stars {
+        color: var(--warning);
+        font-size: 0.875rem;
+    }
+
+    .review-date {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+    }
+
+    .review-content {
+        color: var(--text-primary);
+        line-height: 1.6;
+    }
+
+    .no-reviews {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-secondary);
+    }
+
+    .no-reviews-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
+    /* FAQ Section */
+    .faq-section {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        box-shadow: var(--shadow-lg);
+        margin-bottom: var(--spacing-xl);
+    }
+
+    .accordion-item {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        margin-bottom: 0.75rem;
+        border-radius: var(--radius-md);
+        overflow: hidden;
+    }
+
+    .accordion-button {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-weight: 600;
+        border: none;
+        padding: 1.25rem;
+        width: 100%;
+        text-align: left;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        transition: var(--transition);
+    }
+
+    .accordion-button:not(.collapsed) {
+        background: var(--primary);
+        color: white;
+    }
+
+    .accordion-button::after {
+        content: '\f282';
+        font-family: 'bootstrap-icons';
+        font-size: 1.25rem;
+        transition: transform 0.3s ease;
+    }
+
+    .accordion-button:not(.collapsed)::after {
+        transform: rotate(180deg);
+    }
+
+    .accordion-body {
+        padding: 1.25rem;
+        border-top: 1px solid var(--border-color);
+        color: var(--text-primary);
+        line-height: 1.6;
+    }
+
+    /* Similar Listings & Seller's Other Listings */
+    .similar-listings, .seller-other-listings {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        box-shadow: var(--shadow-lg);
+        margin-bottom: var(--spacing-xl);
+    }
+
+    .similar-grid, .seller-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .similar-card, .seller-listing-card {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        transition: var(--transition);
+        border: 1px solid var(--border-color);
+    }
+
+    .similar-card:hover, .seller-listing-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .similar-card img, .seller-listing-card img {
+        width: 100%;
+        height: 150px;
+        object-fit: cover;
+    }
+
+    .similar-card-content, .seller-listing-info {
+        padding: 1rem;
+    }
+
+    .similar-card-title, .seller-listing-info h6 {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: var(--text-primary);
+    }
+
+    .similar-card-price, .seller-listing-info .price {
+        font-weight: 700;
+        color: var(--primary);
+        margin-bottom: 0.5rem;
+    }
+
+    .similar-card-location {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+    }
+
+    /* Safety Tips & Management */
+    .info-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-lg);
+        box-shadow: var(--shadow-lg);
+        margin-bottom: 1.5rem;
+    }
+
+    .info-card h6 {
+        margin-bottom: 1rem;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .info-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .info-list li {
+        padding: 0.5rem 0;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .info-list li i {
+        color: var(--success);
+    }
+
+    /* Shipping Information */
+    .shipping-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .shipping-option, .shipping-time, .shipping-cost {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .shipping-option:last-child, .shipping-time:last-child, .shipping-cost:last-child {
+        border-bottom: none;
+    }
+
+    /* Return Policy */
+    .return-policy p {
+        margin-bottom: 1rem;
+        color: var(--text-secondary);
+    }
+
+    /* Social Sharing */
+    .social-sharing {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: center;
+    }
+
+    .social-share-btn {
+        width: 45px;
+        height: 45px;
+        border: none;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: var(--transition);
+        color: white;
+        font-size: 1.25rem;
+    }
+
+    .social-share-btn.facebook { background: #1877F2; }
+    .social-share-btn.twitter { background: #1DA1F2; }
+    .social-share-btn.whatsapp { background: #25D366; }
+    .social-share-btn.link { background: var(--text-secondary); }
+
+    .social-share-btn:hover {
+        transform: scale(1.1);
+        box-shadow: var(--shadow-md);
+    }
+
+    /* Recently Viewed Sidebar */
+    .recently-viewed-sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .recent-item {
+        display: flex;
+        gap: 1rem;
+        padding: 0.75rem;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        transition: var(--transition);
+    }
+
+    .recent-item:hover {
+        border-color: var(--primary);
+    }
+
+    .recent-item img {
+        width: 60px;
+        height: 60px;
+        border-radius: 8px;
+        object-fit: cover;
+    }
+
+    .recent-details {
+        flex: 1;
+    }
+
+    .recent-details a {
+        font-weight: 600;
+        color: var(--text-primary);
+        text-decoration: none;
+        font-size: 0.875rem;
+        margin-bottom: 0.25rem;
+        display: block;
+    }
+
+    .recent-details a:hover {
+        color: var(--primary);
+    }
+
+    .recent-price {
+        font-weight: 700;
+        color: var(--primary);
+        font-size: 0.875rem;
+    }
+
+    /* Horizontal scrolling for mobile */
+    .horizontal-scroll-container {
+        display: flex;
+        overflow-x: auto;
+        gap: 1.5rem;
+        padding: 1rem 0.5rem;
+        scrollbar-width: thin;
+        scrollbar-color: var(--primary) transparent;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x mandatory;
+    }
+
+    .horizontal-scroll-container::-webkit-scrollbar {
+        height: 6px;
+    }
+
+    .horizontal-scroll-container::-webkit-scrollbar-track {
+        background: transparent;
+        border-radius: 3px;
+    }
+
+    .horizontal-scroll-container::-webkit-scrollbar-thumb {
+        background: var(--primary);
+        border-radius: 3px;
+    }
+
+    .horizontal-scroll-item {
+        flex: 0 0 auto;
+        scroll-snap-align: start;
+        min-width: 200px;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .listing-gallery-container {
+            height: 400px;
+        }
+        
+        .listing-title {
+            font-size: 1.5rem;
+        }
+        
+        .listing-price {
+            font-size: 2rem;
+        }
+        
+        .rating-overview {
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+            text-align: center;
+        }
+        
+        .seller-stats {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+        }
+        
+        .stat-item {
+            padding: 0.5rem;
+        }
+        
+        .stat-value {
+            font-size: 1rem;
+        }
+        
+        .action-buttons-grid {
+            grid-template-columns: 1fr;
+            gap: 0.75rem;
+        }
+        
+        .listing-actions {
+            flex-direction: column;
+        }
+        
+        .action-button {
+            justify-content: center;
+        }
+        
+        .similar-grid, .seller-grid {
+            display: flex;
+            overflow-x: auto;
+            gap: 1rem;
+            padding: 1rem 0.5rem;
+            scroll-snap-type: x mandatory;
+        }
+        
+        .similar-card, .seller-listing-card {
+            flex: 0 0 auto;
+            min-width: 200px;
+            scroll-snap-align: start;
+        }
+        
+        .thumbnail {
+            width: 60px;
+            height: 60px;
+        }
+        
+        .thumbnail-nav {
+            display: none;
+        }
+        
+        .seller-avatar {
+            width: 60px;
+            height: 60px;
+        }
+        
+        .seller-name {
+            font-size: 1.1rem;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .listing-gallery-container {
+            height: 300px;
+        }
+        
+        .seller-stats {
+            grid-template-columns: repeat(3, 1fr);
+        }
+        
+        .main-image {
+            height: 250px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-custom py-4">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'all-listings' %}?category={{ listing.category.id }}">{{ listing.category.name }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ listing.title|truncatewords:5 }}</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Listing Hero Section -->
+            <div class="listing-hero">
+                <div class="row g-0">
+                    <div class="col-md-6">
+                        <!-- Enhanced Image Gallery -->
+                        <div class="listing-gallery-container">
+                            <div class="main-image-container">
+                                <img src="{{ listing.get_image_url }}" alt="{{ listing.title }}" 
+                                     id="main-image" class="main-image" data-zoom="{{ listing.get_image_url }}">
+                                <div class="listing-badges">
+                                    {% if listing.is_sold %}
+                                    <span class="status-badge sold">Sold</span>
+                                    {% else %}
+                                    <span class="status-badge available">Available</span>
+                                    {% endif %}
+                                    <span class="status-badge stock">
+                                        {% if listing.stock > 0 %}{{ listing.stock }} in stock{% else %}Out of Stock{% endif %}
+                                    </span>
+                                </div>
+                                <div class="image-actions">
+                                    <button class="btn btn-sm btn-light" id="zoom-toggle">
+                                        <i class="bi bi-zoom-in"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-light" id="fullscreen-toggle">
+                                        <i class="bi bi-arrows-fullscreen"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Thumbnail Gallery -->
+                            {% if listing.images.all or listing.get_image_url %}
+                            <div class="thumbnail-gallery">
+                                <button class="thumbnail-nav thumbnail-prev" id="thumb-prev">
+                                    <i class="bi bi-chevron-left"></i>
+                                </button>
+                                <div class="thumbnail-scroll-container">
+                                    <!-- Main image thumbnail -->
+                                    <div class="thumbnail active" data-image="{{ listing.get_image_url }}">
+                                        <img src="{{ listing.get_image_url }}" alt="Main image">
+                                    </div>
+                                    <!-- Additional images -->
+                                    {% for image in listing.images.all %}
+                                    <div class="thumbnail" data-image="{{ image.get_image_url }}">
+                                        <img src="{{ image.get_image_url }}" alt="Image {{ forloop.counter }}">
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                <button class="thumbnail-nav thumbnail-next" id="thumb-next">
+                                    <i class="bi bi-chevron-right"></i>
+                                </button>
+                            </div>
+                            
+                            <!-- Image Counter -->
+                            <div class="image-counter">
+                                <span id="current-image">1</span> of <span id="total-images">{{ listing.images.all|length|add:1 }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="listing-info">
+                            <div class="listing-header">
+                                <h1 class="listing-title">{{ listing.title }}</h1>
+                                
+                                <!-- Price and Price History -->
+                                <div class="listing-price">KSh {{ listing.price }}</div>
+                                
+                                {% if listing.price_trend != 'stable' or listing.original_price %}
+                                <div class="price-history">
+                                    <div class="price-trend trend-{{ listing.price_trend }}">
+                                        <i class="bi bi-arrow-{% if listing.price_trend == 'up' %}up{% elif listing.price_trend == 'down' %}down{% else %}right{% endif %}"></i>
+                                        {% if listing.price_trend == 'up' %}
+                                        Price increased
+                                        {% elif listing.price_trend == 'down' %}
+                                        Price decreased
+                                        {% else %}
+                                        Price stable
+                                        {% endif %}
+                                        {% if listing.original_price and listing.original_price != listing.price %}
+                                        (was KSh {{ listing.original_price }})
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                <div class="listing-meta">
+                                    <span class="meta-tag">
+                                        <i class="bi bi-geo-alt"></i>
+                                        {{ listing.get_location_display }}
+                                    </span>
+                                    <span class="meta-tag">
+                                        <i class="bi bi-grid"></i>
+                                        {{ listing.category.name }}
+                                    </span>
+                                    {% if listing.store %}
+                                    <span class="meta-tag">
+                                        <i class="bi bi-shop"></i>
+                                        <a href="{% url 'storefront:store_detail' listing.store.slug %}" class="text-decoration-none">{{ listing.store.name }}</a>
+                                    </span>
+                                    {% endif %}
+                                    <span class="meta-tag">
+                                        <i class="bi bi-tag"></i>
+                                        {{ listing.get_condition_display }}
+                                    </span>
+                                    <span class="meta-tag">
+                                        <i class="bi bi-truck"></i>
+                                        {{ listing.get_delivery_option_display }}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div class="listing-description">
+                                {{ listing.description|linebreaks }}
+                            </div>
+                            
+                            <!-- Product Specifications -->
+                            {% if listing.brand or listing.model or listing.dimensions or listing.weight or listing.color or listing.material %}
+                            <section class="specifications">
+                                <h5>Product Specifications</h5>
+                                <div class="specs-table">
+                                    {% if listing.brand %}
+                                    <div class="spec-row">
+                                        <span class="spec-label">Brand</span>
+                                        <span class="spec-value">{{ listing.brand }}</span>
+                                    </div>
+                                    {% endif %}
+                                    {% if listing.model %}
+                                    <div class="spec-row">
+                                        <span class="spec-label">Model</span>
+                                        <span class="spec-value">{{ listing.model }}</span>
+                                    </div>
+                                    {% endif %}
+                                    {% if listing.condition %}
+                                    <div class="spec-row">
+                                        <span class="spec-label">Condition</span>
+                                        <span class="spec-value">{{ listing.get_condition_display }}</span>
+                                    </div>
+                                    {% endif %}
+                                    {% if listing.dimensions %}
+                                    <div class="spec-row">
+                                        <span class="spec-label">Dimensions</span>
+                                        <span class="spec-value">{{ listing.dimensions }}</span>
+                                    </div>
+                                    {% endif %}
+                                    {% if listing.weight %}
+                                    <div class="spec-row">
+                                        <span class="spec-label">Weight</span>
+                                        <span class="spec-value">{{ listing.weight }}</span>
+                                    </div>
+                                    {% endif %}
+                                    {% if listing.color %}
+                                    <div class="spec-row">
+                                        <span class="spec-label">Color</span>
+                                        <span class="spec-value">{{ listing.color }}</span>
+                                    </div>
+                                    {% endif %}
+                                    {% if listing.material %}
+                                    <div class="spec-row">
+                                        <span class="spec-label">Material</span>
+                                        <span class="spec-value">{{ listing.material }}</span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </section>
+                            {% endif %}
+                            
+                            <div class="listing-actions">
+                                {% if user.is_authenticated and user != listing.seller %}
+                                    {% if listing.stock > 0 and not listing.is_sold %}
+                                    <form method="post" action="{% url 'add_to_cart' listing.id %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="action-button primary">
+                                            <i class="bi bi-cart-plus"></i> Add to Cart
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                    <a href="{% url 'leave_listing_review' listing.id %}" class="action-button secondary">
+                                        <i class="bi bi-star"></i> Leave Review
+                                    </a>
+                                {% elif not user.is_authenticated %}
+                                    <a href="{% url 'login' %}?next={{ request.path }}" class="action-button primary">Login to Purchase</a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FAQ Section -->
+            {% if faqs %}
+            <section class="faq-section">
+                <h4 class="section-title">
+                    <i class="bi bi-question-circle"></i>
+                    Frequently Asked Questions
+                </h4>
+                <div class="accordion" id="listingFAQ">
+                    {% for faq in faqs %}
+                    <div class="accordion-item">
+                        <h5 class="accordion-header">
+                            <button class="accordion-button {% if not forloop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#faq{{ faq.id }}">
+                                {{ faq.question }}
+                            </button>
+                        </h5>
+                        <div id="faq{{ faq.id }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" data-bs-parent="#listingFAQ">
+                            <div class="accordion-body">
+                                {{ faq.answer|linebreaks }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endif %}
+
+            <!-- Reviews Section -->
+            <div class="reviews-section">
+                <h3 class="section-title">
+                    <i class="bi bi-star-fill text-warning"></i>
+                    Customer Reviews 
+                    <span class="badge bg-primary ms-2">{{ reviews.count }}</span>
+                </h3>
+                
+                {% if reviews %}
+                <div class="rating-overview">
+                    <div class="rating-score">
+                        <div class="rating-number">{{ avg_rating }}</div>
+                        <div class="rating-stars">
+                            {% for i in "12345" %}
+                                {% if forloop.counter <= avg_rating %}
+                                    <i class="bi bi-star-fill"></i>
+                                {% else %}
+                                    <i class="bi bi-star"></i>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                        <div class="rating-count">{{ reviews.count }} reviews</div>
+                    </div>
+                    <div class="rating-bars">
+                        {% for rating in rating_distribution %}
+                        <div class="rating-bar">
+                            <span class="rating-label">{{ rating.rating }}</span>
+                            <i class="bi bi-star-fill text-warning"></i>
+                            <div class="rating-progress">
+                                <div class="rating-progress-fill" style="width: {{ rating.percentage }}%"></div>
+                            </div>
+                            <span class="rating-count-small">{{ rating.count }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="review-list">
+                    {% for review in reviews %}
+                    <div class="review-item">
+                        <div class="review-header">
+                            <div class="reviewer-info">
+                          <img src="{{ review.user.get_profile_picture_url }}" 
+                                     alt="{{ review.user.username }}" class="reviewer-avatar">
+                                <div class="reviewer-details">
+                                    <h4>{{ review.user.get_full_name|default:review.user.username }}</h4>
+                                    <div class="reviewer-stars">
+                                        {% for i in "12345" %}
+                                            {% if forloop.counter <= review.rating %}
+                                                <i class="bi bi-star-fill"></i>
+                                            {% else %}
+                                                <i class="bi bi-star"></i>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="review-date">{{ review.created_at|date:"M d, Y" }}</div>
+                        </div>
+                        <div class="review-content">
+                            {% if review.comment %}
+                                {{ review.comment|linebreaks }}
+                            {% else %}
+                                <em class="text-muted">No comment provided</em>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="no-reviews">
+                    <div class="no-reviews-icon">
+                        <i class="bi bi-chat-square-text"></i>
+                    </div>
+                    <h4>No reviews yet</h4>
+                    <p class="mb-3">Be the first to review this listing!</p>
+                    {% if user.is_authenticated and user != listing.seller %}
+                    <a href="{% url 'leave_listing_review' listing.id %}" class="action-button primary">
+                        <i class="bi bi-star me-1"></i> Write First Review
+                    </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Seller's Other Listings -->
+            {% if seller_other_listings %}
+            <section class="seller-other-listings">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h4 class="section-title">
+                        <i class="bi bi-grid-3x3-gap"></i>
+                        More from this Seller
+                    </h4>
+                    <a href="{% url 'profile' listing.seller.pk %}" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+                <div class="seller-grid">
+                    {% for seller_listing in seller_other_listings %}
+                    <div class="seller-listing-card">
+                        <img src="{{ seller_listing.get_image_url }}" alt="{{ seller_listing.title }}">
+                        <div class="seller-listing-info">
+                            <h6>{{ seller_listing.title|truncatewords:5 }}</h6>
+                            <p class="price">KSh {{ seller_listing.price }}</p>
+                            <a href="{% url 'listing-detail' seller_listing.pk %}" class="btn btn-sm btn-primary w-100">View</a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endif %}
+
+            <!-- Similar Listings -->
+            {% if similar_listings %}
+            <section class="similar-listings">
+                <h4 class="section-title">
+                    <i class="bi bi-arrow-left-right"></i>
+                    Similar Listings
+                </h4>
+                <div class="similar-grid">
+                    {% for similar_listing in similar_listings %}
+                    <div class="similar-card">
+                        <img src="{{ similar_listing.get_image_url }}" alt="{{ similar_listing.title }}">
+                        <div class="similar-card-content">
+                            <h5 class="similar-card-title">{{ similar_listing.title|truncatewords:5 }}</h5>
+                            <div class="similar-card-price">KSh {{ similar_listing.price }}</div>
+                            <div class="similar-card-location">{{ similar_listing.get_location_display }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Enhanced Seller Card -->
+            <div class="seller-card">
+                <div class="row align-items-center">
+                    <div class="col-12 col-sm-4 text-center text-sm-start">
+                    <img src="{{ listing.seller.get_profile_picture_url }}" 
+                             alt="{{ listing.seller.username }}" class="seller-avatar">
+                    </div>
+                    <div class="col-12 col-sm-8 text-center text-sm-start">
+                        <h3 class="seller-name">{{ listing.seller.get_full_name|default:listing.seller.username }}</h3>
+                        <p class="seller-username">@{{ listing.seller.username }}</p>
+                        
+                        {% if listing.seller.profile.bio %}
+                        <p class="seller-bio">{{ listing.seller.profile.bio }}</p>
+                        {% else %}
+                        <p class="seller-bio">This seller hasn't added a bio yet.</p>
+                        {% endif %}
+                        
+                        {% if listing.seller.profile.is_verified %}
+                        <div class="verified-badge">
+                            <i class="bi bi-patch-check-fill"></i>
+                            Verified Seller
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Seller Stats - Responsive Grid -->
+                <div class="seller-stats">
+                    <div class="stat-item">
+                        <div class="stat-value listings">{{ listing.seller.listings.count }}</div>
+                        <div class="stat-label">Listings</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value reviews">{{ seller_reviews_count }}</div>
+                        <div class="stat-label">Reviews</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value rating">
+                            {% if seller_avg_rating > 0 %}
+                                {{ seller_avg_rating }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </div>
+                        <div class="stat-label">Rating</div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons - Stack on Mobile -->
+                <div class="seller-actions">
+                    <!-- Favorite Button -->
+                    <form action="{% url 'toggle_favorite' listing.id %}" method="post" class="favorite-form mb-2">
+                        {% csrf_token %}
+                        <button type="submit" class="action-button {% if is_favorited %}primary{% else %}secondary{% endif %} w-100">
+                            <i class="bi bi-heart{% if is_favorited %}-fill{% endif %}"></i>
+                            {% if is_favorited %}Liked{% else %}Like{% endif %}
+                            ({{ listing.favorites.count }})
+                        </button>
+                    </form>
+
+                    <!-- Main Action Buttons -->
+                    <div class="action-buttons-grid">
+                        <a href="{% url 'profile' listing.seller.pk %}" class="action-button secondary">
+                            <i class="bi bi-person"></i> Profile
+                        </a>
+                        {% if user.is_authenticated and user != listing.seller %}
+                        <a href="{% url 'start-conversation' listing.id listing.seller.id %}" class="action-button primary">
+                            <i class="bi bi-chat"></i> Contact
+                        </a>
+                        
+                        {% elif not user.is_authenticated %}
+                        <a href="{% url 'login' %}?next={{ request.path }}" class="action-button primary w-100">
+                            Login to Contact Seller
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Social Sharing -->
+            <div class="info-card">
+                <h6><i class="bi bi-share"></i> Share this Listing</h6>
+                <div class="social-sharing">
+                    <button class="social-share-btn facebook" data-platform="facebook" onclick="shareOnFacebook()">
+                        <i class="bi bi-facebook"></i>
+                    </button>
+                    <button class="social-share-btn twitter" data-platform="twitter" onclick="shareOnTwitter()">
+                        <i class="bi bi-twitter"></i>
+                    </button>
+                    <button class="social-share-btn whatsapp" data-platform="whatsapp" onclick="shareOnWhatsApp()">
+                        <i class="bi bi-whatsapp"></i>
+                    </button>
+                    <button class="social-share-btn link" data-platform="copy" onclick="copyListingLink()">
+                        <i class="bi bi-link-45deg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Shipping Information -->
+            <div class="info-card">
+                <h6><i class="bi bi-truck"></i> Shipping Information</h6>
+                <div class="shipping-info">
+                    <div class="shipping-option">
+                        <strong>Delivery:</strong> {{ listing.get_delivery_option_display }}
+                    </div>
+                    <div class="shipping-time">
+                        <strong>Estimated Delivery:</strong> 2-5 business days
+                    </div>
+                    <div class="shipping-cost">
+                        <strong>Cost:</strong> 
+                        {% if listing.delivery_option == 'pickup' %}
+                        Free pickup
+                        {% else %}
+                        Calculated at checkout
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Return Policy -->
+            <div class="info-card">
+                <h6><i class="bi bi-arrow-left-right"></i> Return Policy</h6>
+                <div class="return-policy">
+                    <p>30-day return policy. Items must be in original condition.</p>
+                    <ul class="info-list">
+                        <li><i class="bi bi-check-circle text-success"></i> 30-day returns</li>
+                        <li><i class="bi bi-check-circle text-success"></i> Money-back guarantee</li>
+                        <li><i class="bi bi-check-circle text-success"></i> Buyer protection</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Safety Tips -->
+            <div class="info-card">
+                <h6><i class="bi bi-shield-check"></i> Safety Tips</h6>
+                <ul class="info-list">
+                    <li><i class="bi bi-check-circle text-success"></i> Meet in a public place</li>
+                    <li><i class="bi bi-check-circle text-success"></i> Inspect the item before buying</li>
+                    <li><i class="bi bi-check-circle text-success"></i> Avoid paying in advance</li>
+                    <li><i class="bi bi-check-circle text-success"></i> Report suspicious activity</li>
+                </ul>
+            </div>
+
+            <!-- Recently Viewed Products -->
+            {% if recently_viewed_sidebar %}
+            <div class="info-card">
+                <h6><i class="bi bi-clock"></i> Recently Viewed</h6>
+                <div class="recently-viewed-sidebar">
+                    {% for recent in recently_viewed_sidebar %}
+                    <div class="recent-item">
+                        <img src="{{ recent.get_image_url }}" alt="{{ recent.title }}">
+                        <div class="recent-details">
+                            <a href="{% url 'listing-detail' recent.pk %}">{{ recent.title|truncatewords:3 }}</a>
+                            <div class="recent-price">KSh {{ recent.price }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Management for Owner -->
+            {% if user == listing.seller %}
+            <div class="info-card">
+                <h6><i class="bi bi-gear"></i> Manage Listing</h6>
+                <div class="seller-actions">
+                    <a href="{% url 'listing-update' listing.pk %}" class="action-button secondary">
+                        <i class="bi bi-pencil"></i> Edit Listing
+                    </a>
+                    <a href="{% url 'listing-delete' listing.pk %}" class="action-button secondary">
+                        <i class="bi bi-trash"></i> Delete Listing
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="module" src="{% static 'js/gallery-init.js' %}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+    // Additional functionality not covered by gallery-utils
+    const mainImage = document.getElementById('main-image');
+    const thumbnails = document.querySelectorAll('.thumbnail');
+    const currentImageSpan = document.getElementById('current-image');
+    const totalImagesSpan = document.getElementById('total-images');
+    const zoomToggle = document.getElementById('zoom-toggle');
+    const fullscreenToggle = document.getElementById('fullscreen-toggle');
+    const thumbPrev = document.getElementById('thumb-prev');
+    const thumbNext = document.getElementById('thumb-next');
+    
+    let currentImageIndex = 0;
+    const images = [];
+
+    // Collect all images robustly: prefer data-image attributes on thumbnails,
+    // but always include mainImage.src as first fallback.
+    if (mainImage && mainImage.src) {
+        images.push(mainImage.src);
+    }
+    // If thumbnails exist, build images array from their data-image attributes
+    if (thumbnails && thumbnails.length > 0) {
+        thumbnails.forEach((thumb) => {
+            const data = thumb.getAttribute('data-image') || thumb.querySelector('img')?.src;
+            if (data) {
+                // Avoid duplicating the main image if it's already present
+                if (images.length === 0 || images[0] !== data) {
+                    images.push(data);
+                } else if (images[0] === data && images.length === 1) {
+                    // ensure thumbnails map to same indices as images
+                }
+            }
+        });
+    }
+    
+    // Update image counter
+    if (totalImagesSpan) {
+        totalImagesSpan.textContent = images.length;
+    }
+    
+    // Thumbnail click functionality (if thumbnails exist)
+    if (thumbnails && thumbnails.length > 0) {
+        thumbnails.forEach((thumbnail, index) => {
+            thumbnail.addEventListener('click', function() {
+                const imageUrl = this.getAttribute('data-image') || this.querySelector('img')?.src;
+                if (!imageUrl) return;
+
+                // find index in images array
+                const imgIndex = images.indexOf(imageUrl);
+                if (imgIndex >= 0) currentImageIndex = imgIndex;
+                else {
+                    // fallback — show image directly
+                    currentImageIndex = 0;
+                    images[0] = imageUrl;
+                }
+
+                mainImage.src = imageUrl;
+                mainImage.setAttribute('data-zoom', imageUrl);
+
+                // Update active state
+                thumbnails.forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+
+                if (currentImageSpan) {
+                    currentImageSpan.textContent = currentImageIndex + 1;
+                }
+            });
+        });
+    }
+    
+    // Zoom functionality
+    if (zoomToggle && mainImage) {
+        zoomToggle.addEventListener('click', function() {
+            mainImage.classList.toggle('zoomed');
+            zoomToggle.innerHTML = mainImage.classList.contains('zoomed') ? 
+                '<i class="bi bi-zoom-out"></i>' : '<i class="bi bi-zoom-in"></i>';
+        });
+    }
+    
+    // Fullscreen functionality
+    if (fullscreenToggle) {
+        fullscreenToggle.addEventListener('click', openFullscreen);
+    }
+    
+    // Thumbnail navigation
+    if (thumbPrev) {
+        thumbPrev.addEventListener('click', showPrevImage);
+    }
+    
+    if (thumbNext) {
+        thumbNext.addEventListener('click', showNextImage);
+    }
+    
+    // Keyboard navigation
+    document.addEventListener('keydown', function(e) {
+        if (document.querySelector('.image-fullscreen')) {
+            if (e.key === 'Escape') {
+                closeFullscreen();
+            } else if (e.key === 'ArrowLeft') {
+                showPrevImage();
+            } else if (e.key === 'ArrowRight') {
+                showNextImage();
+            }
+        }
+    });
+    
+    function openFullscreen() {
+        // guard: ensure we have at least one image
+        if (!images || images.length === 0) return;
+
+        const fullscreenHTML = `
+            <div class="image-fullscreen">
+                <button class="fullscreen-close" aria-label="Close full screen">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+                <img src="${images[currentImageIndex]}" class="fullscreen-image" alt="Fullscreen view">
+                <button class="fullscreen-nav fullscreen-prev" aria-label="Previous image">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+                <button class="fullscreen-nav fullscreen-next" aria-label="Next image">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+                <div class="fullscreen-counter">
+                    ${currentImageIndex + 1} / ${images.length}
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', fullscreenHTML);
+
+        // Use event delegation so handlers survive removing/adding DOM
+        // Avoid adding multiple global handlers by namespacing on window
+        if (!window.__hs_fullscreen_listeners_attached) {
+            window.__hs_fullscreen_listeners_attached = true;
+
+            document.addEventListener('click', function (e) {
+                const target = e.target.closest?.call(e.target, '.fullscreen-close, .fullscreen-prev, .fullscreen-next');
+                if (!target) return;
+
+                if (target.classList.contains('fullscreen-close')) {
+                    closeFullscreen();
+                } else if (target.classList.contains('fullscreen-prev')) {
+                    showPrevImage();
+                } else if (target.classList.contains('fullscreen-next')) {
+                    showNextImage();
+                }
+            });
+
+            // keyboard navigation while fullscreen is open
+            document.addEventListener('keydown', function (e) {
+                if (!document.querySelector('.image-fullscreen')) return;
+                if (e.key === 'Escape') return closeFullscreen();
+                if (e.key === 'ArrowLeft') return showPrevImage();
+                if (e.key === 'ArrowRight') return showNextImage();
+            });
+        }
+    }
+    
+    function closeFullscreen() {
+        const fullscreen = document.querySelector('.image-fullscreen');
+        if (fullscreen) {
+            fullscreen.remove();
+        }
+    }
+    
+    function showPrevImage() {
+        currentImageIndex = (currentImageIndex - 1 + images.length) % images.length;
+        updateImageDisplay();
+    }
+    
+    function showNextImage() {
+        currentImageIndex = (currentImageIndex + 1) % images.length;
+        updateImageDisplay();
+    }
+    
+    function updateImageDisplay() {
+        const fullscreenImage = document.querySelector('.fullscreen-image');
+        const fullscreenCounter = document.querySelector('.fullscreen-counter');
+        
+        if (fullscreenImage) {
+            fullscreenImage.src = images[currentImageIndex];
+        }
+        
+        if (fullscreenCounter) {
+            fullscreenCounter.textContent = `${currentImageIndex + 1} / ${images.length}`;
+        }
+        
+        // Also update the main image and thumbnails if not in fullscreen
+        if (!document.querySelector('.image-fullscreen')) {
+            mainImage.src = images[currentImageIndex];
+            mainImage.setAttribute('data-zoom', images[currentImageIndex]);
+            
+            thumbnails.forEach((thumb, index) => {
+                thumb.classList.toggle('active', index === currentImageIndex);
+            });
+            
+            if (currentImageSpan) {
+                currentImageSpan.textContent = currentImageIndex + 1;
+            }
+        }
+    }
+
+    // Favorite button AJAX with modern animation
+    const favoriteForm = document.querySelector('.favorite-form');
+    if (favoriteForm) {
+        favoriteForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const form = this;
+            const button = form.querySelector('button');
+            const icon = button.querySelector('i');
+            
+            // Add click animation
+            button.style.transform = 'scale(0.95)';
+            
+            fetch(form.action, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Reset animation
+                setTimeout(() => {
+                    button.style.transform = 'scale(1)';
+                }, 150);
+                
+                if (data.is_favorited) {
+                    button.classList.remove('secondary');
+                    button.classList.add('primary');
+                    icon.classList.remove('bi-heart');
+                    icon.classList.add('bi-heart-fill');
+                    button.innerHTML = `<i class="bi bi-heart-fill"></i> Liked (${data.favorite_count})`;
+                } else {
+                    button.classList.remove('primary');
+                    button.classList.add('secondary');
+                    icon.classList.remove('bi-heart-fill');
+                    icon.classList.add('bi-heart');
+                    button.innerHTML = `<i class="bi bi-heart"></i> Like (${data.favorite_count})`;
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    }
+
+    // Social Sharing Functions
+    window.shareOnFacebook = function() {
+        const url = encodeURIComponent(window.location.href);
+        const text = encodeURIComponent("Check out this listing: {{ listing.title }}");
+        window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${text}`, '_blank');
+    };
+
+    window.shareOnTwitter = function() {
+        const url = encodeURIComponent(window.location.href);
+        const text = encodeURIComponent("Check out this listing: {{ listing.title }}");
+        window.open(`https://twitter.com/intent/tweet?url=${url}&text=${text}`, '_blank');
+    };
+
+    window.shareOnWhatsApp = function() {
+        const text = encodeURIComponent("Check out this listing: {{ listing.title }} - " + window.location.href);
+        window.open(`https://wa.me/?text=${text}`, '_blank');
+    };
+
+    window.copyListingLink = function() {
+        const url = window.location.href;
+        navigator.clipboard.writeText(url).then(() => {
+            // Show success message
+            const originalText = document.querySelector('.social-share-btn.link i').className;
+            const button = document.querySelector('.social-share-btn.link');
+            button.innerHTML = '<i class="bi bi-check"></i>';
+            button.style.background = 'var(--success)';
+            
+            setTimeout(() => {
+                button.innerHTML = '<i class="bi bi-link-45deg"></i>';
+                button.style.background = '';
+            }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy: ', err);
+        });
+    };
+
+    // Accordion functionality for FAQs
+    const accordionButtons = document.querySelectorAll('.accordion-button');
+    accordionButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const target = this.getAttribute('data-bs-target');
+            const collapseElement = document.querySelector(target);
+            
+            // Toggle active state
+            const isCollapsed = collapseElement.classList.contains('show');
+            accordionButtons.forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            if (!isCollapsed) {
+                this.classList.add('active');
+            }
+        });
+    });
+
+    // Mobile horizontal scrolling for similar listings and seller listings
+    function initHorizontalScrolling() {
+        const similarGrid = document.querySelector('.similar-grid');
+        const sellerGrid = document.querySelector('.seller-grid');
+        
+        if (window.innerWidth < 768) {
+            // Convert similar listings to horizontal scroll
+            if (similarGrid && !similarGrid.classList.contains('horizontal-scroll-container')) {
+                similarGrid.classList.add('horizontal-scroll-container');
+                document.querySelectorAll('.similar-card').forEach(card => {
+                    card.classList.add('horizontal-scroll-item');
+                });
+            }
+            
+            // Convert seller listings to horizontal scroll
+            if (sellerGrid && !sellerGrid.classList.contains('horizontal-scroll-container')) {
+                sellerGrid.classList.add('horizontal-scroll-container');
+                document.querySelectorAll('.seller-listing-card').forEach(card => {
+                    card.classList.add('horizontal-scroll-item');
+                });
+            }
+        } else {
+            // Revert to grid layout on larger screens
+            if (similarGrid && similarGrid.classList.contains('horizontal-scroll-container')) {
+                similarGrid.classList.remove('horizontal-scroll-container');
+                document.querySelectorAll('.similar-card').forEach(card => {
+                    card.classList.remove('horizontal-scroll-item');
+                });
+            }
+            
+            if (sellerGrid && sellerGrid.classList.contains('horizontal-scroll-container')) {
+                sellerGrid.classList.remove('horizontal-scroll-container');
+                document.querySelectorAll('.seller-listing-card').forEach(card => {
+                    card.classList.remove('horizontal-scroll-item');
+                });
+            }
+        }
+    }
+
+    // Initialize horizontal scrolling on load and resize
+    initHorizontalScrolling();
+    window.addEventListener('resize', initHorizontalScrolling);
+});
+</script>
+{% endblock %}

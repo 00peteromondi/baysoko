@@ -1,0 +1,431 @@
+
+{% extends 'base.html' %}
+
+{% block title %}My Orders - HomaBay Souq{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item active" aria-current="page">My Orders</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="h3 mb-1">Order Management</h2>
+            <p class="text-muted mb-0">
+                {% if buyer_orders_count > 0 or seller_orders_count > 0 %}
+                Managing {{ buyer_orders_count }} purchase{{ buyer_orders_count|pluralize }} and {{ seller_orders_count }} sale{{ seller_orders_count|pluralize }}
+                {% else %}
+                Track your purchases and sales
+                {% endif %}
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="filterDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-filter me-2"></i> 
+                    {% if status_filter and status_filter != 'all' %}
+                    {{ status_filter|title }}
+                    {% else %}
+                    Filter
+                    {% endif %}
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="filterDropdown">
+                    <li><a class="dropdown-item {% if not status_filter or status_filter == 'all' %}active{% endif %}" href="?status=all{% if role_filter %}&role={{ role_filter }}{% endif %}">All Statuses</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item {% if status_filter == 'pending' %}active{% endif %}" href="?status=pending{% if role_filter %}&role={{ role_filter }}{% endif %}">Pending Payment</a></li>
+                    <li><a class="dropdown-item {% if status_filter == 'paid' %}active{% endif %}" href="?status=paid{% if role_filter %}&role={{ role_filter }}{% endif %}">Paid</a></li>
+                    <li><a class="dropdown-item {% if status_filter == 'shipped' %}active{% endif %}" href="?status=shipped{% if role_filter %}&role={{ role_filter }}{% endif %}">Shipped</a></li>
+                    <li><a class="dropdown-item {% if status_filter == 'delivered' %}active{% endif %}" href="?status=delivered{% if role_filter %}&role={{ role_filter }}{% endif %}">Delivered</a></li>
+                    <li><a class="dropdown-item {% if status_filter == 'disputed' %}active{% endif %}" href="?status=disputed{% if role_filter %}&role={{ role_filter }}{% endif %}">Disputed</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Role Tabs -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body p-0">
+            <ul class="nav nav-pills nav-fill" id="orderTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <a class="nav-link {% if not role_filter or role_filter == 'all' %}active{% endif %}" 
+                       href="?{% if status_filter and status_filter != 'all' %}status={{ status_filter }}{% endif %}">
+                        <i class="bi bi-grid me-2"></i>All Orders
+                        <span class="badge bg-primary ms-2">{{ total_orders_count }}</span>
+                    </a>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <a class="nav-link {% if role_filter == 'buyer' %}active{% endif %}" 
+                       href="?role=buyer{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}">
+                        <i class="bi bi-cart-check me-2"></i>My Purchases
+                        <span class="badge bg-success ms-2">{{ buyer_orders_count }}</span>
+                    </a>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <a class="nav-link {% if role_filter == 'seller' %}active{% endif %}" 
+                       href="?role=seller{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}">
+                        <i class="bi bi-bag-check me-2"></i>My Sales
+                        <span class="badge bg-info ms-2">{{ seller_orders_count }}</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    {% if orders %}
+    <div class="order-list">
+        {% for order in orders %}
+        <div class="card shadow-sm border-0 mb-3 order-card">
+            <div class="card-header bg-light py-3">
+                <div class="row align-items-center">
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-primary bg-opacity-10 rounded p-2 me-3">
+                                <i class="bi bi-{% if order.user == request.user %}cart-check{% else %}bag-check{% endif %} text-primary"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-1">Order #{{ order.id }}</h6>
+                                <div class="d-flex gap-2">
+                                    <span class="badge {% if order.user == request.user %}buyer-badge{% else %}seller-badge{% endif %} order-role-badge">
+                                        {% if order.user == request.user %}Purchase{% else %}Sale{% endif %}
+                                    </span>
+                                    <small class="text-muted">{{ order.created_at|date:"M d, Y" }}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <small class="text-muted">
+                            {% if order.user == request.user %}
+                            Seller: 
+                            {% for item in order.order_items.all|slice:":1" %}
+                            {{ item.listing.seller.username }}
+                            {% endfor %}
+                            {% else %}
+                            Buyer: {{ order.user.username }}
+                            {% endif %}
+                        </small>
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <strong class="text-primary">KSh {{ order.total_price }}</strong>
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <span class="badge {% if order.status == 'delivered' %}bg-success
+                                          {% elif order.status == 'shipped' %}bg-info
+                                          {% elif order.status == 'paid' %}bg-primary
+                                          {% elif order.status == 'disputed' %}bg-danger
+                                          {% else %}bg-secondary{% endif %} rounded-pill">
+                            {{ order.get_status_display }}
+                        </span>
+                    </div>
+                    
+                    <div class="col-md-1 text-end">
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                    type="button" 
+                                    data-bs-toggle="dropdown" 
+                                    aria-expanded="false">
+                                <i class="bi bi-three-dots"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'order_detail' order.id %}">
+                                        <i class="bi bi-eye me-2"></i>View Details
+                                    </a>
+                                </li>
+                                
+                                {% if order.order_items.all.0.listing.seller == request.user and order.status == 'paid' %}
+                                <li>
+                                    <a class="dropdown-item text-success" 
+                                       href="{% url 'mark_order_shipped' order.id %}"
+                                       onclick="return confirm('Mark this order as shipped?')">
+                                        <i class="bi bi-truck me-2"></i>Mark Shipped
+                                    </a>
+                                </li>
+                                {% endif %}
+                                
+                                {% if order.user == request.user and order.status == 'shipped' %}
+                                <li>
+                                    <a class="dropdown-item text-info" 
+                                       href="{% url 'confirm_delivery' order.id %}"
+                                       onclick="return confirm('Confirm you have received this order?')">
+                                        <i class="bi bi-check-circle me-2"></i>Confirm Delivery
+                                    </a>
+                                </li>
+                                {% endif %}
+                                
+                                {% if order.user == request.user and order.status == 'shipped' or order.status == 'delivered' %}
+                                <li>
+                                    <a class="dropdown-item text-warning" 
+                                       href="{% url 'create_dispute' order.id %}"
+                                       onclick="return confirm('Open a dispute for this order?')">
+                                        <i class="bi bi-exclamation-triangle me-2"></i>Open Dispute
+                                    </a>
+                                </li>
+                                {% endif %}
+                                
+                                {% if order.user == request.user and order.status == 'pending' %}
+                                <li>
+                                    <a class="dropdown-item text-primary" href="{% url 'process_payment' order.id %}">
+                                        <i class="bi bi-credit-card me-2"></i>Complete Payment
+                                    </a>
+                                </li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card-body">
+                <div class="row">
+                    <!-- Order Items -->
+                    <div class="col-md-8">
+                        <h6 class="mb-3">Items</h6>
+                        <div class="row">
+                            {% for item in order.order_items.all %}
+                            <div class="col-md-6 mb-2">
+                                <div class="d-flex align-items-center">
+                             <img src="{{ item.listing.get_image_url }}" 
+                                         alt="{{ item.listing.title }}"
+                                         class="rounded me-3"
+                                         width="50"
+                                         height="50"
+                                         style="object-fit: cover;"
+                                         onerror="this.src='https://placehold.co/50x50/c2c2c2/1f1f1f?text=HS'">
+                                    <div class="flex-grow-1">
+                                        <small class="fw-bold d-block">{{ item.listing.title }}</small>
+                                        <small class="text-muted">Qty: {{ item.quantity }} × KSh {{ item.price }}</small>
+                                        {% if item.listing.seller == request.user %}
+                                        <small class="d-block text-info">Your item</small>
+                                        {% endif %}
+                                    </div>
+                                    <small class="fw-bold">KSh {{ item.get_total_price }}</small>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <!-- Order Progress -->
+                    <div class="col-md-4">
+                        <h6 class="mb-3">Order Progress</h6>
+                        <div class="progress-container">
+                            <div class="d-flex justify-content-between position-relative mb-2">
+                                <div class="step {% if order.status != 'pending' %}completed{% endif %}">
+                                    <div class="step-icon">
+                                        <i class="bi bi-{% if order.user == request.user %}cart-check{% else %}bag{% endif %}"></i>
+                                    </div>
+                                    <small>{% if order.user == request.user %}Ordered{% else %}Received{% endif %}</small>
+                                </div>
+                                <div class="step {% if order.status == 'paid' or order.status == 'shipped' or order.status == 'delivered' %}completed{% endif %}">
+                                    <div class="step-icon">
+                                        <i class="bi bi-credit-card"></i>
+                                    </div>
+                                    <small>Paid</small>
+                                </div>
+                                <div class="step {% if order.status == 'shipped' or order.status == 'delivered' %}completed{% endif %}">
+                                    <div class="step-icon">
+                                        <i class="bi bi-truck"></i>
+                                    </div>
+                                    <small>Shipped</small>
+                                </div>
+                                <div class="step {% if order.status == 'delivered' %}completed{% endif %}">
+                                    <div class="step-icon">
+                                        <i class="bi bi-house-check"></i>
+                                    </div>
+                                    <small>Delivered</small>
+                                </div>
+                            </div>
+                            <div class="progress" style="height: 4px;">
+                                <div class="progress-bar 
+                                    {% if order.status == 'delivered' %}bg-success w-100
+                                    {% elif order.status == 'shipped' %}bg-info w-75
+                                    {% elif order.status == 'paid' %}bg-primary w-50
+                                    {% else %}bg-secondary w-25{% endif %}" 
+                                    role="progressbar">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if orders.has_other_pages %}
+    <nav aria-label="Orders pagination" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if orders.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ orders.previous_page_number }}{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}">Previous</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">Previous</span>
+            </li>
+            {% endif %}
+
+            {% for i in orders.paginator.page_range %}
+            {% if orders.number == i %}
+            <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+            {% else %}
+            <li class="page-item"><a class="page-link" href="?page={{ i }}{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}">{{ i }}</a></li>
+            {% endif %}
+            {% endfor %}
+
+            {% if orders.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ orders.next_page_number }}{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}">Next</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">Next</span>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <div class="text-center py-5">
+        <div class="card shadow-lg border-0">
+            <div class="card-body py-5">
+                <i class="bi bi-cart-x display-1 text-muted"></i>
+                <h3 class="mt-3 text-muted">No orders found</h3>
+                <p class="text-muted mb-4">
+                    {% if role_filter == 'buyer' %}
+                    You haven't made any purchases yet.
+                    {% elif role_filter == 'seller' %}
+                    You haven't received any orders yet.
+                    {% else %}
+                    You don't have any orders yet.
+                    {% endif %}
+                </p>
+                <div class="d-flex gap-2 justify-content-center">
+                    {% if role_filter != 'seller' %}
+                    <a href="{% url 'all-listings' %}" class="btn btn-primary rounded-pill px-4">
+                        <i class="bi bi-grid me-2"></i> Start Shopping
+                    </a>
+                    {% endif %}
+                    {% if role_filter != 'buyer' %}
+                        {% if user.is_authenticated %}
+                        <a href="{% url 'listing-create' %}" class="btn btn-outline-primary rounded-pill px-4">
+                            <i class="bi bi-plus-circle me-2"></i> Start Selling
+                        </a>
+                        {% else %}
+                        <a href="{% url 'login' %}?next={% url 'listing-create' %}" class="btn btn-outline-primary rounded-pill px-4">
+                            <i class="bi bi-plus-circle me-2"></i> Start Selling
+                        </a>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.nav-pills .nav-link {
+    border-radius: 0.5rem;
+    margin: 0.25rem;
+    color: var(--text-color);
+    text-decoration: none;
+}
+
+.nav-pills .nav-link.active {
+    background-color: var(--primary-gemini);
+    border-color: var(--primary-gemini);
+    color: white;
+}
+
+.order-role-badge {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.buyer-badge {
+    background-color: #28a745;
+    color: white;
+}
+
+.seller-badge {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.progress-container {
+    position: relative;
+    padding: 0 20px;
+}
+
+.step {
+    text-align: center;
+    position: relative;
+    z-index: 2;
+}
+
+.step-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #e9ecef;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 5px;
+    transition: all 0.3s ease;
+}
+
+.step.completed .step-icon {
+    background: var(--primary-gemini);
+    color: white;
+}
+
+.step small {
+    font-size: 0.75rem;
+    color: #6c757d;
+}
+
+.step.completed small {
+    color: var(--primary-gemini);
+    font-weight: 500;
+}
+
+.progress {
+    position: absolute;
+    top: 20px;
+    left: 10%;
+    width: 80%;
+    z-index: 1;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Smooth animations
+    const orderCards = document.querySelectorAll('.order-card');
+    orderCards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+});
+</script>
+{% endblock %}
+[file content end]

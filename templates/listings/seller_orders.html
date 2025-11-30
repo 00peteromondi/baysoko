@@ -1,0 +1,266 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}My Seller Orders - Souq{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        background-color: var(--card-bg);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        box-shadow: var(--shadow);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+    }
+    .stats-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-hover);
+    }
+    .stat-icon {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+        opacity: 0.7;
+    }
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--text-color);
+    }
+    .stat-label {
+        font-size: 0.9rem;
+        color: var(--text-color);
+        opacity: 0.8;
+    }
+
+    .order-table-container {
+        background-color: var(--card-bg);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        box-shadow: var(--shadow);
+        border: 1px solid var(--border-color);
+    }
+
+    .table th {
+        font-weight: 600;
+        color: var(--text-color);
+        opacity: 0.9;
+    }
+    
+    .table-responsive {
+        min-height: 300px;
+    }
+
+    .status-badge {
+        padding: 0.4em 0.7em;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 0.8rem;
+    }
+    .status-pending { background-color: var(--primary-gemini-25); color: var(--accent-blue); }
+    .status-paid { background-color: rgba(251, 188, 4, 0.2); color: #b48000; }
+    .status-shipped { background-color: rgba(52, 168, 83, 0.2); color: var(--accent-green); }
+    .status-delivered { background-color: rgba(0, 128, 128, 0.2); color: var(--accent-teal); }
+    .status-disputed { background-color: rgba(234, 67, 53, 0.2); color: var(--accent-red); }
+    .status-cancelled { background-color: rgba(108, 117, 125, 0.2); color: var(--text-muted); }
+
+    .customer-info img {
+        width: 40px;
+        height: 40px;
+        object-fit: cover;
+        border-radius: 50%;
+    }
+    .item-image {
+        width: 50px;
+        height: 50px;
+        object-fit: cover;
+        border-radius: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'profile' user.pk %}">Profile</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Seller Dashboard</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">My Seller Orders</h1>
+        <a href="{% url 'my-listings' %}" class="btn btn-modern btn-modern-primary">View My Listings</a>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4 g-4">
+        <div class="col-md-6 col-lg-3">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="stat-value">{{ total_orders_count|default:0 }}</div>
+                        <div class="stat-label">Total Orders</div>
+                    </div>
+                    <i class="bi bi-journal-text stat-icon"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="stats-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="stat-value">{{ pending_orders_count|default:0 }}</div>
+                        <div class="stat-label">Ready to Ship</div>
+                    </div>
+                    <i class="bi bi-box-seam stat-icon"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="stats-card">
+                 <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="stat-value">{{ disputed_orders_count|default:0 }}</div>
+                        <div class="stat-label">Disputed Orders</div>
+                    </div>
+                    <i class="bi bi-exclamation-octagon stat-icon"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="stats-card">
+                 <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="stat-value">KSh 0</div>
+                        <div class="stat-label">Total Revenue</div>
+                    </div>
+                    <i class="bi bi-cash-stack stat-icon"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Orders Table -->
+    <div class="order-table-container">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+            <h2 class="h4 mb-0">Order History</h2>
+            <form>
+                <div class="input-group">
+                    <select class="form-select" name="status" onchange="this.form.submit()">
+                        <option value="">All Statuses</option>
+                        <option value="pending" {% if request.GET.status == 'pending' %}selected{% endif %}>Pending</option>
+                        <option value="paid" {% if request.GET.status == 'paid' %}selected{% endif %}>Paid</option>
+                        <option value="shipped" {% if request.GET.status == 'shipped' %}selected{% endif %}>Shipped</option>
+                        <option value="delivered" {% if request.GET.status == 'delivered' %}selected{% endif %}>Delivered</option>
+                        <option value="cancelled" {% if request.GET.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                        <option value="disputed" {% if request.GET.status == 'disputed' %}selected{% endif %}>Disputed</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+
+        {% if orders %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Order ID</th>
+                        <th>Customer</th>
+                        <th>My Items</th>
+                        <th>Total</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr>
+                        <td><a href="{% url 'order_detail' order.id %}" class="fw-bold text-decoration-none">#{{ order.id }}</a></td>
+                        <td>
+                            <div class="d-flex align-items-center customer-info">
+                                <img src="{{ order.user.get_profile_picture|default:'https://placehold.co/40x40' }}" alt="{{ order.user.username }}" class="me-2">
+                                <div>
+                                    <strong>{{ order.user.username }}</strong>
+                                    <div class="small text-muted">{{ order.user.email }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                                {% for item in order.order_items.all %}
+                                    {% if item.listing.seller == user %}
+                                    <div class="d-flex align-items-center mb-2">
+                                        <img src="{{ item.listing.get_image_url }}" class="item-image me-2" alt="{{ item.listing.title }}">
+                                        <div>
+                                            <div>{{ item.listing.title|truncatewords:4 }} (Qty: {{ item.quantity }})</div>
+                                            {% if item.shipped %}
+                                                <small class="text-success">Shipped{% if item.tracking_number %} — Tracking: {{ item.tracking_number }}{% endif %}{% if item.shipped_at %} on {{ item.shipped_at|date:"M d, Y" }}{% endif %}</small>
+                                            {% else %}
+                                                <small class="text-muted">Not shipped yet</small>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                        </td>
+                        <td class="fw-bold">KSh {{ order.total_price|intcomma }}</td>
+                        <td>
+                            <span class="badge status-badge status-{{ order.status }}">{{ order.get_status_display }}</span>
+                        </td>
+                        <td>
+                            <span class="d-block">{{ order.created_at|date:"M d, Y" }}</span>
+                            <span class="small text-muted">{{ order.created_at|date:"H:i" }}</span>
+                        </td>
+                        <td>
+                            <a href="{% url 'order_detail' order.id %}" class="btn btn-sm btn-outline-primary">View</a>
+                            {% if order.status == 'paid' or order.status == 'partially_shipped' %}
+                            <form method="post" action="{% url 'mark_order_shipped' order.id %}" class="d-inline-block ms-1">
+                                {% csrf_token %}
+                                <input type="text" name="tracking_number" placeholder="Optional tracking number" class="form-control form-control-sm d-inline-block me-2" style="width: 180px;">
+                                <button type="submit" class="btn btn-sm btn-accent-blue">Ship</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-inbox fs-1 text-muted"></i>
+            <h4 class="mt-3">No Orders Yet</h4>
+            <p class="text-muted">You haven't received any orders yet. Keep your listings up to date!</p>
+        </div>
+        {% endif %}
+
+        {% if orders.has_other_pages %}
+        <nav aria-label="Page navigation" class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if orders.has_previous %}
+                <li class="page-item"><a class="page-link" href="?page={{ orders.previous_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">Previous</a></li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">Previous</span></li>
+                {% endif %}
+
+                {% for i in orders.paginator.page_range %}
+                {% if orders.number == i %}
+                <li class="page-item active" aria-current="page"><span class="page-link">{{ i }}</span></li>
+                {% else %}
+                <li class="page-item"><a class="page-link" href="?page={{ i }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">{{ i }}</a></li>
+                {% endif %}
+                {% endfor %}
+
+                {% if orders.has_next %}
+                <li class="page-item"><a class="page-link" href="?page={{ orders.next_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">Next</a></li>
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">Next</span></li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

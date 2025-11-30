@@ -1,0 +1,204 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Blog Posts - HomaBay Souq{% endblock %}
+
+{% block extra_css %}
+<style>
+    .user-posts-hero {
+        background: linear-gradient(135deg, 
+                        rgba(26, 115, 232, 0.9) 0%, 
+                        rgba(13, 71, 161, 0.9) 100%);
+        color: white;
+        padding: 3rem 0;
+        margin: -2rem -1rem 3rem;
+        border-radius: 0 0 2rem 2rem;
+    }
+
+    .stats-card {
+        background: var(--navbar-bg);
+        backdrop-filter: blur(10px);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    .stats-number {
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+    }
+
+    .post-table {
+        background: var(--navbar-bg);
+        backdrop-filter: blur(10px);
+        border-radius: 1rem;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    .status-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.75rem;
+    }
+
+    @media (max-width: 768px) {
+        .user-posts-hero {
+            padding: 2rem 0;
+        }
+        
+        .stats-number {
+            font-size: 2rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="user-posts-hero">
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 mx-auto text-center">
+                <h1 class="display-5 fw-bold mb-3">My Blog Posts</h1>
+                <p class="lead">Manage your blog posts and track their performance</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="container">
+    <!-- Stats -->
+    <div class="row mb-5">
+        <div class="col-md-4 mb-3">
+            <div class="stats-card">
+                <div class="stats-number text-primary">{{ total_posts }}</div>
+                <div class="stats-label">Total Posts</div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="stats-card">
+                <div class="stats-number text-success">{{ published_posts }}</div>
+                <div class="stats-label">Published</div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="stats-card">
+                <div class="stats-number text-warning">{{ draft_posts }}</div>
+                <div class="stats-label">Drafts</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Posts Table -->
+    <div class="card border-0 shadow-sm post-table">
+        <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">My Posts</h5>
+            <a href="{% url 'blog:post-create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle me-2"></i>New Post
+            </a>
+        </div>
+        <div class="card-body p-0">
+            {% if posts %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Category</th>
+                            <th>Status</th>
+                            <th>Views</th>
+                            <th>Likes</th>
+                            <th>Comments</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for post in posts %}
+                        <tr>
+                            <td>
+                                <a href="{{ post.get_absolute_url }}" class="text-decoration-none fw-bold">
+                                    {{ post.title|truncatewords:5 }}
+                                </a>
+                            </td>
+                            <td>
+                                {% if post.category %}
+                                <span class="badge bg-light text-dark">{{ post.category.name }}</span>
+                                {% else %}
+                                <span class="text-muted">Uncategorized</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge {% if post.status == 'published' %}bg-success{% elif post.status == 'draft' %}bg-warning{% else %}bg-secondary{% endif %} status-badge">
+                                    {{ post.get_status_display }}
+                                </span>
+                            </td>
+                            <td>{{ post.view_count }}</td>
+                            <td>{{ post.like_count }}</td>
+                            <td>{{ post.comment_count }}</td>
+                            <td>{{ post.created_at|date:"M d, Y" }}</td>
+                            <td>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                        <i class="bi bi-three-dots"></i>
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li><a class="dropdown-item" href="{{ post.get_absolute_url }}"><i class="bi bi-eye me-2"></i>View</a></li>
+                                        <li><a class="dropdown-item" href="{% url 'blog:post-update' post.slug %}"><i class="bi bi-pencil me-2"></i>Edit</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><a class="dropdown-item text-danger" href="{% url 'blog:post-delete' post.slug %}"><i class="bi bi-trash me-2"></i>Delete</a></li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-journal-text display-1 text-muted"></i>
+                <h3 class="mt-3">No posts yet</h3>
+                <p class="text-muted">Start sharing your knowledge with the community!</p>
+                <a href="{% url 'blog:post-create' %}" class="btn btn-primary">Create Your First Post</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if is_paginated %}
+    <nav aria-label="Posts pagination" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="Previous">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+            </li>
+            {% endif %}
+
+            {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+            <li class="page-item active"><a class="page-link" href="#">{{ num }}</a></li>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+            </li>
+            {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="Next">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

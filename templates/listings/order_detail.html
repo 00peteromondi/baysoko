@@ -1,0 +1,294 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>Order #{{ order.id }}</h2>
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4>Order Details</h4>
+            </div>
+            <div class="card-body">
+                <p><strong>Status:</strong> 
+                    <span class="badge bg-{% if order.status == 'delivered' %}success
+                    {% elif order.status == 'shipped' %}info
+                    {% elif order.status == 'paid' %}primary
+                    {% elif order.status == 'cancelled' %}danger
+                    {% else %}secondary{% endif %}">
+                        {{ order.get_status_display }}
+                    </span>
+                </p>
+                <p><strong>Order Date:</strong> {{ order.created_at|date:"M d, Y H:i" }}</p>
+                <p><strong>Total Amount:</strong> KSh {{ order.total_price }}</p>
+                
+                <h5>Items</h5>
+                <ul class="list-group">
+                    {% for item in order_items %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <img src="{{ item.listing.get_image_url }}" alt="{{ item.listing.title }}" width="50" height="50" class="me-3">
+                            <div>
+                                <div>{{ item.quantity }} x {{ item.listing.title }}</div>
+                                {% if item.shipped %}
+                                    <small class="text-success">Shipped{% if item.tracking_number %} — Tracking: {{ item.tracking_number }}{% endif %}{% if item.shipped_at %} on {{ item.shipped_at|date:"M d, Y" }}{% endif %}</small>
+                                {% else %}
+                                    <small class="text-muted">Not shipped yet</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <!-- Add this near the total amount display -->
+                        {% if is_seller and not is_buyer %}
+                        <div class="alert alert-info mb-0">
+                            <strong>Your Items Total:</strong> KSh {{ seller_specific_total }}
+                        </div>
+                        {% endif %}
+                        <span>KSh {{ item.get_total_price }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container py-4">
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- Order Status Timeline -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Order Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="timeline">
+                            <div class="timeline-item {% if order.status != 'pending' %}completed{% endif %}">
+                                <div class="timeline-marker"></div>
+                                <div class="timeline-content">
+                                    <h6>Payment Received</h6>
+                                    <small class="text-muted">
+                                        {% if order.payment.completed_at %}
+                                            {{ order.payment.completed_at|date:"M d, Y H:i" }}
+                                        {% else %}
+                                            Pending
+                                        {% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <div class="timeline-item {% if order.status == 'shipped' or order.status ==  'delivered' %}completed{% endif %}">
+                                <div class="timeline-marker"></div>
+                                <div class="timeline-content">
+                                    <h6>Order Shipped</h6>
+                                    <small class="text-muted">
+                                        {% if order.shipped_at %}
+                                            {{ order.shipped_at|date:"M d, Y H:i" }}
+                                        {% else %}
+                                            Seller preparing order
+                                        {% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <div class="timeline-item {% if order.status == 'delivered' %}completed{% endif %}">
+                                <div class="timeline-marker"></div>
+                                <div class="timeline-content">
+                                    <h6>Delivery Confirmation</h6>
+                                    <small class="text-muted">
+                                        {% if order.delivered_at %}
+                                            Confirmed on {{ order.delivered_at|date:"M d, Y H:i" }}
+                                        {% else %}
+                                            Waiting for your confirmation
+                                        {% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Delivery Confirmation Button -->
+                        {% if order.status == 'shipped' and is_buyer %}
+                        <div class="alert alert-warning mt-4">
+                            <h6><i class="bi bi-truck me-2"></i>Confirm Delivery</h6>
+                            <p class="mb-3">Your order has been shipped. Please confirm delivery once you receive the items to release payment to the seller.</p>
+                            
+                            <form method="post" action="{% url 'confirm_delivery' order.id %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-success" 
+                                        onclick="return confirm('Have you received your order and verified everything is correct?')">
+                                    <i class="bi bi-check-circle me-2"></i>Confirm Delivery Received
+                                </button>
+                            </form>
+                        </div>
+                        {% endif %}
+                        
+                        {% if order.status == 'delivered' %}
+                        <div class="alert alert-success mt-4">
+                            <h6><i class="bi bi-check-circle me-2"></i>Delivery Confirmed</h6>
+                            <p class="mb-0">Thank you for confirming delivery! Payment has been released to the seller.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Tracking Information -->
+                {% if order.tracking_number %}
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Delivery Tracking</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Tracking Number:</strong>
+                                <p class="mb-2">{{ order.tracking_number }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Status:</strong>
+                                <p class="mb-2">{{ order.get_status_display }}</p>
+                            </div>
+                        </div>
+                        {% if order.status == 'shipped' %}
+                        <div class="alert alert-info mt-3">
+                            <small>
+                                <i class="bi bi-info-circle me-2"></i>
+                                Your order is on the way. You'll receive updates about your delivery status.
+                            </small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if is_seller and not is_buyer and order.status == 'paid' or order.status == 'partially_shipped' %}
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6>Ship Your Items</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted">Mark the items you are responsible for as shipped. You may provide a tracking number.</p>
+                        <form method="post" action="{% url 'mark_order_shipped' order.id %}">
+                            {% csrf_token %}
+                            <div class="mb-2">
+                                <label class="form-label small">Tracking number (optional)</label>
+                                <input type="text" name="tracking_number" class="form-control form-control-sm" placeholder="Enter tracking number">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Mark My Items as Shipped</button>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="col-lg-4">
+                <!-- Order Summary Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Order Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- ... existing order summary ... -->
+                        
+                        <!-- Important Notice -->
+                        {% if order.status == 'shipped' and is_buyer %}
+                        <div class="alert alert-warning mt-3">
+                            <h6><i class="bi bi-exclamation-triangle me-2"></i>Important</h6>
+                            <p class="small mb-0">
+                                Funds are held in escrow until you confirm delivery. 
+                                This protects you in case of issues with your order.
+                            </p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h4>Order Actions</h4>
+            </div>
+            <div class="card-body">
+                {% if order.status == 'pending' %}
+                    <a href="{% url 'process_payment' order.id %}" class="btn btn-primary btn-block mb-2">Complete Payment</a>
+                {% endif %}
+                
+                {% if order.status == 'shipped' %}
+                    <form method="post" action="{% url 'confirm_delivery' order.id %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-success btn-block mb-2">Confirm Delivery</button>
+                    </form>
+                    
+                    <button type="button" class="btn btn-warning btn-block" data-bs-toggle="modal" data-bs-target="#disputeModal">
+                        Report Issue
+                    </button>
+                {% endif %}
+                
+                {% if order.status == 'delivered' %}
+                    <div class="alert alert-success text-center">
+                        <i class="bi bi-check-circle me-2"></i> Order Completed
+                        <br>
+                        Thank you for shopping with us!
+                    </div>
+                    <a href="{% url 'leave_seller_review' order.id %}" class="btn btn-secondary btn-block mt-2">Leave a Review</a>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h4>Payment Status</h4>
+            </div>
+            <div class="card-body">
+                {% if order.payment %}
+                    <p><strong>Status:</strong> {{ order.payment.get_status_display }}</p>
+                    <p><strong>Method:</strong> {{ order.payment.get_method_display }}</p>
+                    {% if order.payment.transaction_id %}
+                        <p><strong>Transaction ID:</strong> {{ order.payment.transaction_id }}</p>
+                    {% endif %}
+                {% else %}
+                    <p>Payment not processed yet.</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h4>Escrow Status</h4>
+            </div>
+            <div class="card-body">
+                {% if order.escrow %}
+                    <p><strong>Status:</strong> {{ order.escrow.get_status_display }}</p>
+                    <p><strong>Amount:</strong> KSh {{ order.escrow.amount }}</p>
+                    {% if order.escrow.released_at %}
+                        <p><strong>Released:</strong> {{ order.escrow.released_at|date:"M d, Y H:i" }}</p>
+                    {% endif %}
+                {% else %}
+                    <p>Escrow not set up yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Dispute Modal -->
+<div class="modal fade" id="disputeModal" tabindex="-1" aria-labelledby="disputeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="disputeModalLabel">Report an Issue with Your Order</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>If you have not received your order or there is an issue with the items, you can open a dispute.</p>
+                <p>Our team will review your case and work to resolve it within 48 hours.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" action="{% url 'create_dispute' order.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-warning">Open Dispute</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
