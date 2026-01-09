@@ -1,326 +1,129 @@
 {% extends 'base.html' %}
 {% load humanize %}
 
-{% block title %}Payment Monitoring - HomaBay Souq{% endblock %}
+{% block title %}Payment Monitoring - Baysoko{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-    <div class="row">
-        <div class="col-lg-12">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2 class="mb-0">Payment System Health</h2>
-                <div class="btn-group">
-                    <a href="?period=24h" class="btn btn-outline-primary {% if period == '24h' %}active{% endif %}">24h</a>
-                    <a href="?period=7d" class="btn btn-outline-primary {% if period == '7d' %}active{% endif %}">7 Days</a>
-                    <a href="?period=30d" class="btn btn-outline-primary {% if period == '30d' %}active{% endif %}">30 Days</a>
-                    <a href="?period=all" class="btn btn-outline-primary {% if period == 'all' %}active{% endif %}">All Time</a>
+<div class="container-custom" style="padding-top: var(--spacing-xl); padding-bottom: var(--spacing-xl);">
+    <!-- Header -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-var(--spacing-xl)">
+        <div class="mb-3 mb-md-0">
+            <h1 class="display-4 fw-bold mb-2">Payment System Health</h1>
+            <p class="lead text-muted mb-0">Monitor subscription performance and revenue</p>
+        </div>
+        <div class="btn-group">
+            <a href="?period=24h" class="btn-custom btn-ghost {% if period == '24h' %}active{% endif %}">24h</a>
+            <a href="?period=7d" class="btn-custom btn-ghost {% if period == '7d' %}active{% endif %}">7 Days</a>
+            <a href="?period=30d" class="btn-custom btn-ghost {% if period == '30d' %}active{% endif %}">30 Days</a>
+            <a href="?period=all" class="btn-custom btn-ghost {% if period == 'all' %}active{% endif %}">All Time</a>
+        </div>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="row g-3 mb-var(--spacing-xl)">
+        <div class="col-md-3 col-6">
+            <div class="card-custom text-center h-100">
+                <div class="card-body p-var(--spacing-lg)">
+                    <div class="stat-icon-wrapper mb-3" style="background: rgba(6, 214, 160, 0.1);">
+                        <i class="bi bi-cash-stack text-success fs-2"></i>
+                    </div>
+                    <h2 class="fw-bold mb-1">KSh {{ mrr|intcomma|default:"0" }}</h2>
+                    <p class="text-muted mb-0 small">Monthly Revenue</p>
                 </div>
             </div>
-            
-            <!-- Key Metrics -->
-            <div class="row mb-4">
-                <!-- Revenue Metrics -->
-                <div class="col-xl-3 col-md-6">
-                    <div class="card border-0 bg-gradient-success text-white mb-4">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h6 class="text-uppercase mb-1">Monthly Revenue (MRR)</h6>
-                                    <h3 class="mb-0">KSh {{ mrr|intcomma }}</h3>
-                                </div>
-                                <div class="icon-circle bg-white-20">
-                                    <i class="bi bi-cash-stack text-white"></i>
-                                </div>
-                            </div>
-                            <div class="mt-3">
-                                <small>Total Revenue: KSh {{ total_revenue|intcomma }}</small>
-                            </div>
-                        </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card-custom text-center h-100">
+                <div class="card-body p-var(--spacing-lg)">
+                    <div class="stat-icon-wrapper mb-3" style="background: rgba(17, 138, 178, 0.1);">
+                        <i class="bi bi-people-fill text-info fs-2"></i>
                     </div>
-                </div>
-
-                <!-- Subscription Health -->
-                <div class="col-xl-3 col-md-6">
-                    <div class="card border-0 {% if active_rate >= 80 %}bg-gradient-primary{% elif active_rate >= 60 %}bg-gradient-info{% else %}bg-gradient-warning{% endif %} text-white mb-4">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h6 class="text-uppercase mb-1">Active Rate</h6>
-                                    <h3 class="mb-0">{{ active_rate|floatformat:1 }}%</h3>
-                                </div>
-                                <div class="icon-circle bg-white-20">
-                                    <i class="bi bi-people-fill text-white"></i>
-                                </div>
-                            </div>
-                            <div class="mt-3">
-                                <small>{{ active_subscriptions }} of {{ total_subscriptions }} subscriptions</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Trial Conversion -->
-                <div class="col-xl-3 col-md-6">
-                    <div class="card border-0 {% if trial_conversion_rate >= 50 %}bg-gradient-success{% else %}bg-gradient-warning{% endif %} text-white mb-4">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h6 class="text-uppercase mb-1">Trial Conversion</h6>
-                                    <h3 class="mb-0">{{ trial_conversion_rate|floatformat:1 }}%</h3>
-                                </div>
-                                <div class="icon-circle bg-white-20">
-                                    <i class="bi bi-arrow-up-circle text-white"></i>
-                                </div>
-                            </div>
-                            <div class="mt-3">
-                                <small>{{ trialing_subscriptions }} currently in trial</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Customer Retention -->
-                <div class="col-xl-3 col-md-6">
-                    <div class="card border-0 {% if retention_rate >= 70 %}bg-gradient-success{% elif retention_rate >= 50 %}bg-gradient-warning{% else %}bg-gradient-danger{% endif %} text-white mb-4">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h6 class="text-uppercase mb-1">Retention Rate</h6>
-                                    <h3 class="mb-0">{{ retention_rate|floatformat:1 }}%</h3>
-                                </div>
-                                <div class="icon-circle bg-white-20">
-                                    <i class="bi bi-heart-fill text-white"></i>
-                                </div>
-                            </div>
-                            <div class="mt-3">
-                                <small>Churn Rate: {{ churn_rate|floatformat:1 }}%</small>
-                            </div>
-                        </div>
-                    </div>
+                    <h2 class="fw-bold mb-1">{{ active_subscriptions|default:"0" }}</h2>
+                    <p class="text-muted mb-0 small">Active Subscriptions</p>
                 </div>
             </div>
-
-            <!-- Subscription Trends -->
-            <div class="row mb-4">
-                <div class="col-xl-8">
-                    <!-- Daily Trends Chart -->
-                    <div class="card border-0 shadow-sm">
-                        <div class="card-header bg-transparent">
-                            <h5 class="mb-0">Subscription Trends</h5>
-                        </div>
-                        <div class="card-body">
-                            <canvas id="subscriptionTrendsChart" height="300"></canvas>
-                        </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card-custom text-center h-100">
+                <div class="card-body p-var(--spacing-lg)">
+                    <div class="stat-icon-wrapper mb-3" style="background: rgba(255, 193, 7, 0.1);">
+                        <i class="bi bi-arrow-up-circle text-warning fs-2"></i>
                     </div>
-                </div>
-                
-                <div class="col-xl-4">
-                    <!-- Subscription Status Breakdown -->
-                    <div class="card border-0 shadow-sm">
-                        <div class="card-header bg-transparent">
-                            <h5 class="mb-0">Status Breakdown</h5>
-                        </div>
-                        <div class="card-body">
-                            <canvas id="statusBreakdownChart" height="300"></canvas>
-                        </div>
-                    </div>
+                    <h2 class="fw-bold mb-1">{{ trial_conversion_rate|floatformat:1|default:"0" }}%</h2>
+                    <p class="text-muted mb-0 small">Trial Conversion</p>
                 </div>
             </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card-custom text-center h-100">
+                <div class="card-body p-var(--spacing-lg)">
+                    <div class="stat-icon-wrapper mb-3" style="background: rgba(239, 71, 111, 0.1);">
+                        <i class="bi bi-heart-fill text-danger fs-2"></i>
+                    </div>
+                    <h2 class="fw-bold mb-1">{{ retention_rate|floatformat:1|default:"0" }}%</h2>
+                    <p class="text-muted mb-0 small">Retention Rate</p>
+                </div>
+            </div>
+        </div>
+    </div>
 
-            <!-- Payment Performance -->
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card border-0 shadow-sm">
-                        <div class="card-header bg-transparent">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0">Payment Performance</h5>
-                                <span class="badge bg-success">{{ success_rate|floatformat:1 }}% Success Rate</span>
+    <!-- Payment Performance -->
+    <div class="card-custom mb-var(--spacing-xl)">
+        <div class="card-header border-0">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0">Payment Performance</h5>
+                <span class="badge bg-success">{{ success_rate|floatformat:1 }}% Success Rate</span>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Store</th>
+                        <th>Amount</th>
+                        <th>Phone</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for payment in failed_payments %}
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-shop text-muted me-2"></i>
+                                {{ payment.subscription.store.name }}
                             </div>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Store</th>
-                                        <th>Amount</th>
-                                        <th>Phone</th>
-                                        <th>Status</th>
-                                        <th>Date</th>
-                                        <th>Description</th>
-                                        <th>Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for payment in failed_payments %}
-                                    <tr>
-                                        <td>
-                                            <div class="d-flex align-items-center">
-                                                <i class="bi bi-shop text-muted me-2"></i>
-                                                {{ payment.subscription.store.name }}
-                                            </div>
-                                        </td>
-                                        <td>KSh {{ payment.amount|intcomma }}</td>
-                                        <td>{{ payment.phone_number }}</td>
-                                        <td>
-                                            <span class="badge bg-danger">Failed</span>
-                                        </td>
-                                        <td>{{ payment.transaction_date|naturaltime }}</td>
-                                        <td>{{ payment.result_description|default:"Unknown error"|truncatechars:50 }}</td>
-                                        <td>
-                                            <form method="post" action="{% url 'storefront:retry_payment' payment.subscription.store.slug %}" class="d-inline">
-                                                {% csrf_token %}
-                                                <button type="submit" class="btn btn-sm btn-warning">
-                                                    <i class="bi bi-arrow-repeat"></i> Retry
-                                                </button>
-                                            </form>
-                                        </td>
-                                    </tr>
-                                    {% empty %}
-                                    <tr>
-                                        <td colspan="7" class="text-center text-muted py-4">
-                                            <i class="bi bi-check-circle display-4"></i>
-                                            <p class="mt-2 mb-0">No failed payments in the selected period</p>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- System Health Alerts -->
-            {% if alerts %}
-            <div class="card border-danger border-start border-4">
-                <div class="card-header bg-danger bg-opacity-10 border-bottom-0">
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>
-                        <h5 class="mb-0">System Alerts</h5>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="list-group list-group-flush">
-                        {% for alert in alerts %}
-                        <div class="list-group-item px-0">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <p class="mb-1 text-danger">{{ alert.message }}</p>
-                                    <small class="text-muted">{{ alert.timestamp|naturaltime }}</small>
-                                </div>
-                                <span class="badge bg-danger rounded-pill">Critical</span>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-            {% endif %}
+                        </td>
+                        <td>KSh {{ payment.amount|intcomma }}</td>
+                        <td>{{ payment.phone_number }}</td>
+                        <td>
+                            <span class="badge bg-danger">Failed</span>
+                        </td>
+                        <td>{{ payment.transaction_date|naturaltime }}</td>
+                        <td>{{ payment.result_description|default:"Unknown error"|truncatechars:50 }}</td>
+                        <td>
+                            <form method="post" action="{% url 'storefront:retry_payment' payment.subscription.store.slug %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn-custom btn-warning btn-sm">
+                                    <i class="bi bi-arrow-repeat"></i> Retry
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            <i class="bi bi-check-circle display-4"></i>
+                            <p class="mt-2 mb-0">No failed payments in the selected period</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
-
-{% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-// Subscription Trends Chart
-const trendsCtx = document.getElementById('subscriptionTrendsChart').getContext('2d');
-new Chart(trendsCtx, {
-    type: 'line',
-    data: {
-        labels: {{ daily_trends|safe }}.map(day => new Date(day.date).toLocaleDateString()),
-        datasets: [{
-            label: 'New Subscriptions',
-            data: {{ daily_trends|safe }}.map(day => day.new_subscriptions),
-            borderColor: 'rgb(75, 192, 192)',
-            tension: 0.1
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-            y: {
-                beginAtZero: true,
-                ticks: {
-                    stepSize: 1
-                }
-            }
-        },
-        plugins: {
-            legend: {
-                position: 'top'
-            },
-            title: {
-                display: true,
-                text: 'Daily New Subscriptions'
-            }
-        }
-    }
-});
-
-// Status Breakdown Chart
-const statusCtx = document.getElementById('statusBreakdownChart').getContext('2d');
-new Chart(statusCtx, {
-    type: 'doughnut',
-    data: {
-        labels: ['Active', 'Trialing', 'Past Due', 'Cancelled'],
-        datasets: [{
-            data: [
-                {{ active_subscriptions }},
-                {{ trialing_subscriptions }},
-                {{ past_due_subscriptions }},
-                {{ cancelled_subscriptions }}
-            ],
-            backgroundColor: [
-                'rgb(75, 192, 192)',
-                'rgb(54, 162, 235)',
-                'rgb(255, 205, 86)',
-                'rgb(255, 99, 132)'
-            ]
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: 'bottom'
-            },
-            title: {
-                display: true,
-                text: 'Subscription Status Distribution'
-            }
-        }
-    }
-});
-</script>
-{% endblock %}
-
-<style>
-.bg-gradient-success { background: linear-gradient(45deg, #2dce89, #2dcecc); }
-.bg-gradient-primary { background: linear-gradient(45deg, #5e72e4, #825ee4); }
-.bg-gradient-info { background: linear-gradient(45deg, #11cdef, #1171ef); }
-.bg-gradient-warning { background: linear-gradient(45deg, #fb6340, #fbb140); }
-.bg-gradient-danger { background: linear-gradient(45deg, #f5365c, #f56036); }
-.bg-white-20 { background-color: rgba(255, 255, 255, 0.2); }
-.icon-circle {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.icon-circle i {
-    font-size: 1.5rem;
-}
-.card {
-    transition: all 0.3s ease;
-}
-.card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
-}
-</style>
 {% endblock %}

@@ -5,75 +5,150 @@
 
 {% block content %}
 <div class="container py-5">
-  <div class="row justify-content-center">
-    <div class="col-lg-10">
-      <h2>OAuth Diagnostics</h2>
-      <p class="text-muted">Staff-only page showing SocialApp records, environment variables and Site settings useful when debugging Google/Facebook OAuth.</p>
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card shadow border-0 mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-tools me-2"></i>
+                        OAuth Diagnostics
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-4">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Staff-only page showing SocialApp records, environment variables and Site settings useful when debugging Google/Facebook OAuth.
+                    </p>
 
-      <div class="card mb-4">
-        <div class="card-header">Site</div>
-        <div class="card-body">
-          <p><strong>Site id:</strong> {{ site.id }}</p>
-          <p><strong>Domain:</strong> {{ site.domain }}</p>
-          <p><strong>Name:</strong> {{ site.name }}</p>
+                    <div class="card mb-4">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">Site Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <p><strong>Site ID:</strong> {{ site.id }}</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <p><strong>Domain:</strong> {{ site.domain }}</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <p><strong>Name:</strong> {{ site.name }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">SocialApp Records</h5>
+                        </div>
+                        <div class="card-body">
+                            {% if provider_apps %}
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Provider</th>
+                                                <th>Client ID</th>
+                                                <th>Secret</th>
+                                                <th>Sites</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for provider, app in provider_apps.items %}
+                                            <tr>
+                                                <td><strong>{{ provider }}</strong></td>
+                                                <td><code class="bg-light p-1 rounded">{{ app.client_id|truncatechars:30 }}</code></td>
+                                                <td><em>{{ app.secret|default:'(hidden)'|truncatechars:20 }}</em></td>
+                                                <td>
+                                                    {% for s in app.sites.all %}
+                                                    <span class="badge bg-secondary">{{ s.domain }}</span>
+                                                    {% endfor %}
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                    No SocialApp records found.
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">Environment Variables</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Variable</th>
+                                            <th>Status</th>
+                                            <th>Value Preview</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for k, v in env_vars.items %}
+                                        <tr>
+                                            <td><code>{{ k }}</code></td>
+                                            <td>
+                                                {% if v %}
+                                                <span class="badge bg-success">Present</span>
+                                                {% else %}
+                                                <span class="badge bg-danger">Missing</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if v %}
+                                                <small class="text-muted">{{ v|truncatechars:30 }}</small>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">Suggested Redirect URIs</h5>
+                        </div>
+                        <div class="card-body">
+                            <p>Typical redirect URIs for Google/Facebook:</p>
+                            <div class="alert alert-info">
+                                <ul class="mb-0">
+                                    <li><code>http://localhost:8000/accounts/google/login/callback/</code> (local http)</li>
+                                    <li><code>https://your-domain.com/accounts/google/login/callback/</code> (production https)</li>
+                                    <li><code>http://localhost:8000/accounts/facebook/login/callback/</code></li>
+                                </ul>
+                            </div>
+                            <p class="text-muted">
+                                <i class="bi bi-lightbulb me-1"></i>
+                                If you use a different port, replace <code>8000</code> with your dev port.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">Social Provider Configuration</h5>
+                        </div>
+                        <div class="card-body">
+                            <pre class="bg-light p-3 rounded" style="max-height: 300px; overflow: auto;">{{ social_providers|safe }}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-
-      <div class="card mb-4">
-        <div class="card-header">SocialApp records</div>
-        <div class="card-body">
-          {% if provider_apps %}
-            <ul>
-              {% for provider, app in provider_apps.items %}
-                <li><strong>{{ provider }}</strong> — client_id: <code>{{ app.client_id }}</code> — secret: <em>{{ app.secret|default:'(hidden)' }}</em>
-                  <br>Sites: {% for s in app.sites.all %}<code>{{ s.domain }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}
-                </li>
-              {% endfor %}
-            </ul>
-          {% else %}
-            <p class="text-warning">No SocialApp records found.</p>
-          {% endif %}
-        </div>
-      </div>
-
-      <div class="card mb-4">
-        <div class="card-header">Environment Variables</div>
-        <div class="card-body">
-          <table class="table table-sm">
-            <thead><tr><th>Variable</th><th>Value present?</th></tr></thead>
-            <tbody>
-              {% for k, v in env_vars.items %}
-              <tr>
-                <td><code>{{ k }}</code></td>
-                <td>{% if v %}<span class="badge bg-success">Present</span>{% else %}<span class="badge bg-danger">Missing</span>{% endif %}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="card mb-4">
-        <div class="card-header">Suggested Redirect URIs</div>
-        <div class="card-body">
-          <p>Typical redirect URIs for Google/Facebook:</p>
-          <ul>
-            <li><code>http://localhost:8000/accounts/google/login/callback/</code> (local http)</li>
-            <li><code>https://your-domain.com/accounts/google/login/callback/</code> (production https)</li>
-            <li><code>http://localhost:8000/accounts/facebook/login/callback/</code></li>
-          </ul>
-          <p>If you use a different port, replace <code>8000</code> with your dev port.</p>
-        </div>
-      </div>
-
-      <div class="card mb-4">
-        <div class="card-header">Social Provider Config</div>
-        <div class="card-body">
-          <pre>{{ social_providers|safe }}</pre>
-        </div>
-      </div>
-
     </div>
-  </div>
 </div>
 {% endblock %}

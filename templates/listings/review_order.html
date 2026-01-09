@@ -1,0 +1,274 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Review Order #{{ order.id }} - HomaBay Souq{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'order_list' %}">Orders</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'order_detail' order.id %}">Order #{{ order.id }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Leave Review</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header bg-success text-white py-3">
+                    <h2 class="h4 mb-0"><i class="bi bi-stars me-2"></i> Review Your Order #{{ order.id }}</h2>
+                </div>
+                <div class="card-body p-4">
+                    <div class="mb-4">
+                        <h5 class="mb-3">Order Summary</h5>
+                        <div class="row">
+                            {% for item in items|slice:":3" %}
+                            <div class="col-md-4 mb-3">
+                                <div class="border rounded p-2">
+                                    <img src="{{ item.listing.get_image_url }}" 
+                                         alt="{{ item.listing.title }}"
+                                         class="img-fluid rounded mb-2"
+                                         style="height: 80px; object-fit: cover; width: 100%;">
+                                    <h6 class="mb-1">{{ item.listing.title|truncatechars:30 }}</h6>
+                                    <small class="text-muted">Qty: {{ item.quantity }}</small>
+                                </div>
+                            </div>
+                            {% endfor %}
+                            {% if items.count > 3 %}
+                            <div class="col-12">
+                                <small class="text-muted">+ {{ items.count|add:"-3" }} more item{{ items.count|add:"-3"|pluralize }}</small>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <!-- Overall Rating -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Overall Experience</label>
+                            <div class="rating-input">
+                                {% for i in "54321" %}
+                                <input type="radio" id="star{{ i }}" name="rating" value="{{ i }}" 
+                                       {% if form.rating.value == i or not form.rating.value and forloop.first %}checked{% endif %}>
+                                <label for="star{{ i }}" title="{{ i }} stars">
+                                    <i class="bi bi-star{% if form.rating.value >= i|add:"0" %}-fill{% endif %}"></i>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            {% if form.rating.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.rating.errors }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Detailed Ratings -->
+                        <div class="mb-4">
+                            <h6 class="mb-3">Detailed Ratings</h6>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Communication</label>
+                                    <div class="detailed-rating-input">
+                                        {% for i in "54321" %}
+                                        <input type="radio" id="comm{{ i }}" name="communication_rating" value="{{ i }}"
+                                               {% if form.communication_rating.value == i or not form.communication_rating.value and forloop.first %}checked{% endif %}>
+                                        <label for="comm{{ i }}" title="{{ i }} stars">
+                                            <i class="bi bi-chat{% if form.communication_rating.value >= i|add:"0" %}-fill{% endif %}"></i>
+                                        </label>
+                                        {% endfor %}
+                                    </div>
+                                    <small class="text-muted">Seller communication</small>
+                                </div>
+                                
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Delivery</label>
+                                    <div class="detailed-rating-input">
+                                        {% for i in "54321" %}
+                                        <input type="radio" id="delivery{{ i }}" name="delivery_rating" value="{{ i }}"
+                                               {% if form.delivery_rating.value == i or not form.delivery_rating.value and forloop.first %}checked{% endif %}>
+                                        <label for="delivery{{ i }}" title="{{ i }} stars">
+                                            <i class="bi bi-truck{% if form.delivery_rating.value >= i|add:"0" %}-fill{% endif %}"></i>
+                                        </label>
+                                        {% endfor %}
+                                    </div>
+                                    <small class="text-muted">Speed & packaging</small>
+                                </div>
+                                
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Accuracy</label>
+                                    <div class="detailed-rating-input">
+                                        {% for i in "54321" %}
+                                        <input type="radio" id="accuracy{{ i }}" name="accuracy_rating" value="{{ i }}"
+                                               {% if form.accuracy_rating.value == i or not form.accuracy_rating.value and forloop.first %}checked{% endif %}>
+                                        <label for="accuracy{{ i }}" title="{{ i }} stars">
+                                            <i class="bi bi-check-circle{% if form.accuracy_rating.value >= i|add:"0" %}-fill{% endif %}"></i>
+                                        </label>
+                                        {% endfor %}
+                                    </div>
+                                    <small class="text-muted">Item as described</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Comment -->
+                        <div class="mb-4">
+                            {{ form.comment|as_crispy_field }}
+                        </div>
+                        
+                        <!-- Photos -->
+                        <div class="mb-4">
+                            <label class="form-label">Add Photos (Optional)</label>
+                            {{ photo_form.photos }}
+                            <small class="text-muted">Upload up to 5 photos of your items</small>
+                        </div>
+                        {% for photo in review.review_images.all %}
+                            <img src="{{ photo.image.url }}" alt="{{ photo.caption }}" class="review-photo">
+                        {% endfor %}
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'order_detail' order.id %}" class="btn btn-outline-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-success">Submit Order Review</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Order Details -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="bi bi-receipt me-2"></i> Order Details</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Order Date:</strong> {{ order.created_at|date:"M d, Y" }}</p>
+                    <p><strong>Total Amount:</strong> KSh {{ order.total_price }}</p>
+                    <p><strong>Status:</strong> {{ order.get_status_display }}</p>
+                    
+                    <hr>
+                    
+                    <h6>Sellers in this Order:</h6>
+                    <ul class="list-unstyled">
+                        {% for seller in sellers %}
+                        <li class="mb-2">
+                            <i class="bi bi-person-check me-2"></i>
+                            {{ seller.username }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Review Tips -->
+            <div class="card shadow">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-lightbulb me-2"></i> Review Tips</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> Be specific about what you liked</li>
+                        <li class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> Mention packaging quality</li>
+                        <li class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> Note communication with seller</li>
+                        <li class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> Describe item condition</li>
+                        <li><i class="bi bi-check-circle text-success me-1"></i> Photos help other buyers</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.rating-input, .detailed-rating-input {
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+    gap: 5px;
+}
+
+.rating-input label, .detailed-rating-input label {
+    cursor: pointer;
+    color: #ddd;
+    font-size: 1.5rem;
+    transition: color 0.2s;
+}
+
+.detailed-rating-input label {
+    font-size: 1.25rem;
+}
+
+.rating-input input:checked ~ label,
+.rating-input label:hover,
+.rating-input label:hover ~ label,
+.detailed-rating-input input:checked ~ label,
+.detailed-rating-input label:hover,
+.detailed-rating-input label:hover ~ label {
+    color: #ffc107;
+}
+
+.rating-input input:checked + label,
+.detailed-rating-input input:checked + label {
+    color: #ffc107;
+}
+
+input[type="radio"] {
+    display: none;
+}
+
+.card {
+    border: none;
+    border-radius: 15px;
+    overflow: hidden;
+}
+
+.card-header {
+    border-radius: 15px 15px 0 0 !important;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle star rating clicks
+    const ratingInputs = document.querySelectorAll('.rating-input input, .detailed-rating-input input');
+    
+    ratingInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            const labels = this.parentElement.querySelectorAll('label');
+            const value = parseInt(this.value);
+            
+            labels.forEach((label, index) => {
+                const starValue = 5 - index;
+                const icon = label.querySelector('i');
+                
+                if (starValue <= value) {
+                    if (icon.classList.contains('bi-star')) {
+                        icon.classList.replace('bi-star', 'bi-star-fill');
+                    } else if (icon.classList.contains('bi-chat')) {
+                        icon.classList.replace('bi-chat', 'bi-chat-fill');
+                    } else if (icon.classList.contains('bi-truck')) {
+                        icon.classList.replace('bi-truck', 'bi-truck-fill');
+                    } else if (icon.classList.contains('bi-check-circle')) {
+                        icon.classList.replace('bi-check-circle', 'bi-check-circle-fill');
+                    }
+                } else {
+                    if (icon.classList.contains('bi-star-fill')) {
+                        icon.classList.replace('bi-star-fill', 'bi-star');
+                    } else if (icon.classList.contains('bi-chat-fill')) {
+                        icon.classList.replace('bi-chat-fill', 'bi-chat');
+                    } else if (icon.classList.contains('bi-truck-fill')) {
+                        icon.classList.replace('bi-truck-fill', 'bi-truck');
+                    } else if (icon.classList.contains('bi-check-circle-fill')) {
+                        icon.classList.replace('bi-check-circle-fill', 'bi-check-circle');
+                    }
+                }
+            });
+        });
+    });
+});
+</script>
+{% endblock %}

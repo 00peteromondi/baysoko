@@ -1,81 +1,300 @@
+
 {% extends 'base.html' %}
 
-{% block title %}Notification Preferences - Homabay Marketplace{% endblock %}
+{% block title %}Notification Preferences - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    .preferences-container {
+        min-height: 70vh;
+        animation: fadeIn 0.6s ease-out;
+    }
+    
+    .preferences-card {
+        background: var(--card-bg);
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-xl);
+        overflow: hidden;
+    }
+    
+    .preferences-header {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        padding: var(--spacing-lg);
+    }
+    
+    .preference-section {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-lg);
+        margin-bottom: var(--spacing-lg);
+        border: 1px solid var(--border-color);
+    }
+    
+    .preference-section h5 {
+        color: var(--primary);
+        border-bottom: 2px solid var(--primary);
+        padding-bottom: var(--spacing-sm);
+        margin-bottom: var(--spacing-lg);
+    }
+    
+    .form-check.form-switch {
+        padding-left: 0;
+    }
+    
+    .form-switch .form-check-input {
+        margin-left: 0;
+        margin-right: 10px;
+        height: 24px;
+        width: 48px;
+        cursor: pointer;
+    }
+    
+    .form-switch .form-check-input:checked {
+        background-color: var(--primary);
+        border-color: var(--primary);
+    }
+    
+    .form-switch .form-check-label {
+        cursor: pointer;
+        font-weight: 500;
+        color: var(--text-primary);
+    }
+    
+    .form-switch .form-check-label:hover {
+        color: var(--primary);
+    }
+    
+    .preference-help {
+        font-size: 0.85rem;
+        color: var(--text-tertiary);
+        margin-top: 4px;
+    }
+    
+    .frequency-selector {
+        background: var(--bg-secondary);
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-md);
+    }
+    
+    .frequency-selector select {
+        background: var(--bg-primary);
+        border: 2px solid var(--border-color);
+        color: var(--text-primary);
+    }
+    
+    .frequency-selector select:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+    }
+    
+    .preview-notification {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: var(--spacing-md);
+        margin-top: var(--spacing-lg);
+        border-left: 4px solid var(--primary);
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
+<div class="container-custom py-var(--spacing-xl) preferences-container">
     <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card">
-                <div class="card-header">
-                    <h4>Notification Preferences</h4>
+        <div class="col-lg-8">
+            <div class="preferences-card">
+                <div class="preferences-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h2 class="mb-2"><i class="bi bi-gear me-2"></i> Notification Preferences</h2>
+                            <p class="mb-0">Control how and when you receive notifications</p>
+                        </div>
+                        <a href="{% url 'notifications' %}" class="btn-custom btn-light">
+                            <i class="bi bi-arrow-left me-2"></i> Back to Notifications
+                        </a>
+                    </div>
                 </div>
-                <div class="card-body">
+                
+                <div class="card-body p-4">
                     <form method="post">
                         {% csrf_token %}
                         
-                        <div class="row mb-4">
-                            <div class="col-12">
-                                <h5>Email Notifications</h5>
-                                <p class="text-muted">Choose which notifications you want to receive via email</p>
-                            </div>
+                        <!-- Email Notifications Section -->
+                        <div class="preference-section">
+                            <h5><i class="bi bi-envelope me-2"></i> Email Notifications</h5>
+                            <p class="text-muted mb-4">Receive notifications via email for important updates</p>
                             
-                            {% for field in form %}
-                                {% if field.name|slice:":5" == "email" %}
-                                <div class="col-md-6 mb-3">
-                                    <div class="form-check form-switch">
-                                        {{ field }}
-                                        <label class="form-check-label" for="{{ field.id_for_label }}">
-                                            {{ field.label }}
-                                        </label>
+                            <div class="row">
+                                {% for field in form %}
+                                    {% if field.name|slice:":5" == "email" %}
+                                    <div class="col-md-6 mb-4">
+                                        <div class="d-flex align-items-center">
+                                            <div class="form-check form-switch me-3">
+                                                <input type="checkbox" 
+                                                       class="form-check-input" 
+                                                       id="{{ field.id_for_label }}" 
+                                                       name="{{ field.name }}"
+                                                       {% if field.value %}checked{% endif %}>
+                                            </div>
+                                            <div>
+                                                <label class="form-check-label" for="{{ field.id_for_label }}">
+                                                    <strong>{{ field.label }}</strong>
+                                                </label>
+                                                {% if field.help_text %}
+                                                    <p class="preference-help mb-0">{{ field.help_text }}</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
                                     </div>
-                                    {% if field.help_text %}
-                                        <small class="form-text text-muted">{{ field.help_text }}</small>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <!-- Push Notifications Section -->
+                        <div class="preference-section">
+                            <h5><i class="bi bi-bell me-2"></i> Push Notifications</h5>
+                            <p class="text-muted mb-4">In-app notifications that appear on the site</p>
+                            
+                            <div class="row">
+                                {% for field in form %}
+                                    {% if field.name|slice:":4" == "push" %}
+                                    <div class="col-md-6 mb-4">
+                                        <div class="d-flex align-items-center">
+                                            <div class="form-check form-switch me-3">
+                                                <input type="checkbox" 
+                                                       class="form-check-input" 
+                                                       id="{{ field.id_for_label }}" 
+                                                       name="{{ field.name }}"
+                                                       {% if field.value %}checked{% endif %}>
+                                            </div>
+                                            <div>
+                                                <label class="form-check-label" for="{{ field.id_for_label }}">
+                                                    <strong>{{ field.label }}</strong>
+                                                </label>
+                                                {% if field.help_text %}
+                                                    <p class="preference-help mb-0">{{ field.help_text }}</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <!-- Notification Frequency -->
+                        <div class="preference-section">
+                            <h5><i class="bi bi-clock me-2"></i> Notification Frequency</h5>
+                            <p class="text-muted mb-3">How often you want to receive notification digests</p>
+                            
+                            <div class="frequency-selector">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Digest Frequency</label>
+                                    <select name="digest_frequency" class="form-select">
+                                        {% for value, label in form.fields.digest_frequency.choices %}
+                                            <option value="{{ value }}" {% if form.digest_frequency.value == value %}selected{% endif %}>
+                                                {{ label }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    {% if form.digest_frequency.help_text %}
+                                        <p class="preference-help mt-2">{{ form.digest_frequency.help_text }}</p>
                                     {% endif %}
                                 </div>
-                                {% endif %}
-                            {% endfor %}
-                        </div>
-                        
-                        <div class="row mb-4">
-                            <div class="col-12">
-                                <h5>Push Notifications</h5>
-                                <p class="text-muted">In-app notifications that appear on the site</p>
-                            </div>
-                            
-                            {% for field in form %}
-                                {% if field.name|slice:":4" == "push" %}
-                                <div class="col-md-6 mb-3">
-                                    <div class="form-check form-switch">
-                                        {{ field }}
-                                        <label class="form-check-label" for="{{ field.id_for_label }}">
-                                            {{ field.label }}
-                                        </label>
-                                    </div>
-                                    {% if field.help_text %}
-                                        <small class="form-text text-muted">{{ field.help_text }}</small>
-                                    {% endif %}
-                                </div>
-                                {% endif %}
-                            {% endfor %}
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-12">
-                                <h5>Notification Frequency</h5>
-                                <p class="text-muted">How often you want to receive notification digests</p>
-                                {{ form.digest_frequency }}
                             </div>
                         </div>
                         
-                        <div class="mt-4">
-                            <button type="submit" class="btn btn-primary">Save Preferences</button>
-                            <a href="{% url 'notification-list' %}" class="btn btn-outline-secondary">Cancel</a>
+                        <!-- Preview -->
+                        <div class="preview-notification">
+                            <h6><i class="bi bi-eye me-2"></i> Preview</h6>
+                            <p class="mb-2"><strong>Order Update</strong></p>
+                            <p class="text-muted small mb-2">Your order #12345 has been shipped and is on its way to you.</p>
+                            <p class="text-muted small mb-0">Based on your preferences, you'll receive this as an email and in-app notification.</p>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="d-flex justify-content-between align-items-center mt-4 pt-4 border-top">
+                            <div>
+                                <button type="submit" class="btn-custom btn-primary">
+                                    <i class="bi bi-check-circle me-2"></i> Save Preferences
+                                </button>
+                                <button type="reset" class="btn-custom btn-ghost ms-2">
+                                    <i class="bi bi-arrow-clockwise me-2"></i> Reset to Defaults
+                                </button>
+                            </div>
+                            <div>
+                                <a href="{% url 'notifications' %}" class="btn-custom btn-outline-secondary">
+                                    <i class="bi bi-x-circle me-2"></i> Cancel
+                                </a>
+                            </div>
                         </div>
                     </form>
+                </div>
+            </div>
+            
+            <!-- Information Card -->
+            <div class="card-custom mt-4">
+                <div class="card-body">
+                    <div class="d-flex align-items-start">
+                        <div class="me-3">
+                            <i class="bi bi-info-circle fs-2 text-primary"></i>
+                        </div>
+                        <div>
+                            <h5>About Notification Settings</h5>
+                            <p class="text-muted mb-3">
+                                You can customize how you receive notifications. Email notifications will be sent to 
+                                <strong>{{ user.email }}</strong>. Push notifications appear in your browser and on mobile devices.
+                            </p>
+                            <div class="d-flex gap-3 flex-wrap">
+                                <a href="{% url 'profile' user.pk %}" class="btn-custom btn-outline-primary btn-sm">
+                                    <i class="bi bi-person me-1"></i> Update Email
+                                </a>
+                                <a href="#" class="btn-custom btn-ghost btn-sm">
+                                    <i class="bi bi-question-circle me-1"></i> Need Help?
+                                </a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add live preview updates
+    const form = document.querySelector('form');
+    const preview = document.querySelector('.preview-notification');
+    
+    form.addEventListener('change', function(e) {
+        if (e.target.type === 'checkbox') {
+            const isEmail = e.target.name.startsWith('email_');
+            const isPush = e.target.name.startsWith('push_');
+            
+            if (isEmail && !e.target.checked) {
+                preview.querySelector('p:last-child').textContent = 
+                    'Based on your preferences, you\'ll receive this as an in-app notification only.';
+            } else if (isPush && !e.target.checked) {
+                preview.querySelector('p:last-child').textContent = 
+                    'Based on your preferences, you\'ll receive this as an email only.';
+            } else if (!isEmail && !isPush) {
+                preview.querySelector('p:last-child').textContent = 
+                    'Based on your preferences, you\'ll receive this as an email and in-app notification.';
+            }
+        }
+    });
+    
+    // Reset form handler
+    form.addEventListener('reset', function() {
+        setTimeout(() => {
+            preview.querySelector('p:last-child').textContent = 
+                'Based on your preferences, you\'ll receive this as an email and in-app notification.';
+        }, 100);
+    });
+});
+</script>
 {% endblock %}

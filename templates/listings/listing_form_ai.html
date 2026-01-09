@@ -1,0 +1,957 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% if ai_used %}Review AI Suggestions - {% endif %}Create Listing{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Modern Form Styles */
+.listing-form-wrapper {
+    max-width: 1000px;
+    margin: 0 auto;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 2.5rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border-color);
+}
+
+.form-header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
+     border-radius: var(--radius-xl);
+}
+
+.form-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-color);
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+     border-radius: var(--radius-md);
+    gap: 0.75rem;
+}
+
+.form-subtitle {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    max-width: 600px;
+    margin: 0 auto;
+    line-height: 1.6;
+}
+
+/* Form Progress Steps */
+     border-radius: var(--radius-md);
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 3rem;
+    position: relative;
+}
+{% extends 'listings/listing_form.html' %}
+.upload-btn {
+    background: var(--primary-gemini);
+    color: white;
+     border-radius: var(--radius-sm);
+    border-radius: 10px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.upload-btn:hover {
+    background: #3367d6;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(66, 133, 244, 0.3);
+}
+
+     border-radius: var(--radius-sm);
+.image-previews-container {
+    margin-top: 1.5rem;
+}
+
+.preview-grid {
+    display: grid;
+     border-radius: var(--radius-md);
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.preview-item {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid var(--border-color);
+    aspect-ratio: 1;
+    transition: all 0.3s ease;
+}
+
+.preview-item:hover {
+    border-color: var(--primary-gemini);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+     border-radius: var(--radius-full);
+.preview-item.main-image {
+    border-color: var(--primary-gemini);
+    border-width: 3px;
+}
+
+.preview-img {
+    width: 100%;
+     border-radius: var(--radius-md);
+    object-fit: cover;
+}
+
+.preview-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+     border-radius: var(--radius-sm);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.preview-item:hover .preview-overlay {
+    opacity: 1;
+}
+
+.preview-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.preview-action-btn {
+    background: rgba(255, 255, 255, 0.9);
+    border: none;
+    border-radius: 6px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.preview-action-btn:hover {
+    background: white;
+    transform: scale(1.1);
+}
+
+.preview-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: var(--primary-gemini);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* Character Counters */
+.char-counter {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    text-align: right;
+    margin-top: 0.5rem;
+}
+
+.char-counter.near-limit {
+    color: #f59e0b;
+}
+
+.char-counter.over-limit {
+    color: #ef4444;
+}
+
+/* Form Actions */
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2.5rem;
+    padding-top: 2rem;
+    border-top: 2px solid var(--border-color);
+}
+
+.btn {
+    padding: 1rem 2rem;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 140px;
+    justify-content: center;
+}
+
+.btn-primary {
+    background: var(--primary-gemini);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #3367d6;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(66, 133, 244, 0.3);
+}
+
+.btn-secondary {
+    background: transparent;
+    color: var(--text-color);
+    border: 2px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    border-color: var(--primary-gemini);
+    color: var(--primary-gemini);
+    transform: translateY(-2px);
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+/* Error States */
+.form-control.error, .form-select.error {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1);
+}
+
+.error-message {
+    color: #ef4444;
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Success States */
+.form-control.success, .form-select.success {
+    border-color: #10b981;
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
+}
+
+/* Loading State */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.loading-overlay.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.loading-spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-top: 4px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .listing-form-wrapper {
+        padding: 1.5rem;
+        margin: 1rem;
+        border-radius: 16px;
+    }
+    
+    .form-title {
+        font-size: 1.5rem;
+    }
+    
+    .form-progress {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+    
+    .form-progress::before {
+        display: none;
+    }
+    
+    .progress-step {
+        flex-direction: row;
+        gap: 1rem;
+    }
+    
+    .form-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .form-section {
+        padding: 1.5rem;
+    }
+    
+    .section-header {
+        flex-direction: column;
+        text-align: center;
+        gap: 0.75rem;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+    
+    .btn {
+        width: 100%;
+    }
+    
+    .upload-area {
+        padding: 2rem 1rem;
+    }
+    
+    .preview-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .listing-form-wrapper {
+        padding: 1rem;
+        margin: 0.5rem;
+    }
+    
+    .form-section {
+        padding: 1rem;
+    }
+    
+    .preview-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Small AI-specific tweaks */
+    .ai-suggestion {
+    border-left: 4px solid var(--info);
+    background-color: rgba(17,138,178,0.04);
+    padding: 12px;
+    margin-bottom: 10px;
+    border-radius: 6px;
+}
+.ai-badge { background: var(--info); color: #fff; padding: 2px 6px; border-radius: 4px; font-size:0.8rem; }
+.field-help { color: var(--text-secondary); font-size:0.9rem; }
+
+</style>
+<style>
+/* Ensure inputs/selects/textarea inside this AI form inherit the same styles even if widgets lack classes */
+.listing-form input, .listing-form textarea, .listing-form select {
+    width: 100%;
+    padding: 1rem 1.25rem;
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    background: var(--card-bg);
+    color: var(--text-color);
+    font-family: inherit;
+}
+.listing-form input:focus, .listing-form textarea:focus, .listing-form select:focus {
+    border-color: var(--primary-gemini);
+    box-shadow: 0 0 0 4px rgba(66, 133, 244, 0.1);
+    outline: none;
+}
+</style>
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'includes/design_wrapper_start.html' %}
+<div class="card-custom listing-form">
+        <div class="form-header">
+            <h1 class="form-title">
+                <i class="bi bi-magic"></i>
+                {% if ai_used %}Review AI Suggestions{% else %}Create New Listing{% endif %}
+            </h1>
+            <p class="form-subtitle">Use the AI assistant to help fill your listing faster.</p>
+
+            {% if ai_enabled and not ai_used %}
+            <form id="ai-assist-form" method="post" class="d-inline mt-2">
+                {% csrf_token %}
+                <div class="form-check form-switch">
+                    <input class="form-check-input ai-toggle" type="checkbox" 
+                           id="use_ai" name="use_ai" {% if form.use_ai.value %}checked{% endif %}>
+                    <label class="form-check-label" for="use_ai">
+                        <i class="bi bi-robot"></i> AI Assistant
+                    </label>
+                </div>
+            </form>
+            {% endif %}
+        </div>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+
+        {% if ai_error %}
+        <div class="mb-3">
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle"></i>
+                <strong>AI Error:</strong>
+                <div>{{ ai_error }}</div>
+                <div class="mt-1 small text-muted">AI features have been temporarily disabled. Try again later.</div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if ai_used %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            <strong>AI Suggestions Applied</strong>
+            <p class="mb-0">Review and edit the AI-generated suggestions below. Fields with AI suggestions are highlighted.</p>
+        </div>
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data" id="listing-form">
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger">
+                            {{ form.non_field_errors }}
+                        </div>
+                        {% endif %}
+                        
+                        <div class="row">
+                            <!-- Main column: Form -->
+                            <div class="col-lg-8 col-md-7">
+                                <h5 class="mb-3 border-bottom pb-2">Basic Information</h5>
+                                
+                                <!-- Main column: Form -->
+                                <div class="col-lg-8 col-md-7">
+                                    <div class="form-grid">
+                                        <!-- Title (full width) -->
+                                        <div class="form-group full-width">
+                                            <label for="{{ form.title.id_for_label }}" class="form-label required-field">
+                                                {{ form.title.label }}
+                                                {% if ai_used and ai_suggestions.title %}
+                                                <span class="ai-badge">AI</span>
+                                                {% endif %}
+                                            </label>
+                                            <div class="d-flex gap-2">
+                                                {{ form.title }}
+                                                {% if ai_enabled and not quick_mode %}
+                                                <button type="button" class="btn-custom btn-ghost" onclick="generateWithAI()" id="ai-generate-btn" aria-label="Generate suggestions with AI">
+                                                    <i class="bi bi-magic"></i>
+                                                </button>
+                                                {% endif %}
+                                            </div>
+                                            <div class="field-help">Be specific and descriptive</div>
+                                            {{ form.title.errors }}
+                                        </div>
+
+                                        <!-- Description (full width) -->
+                                        <div class="form-group full-width">
+                                            <label for="{{ form.description.id_for_label }}" class="form-label required-field">
+                                                {{ form.description.label }}
+                                                {% if ai_used and ai_suggestions.description %}
+                                                <span class="ai-badge">AI</span>
+                                                {% endif %}
+                                            </label>
+                                            {{ form.description }}
+                                            <div class="field-help">Include details, condition, and specifications</div>
+                                            {{ form.description.errors }}
+                                        </div>
+
+                                        <!-- Category -->
+                                        <div class="form-group">
+                                            <label for="{{ form.category.id_for_label }}" class="form-label required-field">
+                                                {{ form.category.label }}
+                                                {% if ai_used and ai_suggestions.category %}
+                                                <span class="ai-badge">AI</span>
+                                                {% endif %}
+                                            </label>
+                                            {{ form.category }}
+                                            <div class="field-help">Select the most relevant category</div>
+                                            <div id="category-suggestions" class="mt-2"></div>
+                                            {{ form.category.errors }}
+                                        </div>
+
+                                        <!-- Price -->
+                                        <div class="form-group">
+                                            <label for="{{ form.price.id_for_label }}" class="form-label required-field">
+                                                {{ form.price.label }} (KES)
+                                                {% if ai_used and ai_suggestions.price %}
+                                                <span class="ai-badge">AI</span>
+                                                {% endif %}
+                                            </label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">KES</span>
+                                                {{ form.price }}
+                                            </div>
+                                            {{ form.price.errors }}
+                                        </div>
+
+                                        <!-- Condition -->
+                                        <div class="form-group">
+                                            <label for="{{ form.condition.id_for_label }}" class="form-label required-field">
+                                                {{ form.condition.label }}
+                                                {% if ai_used and ai_suggestions.condition %}
+                                                <span class="ai-badge">AI</span>
+                                                {% endif %}
+                                            </label>
+                                            {{ form.condition }}
+                                            {{ form.condition.errors }}
+                                        </div>
+
+                                        <!-- Location -->
+                                        <div class="form-group">
+                                            <label for="{{ form.location.id_for_label }}" class="form-label required-field">
+                                                {{ form.location.label }}
+                                                {% if ai_used and ai_suggestions.location %}
+                                                <span class="ai-badge">AI</span>
+                                                {% endif %}
+                                            </label>
+                                            {{ form.location }}
+                                            {{ form.location.errors }}
+                                        </div>
+                                    </div>
+                                </div>
+                            
+                            </div>
+
+                            <!-- Sidebar: AI Suggestions & Additional Details -->
+                            <aside class="col-lg-4 col-md-5">
+                                <div class="mb-3">
+                                    <h5 class="mb-2">AI Suggestions</h5>
+                                    {% if ai_suggestions %}
+                                    <div class="ai-suggestion p-3 mb-3">
+                                        {% if ai_suggestions.title %}
+                                        <div><strong>Title:</strong> {{ ai_suggestions.title }}</div>
+                                        {% endif %}
+                                        {% if ai_suggestions.price %}
+                                        <div><strong>Price:</strong> KES {{ ai_suggestions.price }}</div>
+                                        {% endif %}
+                                        {% if ai_suggestions.description %}
+                                        <div class="mt-2"><strong>Description:</strong>
+                                            <div class="small text-muted">{{ ai_suggestions.description }}</div>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    {% else %}
+                                    <div class="text-muted small">No suggestions yet — click "AI Help" on the title field.</div>
+                                    {% endif %}
+
+                                    <h6 class="mt-3">Preview</h6>
+                                    <div class="card-custom p-3 mb-3">
+                                        <div class="d-flex align-items-start gap-3">
+                                            <div style="width:72px; height:72px; background:var(--bg-secondary); border-radius:8px;"></div>
+                                            <div>
+                                                <div class="fw-bold">{{ ai_suggestions.title|default:form.title.value }}</div>
+                                                <div class="text-muted small">{{ ai_suggestions.meta_description|default:form.meta_description.value }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="card-section">
+                                    <h5 class="mb-3 border-bottom pb-2">Additional Details</h5>
+                                
+                                <!-- Store -->
+                                {% if form.store %}
+                                <div class="mb-3">
+                                    <label for="{{ form.store.id_for_label }}" class="form-label">
+                                        {{ form.store.label }}
+                                    </label>
+                                    {{ form.store }}
+                                    {{ form.store.errors }}
+                                </div>
+                                {% endif %}
+                                
+                                <!-- Delivery Option -->
+                                <div class="mb-3">
+                                    <label for="{{ form.delivery_option.id_for_label }}" class="form-label">
+                                        {{ form.delivery_option.label }} *
+                                        {% if ai_used and ai_suggestions.delivery_option %}
+                                        <span class="ai-badge">AI</span>
+                                        {% endif %}
+                                    </label>
+                                    {{ form.delivery_option }}
+                                    {{ form.delivery_option.errors }}
+                                </div>
+                                
+                                <!-- Stock -->
+                                <div class="mb-3">
+                                    <label for="{{ form.stock.id_for_label }}" class="form-label">
+                                        {{ form.stock.label }} *
+                                    </label>
+                                    {{ form.stock }}
+                                    {{ form.stock.errors }}
+                                </div>
+                                
+                                <!-- Brand & Model -->
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ form.brand.id_for_label }}" class="form-label">
+                                            {{ form.brand.label }}
+                                            {% if ai_used and ai_suggestions.brand %}
+                                            <span class="ai-badge">AI</span>
+                                            {% endif %}
+                                        </label>
+                                        {{ form.brand }}
+                                        {{ form.brand.errors }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ form.model.id_for_label }}" class="form-label">
+                                            {{ form.model.label }}
+                                            {% if ai_used and ai_suggestions.model %}
+                                            <span class="ai-badge">AI</span>
+                                            {% endif %}
+                                        </label>
+                                        {{ form.model }}
+                                        {{ form.model.errors }}
+                                    </div>
+                                </div>
+                                
+                                <!-- Dimensions & Weight -->
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ form.dimensions.id_for_label }}" class="form-label">
+                                            {{ form.dimensions.label }}
+                                            {% if ai_used and ai_suggestions.dimensions %}
+                                            <span class="ai-badge">AI</span>
+                                            {% endif %}
+                                        </label>
+                                        {{ form.dimensions }}
+                                        {{ form.dimensions.errors }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ form.weight.id_for_label }}" class="form-label">
+                                            {{ form.weight.label }}
+                                            {% if ai_used and ai_suggestions.weight %}
+                                            <span class="ai-badge">AI</span>
+                                            {% endif %}
+                                        </label>
+                                        {{ form.weight }}
+                                        {{ form.weight.errors }}
+                                    </div>
+                                </div>
+                                
+                                <!-- Color & Material -->
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ form.color.id_for_label }}" class="form-label">
+                                            {{ form.color.label }}
+                                            {% if ai_used and ai_suggestions.color %}
+                                            <span class="ai-badge">AI</span>
+                                            {% endif %}
+                                        </label>
+                                        {{ form.color }}
+                                        {{ form.color.errors }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ form.material.id_for_label }}" class="form-label">
+                                            {{ form.material.label }}
+                                            {% if ai_used and ai_suggestions.material %}
+                                            <span class="ai-badge">AI</span>
+                                            {% endif %}
+                                        </label>
+                                        {{ form.material }}
+                                        {{ form.material.errors }}
+                                    </div>
+                                </div>
+                                
+                                <!-- Meta Description -->
+                                <div class="mb-3">
+                                    <label for="{{ form.meta_description.id_for_label }}" class="form-label">
+                                        {{ form.meta_description.label }}
+                                        {% if ai_used and ai_suggestions.meta_description %}
+                                        <span class="ai-badge">AI</span>
+                                        {% endif %}
+                                    </label>
+                                    {{ form.meta_description }}
+                                    <div class="field-help">For search engines (max 160 characters)</div>
+                                    <div id="meta-counter" class="text-muted small" aria-live="polite"></div>
+                                    {{ form.meta_description.errors }}
+                                </div>
+                                
+                                <!-- Image Upload -->
+                                <div class="mb-3">
+                                    <label for="{{ form.image.id_for_label }}" class="form-label">
+                                        {{ form.image.label }} *
+                                    </label>
+                                    {{ form.image }}
+                                    {{ form.image.errors }}
+                                    
+                                    <div class="mt-3">
+                                        <label class="form-label">Additional Images</label>
+                                        <input type="file" name="images" multiple class="form-control" 
+                                               accept="image/*">
+                                        <div class="field-help">Upload up to 5 additional images (optional)</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                            <div class="mt-4">
+                                <div class="form-actions d-flex justify-content-between align-items-center">
+                                    <div>
+                                        {% if quick_mode %}
+                                        <a href="{% url 'ai_listing_wizard' %}" class="btn-custom btn-ghost">
+                                            <i class="bi bi-arrow-left"></i> Back
+                                        </a>
+                                        {% else %}
+                                        <a href="{% url 'my-listings' %}" class="btn-custom btn-ghost">
+                                            <i class="bi bi-x"></i> Cancel
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                    <div>
+                                        <button type="submit" class="btn-custom btn-primary">
+                                            <i class="bi bi-check-circle"></i>
+                                            {% if ai_used %}Save with AI Suggestions{% else %}Create Listing{% endif %}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            </form>
+                        </div>
+                    {% include 'includes/design_wrapper_end.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Meta description character counter
+const metaDesc = document.getElementById('{{ form.meta_description.id_for_label }}');
+const metaCounter = document.getElementById('meta-counter');
+
+if (metaDesc && metaCounter) {
+    function updateCounter() {
+        const length = metaDesc.value.length;
+        metaCounter.textContent = `${length}/160 characters`;
+        metaCounter.className = length > 160 ? 'text-danger small' : 'text-muted small';
+    }
+    
+    metaDesc.addEventListener('input', updateCounter);
+    updateCounter();
+}
+
+// AI Assistant functionality
+const aiToggle = document.getElementById('use_ai');
+if (aiToggle) {
+    aiToggle.addEventListener('change', function() {
+        document.getElementById('ai-assist-form').submit();
+    });
+}
+
+// Generate with AI button
+function generateWithAI() {
+    const title = document.getElementById('{{ form.title.id_for_label }}').value;
+    const description = document.getElementById('{{ form.description.id_for_label }}').value;
+    const category = document.getElementById('{{ form.category.id_for_label }}').value;
+    
+    if (!title.trim()) {
+        alert('Please enter a title for AI to work with.');
+        return;
+    }
+    
+    const btn = document.getElementById('ai-generate-btn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-hourglass"></i> Generating...';
+    btn.disabled = true;
+    
+    fetch('{% url "ai_generate_listing" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            title: title,
+            description: description,
+            category: category
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Apply AI suggestions to form fields
+            applyAISuggestions(data.data);
+            
+            // Show category suggestions
+            if (data.category_suggestions && data.category_suggestions.length > 0) {
+                showCategorySuggestions(data.category_suggestions);
+            }
+            
+            // Show success message
+            showAIMessage('AI suggestions applied! Review and edit as needed.', 'success');
+        } else {
+            showAIMessage('AI generation failed: ' + data.error, 'error');
+        }
+    })
+    .catch(error => {
+        showAIMessage('Network error: ' + error.message, 'error');
+    })
+    .finally(() => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
+}
+
+function applyAISuggestions(suggestions) {
+    // Apply suggestions to empty or minimal fields
+    const fields = {
+        'description': { minLength: 50, maxLength: null },
+        'brand': { minLength: 0, maxLength: null },
+        'model': { minLength: 0, maxLength: null },
+        'dimensions': { minLength: 0, maxLength: null },
+        'weight': { minLength: 0, maxLength: null },
+        'color': { minLength: 0, maxLength: null },
+        'material': { minLength: 0, maxLength: null },
+        'meta_description': { minLength: 0, maxLength: 160 }
+    };
+    
+    // Map of form field names to their rendered element IDs (safe for template rendering)
+    const fieldIds = {
+        'description': '{{ form.description.id_for_label }}',
+        'brand': '{% if form.brand %}{{ form.brand.id_for_label }}{% else %}{% endif %}',
+        'model': '{% if form.model %}{{ form.model.id_for_label }}{% else %}{% endif %}',
+        'dimensions': '{% if form.dimensions %}{{ form.dimensions.id_for_label }}{% else %}{% endif %}',
+        'weight': '{% if form.weight %}{{ form.weight.id_for_label }}{% else %}{% endif %}',
+        'color': '{% if form.color %}{{ form.color.id_for_label }}{% else %}{% endif %}',
+        'material': '{% if form.material %}{{ form.material.id_for_label }}{% else %}{% endif %}',
+        'meta_description': '{% if form.meta_description %}{{ form.meta_description.id_for_label }}{% else %}{% endif %}'
+    };
+
+    for (const [field, config] of Object.entries(fields)) {
+        const elementId = fieldIds[field];
+        if (!elementId) continue;
+        const element = document.getElementById(elementId);
+        if (element && suggestions[field]) {
+            const currentValue = element.value.trim();
+            const suggestion = suggestions[field].toString().trim();
+
+            // Apply suggestion if field is empty or below min length
+            if (!currentValue || 
+                (config.minLength && currentValue.length < config.minLength) ||
+                (field === 'meta_description' && !currentValue)) {
+                element.value = suggestion;
+
+                // Trigger change event for character counters
+                element.dispatchEvent(new Event('input'));
+            }
+        }
+    }
+    
+    // Apply condition if not set
+    const conditionSelect = document.getElementById('{{ form.condition.id_for_label }}');
+    if (conditionSelect && suggestions.condition && !conditionSelect.value) {
+        conditionSelect.value = suggestions.condition;
+    }
+    
+    // Apply delivery option if not set
+    const deliverySelect = document.getElementById('{{ form.delivery_option.id_for_label }}');
+    if (deliverySelect && suggestions.delivery_option && !deliverySelect.value) {
+        deliverySelect.value = suggestions.delivery_option;
+    }
+    
+    // Apply location if not set
+    const locationSelect = document.getElementById('{{ form.location.id_for_label }}');
+    if (locationSelect && suggestions.location && !locationSelect.value) {
+        locationSelect.value = suggestions.location;
+    }
+}
+
+function showCategorySuggestions(suggestions) {
+    const container = document.getElementById('category-suggestions');
+    if (!container) return;
+    
+    let html = '<div class="alert alert-info p-2"><small>';
+    html += '<strong>AI suggests:</strong> ';
+    suggestions.forEach((cat, index) => {
+        html += `<button type="button" class="btn-custom btn-ghost btn-sm me-1" 
+                 onclick="setCategory(${cat.id})">${cat.name}</button>`;
+    });
+    html += '</small></div>';
+    
+    container.innerHTML = html;
+}
+
+function setCategory(categoryId) {
+    const select = document.getElementById('{{ form.category.id_for_label }}');
+    if (select) {
+        select.value = categoryId;
+        document.getElementById('category-suggestions').innerHTML = 
+            '<small class="text-success"><i class="bi bi-check-circle"></i> Category selected</small>';
+    }
+}
+
+function showAIMessage(message, type) {
+    // Create or update message container
+    let container = document.getElementById('ai-message-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'ai-message-container';
+        container.className = 'position-fixed top-0 end-0 p-3';
+        container.style.zIndex = '1050';
+        document.body.appendChild(container);
+    }
+    
+    const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+    const icon = type === 'success' ? 'bi-check-circle' : 'bi-exclamation-triangle';
+    
+    const alert = document.createElement('div');
+    alert.className = `alert ${alertClass} alert-dismissible fade show`;
+    alert.innerHTML = `
+        <i class="bi ${icon}"></i> ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    container.appendChild(alert);
+    
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        alert.classList.remove('show');
+        setTimeout(() => alert.remove(), 150);
+    }, 5000);
+}
+</script>
+{% endblock %}

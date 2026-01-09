@@ -1,0 +1,280 @@
+{% extends 'delivery/base.html' %}
+{% load humanize %}
+
+{% block title %}Daily Delivery Report{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2 class="mb-1">Daily Delivery Report</h2>
+        <p class="text-muted">{{ date|date:"F d, Y" }}</p>
+    </div>
+    <div class="col-md-4 text-md-end">
+        <div class="btn-group" role="group">
+            <a href="{% url 'delivery:reports' %}?type=daily&format=csv&date={{ date|date:'Y-m-d' }}" 
+               class="btn btn-success">
+                <i class="fas fa-download"></i> Export CSV
+            </a>
+            <button class="btn btn-primary" onclick="window.print()">
+                <i class="fas fa-print"></i> Print
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Report Summary -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h1 class="display-5 mb-1">{{ summary.total }}</h1>
+                <p class="mb-0">Total Deliveries</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h1 class="display-5 mb-1">{{ summary.delivered }}</h1>
+                <p class="mb-0">Delivered</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h1 class="display-5 mb-1">{{ summary.pending }}</h1>
+                <p class="mb-0">Pending</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h1 class="display-5 mb-1">KES {{ summary.revenue|intcomma }}</h1>
+                <p class="mb-0">Revenue</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Date Selector -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <input type="hidden" name="type" value="daily">
+            <div class="col-md-4">
+                <label for="reportDate" class="form-label">Select Date</label>
+                <input type="date" name="date" id="reportDate" class="form-control" 
+                       value="{{ date|date:'Y-m-d' }}" max="{% now 'Y-m-d' %}">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-filter"></i> Generate
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Deliveries Table -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Deliveries for {{ date|date:"F d, Y" }}</h5>
+        <span class="badge bg-primary">{{ deliveries.count }} records</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-delivery mb-0">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Tracking #</th>
+                        <th>Recipient</th>
+                        <th>Driver</th>
+                        <th>Status</th>
+                        <th>Fee</th>
+                        <th>Distance</th>
+                        <th>Duration</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for delivery in deliveries %}
+                    <tr>
+                        <td>
+                            <small>{{ delivery.created_at|time }}</small>
+                        </td>
+                        <td>
+                            <a href="{% url 'delivery:delivery_detail' delivery.pk %}">
+                                {{ delivery.tracking_number|truncatechars:10 }}
+                            </a>
+                        </td>
+                        <td>
+                            {{ delivery.recipient_name }}<br>
+                            <small class="text-muted">{{ delivery.recipient_phone }}</small>
+                        </td>
+                        <td>
+                            {% if delivery.delivery_person %}
+                            {{ delivery.delivery_person.user.get_short_name|default:delivery.delivery_person.employee_id }}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="status-badge status-{{ delivery.status }}">
+                                {{ delivery.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            <strong>KES {{ delivery.delivery_fee|intcomma }}</strong><br>
+                            <small class="{% if delivery.payment_status == 'paid' %}text-success{% else %}text-warning{% endif %}">
+                                {{ delivery.get_payment_status_display }}
+                            </small>
+                        </td>
+                        <td>
+                            {% if delivery.calculate_distance %}
+                            {{ delivery.calculate_distance }} km
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if delivery.actual_delivery_time %}
+                            {% with duration=delivery.actual_delivery_time|timeuntil:delivery.pickup_time %}
+                            {{ duration }}
+                            {% endwith %}
+                            {% else %}
+                            <span class="text-muted">In progress</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5">
+                            <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No deliveries on this date</h5>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Status Distribution</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="statusChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Hourly Activity</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="hourlyChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Driver Performance -->
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0">Driver Performance</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Driver</th>
+                        <th>Total</th>
+                        <th>Delivered</th>
+                        <th>Success Rate</th>
+                        <th>Avg. Rating</th>
+                        <th>Total Revenue</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- This would be populated from view context -->
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-3">
+                            Driver performance data would appear here
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    // Status Distribution Chart
+    const statusCtx = document.getElementById('statusChart').getContext('2d');
+    const statusChart = new Chart(statusCtx, {
+        type: 'pie',
+        data: {
+            labels: ['Delivered', 'Pending', 'In Transit', 'Failed'],
+            datasets: [{
+                data: [
+                    {{ summary.delivered }}, 
+                    {{ summary.pending }}, 
+                    {{ summary.in_transit }}, 
+                    {{ summary.failed }}
+                ],
+                backgroundColor: ['#28a745', '#ffc107', '#17a2b8', '#dc3545']
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+    
+    // Hourly Activity Chart
+    const hourlyCtx = document.getElementById('hourlyChart').getContext('2d');
+    const hourlyChart = new Chart(hourlyCtx, {
+        type: 'line',
+        data: {
+            labels: Array.from({length: 24}, (_, i) => i + ':00'),
+            datasets: [{
+                label: 'Deliveries per Hour',
+                data: Array.from({length: 24}, () => Math.floor(Math.random() * 10)),
+                borderColor: '#3498db',
+                backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}
+{% endblock %}

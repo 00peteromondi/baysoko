@@ -1,5 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
+from .decorators import store_owner_required
 from django.contrib import messages
 from django.conf import settings
 from .models import Store, Subscription, MpesaPayment
@@ -9,12 +10,19 @@ from listings.models import Listing, Category
 from listings.forms import ListingForm
 from .forms import StoreForm
 from listings.models import ListingImage
+from django.db.models import F, Sum, Count, Avg
 
 
 def store_list(request):
     stores = Store.objects.filter()
-    return render(request, 'storefront/store_list.html', {'stores': stores})
+    premium_count = Store.objects.filter(is_premium=True).count()
+    total_products = sum(store.listings.count() for store in stores)
 
+    return render(request, 'storefront/store_list.html', {
+        'stores': stores,
+        'premium_count': premium_count,
+        'total_products': total_products
+    })
 
 def store_detail(request, slug):
     store = get_object_or_404(Store, slug=slug)
@@ -29,8 +37,8 @@ def product_detail(request, store_slug, slug):
     product = get_object_or_404(Listing, store=store, slug=slug, is_active=True)
     return render(request, 'storefront/product_detail.html', {'store': store, 'product': product})
 
-
 @login_required
+@store_owner_required
 def seller_dashboard(request):
     stores = Store.objects.filter(owner=request.user)
     # Compute some simple metrics for the dashboard
@@ -46,6 +54,7 @@ def seller_dashboard(request):
 
     # All listings grouped by store (for dashboard display)
     user_listings = Listing.objects.filter(store__in=stores).order_by('-date_created')
+    store_with_slug = stores.filter(slug__isnull=False).exclude(slug='').first()
 
     return render(request, 'storefront/dashboard.html', {
         'stores': stores,
@@ -55,10 +64,12 @@ def seller_dashboard(request):
         'free_limit': free_limit,
         'remaining_slots': remaining,
         'user_listings': user_listings,
+        'store_with_slug': store_with_slug
     })
 
 
 @login_required
+
 def store_create(request):
     """
     Create a new store with enforced subscription-based limits.
@@ -131,6 +142,7 @@ def store_create(request):
 
 
 @login_required
+@store_owner_required
 def store_edit(request, slug):
     """
     Edit an existing store with proper error handling and file uploads.
@@ -188,6 +200,7 @@ def store_edit(request, slug):
 
 
 @login_required
+@store_owner_required
 def product_create(request, store_slug):
     """
     Create a listing for the user's storefront. Behavior:
@@ -268,6 +281,7 @@ def product_create(request, store_slug):
 
 
 @login_required
+@store_owner_required
 def product_edit(request, pk):
     product = get_object_or_404(Listing, pk=pk, seller=request.user)
     if request.method == 'POST':
@@ -358,6 +372,7 @@ def product_edit(request, pk):
 
 
 @login_required
+@store_owner_required
 def product_delete(request, pk):
     product = get_object_or_404(Listing, pk=pk, seller=request.user)
     store_slug = request.POST.get('store_slug') or (product.seller.stores.first().slug if product.seller.stores.exists() else '')
@@ -370,6 +385,7 @@ def product_delete(request, pk):
 
 
 @login_required
+@store_owner_required
 def image_delete(request, pk):
     # Delete a ListingImage
     img = get_object_or_404(ListingImage, pk=pk)
@@ -392,6 +408,7 @@ def image_delete(request, pk):
     return render(request, 'storefront/image_confirm_delete.html', {'image': img})
 
 @login_required
+@store_owner_required
 def delete_logo(request, slug):
     """Delete a store's logo."""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -406,6 +423,7 @@ def delete_logo(request, slug):
     return redirect('storefront:store_edit', slug=store.slug)
 
 @login_required
+@store_owner_required
 def delete_cover(request, slug):
     """Delete a store's cover image."""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -432,6 +450,7 @@ from listings.models import OrderItem
 from .utils import dumps_with_decimals
 
 @login_required
+@store_owner_required
 def subscription_manage(request, slug):
     """Subscription management view"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -501,6 +520,7 @@ def retry_payment(request, slug):
     return redirect('storefront:subscription_manage', slug=slug)
 
 @login_required
+@store_owner_required
 def cancel_subscription(request, slug):
     """Cancel subscription"""
     if request.method != 'POST':
@@ -521,7 +541,8 @@ def cancel_subscription(request, slug):
     
     return redirect('storefront:subscription_manage', slug=slug)
 
-@staff_member_required
+@login_required
+@store_owner_required
 def payment_monitor(request):
     """Admin view for monitoring payment system health.
 
@@ -633,7 +654,9 @@ def payment_monitor(request):
 
     return render(request, 'storefront/payment_monitor_enhanced.html', context)
 
+
 @login_required
+@store_owner_required
 def seller_analytics(request):
     """
     Seller analytics dashboard showing aggregated metrics across all stores.
@@ -656,14 +679,17 @@ def seller_analytics(request):
         time_period = timezone.now() - timedelta(days=30)
         previous_period = timezone.now() - timedelta(days=60)
     
-    # Base queryset for orders across all stores
-    orders_qs = OrderItem.objects.filter(listing__store__in=stores)
+    # Base queryset for orders across all stores - FIXED: Include both paid and delivered
+    orders_qs = OrderItem.objects.filter(
+        listing__store__in=stores,
+        order__status__in=['paid', 'delivered']  # Include both statuses
+    )
     
     # Current period metrics
     if time_period:
         current_orders = orders_qs.filter(added_at__gte=time_period)
         current_revenue = current_orders.aggregate(
-            total=Sum('price', default=0)
+            total=Sum(F('price') * F('quantity'), default=0)
         )['total']
         current_order_count = current_orders.count()
         
@@ -673,7 +699,7 @@ def seller_analytics(request):
             added_at__lt=time_period
         )
         previous_revenue = previous_orders.aggregate(
-            total=Sum('price', default=0)
+            total=Sum(F('price') * F('quantity'), default=0)
         )['total']
         previous_order_count = previous_orders.count()
         
@@ -689,7 +715,7 @@ def seller_analytics(request):
     else:
         # All time metrics
         current_revenue = orders_qs.aggregate(
-            total=Sum('price', default=0)
+            total=Sum(F('price') * F('quantity'), default=0)
         )['total']
         current_order_count = orders_qs.count()
         revenue_trend = 0
@@ -714,7 +740,7 @@ def seller_analytics(request):
         day_orders = orders_qs.filter(added_at__date=day.date())
         
         revenue = day_orders.aggregate(
-            total=Sum('price', default=0)
+            total=Sum(F('price') * F('quantity'), default=0)
         )['total']
         orders = day_orders.count()
         
@@ -745,13 +771,16 @@ def seller_analytics(request):
     for store in stores:
         store_revenue = orders_qs.filter(
             listing__store=store
-        ).aggregate(total=Sum('price', default=0))['total']
+        ).aggregate(total=Sum(F('price') * F('quantity'), default=0))['total']
         store_performance.append({
             'name': store.name,
             'revenue': store_revenue
         })
     
+
     store_performance.sort(key=lambda x: x['revenue'], reverse=True)
+    
+    # Create store_performance_data for chart - ADDED THIS SECTION
     store_performance_data = {
         'labels': [s['name'] for s in store_performance],
         'datasets': [{
@@ -761,13 +790,13 @@ def seller_analytics(request):
             ]
         }]
     }
-    
+
     # Top performing stores
     top_stores = []
     for store in stores:
         store_orders = orders_qs.filter(listing__store=store)
         store_revenue = store_orders.aggregate(
-            total=Sum('price', default=0)
+            total=Sum(F('price') * F('quantity'), default=0)
         )['total']
         
         # Calculate average rating
@@ -796,7 +825,7 @@ def seller_analytics(request):
             listing__category=category
         )
         revenue = category_orders.aggregate(
-            total=Sum('price', default=0)
+            total=Sum(F('price') * F('quantity'), default=0)
         )['total']
         
         top_categories.append({
@@ -823,7 +852,7 @@ def seller_analytics(request):
             'timestamp': order.added_at,
             'store': order.listing.store.name,
             'type': 'Order',
-            'description': f'New order for {order.listing.title}'
+            'description': f'New order for {order.listing.title} (Qty: {order.quantity}) - Status: {order.order.status}'
         })
     
     # Recent reviews
@@ -891,12 +920,19 @@ def seller_analytics(request):
     
     return render(request, 'storefront/seller_analytics.html', context)
 
+
 @login_required
+@store_owner_required
 def store_analytics(request, slug):
     """
     Store analytics view with comprehensive metrics and visualizations.
     """
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    # Fetch the store by slug first, then ensure the requesting user is the owner.
+    store = get_object_or_404(Store, slug=slug)
+    if store.owner != request.user and not request.user.is_staff:
+        message = "You do not have permission to view analytics for a store you do not own."
+        context = {'message': message, 'store': store}
+        return render(request, 'storefront/forbidden.html', context, status=403)
     
     # Get time period from query params
     period = request.GET.get('period', '24h')
@@ -911,20 +947,24 @@ def store_analytics(request, slug):
     
     # Base queryset for the store's listings
     listings_qs = Listing.objects.filter(store=store)
-    orders_qs = OrderItem.objects.filter(listing__store=store)
+    # FIXED: Include both paid and delivered orders
+    orders_qs = OrderItem.objects.filter(
+        listing__store=store,
+        order__status__in=['paid', 'delivered']  # Include both statuses
+    )
     
     if time_period:
         orders_qs = orders_qs.filter(added_at__gte=time_period)
     
     # Basic metrics
     revenue = orders_qs.aggregate(
-        total=Sum('price', default=0)
+        total=Sum(F('price') * F('quantity'), default=0)
     )['total']
     
     orders_count = orders_qs.count()
     active_listings = listings_qs.filter(is_active=True).count()
     avg_order_value = orders_qs.aggregate(
-        avg=Avg('price', default=0)
+        avg=Avg(F('price') * F('quantity'), default=0)
     )['avg']
     
     # Revenue trend (daily data points)
@@ -936,7 +976,7 @@ def store_analytics(request, slug):
         day = timezone.now() - timedelta(days=i)
         day_revenue = orders_qs.filter(
             added_at__date=day.date()
-        ).aggregate(total=Sum('price', default=0))['total']
+        ).aggregate(total=Sum(F('price') * F('quantity'), default=0))['total']
         
         revenue_trend.insert(0, day_revenue)
         labels.insert(0, day.strftime('%b %d'))
@@ -957,7 +997,7 @@ def store_analytics(request, slug):
         'listing__category__name'
     ).annotate(
         total_sales=Count('id'),
-        revenue=Sum('price')
+        revenue=Sum(F('price') * F('quantity'))
     ).order_by('-total_sales')[:5]
     
     category_data = {
@@ -974,8 +1014,8 @@ def store_analytics(request, slug):
     top_products = orders_qs.values(
         'listing__title'
     ).annotate(
-        sales_count=Count('id'),
-        revenue=Sum('price')
+        sales_count=Sum('quantity'),
+        revenue=Sum(F('price') * F('quantity'))
     ).order_by('-revenue')[:5]
     
     # Recent activity (orders, reviews, listings)
@@ -987,7 +1027,7 @@ def store_analytics(request, slug):
         recent_activity.append({
             'timestamp': order.added_at,
             'type': 'Order',
-            'description': f'New order for {order.listing.title}'
+            'description': f'New order for {order.listing.title} (Qty: {order.quantity}) - Status: {order.order.status}'
         })
     
     # Add recent reviews
@@ -1015,62 +1055,6 @@ def store_analytics(request, slug):
     recent_activity.sort(key=lambda x: x['timestamp'], reverse=True)
     recent_activity = recent_activity[:10]  # Keep top 10
     
-    # Customer demographics (if we have user data)
-    from django.contrib.auth import get_user_model
-    User = get_user_model()
-    
-    buyer_ages = (
-        User.objects.filter(
-            orders__order_items__listing__store=store,
-            date_of_birth__isnull=False
-        )
-        .values('date_of_birth')
-        .annotate(count=Count('id'))
-        .order_by('date_of_birth')
-    )
-    
-    age_ranges = ['18-24', '25-34', '35-44', '45-54', '55+']
-    age_data = [0] * len(age_ranges)
-    
-    for buyer in buyer_ages:
-        age = (timezone.now().date() - buyer['date_of_birth']).days // 365
-        if age < 25:
-            age_data[0] += buyer['count']
-        elif age < 35:
-            age_data[1] += buyer['count']
-        elif age < 45:
-            age_data[2] += buyer['count']
-        elif age < 55:
-            age_data[3] += buyer['count']
-        else:
-            age_data[4] += buyer['count']
-    
-    demographics_data = {
-        'labels': age_ranges,
-        'datasets': [{
-            'label': 'Buyers by Age Range',
-            'data': age_data,
-            'backgroundColor': '#4CAF50'
-        }]
-    }
-    
-    # Customer locations
-    locations = orders_qs.values(
-        'order__city'
-    ).annotate(
-        count=Count('id')
-    ).order_by('-count')[:5]
-    
-    locations_data = {
-        'labels': [loc['order__city'] for loc in locations],
-        'datasets': [{
-            'data': [loc['count'] for loc in locations],
-            'backgroundColor': [
-                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'
-            ]
-        }]
-    }
-    
     context = {
         'store': store,
         'period': period,
@@ -1082,11 +1066,10 @@ def store_analytics(request, slug):
         'category_data': dumps_with_decimals(category_data),
         'top_products': top_products,
         'recent_activity': recent_activity,
-        'demographics_data': dumps_with_decimals(demographics_data),
-        'locations_data': dumps_with_decimals(locations_data),
     }
     
     return render(request, 'storefront/store_analytics.html', context)
+
 
 @login_required
 def store_upgrade(request, slug):

@@ -166,6 +166,40 @@ def notify_delivery_assigned(order, driver_name, estimated_delivery):
     sms_message = f"Delivery assigned for order #{order.id}. Driver: {driver_name}. Estimated delivery: {estimated_delivery}"
     notification_service.send_sms(order.phone_number, sms_message)
 
+def notify_delivery_status(recipient, order, message):
+    """Generic delivery status notification for buyer or seller.
+
+    Args:
+        recipient: User instance to receive notification (buyer or seller)
+        order: Order instance related to the message
+        message: Short text message to deliver
+    """
+    notification_service = NotificationService()
+
+    # Prefer order-level phone number, fall back to recipient attribute
+    phone = getattr(order, 'phone_number', None) or getattr(recipient, 'phone_number', None)
+    if phone:
+        try:
+            notification_service.send_sms(phone, str(message))
+        except Exception:
+            logger.exception('Failed sending delivery status SMS')
+
+    # Create in-app notification
+    try:
+        return create_notification(
+            recipient=recipient,
+            notification_type='delivery_status',
+            title='Delivery Update',
+            message=str(message),
+            related_object_id=getattr(order, 'id', None),
+            related_content_type='order',
+            action_url=f'/orders/{getattr(order, "id", "")}/',
+            action_text='View Order'
+        )
+    except Exception:
+        logger.exception('Failed creating in-app delivery status notification')
+        return None
+
 def notify_delivery_confirmed(seller, buyer, order):
     """Notify seller that delivery was confirmed and funds released"""
     notification_service = NotificationService()
@@ -180,27 +214,67 @@ def notify_order_delivered(buyer, order):
     sms_message = f"Your order #{order.id} has been delivered. Thank you for shopping with us!"
     notification_service.send_sms(order.phone_number, sms_message)
 
-def notify_new_review(recipient, reviewer, review, listing=None):
-    """Notify about new review"""
-    if listing:
-        title = f"New Review on {listing.title}"
-        message = f"{reviewer.username} left a {review.rating}-star review"
-    else:
-        title = "New Seller Review"
-        message = f"{reviewer.username} left you a {review.rating}-star review"
+# In notifications/utils.py, update the notify_new_review function:
+
+def notify_new_review(seller, user, review, listing=None, review_type=None):
+    """Send notification about a new review"""
+    from .models import Notification
     
-    return create_notification(
-        recipient=recipient,
-        sender=reviewer,
-        notification_type='review_received',
+    if review_type == 'seller':
+        title = f'New Seller Review from {user.username}'
+        message = f'{user.username} has reviewed you as a seller.'
+    elif review_type == 'order':
+        title = f'New Order Review from {user.username}'
+        message = f'{user.username} has reviewed their order experience.'
+    else:
+        # Default to listing review
+        title = f'New Review on {listing.title}' if listing else f'New Review from {user.username}'
+        message = f'{user.username} has reviewed {listing.title if listing else "your item"}.'
+    
+    notification = Notification.objects.create(
+        recipient=seller,
+        sender=user,
+        notification_type='review',
         title=title,
         message=message,
-        related_object_id=review.id,
-        related_content_type='review',
-        action_url=f'/profile/{recipient.id}/' if not listing else f'/listing/{listing.id}/',
-        action_text='View Review'
+        related_object=review
     )
-
+    
+    # You could also send email notification here if configured
+    if hasattr(seller, 'email') and seller.email:
+        from django.core.mail import send_mail
+        from django.conf import settings
+        
+        subject = f'New Review Notification - {settings.SITE_NAME}'
+        message = f'''
+        Hello {seller.username},
+        
+        You have received a new review from {user.username}.
+        
+        {message}
+        
+        Rating: {'★' * review.rating}{'☆' * (5 - review.rating)}
+        
+        Review: {review.comment[:100]}...
+        
+        View it here: {settings.SITE_URL}/notifications/
+        
+        Thank you,
+        {settings.SITE_NAME} Team
+        '''
+        
+        try:
+            send_mail(
+                subject,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                [seller.email],
+                fail_silently=True
+            )
+        except Exception as e:
+            logger.error(f"Failed to send review notification email: {e}")
+    
+    return notification
 def notify_listing_favorited(seller, user, listing):
     """Notify seller about favorite"""
     return create_notification(
@@ -224,5 +298,89 @@ def notify_system_message(recipient, title, message, action_url=''):
         message=message,
         related_content_type='system',
         action_url=action_url,
+        action_text='View Details'
+    )
+
+def create_notification(recipient, notification_type, title, message, 
+                       sender=None, related_object_id=None, 
+                       related_content_type='', action_url='', action_text=''):
+    """
+    Utility function to create notifications with improved error handling
+    """
+    try:
+        # Get or create notification preferences
+        preferences, created = NotificationPreference.objects.get_or_create(user=recipient)
+        
+        # Check if user wants this type of notification
+        push_enabled = getattr(preferences, f'push_{notification_type.split("_")[0]}', True)
+        
+        if push_enabled:
+            notification = Notification.objects.create(
+                recipient=recipient,
+                sender=sender,
+                notification_type=notification_type,
+                title=title,
+                message=message,
+                related_object_id=related_object_id,
+                related_content_type=related_content_type,
+                action_url=action_url,
+                action_text=action_text
+            )
+            
+            # Log notification creation
+            logger.info(f"Notification created for {recipient.username}: {title}")
+            
+            return notification
+        return None
+    except Exception as e:
+        logger.error(f"Error creating notification: {str(e)}")
+        return None
+
+def notify_order_created(buyer, order):
+    """Notify buyer about order creation"""
+    return create_notification(
+        recipient=buyer,
+        notification_type='order_created',
+        title='Order Placed Successfully',
+        message=f'Your order #{order.id} has been placed. Please complete payment.',
+        related_object_id=order.id,
+        related_content_type='order',
+        action_url=f'/orders/{order.id}/',
+        action_text='View Order'
+    )
+
+def notify_order_paid(buyer, order):
+    """Notify buyer about payment confirmation"""
+    return create_notification(
+        recipient=buyer,
+        notification_type='payment_success',
+        title='Payment Confirmed',
+        message=f'Payment for order #{order.id} has been confirmed. Your order is now being processed.',
+        related_object_id=order.id,
+        related_content_type='order',
+        action_url=f'/orders/{order.id}/',
+        action_text='Track Order'
+    )
+
+def notify_order_status_update(buyer, order, status):
+    """Notify buyer about order status update"""
+    status_messages = {
+        'processing': 'Your order is being prepared by the seller.',
+        'shipped': 'Your order has been shipped and is on its way.',
+        'delivered': 'Your order has been delivered successfully.',
+        'cancelled': 'Your order has been cancelled.',
+        'refunded': 'Your order has been refunded.',
+    }
+    
+    message = status_messages.get(status, f'Your order status has been updated to {status}.')
+    
+    return create_notification(
+        recipient=buyer,
+        notification_type='order_update',
+        title=f'Order #{order.id} Update',
+        message=message,
+        related_object_id=order.id,
+        related_content_type='order',
+        action_url=f'/orders/{order.id}/',
         action_text='View Details'
     )

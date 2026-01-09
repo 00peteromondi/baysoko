@@ -1,431 +1,1015 @@
-
 {% extends 'base.html' %}
+{% load humanize %}
+{% load listing_filters %}
 
-{% block title %}My Orders - HomaBay Souq{% endblock %}
+{% block title %}My Orders - Baysoko{% endblock %}
 
 {% block content %}
-<div class="container py-4">
-    <!-- Breadcrumb -->
-    <nav aria-label="breadcrumb" class="mb-4">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
-            <li class="breadcrumb-item active" aria-current="page">My Orders</li>
-        </ol>
-    </nav>
-
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="h3 mb-1">Order Management</h2>
-            <p class="text-muted mb-0">
-                {% if buyer_orders_count > 0 or seller_orders_count > 0 %}
-                Managing {{ buyer_orders_count }} purchase{{ buyer_orders_count|pluralize }} and {{ seller_orders_count }} sale{{ seller_orders_count|pluralize }}
-                {% else %}
-                Track your purchases and sales
-                {% endif %}
-            </p>
-        </div>
-        <div class="d-flex gap-2">
-            <div class="dropdown">
-                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="filterDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="bi bi-filter me-2"></i> 
-                    {% if status_filter and status_filter != 'all' %}
-                    {{ status_filter|title }}
-                    {% else %}
-                    Filter
-                    {% endif %}
-                </button>
-                <ul class="dropdown-menu" aria-labelledby="filterDropdown">
-                    <li><a class="dropdown-item {% if not status_filter or status_filter == 'all' %}active{% endif %}" href="?status=all{% if role_filter %}&role={{ role_filter }}{% endif %}">All Statuses</a></li>
-                    <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item {% if status_filter == 'pending' %}active{% endif %}" href="?status=pending{% if role_filter %}&role={{ role_filter }}{% endif %}">Pending Payment</a></li>
-                    <li><a class="dropdown-item {% if status_filter == 'paid' %}active{% endif %}" href="?status=paid{% if role_filter %}&role={{ role_filter }}{% endif %}">Paid</a></li>
-                    <li><a class="dropdown-item {% if status_filter == 'shipped' %}active{% endif %}" href="?status=shipped{% if role_filter %}&role={{ role_filter }}{% endif %}">Shipped</a></li>
-                    <li><a class="dropdown-item {% if status_filter == 'delivered' %}active{% endif %}" href="?status=delivered{% if role_filter %}&role={{ role_filter }}{% endif %}">Delivered</a></li>
-                    <li><a class="dropdown-item {% if status_filter == 'disputed' %}active{% endif %}" href="?status=disputed{% if role_filter %}&role={{ role_filter }}{% endif %}">Disputed</a></li>
-                </ul>
-            </div>
-        </div>
+<div class="container-custom py-var(--spacing-xl)">
+  <!-- Header Section -->
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-var(--spacing-xl)">
+    <div class="mb-3 mb-md-0">
+      <h1 class="display-4 fw-bold mb-2">Order Management</h1>
+      <p class="lead text-muted mb-0">
+        {% if buyer_orders_count > 0 or seller_orders_count > 0 %}
+        Managing {{ buyer_orders_count }} purchase{{ buyer_orders_count|pluralize }} and {{ seller_orders_count }} sale{{ seller_orders_count|pluralize }}
+        {% else %}
+        Track your purchases and sales on Baysoko
+        {% endif %}
+      </p>
     </div>
-
-    <!-- Role Tabs -->
-    <div class="card shadow-sm border-0 mb-4">
-        <div class="card-body p-0">
-            <ul class="nav nav-pills nav-fill" id="orderTabs" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <a class="nav-link {% if not role_filter or role_filter == 'all' %}active{% endif %}" 
-                       href="?{% if status_filter and status_filter != 'all' %}status={{ status_filter }}{% endif %}">
-                        <i class="bi bi-grid me-2"></i>All Orders
-                        <span class="badge bg-primary ms-2">{{ total_orders_count }}</span>
-                    </a>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <a class="nav-link {% if role_filter == 'buyer' %}active{% endif %}" 
-                       href="?role=buyer{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}">
-                        <i class="bi bi-cart-check me-2"></i>My Purchases
-                        <span class="badge bg-success ms-2">{{ buyer_orders_count }}</span>
-                    </a>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <a class="nav-link {% if role_filter == 'seller' %}active{% endif %}" 
-                       href="?role=seller{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}">
-                        <i class="bi bi-bag-check me-2"></i>My Sales
-                        <span class="badge bg-info ms-2">{{ seller_orders_count }}</span>
-                    </a>
-                </li>
-            </ul>
-        </div>
-    </div>
-
-    {% if orders %}
-    <div class="order-list">
-        {% for order in orders %}
-        <div class="card shadow-sm border-0 mb-3 order-card">
-            <div class="card-header bg-light py-3">
-                <div class="row align-items-center">
-                    <div class="col-md-4">
-                        <div class="d-flex align-items-center">
-                            <div class="bg-primary bg-opacity-10 rounded p-2 me-3">
-                                <i class="bi bi-{% if order.user == request.user %}cart-check{% else %}bag-check{% endif %} text-primary"></i>
-                            </div>
-                            <div>
-                                <h6 class="mb-1">Order #{{ order.id }}</h6>
-                                <div class="d-flex gap-2">
-                                    <span class="badge {% if order.user == request.user %}buyer-badge{% else %}seller-badge{% endif %} order-role-badge">
-                                        {% if order.user == request.user %}Purchase{% else %}Sale{% endif %}
-                                    </span>
-                                    <small class="text-muted">{{ order.created_at|date:"M d, Y" }}</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-3">
-                        <small class="text-muted">
-                            {% if order.user == request.user %}
-                            Seller: 
-                            {% for item in order.order_items.all|slice:":1" %}
-                            {{ item.listing.seller.username }}
-                            {% endfor %}
-                            {% else %}
-                            Buyer: {{ order.user.username }}
-                            {% endif %}
-                        </small>
-                    </div>
-                    
-                    <div class="col-md-2">
-                        <strong class="text-primary">KSh {{ order.total_price }}</strong>
-                    </div>
-                    
-                    <div class="col-md-2">
-                        <span class="badge {% if order.status == 'delivered' %}bg-success
-                                          {% elif order.status == 'shipped' %}bg-info
-                                          {% elif order.status == 'paid' %}bg-primary
-                                          {% elif order.status == 'disputed' %}bg-danger
-                                          {% else %}bg-secondary{% endif %} rounded-pill">
-                            {{ order.get_status_display }}
-                        </span>
-                    </div>
-                    
-                    <div class="col-md-1 text-end">
-                        <div class="dropdown">
-                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
-                                    type="button" 
-                                    data-bs-toggle="dropdown" 
-                                    aria-expanded="false">
-                                <i class="bi bi-three-dots"></i>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li>
-                                    <a class="dropdown-item" href="{% url 'order_detail' order.id %}">
-                                        <i class="bi bi-eye me-2"></i>View Details
-                                    </a>
-                                </li>
-                                
-                                {% if order.order_items.all.0.listing.seller == request.user and order.status == 'paid' %}
-                                <li>
-                                    <a class="dropdown-item text-success" 
-                                       href="{% url 'mark_order_shipped' order.id %}"
-                                       onclick="return confirm('Mark this order as shipped?')">
-                                        <i class="bi bi-truck me-2"></i>Mark Shipped
-                                    </a>
-                                </li>
-                                {% endif %}
-                                
-                                {% if order.user == request.user and order.status == 'shipped' %}
-                                <li>
-                                    <a class="dropdown-item text-info" 
-                                       href="{% url 'confirm_delivery' order.id %}"
-                                       onclick="return confirm('Confirm you have received this order?')">
-                                        <i class="bi bi-check-circle me-2"></i>Confirm Delivery
-                                    </a>
-                                </li>
-                                {% endif %}
-                                
-                                {% if order.user == request.user and order.status == 'shipped' or order.status == 'delivered' %}
-                                <li>
-                                    <a class="dropdown-item text-warning" 
-                                       href="{% url 'create_dispute' order.id %}"
-                                       onclick="return confirm('Open a dispute for this order?')">
-                                        <i class="bi bi-exclamation-triangle me-2"></i>Open Dispute
-                                    </a>
-                                </li>
-                                {% endif %}
-                                
-                                {% if order.user == request.user and order.status == 'pending' %}
-                                <li>
-                                    <a class="dropdown-item text-primary" href="{% url 'process_payment' order.id %}">
-                                        <i class="bi bi-credit-card me-2"></i>Complete Payment
-                                    </a>
-                                </li>
-                                {% endif %}
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="card-body">
-                <div class="row">
-                    <!-- Order Items -->
-                    <div class="col-md-8">
-                        <h6 class="mb-3">Items</h6>
-                        <div class="row">
-                            {% for item in order.order_items.all %}
-                            <div class="col-md-6 mb-2">
-                                <div class="d-flex align-items-center">
-                             <img src="{{ item.listing.get_image_url }}" 
-                                         alt="{{ item.listing.title }}"
-                                         class="rounded me-3"
-                                         width="50"
-                                         height="50"
-                                         style="object-fit: cover;"
-                                         onerror="this.src='https://placehold.co/50x50/c2c2c2/1f1f1f?text=HS'">
-                                    <div class="flex-grow-1">
-                                        <small class="fw-bold d-block">{{ item.listing.title }}</small>
-                                        <small class="text-muted">Qty: {{ item.quantity }} × KSh {{ item.price }}</small>
-                                        {% if item.listing.seller == request.user %}
-                                        <small class="d-block text-info">Your item</small>
-                                        {% endif %}
-                                    </div>
-                                    <small class="fw-bold">KSh {{ item.get_total_price }}</small>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    
-                    <!-- Order Progress -->
-                    <div class="col-md-4">
-                        <h6 class="mb-3">Order Progress</h6>
-                        <div class="progress-container">
-                            <div class="d-flex justify-content-between position-relative mb-2">
-                                <div class="step {% if order.status != 'pending' %}completed{% endif %}">
-                                    <div class="step-icon">
-                                        <i class="bi bi-{% if order.user == request.user %}cart-check{% else %}bag{% endif %}"></i>
-                                    </div>
-                                    <small>{% if order.user == request.user %}Ordered{% else %}Received{% endif %}</small>
-                                </div>
-                                <div class="step {% if order.status == 'paid' or order.status == 'shipped' or order.status == 'delivered' %}completed{% endif %}">
-                                    <div class="step-icon">
-                                        <i class="bi bi-credit-card"></i>
-                                    </div>
-                                    <small>Paid</small>
-                                </div>
-                                <div class="step {% if order.status == 'shipped' or order.status == 'delivered' %}completed{% endif %}">
-                                    <div class="step-icon">
-                                        <i class="bi bi-truck"></i>
-                                    </div>
-                                    <small>Shipped</small>
-                                </div>
-                                <div class="step {% if order.status == 'delivered' %}completed{% endif %}">
-                                    <div class="step-icon">
-                                        <i class="bi bi-house-check"></i>
-                                    </div>
-                                    <small>Delivered</small>
-                                </div>
-                            </div>
-                            <div class="progress" style="height: 4px;">
-                                <div class="progress-bar 
-                                    {% if order.status == 'delivered' %}bg-success w-100
-                                    {% elif order.status == 'shipped' %}bg-info w-75
-                                    {% elif order.status == 'paid' %}bg-primary w-50
-                                    {% else %}bg-secondary w-25{% endif %}" 
-                                    role="progressbar">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-
-    <!-- Pagination -->
-    {% if orders.has_other_pages %}
-    <nav aria-label="Orders pagination" class="mt-4">
-        <ul class="pagination justify-content-center">
-            {% if orders.has_previous %}
-            <li class="page-item">
-                <a class="page-link" href="?page={{ orders.previous_page_number }}{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}">Previous</a>
-            </li>
-            {% else %}
-            <li class="page-item disabled">
-                <span class="page-link">Previous</span>
-            </li>
-            {% endif %}
-
-            {% for i in orders.paginator.page_range %}
-            {% if orders.number == i %}
-            <li class="page-item active"><span class="page-link">{{ i }}</span></li>
-            {% else %}
-            <li class="page-item"><a class="page-link" href="?page={{ i }}{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}">{{ i }}</a></li>
-            {% endif %}
-            {% endfor %}
-
-            {% if orders.has_next %}
-            <li class="page-item">
-                <a class="page-link" href="?page={{ orders.next_page_number }}{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}">Next</a>
-            </li>
-            {% else %}
-            <li class="page-item disabled">
-                <span class="page-link">Next</span>
-            </li>
-            {% endif %}
+    <div class="d-flex gap-2">
+      <div class="dropdown">
+        <button class="btn-custom btn-ghost dropdown-toggle" type="button" id="filterDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="bi bi-filter me-2"></i> 
+          {% if status_filter and status_filter != 'all' %}
+          {{ status_filter|title }}
+          {% else %}
+          Filter Orders
+          {% endif %}
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="filterDropdown">
+          <li><a class="dropdown-item {% if not status_filter or status_filter == 'all' %}active{% endif %}" href="?status=all{% if role_filter %}&role={{ role_filter }}{% endif %}">
+            <i class="bi bi-grid me-2"></i>All Statuses
+          </a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item {% if status_filter == 'pending' %}active{% endif %}" href="?status=pending{% if role_filter %}&role={{ role_filter }}{% endif %}">
+            <i class="bi bi-clock text-warning me-2"></i>Pending Payment
+          </a></li>
+          <li><a class="dropdown-item {% if status_filter == 'paid' %}active{% endif %}" href="?status=paid{% if role_filter %}&role={{ role_filter }}{% endif %}">
+            <i class="bi bi-credit-card text-primary me-2"></i>Paid
+          </a></li>
+          <li><a class="dropdown-item {% if status_filter == 'shipped' %}active{% endif %}" href="?status=shipped{% if role_filter %}&role={{ role_filter }}{% endif %}">
+            <i class="bi bi-truck text-info me-2"></i>Shipped
+          </a></li>
+          <li><a class="dropdown-item {% if status_filter == 'delivered' %}active{% endif %}" href="?status=delivered{% if role_filter %}&role={{ role_filter }}{% endif %}">
+            <i class="bi bi-check-circle text-success me-2"></i>Delivered
+          </a></li>
+          <li><a class="dropdown-item {% if status_filter == 'disputed' %}active{% endif %}" href="?status=disputed{% if role_filter %}&role={{ role_filter }}{% endif %}">
+            <i class="bi bi-exclamation-triangle text-danger me-2"></i>Disputed
+          </a></li>
         </ul>
-    </nav>
-    {% endif %}
-
-    {% else %}
-    <div class="text-center py-5">
-        <div class="card shadow-lg border-0">
-            <div class="card-body py-5">
-                <i class="bi bi-cart-x display-1 text-muted"></i>
-                <h3 class="mt-3 text-muted">No orders found</h3>
-                <p class="text-muted mb-4">
-                    {% if role_filter == 'buyer' %}
-                    You haven't made any purchases yet.
-                    {% elif role_filter == 'seller' %}
-                    You haven't received any orders yet.
-                    {% else %}
-                    You don't have any orders yet.
-                    {% endif %}
-                </p>
-                <div class="d-flex gap-2 justify-content-center">
-                    {% if role_filter != 'seller' %}
-                    <a href="{% url 'all-listings' %}" class="btn btn-primary rounded-pill px-4">
-                        <i class="bi bi-grid me-2"></i> Start Shopping
-                    </a>
-                    {% endif %}
-                    {% if role_filter != 'buyer' %}
-                        {% if user.is_authenticated %}
-                        <a href="{% url 'listing-create' %}" class="btn btn-outline-primary rounded-pill px-4">
-                            <i class="bi bi-plus-circle me-2"></i> Start Selling
-                        </a>
-                        {% else %}
-                        <a href="{% url 'login' %}?next={% url 'listing-create' %}" class="btn btn-outline-primary rounded-pill px-4">
-                            <i class="bi bi-plus-circle me-2"></i> Start Selling
-                        </a>
-                        {% endif %}
-                    {% endif %}
-                </div>
-            </div>
-        </div>
+      </div>
     </div>
-    {% endif %}
+  </div>
+
+  <!-- Role Tabs -->
+  <div class="card-custom mb-var(--spacing-xl)">
+    <div class="card-body p-0">
+      <div class="d-flex flex-wrap gap-2 border-bottom pb-3">
+        <a class="btn-custom btn-ghost {% if not role_filter or role_filter == 'all' %}active{% endif %}" 
+           href="?{% if status_filter and status_filter != 'all' %}status={{ status_filter }}{% endif %}">
+          <i class="bi bi-grid me-2"></i>All Orders
+          <span class="badge bg-primary ms-2">{{ total_orders_count }}</span>
+        </a>
+        <a class="btn-custom btn-ghost {% if role_filter == 'buyer' %}active{% endif %}" 
+           href="?role=buyer{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}">
+          <i class="bi bi-cart-check me-2"></i>My Purchases
+          <span class="badge bg-success ms-2">{{ buyer_orders_count }}</span>
+        </a>
+        <a class="btn-custom btn-ghost {% if role_filter == 'seller' %}active{% endif %}" 
+           href="?role=seller{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}">
+          <i class="bi bi-bag-check me-2"></i>My Sales
+          <span class="badge bg-info ms-2">{{ seller_orders_count }}</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {% if orders %}
+  <div class="order-list">
+    {% for order_data in orders %}
+    <div class="card-custom mb-var(--spacing-lg) order-card" data-order-id="{{ order_data.order.id }}">
+      {% with seller_items=order_data.seller_items seller_items_count=order_data.seller_items_count seller_total=order_data.seller_total shipped_count=order_data.shipped_count %}
+      
+      {% if role_filter == 'seller' or role_filter == 'all' and seller_items_count > 0 and order_data.order.user != request.user %}
+      <!-- Seller View -->
+      <div class="card-header border-2 bg-gradient-info text-white p-var(--spacing-lg)">
+        <div class="row align-items-center">
+          <div class="col-md-5">
+            <div class="d-flex align-items-center">
+              <div class="order-icon-wrapper bg-opacity-20 rounded-circle p-3 me-3">
+                <i class="bi bi-bag-check fs-4"></i>
+              </div>
+              <div>
+                <h4 class="fw-bold mb-1">Sale #{{ order_data.order.id }}</h4>
+                <div class="d-flex flex-wrap gap-2">
+                  <span class="badge bg-info order-role-badge">
+                    Your Sale
+                  </span>
+                  <span class="text-white opacity-75">{{ order_data.order.created_at|date:"F d, Y · g:i A" }}</span>
+                </div>
+                <small class="opacity-75 mt-1 d-block">
+                  <i class="bi bi-person me-1"></i>Buyer: {{ order_data.order.user.username }}
+                </small>
+              </div>
+            </div>
+          </div>
+          
+          <div class="col-md-3">
+            <div class="order-party-info">
+              <small class="opacity-75 d-block">
+                <i class="bi bi-box me-1"></i>Your Items: {{ seller_items_count }}
+              </small>
+              {% if seller_items %}
+              <small class="opacity-75 d-block">
+                <i class="bi bi-shop me-1"></i>
+                {% for item in seller_items|slice:":2" %}
+                  {{ item.listing.store.name|default:"No store" }}{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+              </small>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="col-md-2 text-center">
+            <div class="order-total">
+              <h4 class="fw-bold mb-0">KSh {{ seller_total|intcomma }}</h4>
+              <small class="opacity-75">Your Items Total</small>
+            </div>
+          </div>
+          
+          <div class="col-md-2">
+            <div class="text-end">
+              <div class="mb-1">
+                <span class="badge {% if order_data.order.status == 'delivered' %}bg-success
+                                {% elif order_data.order.status == 'shipped' %}bg-info
+                                {% elif order_data.order.status == 'paid' %}bg-primary
+                                {% elif order_data.order.status == 'disputed' %}bg-danger
+                                {% else %}bg-secondary{% endif %} px-3 py-2 fw-bold">
+                  {{ order_data.order.get_status_display }}
+                </span>
+              </div>
+              <div>
+                <small class="opacity-75">Your Items:</small>
+                <span class="badge {% if shipped_count == seller_items_count %}bg-success
+                               {% elif shipped_count > 0 %}bg-warning
+                               {% else %}bg-secondary{% endif %}">
+                  {{ shipped_count }}/{{ seller_items_count }} shipped
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Seller View Body -->
+      <div class="card-body p-var(--spacing-lg)">
+        <div class="row g-4">
+          <div class="col-lg-8">
+            <h5 class="fw-bold mb-var(--spacing-lg)">
+              <i class="bi bi-box-seam text-info me-2"></i>
+              Your Items in Order ({{ seller_items_count }})
+            </h5>
+            <div class="row g-3">
+              {% for item in seller_items %}
+              <div class="col-md-6">
+                <div class="order-item-card card-custom h-100">
+                  <div class="row g-0 h-100">
+                    <div class="col-4">
+                      <div class="order-item-image position-relative h-100">
+                        <img src="{{ item.listing.get_image_url }}" 
+                             alt="{{ item.listing.title }}"
+                             class="w-100 h-100 object-fit-cover rounded-start"
+                             onerror="this.src='https://placehold.co/300x200/c2c2c2/1f1f1f?text=Product'">
+                        <span class="position-absolute top-0 start-0 bg-info text-white px-2 py-1 rounded-end">
+                          <small>Your Item</small>
+                        </span>
+                      </div>
+                    </div>
+                    <div class="col-8">
+                      <div class="p-3">
+                        <h6 class="fw-bold mb-1">{{ item.listing.title|truncatechars:40 }}</h6>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                          <span class="text-muted small">Qty: {{ item.quantity }}</span>
+                          <span class="fw-bold text-primary">KSh {{ item.price|intcomma }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                          <small class="text-muted">Item Total</small>
+                          <span class="fw-bold fs-5">KSh {{ item.get_total_price|intcomma }}</span>
+                        </div>
+                        
+                        {% if item.shipped %}
+                        <div class="alert alert-success small mb-0 p-2 mt-2">
+                          <i class="bi bi-check-circle me-1"></i> Shipped
+                          {% if item.tracking_number %} — Tracking: {{ item.tracking_number }}{% endif %}
+                          {% if item.shipped_at %} on {{ item.shipped_at|date:"M d, Y" }}{% endif %}
+                        </div>
+                        {% elif order_data.order.status == 'paid' %}
+                        <div class="alert alert-warning small mb-0 p-2 mt-2">
+                          <i class="bi bi-clock me-1"></i> Ready to ship
+                        </div>
+                        {% endif %}
+                        
+                        {% if item.listing.store %}
+                        <div class="mt-2">
+                          <small class="text-muted">
+                            <i class="bi bi-shop me-1"></i>
+                            {{ item.listing.store.name }}
+                          </small>
+                        </div>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          
+          <div class="col-lg-4">
+            <div class="sticky-top" style="top: 100px;">
+              <div class="card-custom mb-var(--spacing-lg)">
+                <h5 class="fw-bold mb-var(--spacing-lg)">
+                  <i class="bi bi-speedometer2 text-info me-2"></i>
+                  Your Items Progress
+                </h5>
+                <div class="order-progress">
+                  <div class="progress-steps">
+                    <div class="step {% if order_data.order.status != 'pending' %}completed{% endif %}">
+                      <div class="step-icon">
+                        <i class="bi bi-cash-coin"></i>
+                      </div>
+                      <div class="step-info">
+                        <small class="fw-bold d-block">Payment Received</small>
+                        {% if order_data.order.payment.completed_at %}
+                        <small class="text-muted">{{ order_data.order.payment.completed_at|date:"M d" }}</small>
+                        {% endif %}
+                      </div>
+                    </div>
+                    <div class="step {% if shipped_count > 0 %}completed{% endif %}">
+                      <div class="step-icon">
+                        <i class="bi bi-truck"></i>
+                      </div>
+                      <div class="step-info">
+                        <small class="fw-bold d-block">Ship Your Items</small>
+                        <small class="text-muted">
+                          {{ shipped_count }}/{{ seller_items_count }} shipped
+                        </small>
+                      </div>
+                    </div>
+                    <div class="step {% if order_data.order.status == 'delivered' %}completed{% endif %}">
+                      <div class="step-icon">
+                        <i class="bi bi-house-check"></i>
+                      </div>
+                      <div class="step-info">
+                        <small class="fw-bold d-block">Buyer Confirms</small>
+                        {% if order_data.order.delivered_at %}
+                        <small class="text-muted">{{ order_data.order.delivered_at|date:"M d" }}</small>
+                        {% endif %}
+                      </div>
+                    </div>
+                    <div class="step {% if order_data.order.escrow.status == 'released' %}completed{% endif %}">
+                      <div class="step-icon">
+                        <i class="bi bi-cash-stack"></i>
+                      </div>
+                      <div class="step-info">
+                        <small class="fw-bold d-block">Funds Released</small>
+                        {% if order_data.order.escrow.released_at %}
+                        <small class="text-muted">{{ order_data.order.escrow.released_at|date:"M d" }}</small>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="progress mt-3">
+                    <div class="progress-bar 
+                      {% if order_data.order.escrow.status == 'released' %}bg-success w-100
+                      {% elif order_data.order.status == 'delivered' %}bg-info w-75
+                      {% elif shipped_count > 0 %}bg-primary w-50
+                      {% else %}bg-secondary w-25{% endif %}" 
+                      role="progressbar">
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="card-custom">
+                <h5 class="fw-bold mb-var(--spacing-lg)">
+                  <i class="bi bi-gear text-info me-2"></i>
+                  Actions for Your Items
+                </h5>
+                <div class="d-grid gap-2">
+                  <a href="{% url 'order_detail' order_data.order.id %}" class="btn-custom btn-info">
+                    <i class="bi bi-eye me-2"></i>View Your Items
+                  </a>
+                  
+                  {% if order_data.order.status == 'paid' and shipped_count < seller_items_count %}
+                  <a href="{% url 'mark_order_shipped' order_data.order.id %}" class="btn-custom btn-primary">
+                    <i class="bi bi-truck me-2"></i>Mark Items as Shipped
+                  </a>
+                  {% endif %}
+                  
+                  {% if order_data.order.status == 'delivered' and order_data.order.escrow.status != 'released' %}
+                  <div class="alert alert-success small p-2 text-center">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Awaiting escrow release
+                  </div>
+                  {% elif order_data.order.escrow.status == 'released' %}
+                  <div class="alert alert-success small p-2 text-center">
+                    <i class="bi bi-check-circle me-1"></i>
+                    Funds released to you
+                  </div>
+                  {% endif %}
+                  
+                  {% if order_data.order.status == 'disputed' %}
+                  <a href="{% url 'order_detail' order_data.order.id %}" class="btn-custom btn-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>View Dispute
+                  </a>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {% else %}
+      <!-- Buyer View -->
+      <div class="card-header border-2 bg-gradient-primary text-white p-var(--spacing-lg)">
+        <div class="row align-items-center">
+          <div class="col-md-5">
+            <div class="d-flex align-items-center">
+              <div class="order-icon-wrapper bg-opacity-20 rounded-circle p-3 me-3">
+                <i class="bi bi-cart-check fs-4"></i>
+              </div>
+              <div>
+                <h4 class="fw-bold mb-1">Order #{{ order_data.order.id }}</h4>
+                <div class="d-flex flex-wrap gap-2">
+                  <span class="badge bg-success order-role-badge">
+                    Purchase
+                  </span>
+                  <span class="text-white opacity-75">{{ order_data.order.created_at|date:"F d, Y · g:i A" }}</span>
+                </div>
+                {% if order_data.unique_sellers_count > 1 %}
+                <small class="opacity-75 mt-1 d-block">
+                  <i class="bi bi-shop me-1"></i>Multiple sellers
+                </small>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          
+          <div class="col-md-3">
+            <div class="order-party-info">
+              <small class="opacity-75 d-block">
+                <i class="bi bi-box me-1"></i>Items: {{ order_data.order_items|length }}
+              </small>
+              {% if order_data.unique_sellers_count > 1 %}
+              <small class="opacity-75 d-block">
+                <i class="bi bi-people me-1"></i>{{ order_data.unique_sellers_count }} sellers
+              </small>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="col-md-2 text-center">
+            <div class="order-total">
+              <h4 class="fw-bold mb-0">KSh {{ order_data.order.total_price|intcomma }}</h4>
+              <small class="opacity-75">Total Amount</small>
+            </div>
+          </div>
+          
+          <div class="col-md-2">
+            <div class="text-end">
+              <div class="mb-1">
+                <span class="badge {% if order_data.order.status == 'delivered' %}bg-success
+                                {% elif order_data.order.status == 'shipped' %}bg-info
+                                {% elif order_data.order.status == 'paid' %}bg-primary
+                                {% elif order_data.order.status == 'disputed' %}bg-danger
+                                {% else %}bg-secondary{% endif %} px-3 py-2 fw-bold">
+                  {{ order_data.order.get_status_display }}
+                </span>
+              </div>
+              {% if order_data.order.delivery_status %}
+              <div>
+                <small class="opacity-75">Delivery:</small>
+                <span id="delivery-status-{{ order_data.order.id }}" 
+                      class="badge {% if order_data.order.delivery_status == 'delivered' %}bg-success
+                                 {% elif order_data.order.delivery_status == 'out_for_delivery' %}bg-info
+                                 {% elif order_data.order.delivery_status == 'in_transit' %}bg-primary
+                                 {% elif order_data.order.delivery_status == 'failed' %}bg-danger
+                                 {% else %}bg-secondary{% endif %}" 
+                      data-tracking="{{ order_data.order.tracking_number }}">
+                  {{ order_data.order.get_delivery_status_display }}
+                </span>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Buyer View Body -->
+      <div class="card-body p-var(--spacing-lg)">
+        <div class="row g-4">
+          <div class="col-lg-8">
+            <h5 class="fw-bold mb-var(--spacing-lg)">
+              <i class="bi bi-box-seam text-primary me-2"></i>
+              Order Items ({{ order_data.order_items|length }})
+            </h5>
+            {% if order_data.unique_sellers_count > 1 %}
+            <div class="alert alert-info mb-3">
+              <small><i class="bi bi-info-circle me-1"></i> This order contains items from multiple sellers. Each seller handles their own shipping.</small>
+            </div>
+            {% endif %}
+            <div class="row g-3">
+              {% for item in order_data.order_items %}
+              <div class="col-md-6">
+                <div class="order-item-card card-custom h-100">
+                  <div class="row g-0 h-100">
+                    <div class="col-4">
+                      <div class="order-item-image position-relative h-100">
+                        <img src="{{ item.listing.get_image_url }}" 
+                             alt="{{ item.listing.title }}"
+                             class="w-100 h-100 object-fit-cover rounded-start"
+                             onerror="this.src='https://placehold.co/300x200/c2c2c2/1f1f1f?text=Product'">
+                      </div>
+                    </div>
+                    <div class="col-8">
+                      <div class="p-3">
+                        <h6 class="fw-bold mb-1">{{ item.listing.title|truncatechars:40 }}</h6>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                          <span class="text-muted small">Qty: {{ item.quantity }}</span>
+                          <span class="fw-bold text-primary">KSh {{ item.price|intcomma }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                          <small class="text-muted">Item Total</small>
+                          <span class="fw-bold fs-5">KSh {{ item.get_total_price|intcomma }}</span>
+                        </div>
+                        {% if item.listing.store %}
+                        <div class="mt-2">
+                          <small class="text-muted">
+                            <i class="bi bi-shop me-1"></i>
+                            {{ item.listing.store.name }}
+                          </small>
+                        </div>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          
+          <div class="col-lg-4">
+            <div class="sticky-top" style="top: 100px;">
+              <div class="card-custom mb-var(--spacing-lg)">
+                <h5 class="fw-bold mb-var(--spacing-lg)">
+                  <i class="bi bi-speedometer2 text-primary me-2"></i>
+                  Order Progress
+                </h5>
+                <div class="order-progress">
+                  <div class="progress-steps">
+                    <div class="step {% if order_data.order.status != 'pending' %}completed{% endif %}">
+                      <div class="step-icon">
+                        <i class="bi bi-{% if order_data.order.user == request.user %}cart-check{% else %}bag{% endif %}"></i>
+                      </div>
+                      <div class="step-info">
+                        <small class="fw-bold d-block">Ordered</small>
+                        <small class="text-muted">{{ order_data.order.created_at|date:"M d" }}</small>
+                      </div>
+                    </div>
+                    <div class="step {% if order_data.order.status == 'paid' or order_data.order.status == 'shipped' or order_data.order.status == 'delivered' %}completed{% endif %}">
+                      <div class="step-icon">
+                        <i class="bi bi-credit-card"></i>
+                      </div>
+                      <div class="step-info">
+                        <small class="fw-bold d-block">Paid</small>
+                        {% if order_data.order.payment_date %}
+                        <small class="text-muted">{{ order_data.order.payment_date|date:"M d" }}</small>
+                        {% endif %}
+                      </div>
+                    </div>
+                    <div class="step {% if order_data.order.status == 'shipped' or order_data.order.status == 'delivered' %}completed{% endif %}">
+                      <div class="step-icon">
+                        <i class="bi bi-truck"></i>
+                      </div>
+                      <div class="step-info">
+                        <small class="fw-bold d-block">Shipped</small>
+                        {% if order_data.order.shipped_date %}
+                        <small class="text-muted">{{ order_data.order.shipped_date|date:"M d" }}</small>
+                        {% endif %}
+                      </div>
+                    </div>
+                    <div class="step {% if order_data.order.status == 'delivered' %}completed{% endif %}">
+                      <div class="step-icon">
+                        <i class="bi bi-house-check"></i>
+                      </div>
+                      <div class="step-info">
+                        <small class="fw-bold d-block">Delivered</small>
+                        {% if order_data.order.delivered_date %}
+                        <small class="text-muted">{{ order_data.order.delivered_date|date:"M d" }}</small>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="progress mt-3">
+                    <div class="progress-bar 
+                      {% if order_data.order.status == 'delivered' %}bg-success w-100
+                      {% elif order_data.order.status == 'shipped' %}bg-info w-75
+                      {% elif order_data.order.status == 'paid' %}bg-primary w-50
+                      {% else %}bg-secondary w-25{% endif %}" 
+                      role="progressbar">
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="card-custom">
+                <h5 class="fw-bold mb-var(--spacing-lg)">
+                  <i class="bi bi-gear text-primary me-2"></i>
+                  Order Actions
+                </h5>
+                <div class="d-grid gap-2">
+                  <a href="{% url 'order_detail' order_data.order.id %}" class="btn-custom btn-primary">
+                    <i class="bi bi-eye me-2"></i>View Order Details
+                  </a>
+                  
+                  {% if order_data.order_items.0.listing.seller == request.user and order_data.order.status == 'paid' %}
+                  <a href="{% url 'delivery:dashboard' %}?order_id={{ order_data.order.id }}" class="btn-custom btn-info">
+                    <i class="bi bi-truck me-2"></i>Manage Shipment
+                  </a>
+                  {% endif %}
+                  
+                  {% if order_data.order.user == request.user and order_data.order.status == 'shipped' %}
+                  <button class="btn-custom btn-ghost" onclick="trackDelivery('{{ order_data.order.tracking_number }}')">
+                    <i class="bi bi-geo-alt me-2"></i>Track Delivery
+                  </button>
+                  {% endif %}
+                  
+                  {% if order_data.order.user == request.user and order_data.order.status == 'pending' %}
+                  <a href="{% url 'process_payment' order_data.order.id %}" class="btn-custom btn-warning">
+                    <i class="bi bi-credit-card me-2"></i>Complete Payment
+                  </a>
+                  {% endif %}
+                  
+                  {% if order_data.order.user == request.user and order_data.order.status == 'shipped' or order_data.order.user == request.user and order_data.order.status == 'delivered' %}
+                  <a href="{% url 'create_dispute' order_data.order.id %}" 
+                     class="btn-custom btn-danger"
+                     onclick="return confirm('Are you sure you want to open a dispute for this order?')">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Open Dispute
+                  </a>
+                  {% endif %}
+                  
+                  {% if order_data.order.user == request.user and order_data.order.status == 'delivered' %}
+                    {% if order_data.order_items.count == 1 %}
+                        {% with item=order_data.order_items.first %}
+                        <div class="d-grid gap-2">
+                            <a href="{% url 'leave_review' 'listing' item.listing.id %}" class="btn-custom btn-secondary">Review Item</a>
+                            <a href="{% url 'leave_review' 'seller' item.listing.seller.id %}" class="btn-custom btn-outline-secondary">Review Seller</a>
+                        </div>
+                        {% endwith %}
+                    {% else %}
+                        <a href="{% url 'leave_review' 'order' order_data.order.id %}" class="btn-custom btn-secondary w-100 mt-2">Leave Order Review</a>
+                    {% endif %}
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+      {% endwith %}
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if page_obj.has_other_pages %}
+  <nav aria-label="Orders pagination" class="mt-var(--spacing-xl)">
+    <ul class="pagination justify-content-center">
+      {% if page_obj.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}">
+          <i class="bi bi-chevron-left"></i> Previous
+        </a>
+      </li>
+      {% else %}
+      <li class="page-item disabled">
+        <span class="page-link"><i class="bi bi-chevron-left"></i> Previous</span>
+      </li>
+      {% endif %}
+
+      {% for i in page_obj.paginator.page_range %}
+        {% if page_obj.number == i %}
+        <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+        {% elif i > page_obj.number|add:'-3' and i < page_obj.number|add:'3' %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ i }}{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}">{{ i }}</a>
+        </li>
+        {% endif %}
+      {% endfor %}
+
+      {% if page_obj.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if status_filter and status_filter != 'all' %}&status={{ status_filter }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}">
+          Next <i class="bi bi-chevron-right"></i>
+        </a>
+      </li>
+      {% else %}
+      <li class="page-item disabled">
+        <span class="page-link">Next <i class="bi bi-chevron-right"></i></span>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
+  {% endif %}
+
+  {% else %}
+  <div class="empty-state card-custom text-center py-var(--spacing-xxl)">
+    <div class="empty-state-icon mb-var(--spacing-lg)">
+      <i class="bi bi-cart-x display-1 text-muted"></i>
+    </div>
+    <h3 class="mb-3">No Orders Found</h3>
+    <p class="text-muted mb-4">
+      {% if role_filter == 'buyer' %}
+      You haven't made any purchases yet. Start shopping from amazing stores!
+      {% elif role_filter == 'seller' %}
+      You haven't received any orders yet. Add more listings to your store!
+      {% else %}
+      You don't have any orders yet. Start shopping or selling today!
+      {% endif %}
+    </p>
+    <div class="d-flex gap-3 justify-content-center flex-wrap">
+      {% if role_filter != 'seller' %}
+      <a href="{% url 'all-listings' %}" class="btn-custom btn-primary">
+        <i class="bi bi-grid me-2"></i> Browse Products
+      </a>
+      {% endif %}
+      {% if role_filter != 'buyer' %}
+        {% if user.is_authenticated %}
+        <a href="{% url 'listing-create' %}" class="btn-custom btn-success">
+          <i class="bi bi-plus-circle me-2"></i> Create Listing
+        </a>
+        <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-secondary">
+          <i class="bi bi-shop me-2"></i> Create Store
+        </a>
+        {% else %}
+        <a href="{% url 'login' %}?next={% url 'listing-create' %}" class="btn-custom btn-success">
+          <i class="bi bi-plus-circle me-2"></i> Start Selling
+        </a>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 <style>
-.nav-pills .nav-link {
-    border-radius: 0.5rem;
-    margin: 0.25rem;
-    color: var(--text-color);
-    text-decoration: none;
+.bg-gradient-primary {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
 }
 
-.nav-pills .nav-link.active {
-    background-color: var(--primary-gemini);
-    border-color: var(--primary-gemini);
-    color: white;
+.bg-gradient-info {
+  background: linear-gradient(135deg, var(--info) 0%, var(--info-dark) 100%) !important;
+}
+
+.card-header {
+  border-radius: var(--radius-md) var(--radius-md) 0 0 !important;
+  padding: var(--spacing-lg) !important;
+  margin-bottom: var(--spacing-md) !important;
+}
+
+.order-icon-wrapper {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-header.bg-gradient-info .order-icon-wrapper {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+.card-header.bg-gradient-primary .order-icon-wrapper {
+  background: rgba(255, 255, 255, 0.2) !important;
 }
 
 .order-role-badge {
-    font-size: 0.7rem;
-    padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-md);
 }
 
-.buyer-badge {
-    background-color: #28a745;
-    color: white;
+.order-item-card {
+  transition: var(--transition);
+  border: 1px solid var(--border-color);
 }
 
-.seller-badge {
-    background-color: #17a2b8;
-    color: white;
+.order-item-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary);
 }
 
-.progress-container {
-    position: relative;
-    padding: 0 20px;
+.order-item-image {
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.order-item-image img {
+  transition: transform 0.5s ease;
+}
+
+.order-item-card:hover .order-item-image img {
+  transform: scale(1.05);
+}
+
+.object-fit-cover {
+  object-fit: cover;
+}
+
+.progress-steps {
+  position: relative;
+  padding-left: 30px;
+}
+
+.progress-steps::before {
+  content: '';
+  position: absolute;
+  left: 20px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border-color);
+  z-index: 1;
 }
 
 .step {
-    text-align: center;
-    position: relative;
-    z-index: 2;
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+  z-index: 2;
+}
+
+.step:last-child {
+  margin-bottom: 0;
 }
 
 .step-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: #e9ecef;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 5px;
-    transition: all 0.3s ease;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: -50px;
+  margin-right: var(--spacing-md);
+  border: 2px solid var(--border-color);
+  transition: var(--transition);
 }
 
 .step.completed .step-icon {
-    background: var(--primary-gemini);
-    color: white;
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
 }
 
-.step small {
-    font-size: 0.75rem;
-    color: #6c757d;
+.step-info {
+  flex: 1;
 }
 
-.step.completed small {
-    color: var(--primary-gemini);
-    font-weight: 500;
+.step-info small {
+  display: block;
+  line-height: 1.2;
 }
 
 .progress {
-    position: absolute;
-    top: 20px;
-    left: 10%;
-    width: 80%;
-    z-index: 1;
+  height: 6px;
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  margin-top: var(--spacing-lg);
+}
+
+.progress-bar {
+  border-radius: var(--radius-md);
+  background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+  transition: width 1s ease-in-out;
+}
+
+.empty-state {
+  background: var(--bg-secondary);
+  border: 2px dashed var(--border-color);
+}
+
+.pagination {
+  gap: var(--spacing-xs);
+}
+
+.page-link {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-weight: 500;
+  transition: var(--transition);
+}
+
+.page-link:hover {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+  transform: translateY(-2px);
+}
+
+.page-item.active .page-link {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+.order-actions .btn-custom {
+  border-radius: var(--radius-md);
+}
+
+@media (max-width: 768px) {
+  .order-header {
+    flex-direction: column;
+    text-align: center;
+    gap: var(--spacing-md);
+  }
+  
+  .order-icon-wrapper {
+    margin: 0 auto var(--spacing-sm);
+  }
+  
+  .order-party-info, .order-total {
+    text-align: center;
+    margin-bottom: var(--spacing-sm);
+  }
+  
+  .progress-steps {
+    padding-left: 20px;
+  }
+  
+  .step-icon {
+    width: 30px;
+    height: 30px;
+    margin-left: -35px;
+    margin-right: var(--spacing-sm);
+  }
+  
+  .step-info small {
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .empty-state .d-flex {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+  
+  .order-item-card .row {
+    flex-direction: column;
+  }
+  
+  .order-item-card .col-4,
+  .order-item-card .col-8 {
+    width: 100% !important;
+  }
+  
+  .order-item-image {
+    height: 150px;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  }
 }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Smooth animations
-    const orderCards = document.querySelectorAll('.order-card');
-    orderCards.forEach((card, index) => {
-        card.style.opacity = '0';
-        card.style.transform = 'translateY(20px)';
-        
-        setTimeout(() => {
-            card.style.transition = 'all 0.5s ease';
-            card.style.opacity = '1';
-            card.style.transform = 'translateY(0)';
-        }, index * 100);
+  const orderCards = document.querySelectorAll('.order-card');
+  orderCards.forEach((card, index) => {
+    card.style.opacity = '0';
+    card.style.transform = 'translateY(20px)';
+    
+    setTimeout(() => {
+      card.style.transition = 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
+      card.style.opacity = '1';
+      card.style.transform = 'translateY(0)';
+    }, index * 100);
+  });
+  
+  orderCards.forEach(card => {
+    card.addEventListener('mouseenter', function() {
+      this.style.transform = 'translateY(-5px)';
+      this.style.boxShadow = 'var(--shadow-xl)';
     });
+    
+    card.addEventListener('mouseleave', function() {
+      this.style.transform = 'translateY(0)';
+      this.style.boxShadow = 'var(--shadow-sm)';
+    });
+  });
+  
+  const orderItemCards = document.querySelectorAll('.order-item-card');
+  orderItemCards.forEach(card => {
+    card.addEventListener('mouseenter', function() {
+      const image = this.querySelector('img');
+      if (image) {
+        image.style.transform = 'scale(1.08)';
+      }
+    });
+    
+    card.addEventListener('mouseleave', function() {
+      const image = this.querySelector('img');
+      if (image) {
+        image.style.transform = 'scale(1)';
+      }
+    });
+  });
+  
+  function updateDeliveryStatus(orderId, trackingNumber) {
+    const statusElement = document.getElementById(`delivery-status-${orderId}`);
+    if (!statusElement) return;
+    
+    setTimeout(() => {
+      const statuses = ['processing', 'shipped', 'out_for_delivery', 'delivered'];
+      const currentStatus = statusElement.textContent.toLowerCase();
+      const currentIndex = statuses.indexOf(currentStatus);
+      
+      if (currentIndex < statuses.length - 1) {
+        const newStatus = statuses[currentIndex + 1];
+        const displayText = newStatus.split('_').map(word => 
+          word.charAt(0).toUpperCase() + word.slice(1)
+        ).join(' ');
+        
+        statusElement.textContent = displayText;
+        
+        statusElement.className = 'badge';
+        if (newStatus === 'delivered') {
+          statusElement.classList.add('bg-success');
+        } else if (newStatus === 'out_for_delivery') {
+          statusElement.classList.add('bg-info');
+        } else if (newStatus === 'shipped') {
+          statusElement.classList.add('bg-primary');
+        } else {
+          statusElement.classList.add('bg-secondary');
+        }
+        
+        showToast(`Order #${orderId} status updated to ${displayText}`, 'info');
+      }
+    }, 1000);
+  }
+  
+  window.trackDelivery = function(trackingNumber) {
+    if (!trackingNumber) {
+      showToast('No tracking number available for this order', 'warning');
+      return;
+    }
+    
+    showToast(`Opening tracking for #${trackingNumber}`, 'info');
+    window.open(`https://tracking.example.com/?tracking=${trackingNumber}`, '_blank');
+  };
+  
+  function showToast(message, type = 'info') {
+    let toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) {
+      toastContainer = document.createElement('div');
+      toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+      toastContainer.style.zIndex = '9999';
+      document.body.appendChild(toastContainer);
+    }
+    
+    const toastId = 'toast-' + Date.now();
+    const toast = document.createElement('div');
+    toast.id = toastId;
+    toast.className = `toast align-items-center text-white bg-${type} border-0`;
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'assertive');
+    toast.setAttribute('aria-atomic', 'true');
+    
+    toast.innerHTML = `
+      <div class="d-flex">
+        <div class="toast-body d-flex align-items-center">
+          <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
+          ${message}
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+    `;
+    
+    toastContainer.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+    bsToast.show();
+    
+    toast.addEventListener('hidden.bs.toast', function() {
+      toast.remove();
+    });
+  }
+  
+  const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+  tooltipTriggerList.map(function (tooltipTriggerEl) {
+    return new bootstrap.Tooltip(tooltipTriggerEl);
+  });
 });
 </script>
 {% endblock %}
-[file content end]

@@ -1,11 +1,12 @@
 {% extends 'base.html' %}
 {% load crispy_forms_tags %}
 
-{% block title %}Checkout - HomaBay Souq{% endblock %}
+{% block title %}Checkout - Baysoko{% endblock %}
 
 {% block content %}
 <div class="container py-4">
-    <!-- Breadcrumb -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:1060;" aria-live="polite" aria-atomic="true"></div>
+    
     <nav aria-label="breadcrumb" class="mb-4">
         <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
@@ -29,7 +30,6 @@
                             </div>
                         {% endif %}
                         
-                        <!-- Quick Actions -->
                         {% if has_previous_orders %}
                         <div class="alert alert-info mb-4">
                             <div class="d-flex align-items-center mb-2">
@@ -50,7 +50,6 @@
                         </div>
                         {% endif %}
                         
-                        <!-- Shipping Options -->
                         <div class="mb-4">
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" id="useAlternateShipping" name="use_alternate_shipping" {% if use_alternate_shipping %}checked{% endif %}>
@@ -60,7 +59,6 @@
                             </div>
                         </div>
                         
-                        <!-- Personal Info Section -->
                         <div id="personalInfoSection" {% if use_alternate_shipping %}style="display: none;"{% endif %}>
                             <div class="alert alert-success mb-4">
                                 <div class="d-flex align-items-center">
@@ -85,7 +83,6 @@
                             </div>
                         </div>
                         
-                        <!-- Shipping Form (Hidden by default unless alternate shipping) -->
                         <div id="shippingFormSection" {% if not use_alternate_shipping %}style="display: none;"{% endif %}>
                             <h6 class="mb-3">Shipping Details</h6>
                             
@@ -108,7 +105,6 @@
                             </div>
                         </div>
                         
-                        <!-- Address Section (Always visible) -->
                         <div id="addressSection" class="mt-4">
                             <h6 class="mb-3">Delivery Address</h6>
                             
@@ -219,7 +215,7 @@
 
 <style>
 .bg-gradient-primary {
-    background: linear-gradient(135deg, var(--primary-gemini) 0%, #0d47a1 100%) !important;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
 }
 
 .sticky-top {
@@ -237,14 +233,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const useLastAddress = document.getElementById('useLastAddress');
     const enterNewAddress = document.getElementById('enterNewAddress');
     
-    // Handle shipping toggle
     if (useAlternateShipping) {
         useAlternateShipping.addEventListener('change', function() {
             personalInfoSection.style.display = this.checked ? 'none' : 'block';
             shippingFormSection.style.display = this.checked ? 'block' : 'none';
             
             if (!this.checked) {
-                // Reset shipping form to account info
                 const userInfo = {
                     'id_first_name': '{{ request.user.first_name }}',
                     'id_last_name': '{{ request.user.last_name }}',
@@ -257,13 +251,30 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (field) field.value = userInfo[id];
                 });
             }
+            toggleShippingFields(this.checked);
         });
     }
+
+    function toggleShippingFields(enable) {
+        if (!shippingFormSection) return;
+        const inputs = shippingFormSection.querySelectorAll('input, select, textarea');
+        inputs.forEach(el => {
+            if (enable) {
+                el.removeAttribute('disabled');
+            } else {
+                el.setAttribute('disabled', 'disabled');
+            }
+        });
+    }
+
+    if (useAlternateShipping) {
+        toggleShippingFields(useAlternateShipping.checked);
+    } else {
+        toggleShippingFields(false);
+    }
     
-    // Handle quick actions
     if (useLastAddress) {
         useLastAddress.addEventListener('click', function() {
-            // Fill in saved address
             const savedAddress = {
                 'id_shipping_address': '{{ form.initial.shipping_address|escapejs }}',
                 'id_city': '{{ form.initial.city|escapejs }}',
@@ -284,13 +295,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (enterNewAddress) {
         enterNewAddress.addEventListener('click', function() {
-            // Clear address fields
             ['id_shipping_address', 'id_city', 'id_postal_code'].forEach(id => {
                 const field = document.getElementById(id);
                 if (field) field.value = '';
             });
             
-            // Focus on address field
             document.getElementById('id_shipping_address').focus();
             showToast('Enter your new shipping address', 'info');
         });
@@ -304,12 +313,10 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Validate required fields based on shipping mode
         let fieldsToValidate;
         if (useAlternateShipping && useAlternateShipping.checked) {
             fieldsToValidate = checkoutForm.querySelectorAll('[required]');
         } else {
-            // Only validate address fields if using account info
             fieldsToValidate = checkoutForm.querySelectorAll('#addressSection [required]');
         }
         
@@ -328,15 +335,15 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Show loading state
         placeOrderBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i> Processing...';
         placeOrderBtn.disabled = true;
         
-        // Submit form
+        if (useAlternateShipping && !useAlternateShipping.checked) {
+            toggleShippingFields(false);
+        }
         this.submit();
     });
     
-    // Real-time form validation
     const inputs = checkoutForm.querySelectorAll('input, select, textarea');
     inputs.forEach(input => {
         input.addEventListener('blur', function() {
@@ -354,15 +361,23 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Toast function
-    function showToast(message, type = 'info') {
-        // Create toast element
+        function showToast(message, type = 'info') {
+        const container = document.querySelector('.toast-container');
+        if (!container || typeof bootstrap === 'undefined' || typeof bootstrap.Toast !== 'function') {
+            try {
+                console.log('TOAST', type, message);
+                if (type === 'error') alert(message);
+            } catch (e) {
+            }
+            return;
+        }
+
         const toast = document.createElement('div');
         toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} border-0`;
         toast.setAttribute('role', 'alert');
         toast.setAttribute('aria-live', 'assertive');
         toast.setAttribute('aria-atomic', 'true');
-        
+
         toast.innerHTML = `
             <div class="d-flex">
                 <div class="toast-body d-flex align-items-center">
@@ -372,20 +387,45 @@ document.addEventListener('DOMContentLoaded', function() {
                 <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
             </div>
         `;
-        
-        // Add to container
-        const container = document.querySelector('.toast-container');
+
         container.appendChild(toast);
-        
-        // Show toast
+
         const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 3000 });
         bsToast.show();
-        
-        // Remove after hide
+
         toast.addEventListener('hidden.bs.toast', () => {
             toast.remove();
         });
     }
+});
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const djangoMessages = [
+        {% for msg in messages %}
+        { message: "{{ msg|escapejs }}", tags: "{{ msg.tags }}" }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+
+    const mapTag = (tags) => {
+        if (!tags) return 'info';
+        if (tags.indexOf('error') !== -1) return 'error';
+        if (tags.indexOf('warning') !== -1) return 'warning';
+        if (tags.indexOf('success') !== -1) return 'success';
+        return 'info';
+    };
+
+    setTimeout(() => {
+        djangoMessages.forEach(m => {
+            try {
+                const t = mapTag(m.tags);
+                if (typeof showToast === 'function') showToast(m.message, t);
+                else console.log('Message:', t, m.message);
+            } catch (e) {
+                console.error('Error showing toast for message', m, e);
+            }
+        });
+    }, 150);
 });
 </script>
 {% endblock %}

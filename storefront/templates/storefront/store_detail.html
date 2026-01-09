@@ -1,295 +1,645 @@
-[file name]: store_detail.html
-[file content begin]
 {% extends 'base.html' %}
 {% load static %}
 
 {% block title %}{{ store.name }} - Store - HomaBay Souq{% endblock %}
 
 {% block content %}
-<div class="apple-container py-4">
-    <!-- Store Header -->
-    <div class="apple-card mb-4 store-header" {% if store.cover_image %} style="background-image: linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.12)), url('{{ store.cover_image.url }}'); background-size: cover; background-position: center;" {% endif %}>
-        <div class="card-body p-4" style="position: relative;">
-            <div class="row align-items-center">
-                <div class="col-md-2 text-center">
-                <img src="{{ store.get_logo_url|default:'https://placehold.co/120x120/c2c2c2/1f1f1f?text=Store' }}"
-                    data-default="https://placehold.co/120x120/c2c2c2/1f1f1f?text=Store"
-                    alt="{{ store.name }}"
-                    class="rounded-circle shadow-sm mb-3"
-                    style="width: 120px; height: 120px; object-fit: cover;"
-                    onerror="this.onerror=null;this.src=this.getAttribute('data-default');">
-                    {% if store.is_premium %}
-                    <span class="badge bg-warning text-dark">
-                        <i class="bi bi-star-fill me-1"></i>Premium Store
-                    </span>
-                    {% endif %}
-                </div>
-                <div class="col-md-8">
-                    <h1 class="fw-bold mb-2">{{ store.name }}</h1>
-                    <p class="lead text-muted mb-3">{{ store.description }}</p>
-                    
-                    <!-- Store Stats -->
-                    <div class="row text-center">
-                        <div class="col-4">
-                            <h4 class="fw-bold text-primary mb-1">{{ products.count }}</h4>
-                            <small class="text-muted">Products</small>
-                        </div>
-                        <div class="col-4">
-                            <h4 class="fw-bold text-success mb-1">{{ store.get_rating }}</h4>
-                            <small class="text-muted">Rating</small>
-                        </div>
-                        <div class="col-4">
-                            <h4 class="fw-bold text-info mb-1">{{ store.get_sales_count }}</h4>
-                            <small class="text-muted">Sales</small>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-2 text-center">
-                    {% if user == store.owner %}
-                    <a href="{% url 'storefront:store_edit' slug=store.slug %}" class="apple-btn apple-btn-secondary mb-2">
-                        <i class="bi bi-pencil me-1"></i>Edit Store
-                    </a>
-                    {% endif %}
-                    <button class="apple-btn apple-btn-primary">
-                        <i class="bi bi-chat-dots me-1"></i>Contact Store
-                    </button>
-                </div>
+<div class="container py-var(--spacing-xl)">
+  <!-- Store Header with Enhanced Text Overlay -->
+  <div class="store-header-wrapper rounded-lg mb-2 mt-2 position-relative overflow-hidden"
+       style="{% if store.cover_image %}background-image: url('{{ store.cover_image.url }}');{% else %}background: linear-gradient(135deg, var(--primary) 0%, var(--info) 100%);{% endif %}">
+    
+    <!-- Dark overlay for better text contrast -->
+    <div class="store-header-overlay position-absolute top-0 start-0 w-100 h-100"></div>
+    
+    <!-- Text content with multiple protection layers -->
+    <div class="store-header-content position-relative z-2">
+      <div class="container py-var(--spacing-xxl)">
+        <div class="row align-items-center">
+          <div class="col-lg-8">
+            <!-- Store name with multiple shadow layers -->
+            <h1 class="display-4 fw-bold mb-3 store-title text-shadow-3d">
+              <span class="store-title-text">{{ store.name }}</span>
+            </h1>
+            
+            <!-- Store description with background -->
+            <div class="store-description-container mb-4">
+              <p class="lead store-description">{{ store.description|default:"Welcome to our store" }}</p>
             </div>
-        </div>
-    </div>
-
-    <!-- Products Grid -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h3 class="fw-bold">Products</h3>
-                <span class="text-muted">{{ products.count }} items</span>
+            
+            <!-- Store Stats with protected backgrounds -->
+            <div class="d-flex flex-wrap gap-4">
+              <div class="stat-item text-protected">
+                <div class="stat-value-bg">
+                  <h3 class="fw-bold mb-0">{{ products.count }}</h3>
+                </div>
+                <small class="stat-label text-protected-label">Products</small>
+              </div>
+              <div class="stat-item text-protected">
+                <div class="stat-value-bg">
+                  <h3 class="fw-bold mb-0">{{ store.get_rating|default:"4.5" }}</h3>
+                </div>
+                <small class="stat-label text-protected-label">Rating</small>
+              </div>
+              <div class="stat-item text-protected">
+                <div class="stat-value-bg">
+                  <h3 class="fw-bold mb-0">{{ store.get_sales_count|default:"50" }}+</h3>
+                </div>
+                <small class="stat-label text-protected-label">Sales</small>
+              </div>
             </div>
+          </div>
+          <div class="col-lg-4 text-center">
+            <!-- Store Logo with protected background -->
+            <div class="store-logo-wrapper position-relative">
+              <div class="store-logo-background"></div>
+              <img src="{{ store.get_logo_url|default:'https://placehold.co/200x200/c2c2c2/1f1f1f?text=Store' }}"
+                   alt="{{ store.name }}"
+                   class="store-logo position-relative z-1"
+                   onerror="this.src='https://placehold.co/200x200/c2c2c2/1f1f1f?text=Store'">
+              {% if store.is_premium %}
+              <span class="premium-badge position-absolute badge-protected">
+                <i class="bi bi-star-fill"></i> Premium
+              </span>
+              {% endif %}
+            </div>
+          </div>
         </div>
+      </div>
     </div>
+  </div>
 
+  <!-- Store Navigation -->
+  <div class="store-navigation mb-2">
+    <div class="d-flex flex-wrap gap-2">
+      <a href="#products" class="btn-custom btn-secondary active">Products</a>
+      <a href="#about" class="btn-custom btn-ghost">About</a>
+      <a href="#reviews" class="btn-custom btn-ghost">Reviews</a>
+      {% if user == store.owner %}
+      <a href="{% url 'storefront:store_edit' slug=store.slug %}" class="btn-custom btn-accent ms-auto">
+        <i class="bi bi-pencil"></i> Edit Store
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Products Grid -->
+  <section id="products" class="mb-5">
+    <div class="section-header mb-2">
+      <h2 class="section-title">Products ({{ products.count }})</h2>
+      <p class="section-subtitle">Browse our collection</p>
+    </div>
+    
     {% if products %}
-    <div class="row g-4">
-        {% for product in products %}
-        <div class="col-6 col-md-4 col-lg-3">
-            <div class="apple-card product-card h-100">
-                <div class="listing-card__image">
-                    <img src="{{ product.get_image_url }}" 
-                         alt="{{ product.title }}"
-                         class="card-img-top product-image"
-                         data-src="{{ product.get_image_url }}"
-                         data-placeholder="https://placehold.co/300x200/c2c2c2/1f1f1f?text=Product"
-                         loading="lazy">
-                    
-                    <div class="listing-card__badges">
-                        {% if store.is_premium %}
-                        <span class="listing-card__category">
-                            <i class="bi bi-star-fill me-1"></i>Premium
-                        </span>
-                        {% endif %}
-                        
-                        <div class="listing-card__status">
-                            <form action="{% url 'toggle_favorite' product.id %}" method="post" class="favorite-form">
-                                {% csrf_token %}
-                                <button type="submit" class="apple-listing-favorite {% if product.id in user_favorites %}favorited{% endif %}">
-                                    <i class="bi bi-heart{% if product.id in user_favorites %}-fill{% endif %}"></i>
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="card-body">
-                    <h6 class="card-title fw-bold mb-2 line-clamp-2">{{ product.title }}</h6>
-                    <p class="card-text text-muted small mb-2 line-clamp-2">{{ product.description|truncatewords:10 }}</p>
-                    
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="fw-bold text-primary">KSh {{ product.price }}</span>
-                        {% if product.condition %}
-                        <span class="badge bg-light text-dark small">{{ product.get_condition_display }}</span>
-                        {% endif %}
-                    </div>
-                    
-                    <!-- Rating -->
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="text-warning small">
-                            <i class="bi bi-star-fill"></i>
-                            <i class="bi bi-star-fill"></i>
-                            <i class="bi bi-star-fill"></i>
-                            <i class="bi bi-star-fill"></i>
-                            <i class="bi bi-star-half"></i>
-                        </div>
-                        <small class="text-muted ms-1">({{ product.review_count }})</small>
-                    </div>
-                </div>
-                
-                <div class="card-footer bg-transparent border-0 pt-0 d-flex gap-2">
-                    <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=product.slug %}" 
-                       class="apple-btn apple-btn-primary w-100">
-                        <i class="bi bi-eye me-1"></i>View Details
-                    </a>
-                    {% if user == store.owner %}
-                    <a href="{% url 'storefront:product_edit' pk=product.pk %}" class="apple-btn apple-btn-secondary">
-                        <i class="bi bi-pencil me-1"></i>Edit
-                    </a>
-                    <form method="post" action="{% url 'storefront:product_delete' pk=product.pk %}" style="display:inline-block;">
-                        {% csrf_token %}
-                        <button type="submit" class="apple-btn apple-btn-ghost text-danger" onclick="return confirm('Delete this product?');">
-                            <i class="bi bi-trash me-1"></i>Delete
-                        </button>
-                    </form>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    {% else %}
-    <div class="text-center py-5">
-        <i class="bi bi-inbox display-1 text-muted mb-3"></i>
-        <h3 class="text-muted mb-3">No Products Yet</h3>
-        <p class="text-muted mb-4">This store hasn't added any products yet.</p>
-        {% if user == store.owner %}
-        <a href="{% url 'storefront:product_create' store_slug=store.slug %}" class="apple-btn apple-btn-primary px-4">
-            <i class="bi bi-plus-circle me-2"></i>
-            Add Your First Product
-        </a>
-        {% endif %}
-    </div>
-    {% endif %}
-
-    <!-- Store Information -->
-    <div class="row mt-5">
-        <div class="col-lg-8">
-            <div class="apple-card">
-                <div class="card-header bg-light py-3">
-                    <h5 class="mb-0 fw-bold">
-                        <i class="bi bi-info-circle me-2"></i>
-                        About This Store
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <strong><i class="bi bi-person me-2"></i>Store Owner:</strong>
-                            <span class="text-muted">{{ store.owner.get_full_name|default:store.owner.username }}</span>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <strong><i class="bi bi-calendar me-2"></i>Joined:</strong>
-                            <span class="text-muted">{{ store.created_at|date:"F Y" }}</span>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <strong><i class="bi bi-geo-alt me-2"></i>Location:</strong>
-                            <span class="text-muted">{{ store.location|default:"Homabay County" }}</span>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <strong><i class="bi bi-chat-dots me-2"></i>Response Time:</strong>
-                            <span class="text-muted">Within 24 hours</span>
-                        </div>
-                    </div>
-                    
-                    {% if store.policies %}
-                    <div class="mt-3">
-                        <h6 class="fw-bold">Store Policies</h6>
-                        <p class="text-muted">{{ store.policies }}</p>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
+    <div class="grid-system">
+      {% for product in products %}
+      <div class="product-card card-custom">
+        <!-- Product Image with Text Overlay Protection -->
+        <div class="product-image-wrapper mb-3 position-relative">
+          <img src="{{ product.get_image_url }}" 
+               alt="{{ product.title }}"
+               class="product-image"
+               onerror="this.src='https://placehold.co/400x300/c2c2c2/1f1f1f?text=Product'">
+          
+          <!-- Image overlay for better text contrast -->
+          <div class="product-image-overlay position-absolute top-0 start-0 w-100 h-100"></div>
+          
+          <!-- Badges with protected backgrounds -->
+          <div class="product-badges position-absolute top-0 start-0 z-2">
+            {% if store.is_premium %}
+            <span class="badge bg-warning text-dark badge-protected">
+              <i class="bi bi-star-fill"></i> Premium
+            </span>
+            {% endif %}
+            {% if product.condition %}
+            <span class="badge badge-protected">
+              {{ product.get_condition_display }}
+            </span>
+            {% endif %}
+          </div>
+          
+          <!-- Favorite button with contrast -->
+          <div class="product-actions position-absolute top-0 end-0 z-2">
+            <form action="{% url 'toggle_favorite' product.id %}" method="post">
+              {% csrf_token %}
+              <button type="submit" class="favorite-btn btn-protected {% if product.id in user_favorites %}active{% endif %}">
+                <i class="bi bi-heart{% if product.id in user_favorites %}-fill{% endif %}"></i>
+              </button>
+            </form>
+          </div>
         </div>
         
-        <div class="col-lg-4">
-            <div class="apple-card">
-                <div class="card-header bg-light py-3">
-                    <h5 class="mb-0 fw-bold">
-                        <i class="bi bi-shield-check me-2"></i>
-                        Store Verification
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="d-flex align-items-center mb-3">
-                        <i class="bi bi-check-circle-fill text-success fs-4 me-3"></i>
-                        <div>
-                            <h6 class="mb-1 fw-bold">Email Verified</h6>
-                            <small class="text-muted">Store owner has verified email</small>
-                        </div>
-                    </div>
-                    
-                    <div class="d-flex align-items-center mb-3">
-                        <i class="bi bi-check-circle-fill text-success fs-4 me-3"></i>
-                        <div>
-                            <h6 class="mb-1 fw-bold">Phone Verified</h6>
-                            <small class="text-muted">M-Pesa number verified</small>
-                        </div>
-                    </div>
-                    
-                    {% if store.is_premium %}
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-award-fill text-warning fs-4 me-3"></i>
-                        <div>
-                            <h6 class="mb-1 fw-bold">Premium Store</h6>
-                            <small class="text-muted">Verified premium seller</small>
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
+        <div class="product-info">
+          <h3 class="product-title">{{ product.title }}</h3>
+          <p class="product-description text-muted">{{ product.description|truncatewords:15 }}</p>
+          
+          <div class="product-meta">
+            <span class="product-price fw-bold text-primary">KSh {{ product.price }}</span>
+            <span class="product-rating text-protected">
+              <i class="bi bi-star-fill text-warning"></i>
+              {{ product.get_rating|default:"4.5" }}
+            </span>
+          </div>
+          
+          <div class="product-cta mt-3">
+            <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=product.slug %}" 
+               class="btn-custom btn-primary w-100">
+              View Details
+            </a>
+          </div>
         </div>
+      </div>
+      {% endfor %}
     </div>
+    {% else %}
+    <div class="empty-state card-custom text-center py-var(--spacing-xxl)">
+      <i class="bi bi-inbox display-1 text-muted mb-3"></i>
+      <h3>No Products Yet</h3>
+      <p class="text-muted mb-4">This store hasn't added any products yet.</p>
+      {% if user == store.owner %}
+      <a href="{% url 'storefront:product_create' store_slug=store.slug %}" class="btn-custom btn-primary">
+        <i class="bi bi-plus-circle"></i> Add Your First Product
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- Store Information -->
+  <section id="about" class="mb-3 mt-2">
+    <div class="row g-4">
+      <div class="col-lg-8">
+        <div class="card-custom">
+          <h3 class="mb-2">
+            <i class="bi bi-info-circle text-primary me-2"></i>
+            About This Store
+          </h3>
+          
+          <div class="info-grid">
+            <div class="info-item">
+              <i class="bi bi-person text-primary"></i>
+              <div>
+                <strong>Store Owner</strong>
+                <p class="mb-0">{{ store.owner.get_full_name|default:store.owner.username }}</p>
+              </div>
+            </div>
+            <div class="info-item">
+              <i class="bi bi-geo-alt text-primary"></i>
+              <div>
+                <strong>Location</strong>
+                <p class="mb-0">{{ store.location|default:"Homabay County" }}</p>
+              </div>
+            </div>
+            <div class="info-item">
+              <i class="bi bi-calendar text-primary"></i>
+              <div>
+                <strong>Joined</strong>
+                <p class="mb-0">{{ store.created_at|date:"F Y" }}</p>
+              </div>
+            </div>
+            <div class="info-item">
+              <i class="bi bi-chat-dots text-primary"></i>
+              <div>
+                <strong>Response Time</strong>
+                <p class="mb-0">Within 24 hours</p>
+              </div>
+            </div>
+          </div>
+          
+          {% if store.policies %}
+          <div class="mt-var(--spacing-lg)">
+            <h4 class="mb-3">Store Policies</h4>
+            <div class="policy-content bg-light p-3 rounded">{{ store.policies|linebreaks }}</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      
+      <div class="col-lg-4">
+        <!-- Verification Card -->
+        <div class="card-custom">
+          <h3 class="mb-2">
+            <i class="bi bi-shield-check text-success me-2"></i>
+            Store Verification
+          </h3>
+          
+          <div class="verification-list">
+            <div class="verification-item success">
+              <i class="bi bi-check-circle-fill text-success"></i>
+              <div>
+                <strong>Email Verified</strong>
+                <small>Store owner has verified email</small>
+              </div>
+            </div>
+            <div class="verification-item success">
+              <i class="bi bi-check-circle-fill text-success"></i>
+              <div>
+                <strong>Phone Verified</strong>
+                <small>M-Pesa number verified</small>
+              </div>
+            </div>
+            {% if store.is_premium %}
+            <div class="verification-item warning">
+              <i class="bi bi-award-fill text-warning"></i>
+              <div>
+                <strong>Premium Store</strong>
+                <small>Verified premium seller</small>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <style>
-    .store-header {
-        /* fallback gradient when no cover is present */
-        background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
-        color: var(--text-color);
-        border-radius: var(--apple-radius-lg);
-        overflow: hidden;
-        position: relative;
-    }
+/* Enhanced Store Detail Styles with Text Protection */
+.store-header-wrapper {
+  min-height: 400px;
+  border-radius: var(--radius-xl);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+}
 
-    .store-header::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: rgba(0,0,0,0.18);
-        mix-blend-mode: multiply;
-        pointer-events: none;
-    }
+.store-header-overlay {
+  background: linear-gradient(to bottom, 
+    rgba(0, 0, 0, 0.7) 0%, 
+    rgba(0, 0, 0, 0.5) 50%, 
+    rgba(0, 0, 0, 0.3) 100%);
+  z-index: 1;
+}
 
-    .store-header .rounded-circle {
-        border: 4px solid rgba(255,255,255,0.85);
-        box-shadow: var(--apple-shadow-lg);
-        background: rgba(255,255,255,0.85);
-    }
+.store-header-content {
+  z-index: 2;
+}
 
-    /* When in dark theme, reduce overlay darkness */
-    [data-theme="dark"] .store-header::after { background: rgba(0,0,0,0.35); }
+/* Enhanced text shadow for better readability on any background */
+.store-title {
+  color: white;
+  position: relative;
+}
 
-    .product-card {
-        transition: var(--apple-transition);
-    }
+.store-title-text {
+  text-shadow: 
+    0 2px 4px rgba(0, 0, 0, 0.8),
+    0 4px 8px rgba(0, 0, 0, 0.6),
+    0 8px 16px rgba(0, 0, 0, 0.4);
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+}
 
-    .product-card:hover {
-        transform: translateY(-5px);
-        box-shadow: var(--apple-shadow-lg);
-    }
+.store-description-container {
+  background: rgba(0, 0, 0, 0.5);
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
 
-    .product-image {
-        transition: var(--apple-transition);
-    }
+.store-description {
+  color: white;
+  margin-bottom: 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
 
-    .product-card:hover .product-image {
-        transform: scale(1.05);
-    }
+/* Protected stat items */
+.stat-item {
+  text-align: center;
+}
 
-    .line-clamp-2 {
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        line-clamp: 2; /* Standard property for compatibility */
-    }
+.stat-value-bg {
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 1rem;
+  display: inline-block;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.stat-item h3 {
+  font-size: 2.5rem;
+  margin-bottom: 0;
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.stat-label {
+  display: block;
+  margin-top: 0.5rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Store logo with protected background */
+.store-logo-wrapper {
+  display: inline-block;
+  position: relative;
+  padding: 1rem;
+}
+
+.store-logo-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.store-logo {
+  width: 200px;
+  height: 200px;
+  border-radius: var(--radius-full);
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  background: white;
+  padding: var(--spacing-xs);
+  position: relative;
+  z-index: 1;
+}
+
+.premium-badge {
+  bottom: 20px;
+  right: 20px;
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  color: #333;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-full);
+  font-weight: 700;
+  font-size: 0.875rem;
+  z-index: 3;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Protected badges */
+.badge-protected {
+  backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.85) !important;
+  color: white !important;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.badge-protected.bg-warning {
+  background: rgba(255, 193, 7, 0.95) !important;
+  color: #333 !important;
+}
+
+/* Grid System */
+.grid-system {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--spacing-lg);
+}
+
+.product-card {
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.product-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-lg);
+}
+
+.product-image-wrapper {
+  position: relative;
+  height: 200px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+
+.product-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.product-card:hover .product-image {
+  transform: scale(1.05);
+}
+
+.product-image-overlay {
+  background: linear-gradient(to bottom, 
+    transparent 60%, 
+    rgba(0, 0, 0, 0.4) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.product-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: var(--spacing-sm);
+}
+
+.product-actions {
+  padding: var(--spacing-sm);
+}
+
+.favorite-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.btn-protected {
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.favorite-btn.active {
+  background: var(--danger);
+  color: white;
+  border-color: var(--danger);
+}
+
+.favorite-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.product-info {
+  padding: var(--spacing-lg);
+}
+
+.product-title {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  margin-bottom: var(--spacing-xs);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.product-description {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: var(--spacing-md);
+  line-height: 1.5;
+}
+
+.product-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md);
+}
+
+.product-price {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.product-rating {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* Text protection for rating */
+.text-protected {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Info Grid */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--spacing-lg);
+}
+
+.info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.info-item i {
+  font-size: 1.5rem;
+  color: var(--primary);
+  margin-top: var(--spacing-xs);
+}
+
+.verification-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.verification-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.verification-item.success i {
+  color: var(--accent);
+}
+
+.verification-item.warning i {
+  color: var(--warning);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .store-header-wrapper {
+    min-height: 300px;
+  }
+  
+  .store-logo {
+    width: 150px;
+    height: 150px;
+  }
+  
+  .grid-system {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  }
+  
+  .store-title {
+    font-size: 2.5rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .grid-system {
+    grid-template-columns: 1fr;
+  }
+  
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .store-title {
+    font-size: 2rem;
+  }
+  
+  .store-logo {
+    width: 120px;
+    height: 120px;
+  }
+  
+  .stat-item h3 {
+    font-size: 2rem;
+  }
+}
+
+/* Additional text protection classes */
+.text-shadow-3d {
+  text-shadow: 
+    0 1px 0 #ccc,
+    0 2px 0 #c9c9c9,
+    0 3px 0 #bbb,
+    0 4px 0 #b9b9b9,
+    0 5px 0 #aaa,
+    0 6px 1px rgba(0,0,0,.1),
+    0 0 5px rgba(0,0,0,.1),
+    0 1px 3px rgba(0,0,0,.3),
+    0 3px 5px rgba(0,0,0,.2),
+    0 5px 10px rgba(0,0,0,.25),
+    0 10px 10px rgba(0,0,0,.2),
+    0 20px 20px rgba(0,0,0,.15);
+}
+
+.text-protected-label {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+  backdrop-filter: blur(4px);
+}
 </style>
 {% endblock %}
-[file content end]

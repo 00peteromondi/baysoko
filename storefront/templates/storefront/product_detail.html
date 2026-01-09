@@ -1,874 +1,787 @@
-[file name]: product_detail.html
-[file content begin]
 {% extends 'base.html' %}
 
 {% block title %}{{ product.title }} - {{ store.name }} - HomaBay Souq{% endblock %}
 
 {% block content %}
-<div class="container py-4">
-    <!-- Breadcrumb -->
-    <nav aria-label="breadcrumb" class="mb-4">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'storefront:store_list' %}">Stores</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'storefront:store_detail' slug=store.slug %}">{{ store.name }}</a></li>
-            <li class="breadcrumb-item active" aria-current="page">{{ product.title }}</li>
-        </ol>
-    </nav>
-
-    <div class="row">
-        <!-- Product Images -->
-        <div class="col-lg-6 mb-4">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body p-3">
-                    <!-- Main Image -->
-                    <div class="text-center mb-3">
-                        <img src="{{ product.get_image_url }}" 
-                             alt="{{ product.title }}"
-                             class="img-fluid rounded product-main-image"
-                             style="max-height: 400px; object-fit: contain;"
-                             onerror="this.src='https://placehold.co/500x400/c2c2c2/1f1f1f?text=Product+Image'">
-                    </div>
-                    
-                    <!-- Thumbnail Gallery -->
-                    {% if product.images.all %}
-                    <div class="row g-2">
-                        {% for img in product.images.all %}
-                        <div class="col-3">
-                            <img src="{{ img.get_image_url }}" 
-                                 alt="{{ product.title }}"
-                                 class="img-fluid rounded cursor-pointer thumbnail"
-                                 style="height: 80px; object-fit: cover; width: 100%;"
-                                 onclick="setMainImage(this.src)"
-                                 onerror="this.src='https://placehold.co/100x80/c2c2c2/1f1f1f?text=Thumb'">
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                </div>
+<div class="container p-4">
+  <!-- Product Hero with Protected Text -->
+  <div class="hero-section rounded-lg mb-4 position-relative overflow-hidden"
+       style="{% if product.get_image_url %}background-image: url('{{ product.get_image_url }}');{% else %}background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);{% endif %}">
+    <!-- Overlay for text protection -->
+    <div class="hero-overlay position-absolute top-0 start-0 w-100 h-100"></div>
+    
+    <div class="hero-content position-relative z-2">
+      <div class="container py-5)">
+        <div class="row align-items-center">
+          <div class="col-lg-8">
+            <!-- Protected text -->
+            <div class="protected-text-container">
+              <h1 class="hero-title display-4 fw-bold mb-3 text-white text-shadow-3d">{{ product.title }}</h1>
+              <p class="hero-subtitle lead mb-4 text-white text-protected-bg">{{ store.name }}</p>
             </div>
+            
+            <div class="d-flex flex-wrap align-items-center gap-4">
+              <div class="price-protected-bg">
+                <h2 class="product-price-hero mb-0">KSh {{ product.price }}</h2>
+              </div>
+              {% if product.original_price and product.original_price > product.price %}
+              <div class="price-badge bg-success text-protected-bg">
+                Save {{ product.get_discount_percentage }}%
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          <div class="col-lg-4 text-center">
+            <div class="store-logo-hero position-relative">
+              <div class="logo-background"></div>
+              <img src="{{ store.get_logo_url|default:'https://placehold.co/120x120/c2c2c2/1f1f1f?text=Store' }}"
+                   alt="{{ store.name }}"
+                   class="rounded-circle border-3 border-white position-relative z-1">
+              {% if store.is_premium %}
+              <span class="premium-badge-hero text-protected-bg">
+                <i class="bi bi-star-fill"></i> Premium
+              </span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-var(--spacing-xl)">
+    <!-- Image Gallery -->
+    <div class="col-lg-7">
+      <div class="image-gallery card-custom">
+        <!-- Main Image -->
+        <div class="main-image-wrapper mb-var(--spacing-md)">
+          <img src="{{ product.get_image_url }}" 
+               alt="{{ product.title }}"
+               class="main-image"
+               onerror="this.src='https://placehold.co/800x600/c2c2c2/1f1f1f?text=Product'">
         </div>
         
-        <!-- Product Details -->
-        <div class="col-lg-6">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body">
-                    <!-- Store Info -->
-                    <div class="d-flex align-items-center mb-3">
-                    <img src="{{ store.get_logo_url|default:'https://placehold.co/40x40/c2c2c2/1f1f1f?text=Store' }}"
-                        data-default="https://placehold.co/40x40/c2c2c2/1f1f1f?text=Store"
-                        alt="{{ store.name }}"
-                        class="rounded-circle me-2"
-                        style="width: 60px; height: 60px; object-fit: cover;"
-                        onerror="this.onerror=null;this.src=this.getAttribute('data-default');">
-                        <div>
-                            <h6 class="mb-0 fw-bold fs-4">{{ store.name }}</h6>
-                            <small class="text-muted">
-                                {% if store.is_premium %}
-                                <span class="badge bg-warning text-dark me-1 mt-1">
-                                    <i class="bi bi-star-fill me-1"></i>Premium Seller
-                                </span>
-                                {% endif %}
-                                <br>
-                                <a href="{% url 'storefront:store_detail' slug=store.slug %}" class="text-decoration-none mt-2 d-inline-block">
-                                    <i class="bi bi-shop me-1"></i>View Store
-                                </a>
-                            </small>
-                        </div>
-                    </div>
-                    
-                    <hr>
-                    
-                    <!-- Product Title and Price -->
-                    <h1 class="h2 fw-bold mb-2 listing-title">{{ product.title }}</h1>
-                    <div class="d-flex align-items-center mb-3">
-                        <h2 class="listing-price me-3">KSh {{ product.price }}</h2>
-                        {% if product.original_price and product.original_price > product.price %}
-                        <div class="price-history">
-                            <div class="price-trend trend-down">
-                                <i class="bi bi-arrow-down me-1"></i>
-                                <span class="text-muted text-decoration-line-through">KSh {{ product.original_price }}</span>
-                                <span class="ms-1">Save {{ product.get_discount_percentage }}%</span>
-                            </div>
-                        </div>
-                        {% endif %}
-                    </div>
-                    
-                    <!-- Product Meta Tags -->
-                    <div class="listing-meta">
-                        {% if product.brand %}
-                        <span class="meta-tag">
-                            <i class="bi bi-tag"></i>
-                            {{ product.brand }}
-                        </span>
-                        {% endif %}
-                        {% if product.model %}
-                        <span class="meta-tag">
-                            <i class="bi bi-box"></i>
-                            {{ product.model }}
-                        </span>
-                        {% endif %}
-                        <span class="meta-tag">
-                            <i class="bi bi-grid"></i>
-                            {{ product.category.name }}
-                        </span>
-                        <span class="meta-tag">
-                            <i class="bi bi-check2-circle"></i>
-                            {{ product.get_condition_display }}
-                        </span>
-                        <span class="meta-tag">
-                            <i class="bi bi-truck"></i>
-                            {{ product.get_delivery_option_display }}
-                        </span>
-                    </div>
-                    
-                    <!-- Product Description -->
-                    <div class="listing-description">
-                        {{ product.description|linebreaks }}
-                    </div>
-                    
-                    <!-- Product Specifications -->
-                    {% if product.brand or product.model or product.color or product.dimensions or product.weight or product.material %}
-                    <section class="specifications">
-                        <h5 class="mb-3">Product Specifications</h5>
-                        <div class="specs-table">
-                            {% if product.brand %}
-                            <div class="spec-row">
-                                <span class="spec-label">Brand</span>
-                                <span class="spec-value">{{ product.brand }}</span>
-                            </div>
-                            {% endif %}
-                            {% if product.model %}
-                            <div class="spec-row">
-                                <span class="spec-label">Model</span>
-                                <span class="spec-value">{{ product.model }}</span>
-                            </div>
-                            {% endif %}
-                            {% if product.color %}
-                            <div class="spec-row">
-                                <span class="spec-label">Color</span>
-                                <span class="spec-value">{{ product.color }}</span>
-                            </div>
-                            {% endif %}
-                            {% if product.dimensions %}
-                            <div class="spec-row">
-                                <span class="spec-label">Dimensions</span>
-                                <span class="spec-value">{{ product.dimensions }}</span>
-                            </div>
-                            {% endif %}
-                            {% if product.weight %}
-                            <div class="spec-row">
-                                <span class="spec-label">Weight</span>
-                                <span class="spec-value">{{ product.weight }}</span>
-                            </div>
-                            {% endif %}
-                            {% if product.material %}
-                            <div class="spec-row">
-                                <span class="spec-label">Material</span>
-                                <span class="spec-value">{{ product.material }}</span>
-                            </div>
-                            {% endif %}
-                        </div>
-                    </section>
-                    {% endif %}
-                    
-                    <!-- Action Buttons -->
-                    <div class="listing-actions">
-                        {% if user.is_authenticated and not product.is_sold and product.stock > 0 %}
-                        <form action="{% url 'add_to_cart' product.id %}" method="post" class="flex-fill">
-                            {% csrf_token %}
-                            <button type="submit" class="action-button primary">
-                                <i class="bi bi-cart-plus me-2"></i>
-                                Add to Cart
-                            </button>
-                        </form>
-                        <form action="{% url 'toggle_favorite' product.id %}" method="post" class="favorite-form">
-                            {% csrf_token %}
-                            <button type="submit" class="action-button {% if product.id in user_favorites %}primary{% else %}secondary{% endif %}">
-                                <i class="bi bi-heart{% if product.id in user_favorites %}-fill{% endif %}"></i>
-                                {% if product.id in user_favorites %}Liked{% else %}Like{% endif %}
-                                ({{ product.favorites.count }})
-                            </button>
-                        </form>
-                        {% elif not user.is_authenticated %}
-                        <a href="{% url 'login' %}?next={{ request.path }}" class="action-button primary">
-                            <i class="bi bi-box-arrow-in-right me-2"></i>Login to Purchase
-                        </a>
-                        {% endif %}
-                    </div>
-                    
-                    <!-- Stock Status -->
-                    <div class="mb-4">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <span class="fw-bold">Stock Status:</span>
-                            <span class="stock-badge {% if product.stock > 10 %}in-stock{% elif product.stock > 0 %}low-stock{% else %}out-of-stock{% endif %}">
-                                {% if product.stock > 10 %}
-                                    In Stock ({{ product.stock }} available)
-                                {% elif product.stock > 0 %}
-                                    Low Stock (Only {{ product.stock }} left)
-                                {% else %}
-                                    Out of Stock
-                                {% endif %}
-                            </span>
-                        </div>
-                    </div>
-                    
-                    <!-- Shipping Information -->
-                    <div class="shipping-info alert alert-info">
-                        <div class="shipping-option">
-                            <i class="bi bi-truck me-2"></i>
-                            <strong>{{ product.get_delivery_option_display }}</strong>
-                            <br>
-                            <small class="text-muted ms-4">Orders processed within 24 hours</small>
-                        </div>
-                        <div class="shipping-time">
-                            <i class="bi bi-clock-history me-2"></i>
-                            <strong>Estimated Delivery:</strong> 2-5 business days
-                        </div>
-                        <div class="shipping-cost">
-                            <i class="bi bi-credit-card me-2"></i>
-                            <strong>Shipping Cost:</strong>
-                            {% if product.delivery_option == 'pickup' %}
-                            Free pickup at meeting point
-                            {% else %}
-                            Calculated at checkout based on location
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <!-- Stock Status -->
-                    <div class="mb-4">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <span class="fw-bold">Stock Status:</span>
-                            <span class="stock-badge {% if product.stock > 10 %}in-stock{% elif product.stock > 0 %}low-stock{% else %}out-of-stock{% endif %}">
-                                {% if product.stock > 10 %}
-                                    In Stock ({{ product.stock }} available)
-                                {% elif product.stock > 0 %}
-                                    Low Stock (Only {{ product.stock }} left)
-                                {% else %}
-                                    Out of Stock
-                                {% endif %}
-                            </span>
-                        </div>
-                    </div>
-
-                    <!-- Contact Seller -->
-                    {% if user.is_authenticated and user != product.seller %}
-                    <div class="mb-4">
-                        <a href="{% url 'start-conversation' product.id product.seller.id %}" class="btn btn-outline-primary rounded-pill w-100">
-                            <i class="bi bi-chat-dots me-2"></i>
-                            Contact Seller
-                        </a>
-                    </div>
-                    {% endif %}
-                    
-                    <!-- Safety Tips -->
-                    <div class="alert alert-warning">
-                        <h6 class="fw-bold"><i class="bi bi-shield-check me-2"></i>Safety Tips</h6>
-                        <ul class="list-unstyled mb-0">
-                            <li><i class="bi bi-check2 me-2"></i>Meet in a safe public place</li>
-                            <li><i class="bi bi-check2 me-2"></i>Inspect the item before buying</li>
-                            <li><i class="bi bi-check2 me-2"></i>Use secure payment methods</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
+        <!-- Thumbnails -->
+        {% if product.images.all %}
+        <div class="thumbnail-grid">
+          {% for img in product.images.all %}
+          <div class="thumbnail-item">
+            <img src="{{ img.get_image_url }}" 
+                 alt="{{ product.title }}"
+                 class="thumbnail"
+                 onclick="setMainImage(this.src)">
+          </div>
+          {% endfor %}
         </div>
+        {% endif %}
+      </div>
     </div>
     
-    <!-- Gallery Section -->
-    {% if product.images.all %}
-    <section class="similar-listings mt-4">
-        <h4 class="section-title">
-            <i class="bi bi-images me-2"></i>
-            Product Gallery
-        </h4>
-        <div class="row g-3">
-            {% for img in product.images.all %}
-            <div class="col-6 col-md-3">
-                <div class="similar-card h-100">
-                    <img src="{{ img.get_image_url }}" 
-                         alt="{{ product.title }}"
-                         class="img-fluid rounded cursor-pointer gallery-image w-100"
-                         style="height: 200px; object-fit: cover;"
-                         onclick="openLightbox(this.src)"
-                         onerror="this.src='https://placehold.co/300x200/c2c2c2/1f1f1f?text=Gallery'">
-                </div>
+    <!-- Product Details -->
+    <div class="col-lg-5">
+      <div class="product-details card-custom mb-3">
+        <!-- Store Info -->
+        <div class="store-info-section mb-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="store-logo-protected">
+              <div class="store-logo-background-small"></div>
+              <img src="{{ store.get_logo_url|default:'https://placehold.co/60x60/c2c2c2/1f1f1f?text=Store' }}"
+                   alt="{{ store.name }}"
+                   class="store-logo-small rounded-circle position-relative z-1">
             </div>
-            {% endfor %}
+            <div>
+              <h3 class="store-name mb-1">{{ store.name }}</h3>
+              <div class="store-meta">
+                {% if store.is_premium %}
+                <span class="badge bg-warning text-dark badge-protected">
+                  <i class="bi bi-star-fill"></i> Premium Seller
+                </span>
+                {% endif %}
+                <a href="{% url 'storefront:store_detail' slug=store.slug %}" class="text-decoration-none ms-2">
+                  Visit Store
+                </a>
+              </div>
+            </div>
+          </div>
         </div>
-    </section>
+        
+        <!-- Product Specs -->
+        <div class="specs-section mb-3">
+          <h4 class="section-title mb-3">Product Details</h4>
+          <div class="specs-grid">
+            {% if product.category %}
+            <div class="spec-item">
+              <i class="bi bi-grid"></i>
+              <span>{{ product.category.name }}</span>
+            </div>
+            {% endif %}
+            {% if product.condition %}
+            <div class="spec-item">
+              <i class="bi bi-check-circle"></i>
+              <span>{{ product.get_condition_display }}</span>
+            </div>
+            {% endif %}
+            {% if product.brand %}
+            <div class="spec-item">
+              <i class="bi bi-tag"></i>
+              <span>{{ product.brand }}</span>
+            </div>
+            {% endif %}
+            {% if product.model %}
+            <div class="spec-item">
+              <i class="bi bi-box"></i>
+              <span>{{ product.model }}</span>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        
+        <!-- Stock & Actions -->
+        <div class="action-section">
+          <div class="stock-status mb-3">
+            <h4 class="mb-2">Stock Status</h4>
+            <div class="stock-indicator {% if product.stock > 10 %}in-stock{% elif product.stock > 0 %}low-stock{% else %}out-of-stock{% endif %}">
+              {% if product.stock > 10 %}
+                <i class="bi bi-check-circle-fill"></i>
+                In Stock ({{ product.stock }} available)
+              {% elif product.stock > 0 %}
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                Low Stock (Only {{ product.stock }} left)
+              {% else %}
+                <i class="bi bi-x-circle-fill"></i>
+                Out of Stock
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="action-buttons">
+            {% if user.is_authenticated and not product.is_sold and product.stock > 0 %}
+            <form action="{% url 'add_to_cart' product.id %}" method="post" class="w-100 mb-3">
+              {% csrf_token %}
+              <button type="submit" class="btn-custom btn-primary btn-lg w-100">
+                <i class="bi bi-cart-plus"></i>
+                Add to Cart
+              </button>
+            </form>
+            {% elif not user.is_authenticated %}
+            <a href="{% url 'login' %}?next={{ request.path }}" class="btn-custom btn-primary btn-lg w-100 mb-3">
+              <i class="bi bi-box-arrow-in-right"></i>
+              Login to Purchase
+            </a>
+            {% endif %}
+            
+            <div class="d-flex gap-2">
+              <form action="{% url 'toggle_favorite' product.id %}" method="post" class="flex-fill">
+                {% csrf_token %}
+                <button type="submit" class="btn-custom btn-ghost w-100">
+                  <i class="bi bi-heart{% if product.id in user_favorites %}-fill{% endif %}"></i>
+                  {{ product.favorites.count }} Likes
+                </button>
+              </form>
+              
+              {% if user.is_authenticated and user != product.seller %}
+              <a href="{% url 'start-conversation' product.id product.seller.id %}" class="btn-custom btn-secondary flex-fill">
+                <i class="bi bi-chat-dots"></i>
+                Contact
+              </a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Product Description -->
+  <div class="description-section card-custom mt-3 mb-3">
+    <h3 class="mb-3">Description</h3>
+    <div class="description-content">
+      {{ product.description|linebreaks }}
+    </div>
+  </div>
+
+  <!-- Store Reviews Section -->
+  <div class="reviews-section card-custom mt-3 mb-3">
+    <h3 class="mb-3">
+      <i class="bi bi-chat-square-text text-primary me-2"></i>
+      Store Reviews
+    </h3>
+    
+    <!-- Review Stats -->
+    <div class="review-stats mb-4">
+      <div class="row">
+        <div class="col-md-4">
+          <div class="text-center p-3 bg-light rounded">
+            <h2 class="display-4 fw-bold text-primary">{{ store.get_rating|default:"4.5" }}</h2>
+            <div class="rating-stars mb-2">
+              {% with rating=store.get_rating|default:4.5 %}
+                {% for i in "12345" %}
+                  {% if forloop.counter <= rating|floatformat:0|add:"0" %}
+                    <i class="bi bi-star-fill text-warning"></i>
+                  {% else %}
+                    <i class="bi bi-star text-warning"></i>
+                  {% endif %}
+                {% endfor %}
+              {% endwith %}
+            </div>
+            <p class="text-muted mb-0">{{ store.reviews.count }} reviews</p>
+          </div>
+        </div>
+        <div class="col-md-8">
+          <div class="p-3">
+            {% if user.is_authenticated and user != store.owner %}
+            <button class="btn-custom btn-primary mb-3" id="writeReviewBtn">
+              <i class="bi bi-pencil me-2"></i>Write a Review
+            </button>
+            {% elif not user.is_authenticated %}
+            <a href="{% url 'login' %}?next={{ request.path }}" class="btn-custom btn-primary mb-3">
+              <i class="bi bi-box-arrow-in-right me-2"></i>Login to Write a Review
+            </a>
+            {% endif %}
+            
+            {% if user.is_authenticated and user == store.owner %}
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle me-2"></i>
+              You cannot review your own store.
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Review Form (Hidden by default) -->
+    {% if user.is_authenticated and user != store.owner %}
+    <div class="review-form-container card-custom mb-4" id="reviewForm" style="display: none;">
+      <h4 class="mb-3">Write Your Review</h4>
+      <form method="post" action="{% url 'store_review' store.slug %}">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label">Rating</label>
+          <div class="rating-input mb-2">
+            {% for i in "12345" %}
+              <i class="bi bi-star rating-star" data-value="{{ forloop.counter }}"></i>
+            {% endfor %}
+            <input type="hidden" name="rating" id="ratingValue" value="5">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label for="reviewComment" class="form-label">Your Review</label>
+          <textarea class="form-control" id="reviewComment" name="comment" rows="4" 
+                    placeholder="Share your experience with this store..." required></textarea>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn-custom btn-primary">Submit Review</button>
+          <button type="button" class="btn-custom btn-ghost" id="cancelReviewBtn">Cancel</button>
+        </div>
+      </form>
+    </div>
     {% endif %}
     
-    <!-- Safety Tips Section -->
-    <section class="similar-listings mt-4">
-        <h4 class="section-title">
-            <i class="bi bi-shield-check me-2"></i>
-            Safety Guidelines
-        </h4>
-        <div class="row g-4">
-            <div class="col-md-6">
-                <div class="info-card h-100">
-                    <h6 class="mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i>Do's</h6>
-                    <ul class="info-list">
-                        <li>
-                            <i class="bi bi-check-lg"></i>
-                            Meet in a public, well-lit location for transactions
-                        </li>
-                        <li>
-                            <i class="bi bi-check-lg"></i>
-                            Inspect the item thoroughly before purchase
-                        </li>
-                        <li>
-                            <i class="bi bi-check-lg"></i>
-                            Use secure payment methods through our platform
-                        </li>
-                        <li>
-                            <i class="bi bi-check-lg"></i>
-                            Keep all communication within our messaging system
-                        </li>
-                        <li>
-                            <i class="bi bi-check-lg"></i>
-                            Report any suspicious behavior immediately
-                        </li>
-                    </ul>
-                </div>
+    <!-- Reviews List -->
+    <div class="reviews-list">
+      <h5 class="mb-3">Recent Reviews</h5>
+      {% if store.reviews.all %}
+        {% for review in store.reviews.all|slice:":5" %}
+        <div class="review-item card-custom mb-3">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div class="d-flex align-items-center">
+              <div class="reviewer-avatar me-3">
+                <img src="{{ review.reviewer.profile.get_avatar_url|default:'https://placehold.co/40x40/c2c2c2/1f1f1f?text=User' }}"
+                     alt="{{ review.reviewer.username }}"
+                     class="rounded-circle" width="40" height="40">
+              </div>
+              <div>
+                <h6 class="mb-0">{{ review.reviewer.get_full_name|default:review.reviewer.username }}</h6>
+                <small class="text-muted">{{ review.created_at|date:"M d, Y" }}</small>
+              </div>
             </div>
-            <div class="col-md-6">
-                <div class="info-card h-100">
-                    <h6 class="mb-3"><i class="bi bi-x-circle-fill text-danger me-2"></i>Don'ts</h6>
-                    <ul class="info-list">
-                        <li>
-                            <i class="bi bi-x-lg"></i>
-                            Never send money before receiving the item
-                        </li>
-                        <li>
-                            <i class="bi bi-x-lg"></i>
-                            Don't share personal financial information
-                        </li>
-                        <li>
-                            <i class="bi bi-x-lg"></i>
-                            Avoid meeting at private residences
-                        </li>
-                        <li>
-                            <i class="bi bi-x-lg"></i>
-                            Don't use payment methods outside our platform
-                        </li>
-                        <li>
-                            <i class="bi bi-x-lg"></i>
-                            Never rush into a transaction under pressure
-                        </li>
-                    </ul>
-                </div>
+            <div class="rating">
+              {% for i in "12345" %}
+                {% if forloop.counter <= review.rating %}
+                  <i class="bi bi-star-fill text-warning"></i>
+                {% else %}
+                  <i class="bi bi-star text-warning"></i>
+                {% endif %}
+              {% endfor %}
             </div>
+          </div>
+          <p class="mb-0">{{ review.comment }}</p>
+          
+          {% if review.helpful_count > 0 %}
+          <div class="review-helpful mt-2">
+            <small class="text-muted">
+              <i class="bi bi-hand-thumbs-up"></i>
+              {{ review.helpful_count }} people found this helpful
+            </small>
+          </div>
+          {% endif %}
         </div>
-    </section>
+        {% endfor %}
+        
+        {% if store.reviews.count > 5 %}
+        <div class="text-center mt-3">
+          <a href="{% url 'store_reviews' store.slug %}" class="btn-custom btn-ghost">
+            View All {{ store.reviews.count }} Reviews
+          </a>
+        </div>
+        {% endif %}
+      {% else %}
+        <div class="empty-state text-center p-4">
+          <i class="bi bi-chat-square-text display-4 text-muted mb-3"></i>
+          <h5>No Reviews Yet</h5>
+          <p class="text-muted">Be the first to review this store!</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
 </div>
 
-<!-- Lightbox Modal -->
-<div class="modal fade" id="lightboxModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content border-0">
-            <div class="modal-header border-0">
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body text-center">
-                <img id="lightboxImage" src="" class="img-fluid rounded" alt="Product image">
-            </div>
-        </div>
-    </div>
-</div>
+<style>
+/* Enhanced text protection for product detail */
+
+/* Hero Section with overlay */
+.hero-section {
+  background-size: cover;
+  background-position: center;
+  min-height: 400px;
+  border-radius: var(--radius-xl);
+}
+
+.hero-overlay {
+  background: linear-gradient(to bottom, 
+    rgba(0, 0, 0, 0.7) 0%, 
+    rgba(0, 0, 0, 0.5) 50%, 
+    rgba(0, 0, 0, 0.3) 100%);
+  border-radius: var(--radius-xl);
+}
+
+.protected-text-container {
+  position: relative;
+  z-index: 2;
+}
+
+.price-protected-bg {
+  background: rgba(0, 0, 0, 0.6);
+  padding: 0.5rem 1.5rem;
+  border-radius: var(--radius-md);
+  display: inline-block;
+  backdrop-filter: blur(8px);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.product-price-hero {
+  font-size: 3.5rem;
+  font-weight: 800;
+  color: white;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
+}
+
+.price-badge {
+  padding: 0.5rem 1.5rem;
+  border-radius: var(--radius-md);
+  color: white;
+  font-weight: 600;
+  font-size: 1.1rem;
+  backdrop-filter: blur(8px);
+}
+
+.text-protected-bg {
+  background: rgba(0, 0, 0, 0.5);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+  backdrop-filter: blur(4px);
+}
+
+.store-logo-hero {
+  position: relative;
+}
+
+.logo-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 100%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.store-logo-hero img {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border: 3px solid rgba(255, 255, 255, 0.5);
+  background: white;
+  padding: 3px;
+}
+
+.premium-badge-hero {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background: var(--warning);
+  color: #333;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.875rem;
+  backdrop-filter: blur(4px);
+  z-index: 3;
+}
+
+/* Store logo protection */
+.store-logo-protected {
+  position: relative;
+  display: inline-block;
+}
+
+.store-logo-background-small {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  border-radius: 100%;
+}
+
+.store-logo-small {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border: 2px solid var(--border-color);
+  position: relative;
+  z-index: 1;
+}
+
+.badge-protected {
+  backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.85) !important;
+  color: white !important;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+}
+
+.badge-protected.bg-warning {
+  background: rgba(255, 193, 7, 0.95) !important;
+  color: #333 !important;
+}
+
+/* Review stars */
+.rating-star {
+  cursor: pointer;
+  font-size: 1.5rem;
+  color: #ddd;
+  transition: color 0.3s ease;
+}
+
+.rating-star:hover,
+.rating-star.active {
+  color: #ffc107;
+}
+
+.review-item {
+  transition: transform 0.3s ease;
+}
+
+.review-item:hover {
+  transform: translateY(-2px);
+}
+
+/* Image Gallery */
+.image-gallery {
+  padding: var(--spacing-lg);
+}
+
+.main-image-wrapper {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.main-image {
+  width: 100%;
+  height: 400px;
+  object-fit: contain;
+  transition: transform 0.3s ease;
+}
+
+.main-image:hover {
+  transform: scale(1.02);
+}
+
+.thumbnail-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.thumbnail-item {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.thumbnail-item:hover {
+  transform: translateY(-2px);
+  border-color: var(--primary);
+}
+
+.thumbnail {
+  width: 100%;
+  height: 80px;
+  object-fit: cover;
+}
+
+/* Product Details */
+.specs-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-md);
+}
+
+.spec-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+}
+
+.spec-item i {
+  color: var(--primary);
+}
+
+/* Stock Indicator */
+.stock-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+}
+
+.stock-indicator.in-stock {
+  background: rgba(6, 214, 160, 0.1);
+  color: var(--accent);
+  border: 2px solid var(--accent);
+}
+
+.stock-indicator.low-stock {
+  background: rgba(255, 158, 31, 0.1);
+  color: var(--warning);
+  border: 2px solid var(--warning);
+}
+
+.stock-indicator.out-of-stock {
+  background: rgba(239, 71, 111, 0.1);
+  color: var(--danger);
+  border: 2px solid var(--danger);
+}
+
+/* Action Buttons */
+.btn-lg {
+  padding: var(--spacing-md) var(--spacing-xl);
+  font-size: 1.1rem;
+}
+
+.action-buttons .btn-ghost {
+  border: 2px solid var(--border-color);
+}
+
+.action-buttons .btn-ghost:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* Description */
+.description-content {
+  line-height: 1.8;
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+}
+
+.description-content p {
+  margin-bottom: var(--spacing-md);
+}
+
+/* Responsive Design */
+@media (max-width: 992px) {
+  .hero-section {
+    min-height: 300px;
+  }
+  
+  .product-price-hero {
+    font-size: 2.5rem;
+  }
+  
+  .thumbnail-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .hero-section {
+    min-height: 250px;
+  }
+  
+  .specs-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .thumbnail-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 576px) {
+  .hero-section {
+    min-height: 200px;
+  }
+  
+  .thumbnail-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .action-buttons .d-flex {
+    flex-direction: column;
+  }
+}
+</style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const mainImage = document.querySelector('.product-main-image');
-    const thumbnails = document.querySelectorAll('.thumbnail, .gallery-image');
-    const zoomToggle = document.querySelector('.zoom-toggle');
-    let isZoomed = false;
-
-    // Enhanced Image Zoom
+  // Image gallery functionality
+  const mainImage = document.querySelector('.main-image');
+  const thumbnails = document.querySelectorAll('.thumbnail');
+  
+  function setMainImage(src) {
     if (mainImage) {
-        mainImage.addEventListener('click', function() {
-            if (isZoomed) {
-                this.style.transform = 'scale(1)';
-                this.style.cursor = 'zoom-in';
-            } else {
-                this.style.transform = 'scale(1.5)';
-                this.style.cursor = 'zoom-out';
-            }
-            isZoomed = !isZoomed;
-        });
-
-        // Mouse move handling for zoomed image
-        mainImage.addEventListener('mousemove', function(e) {
-            if (isZoomed) {
-                const bounds = this.getBoundingClientRect();
-                const x = (e.clientX - bounds.left) / bounds.width;
-                const y = (e.clientY - bounds.top) / bounds.height;
-                
-                this.style.transformOrigin = `${x * 100}% ${y * 100}%`;
-            }
-        });
-    }
-
-    // Image Carousel and Lightbox
-    function setMainImage(src) {
-        if (mainImage) {
-            mainImage.style.transform = 'scale(1)';
-            mainImage.src = src;
-            isZoomed = false;
-            
-            // Update active thumbnail
-            thumbnails.forEach(thumb => {
-                thumb.classList.toggle('active', thumb.src === src);
-            });
+      mainImage.src = src;
+      
+      // Add visual feedback
+      thumbnails.forEach(thumb => {
+        const wrapper = thumb.closest('.thumbnail-item');
+        if (thumb.src === src) {
+          wrapper.style.borderColor = 'var(--primary)';
+          wrapper.style.transform = 'scale(1.05)';
+        } else {
+          wrapper.style.borderColor = 'transparent';
+          wrapper.style.transform = 'scale(1)';
         }
+      });
     }
-
-    function openLightbox(src) {
-        // Create fullscreen lightbox
-        const lightbox = document.createElement('div');
-        lightbox.className = 'image-fullscreen';
-        lightbox.innerHTML = `
-            <button class="fullscreen-close">
-                <i class="bi bi-x-lg"></i>
-            </button>
-            <img src="${src}" class="fullscreen-image" alt="Fullscreen view">
-            <button class="fullscreen-nav fullscreen-prev">
-                <i class="bi bi-chevron-left"></i>
-            </button>
-            <button class="fullscreen-nav fullscreen-next">
-                <i class="bi bi-chevron-right"></i>
-            </button>
-            <div class="fullscreen-counter"></div>
-        `;
-        
-        document.body.appendChild(lightbox);
-        document.body.style.overflow = 'hidden';
-        
-        // Get all image sources
-        const images = Array.from(document.querySelectorAll('.thumbnail img, .gallery-image')).map(img => img.src);
-        let currentIndex = images.indexOf(src);
-        
-        // Update counter
-        const updateCounter = () => {
-            lightbox.querySelector('.fullscreen-counter').textContent = `${currentIndex + 1} / ${images.length}`;
-        };
-        updateCounter();
-        
-        // Navigation handlers
-        lightbox.querySelector('.fullscreen-prev').addEventListener('click', () => {
-            currentIndex = (currentIndex - 1 + images.length) % images.length;
-            lightbox.querySelector('.fullscreen-image').src = images[currentIndex];
-            updateCounter();
-        });
-        
-        lightbox.querySelector('.fullscreen-next').addEventListener('click', () => {
-            currentIndex = (currentIndex + 1) % images.length;
-            lightbox.querySelector('.fullscreen-image').src = images[currentIndex];
-            updateCounter();
-        });
-        
-        // Close handler
-        const closeHandler = () => {
-            lightbox.remove();
-            document.body.style.overflow = '';
-        };
-        
-        lightbox.querySelector('.fullscreen-close').addEventListener('click', closeHandler);
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeHandler();
-            if (e.key === 'ArrowLeft') lightbox.querySelector('.fullscreen-prev').click();
-            if (e.key === 'ArrowRight') lightbox.querySelector('.fullscreen-next').click();
-        });
-    }
-
-    // Thumbnail hover effects and click handlers
-    thumbnails.forEach(thumb => {
-        thumb.style.cursor = 'pointer';
-        
-        // Hover animations
-        thumb.addEventListener('mouseenter', function() {
-            this.style.transform = 'scale(1.05)';
-            this.style.transition = 'transform 0.3s ease';
-        });
-        
-        thumb.addEventListener('mouseleave', function() {
-            this.style.transform = 'scale(1)';
-        });
-        
-        // Click handlers
-        thumb.addEventListener('click', function() {
-            if (this.classList.contains('gallery-image')) {
-                openLightbox(this.src);
-            } else {
-                setMainImage(this.src);
-            }
-        });
+  }
+  
+  // Set up thumbnail click handlers
+  thumbnails.forEach(thumb => {
+    thumb.addEventListener('click', function() {
+      setMainImage(this.src);
     });
-
-    // Social sharing functionality
-    window.shareOnFacebook = function() {
-        const url = encodeURIComponent(window.location.href);
-        const title = encodeURIComponent(document.title);
-        window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${title}`, '_blank');
-    };
-
-    window.shareOnTwitter = function() {
-        const url = encodeURIComponent(window.location.href);
-        const title = encodeURIComponent(document.title);
-        window.open(`https://twitter.com/intent/tweet?url=${url}&text=${title}`, '_blank');
-    };
-
-    window.shareOnWhatsApp = function() {
-        const url = encodeURIComponent(window.location.href);
-        const title = encodeURIComponent(document.title);
-        window.open(`https://wa.me/?text=${title} ${url}`, '_blank');
-    };
-
-    window.copyListingLink = function() {
-        const button = document.querySelector('.social-share-btn.link');
-        const originalHTML = button.innerHTML;
+  });
+  
+  // Review functionality
+  const writeReviewBtn = document.getElementById('writeReviewBtn');
+  const reviewForm = document.getElementById('reviewForm');
+  const cancelReviewBtn = document.getElementById('cancelReviewBtn');
+  const ratingStars = document.querySelectorAll('.rating-star');
+  const ratingValue = document.getElementById('ratingValue');
+  
+  if (writeReviewBtn && reviewForm) {
+    writeReviewBtn.addEventListener('click', function() {
+      reviewForm.style.display = 'block';
+      writeReviewBtn.style.display = 'none';
+    });
+  }
+  
+  if (cancelReviewBtn && reviewForm) {
+    cancelReviewBtn.addEventListener('click', function() {
+      reviewForm.style.display = 'none';
+      if (writeReviewBtn) writeReviewBtn.style.display = 'block';
+    });
+  }
+  
+  // Rating stars functionality
+  if (ratingStars.length > 0) {
+    ratingStars.forEach(star => {
+      star.addEventListener('click', function() {
+        const value = this.getAttribute('data-value');
+        ratingValue.value = value;
         
-        navigator.clipboard.writeText(window.location.href)
-            .then(() => {
-                button.innerHTML = '<i class="bi bi-check-lg"></i>';
-                button.style.background = 'var(--accent-green)';
-                
-                setTimeout(() => {
-                    button.innerHTML = originalHTML;
-                    button.style.background = '';
-                }, 2000);
-            })
-            .catch(err => {
-                console.error('Failed to copy: ', err);
-                button.innerHTML = '<i class="bi bi-x-lg"></i>';
-                button.style.background = 'var(--danger-color)';
-                
-                setTimeout(() => {
-                    button.innerHTML = originalHTML;
-                    button.style.background = '';
-                }, 2000);
-            });
-    };
-
-    // Favorite button AJAX functionality
-    const favoriteForm = document.querySelector('.favorite-form');
-    if (favoriteForm) {
-        favoriteForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const button = this.querySelector('button');
-            const icon = button.querySelector('i');
-            
-            // Click animation
-            button.style.transform = 'scale(0.95)';
-            
-            fetch(this.action, {
-                method: 'POST',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Reset animation
-                setTimeout(() => button.style.transform = 'scale(1)', 150);
-                
-                if (data.is_favorited) {
-                    button.classList.remove('secondary');
-                    button.classList.add('primary');
-                    icon.classList.remove('bi-heart');
-                    icon.classList.add('bi-heart-fill');
-                    button.innerHTML = `<i class="bi bi-heart-fill"></i> Liked (${data.favorite_count})`;
-                } else {
-                    button.classList.remove('primary');
-                    button.classList.add('secondary');
-                    icon.classList.remove('bi-heart-fill');
-                    icon.classList.add('bi-heart');
-                    button.innerHTML = `<i class="bi bi-heart"></i> Like (${data.favorite_count})`;
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                button.style.transform = 'scale(1)';
-            });
+        // Update star display
+        ratingStars.forEach((s, index) => {
+          if (index < value) {
+            s.classList.add('active');
+            s.classList.remove('bi-star');
+            s.classList.add('bi-star-fill');
+          } else {
+            s.classList.remove('active');
+            s.classList.remove('bi-star-fill');
+            s.classList.add('bi-star');
+          }
         });
-    }
+      });
+      
+      // Hover effect
+      star.addEventListener('mouseover', function() {
+        const value = this.getAttribute('data-value');
+        ratingStars.forEach((s, index) => {
+          if (index < value) {
+            s.style.color = '#ffc107';
+          }
+        });
+      });
+      
+      star.addEventListener('mouseout', function() {
+        ratingStars.forEach((s, index) => {
+          if (!s.classList.contains('active')) {
+            s.style.color = '#ddd';
+          }
+        });
+      });
+    });
+  }
+  
+  // Initialize rating stars
+  if (ratingStars.length > 0 && ratingValue) {
+    ratingStars.forEach((star, index) => {
+      if (index < ratingValue.value) {
+        star.classList.add('active');
+        star.classList.remove('bi-star');
+        star.classList.add('bi-star-fill');
+      }
+    });
+  }
+  
+  // Favorite button AJAX
+  const favoriteForm = document.querySelector('.favorite-form');
+  if (favoriteForm) {
+    favoriteForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      const button = this.querySelector('button');
+      const icon = button.querySelector('i');
+      
+      // Visual feedback
+      button.style.transform = 'scale(0.95)';
+      
+      // AJAX call here (simplified)
+      setTimeout(() => {
+        button.style.transform = 'scale(1)';
+      }, 150);
+    });
+  }
 });
 </script>
-
-<style>
-.listing-hero {
-    background: var(--card-bg);
-    border-radius: 20px;
-    overflow: hidden;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-    margin-bottom: 2rem;
-}
-
-.cursor-pointer {
-    cursor: pointer;
-}
-
-.product-main-image {
-    transition: transform 0.3s ease;
-    background: var(--card-bg);
-}
-
-.product-main-image:hover {
-    transform: scale(1.02);
-}
-
-/* Theme-aware text colors */
-h1, h2, h3, h4, h5, h6 {
-    color: var(--text-color-dark);
-}
-
-[data-theme="light"] h1,
-[data-theme="light"] h2,
-[data-theme="light"] h3,
-[data-theme="light"] h4,
-[data-theme="light"] h5,
-[data-theme="light"] h6 {
-    color: var(--text-color-light);
-}
-
-.text-muted {
-    color: var(--text-muted-dark) !important;
-}
-
-[data-theme="light"] .text-muted {
-    color: var(--text-muted-light) !important;
-}
-
-/* Image placeholder handling */
-img[src*="placehold.co"] {
-    background: var(--card-bg-hover);
-    border: 1px solid var(--border-color);
-    padding: 0.5rem;
-}
-
-/* Stock badges */
-.stock-badge {
-    padding: 0.5rem 1rem;
-    border-radius: 20px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.stock-badge.in-stock {
-    background: rgba(52, 168, 83, 0.1);
-    color: var(--accent-green);
-    border: 1px solid rgba(52, 168, 83, 0.2);
-}
-
-.stock-badge.low-stock {
-    background: rgba(251, 188, 5, 0.1);
-    color: var(--warning-color);
-    border: 1px solid rgba(251, 188, 5, 0.2);
-}
-
-.stock-badge.out-of-stock {
-    background: rgba(234, 67, 53, 0.1);
-    color: var(--danger-color);
-    border: 1px solid rgba(234, 67, 53, 0.2);
-}
-
-/* Safety tips */
-.alert-warning {
-    background: rgba(251, 188, 5, 0.1);
-    border: 1px solid rgba(251, 188, 5, 0.2);
-    color: var(--warning-color);
-}
-
-.alert-warning .bi {
-    color: var(--warning-color);
-}
-
-.alert-warning ul li {
-    margin-bottom: 0.5rem;
-}
-
-.alert-warning ul li:last-child {
-    margin-bottom: 0;
-}
-
-/* Enhanced Listing Styles */
-.listing-title {
-    font-size: 2rem;
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-    color: var(--text-color);
-}
-
-.listing-price {
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: var(--primary-gemini);
-    margin-bottom: 1rem;
-}
-
-.price-history {
-    margin-bottom: 1rem;
-}
-
-.price-trend {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    border-radius: 20px;
-    font-size: 0.875rem;
-    font-weight: 600;
-}
-
-.price-trend.trend-up {
-    background: rgba(52, 168, 83, 0.1);
-    color: var(--accent-green);
-    border: 1px solid rgba(52, 168, 83, 0.2);
-}
-
-.price-trend.trend-down {
-    background: rgba(234, 67, 53, 0.1);
-    color: var(--danger-color);
-    border: 1px solid rgba(234, 67, 53, 0.2);
-}
-
-.listing-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-bottom: 1.5rem;
-}
-
-.meta-tag {
-    background: var(--card-bg-hover);
-    border: 1px solid var(--border-color);
-    padding: 0.5rem 1rem;
-    border-radius: 15px;
-    font-size: 0.875rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: var(--text-color);
-}
-
-.listing-description {
-    font-size: 1.1rem;
-    line-height: 1.7;
-    color: var(--text-color);
-    margin-bottom: 2rem;
-}
-
-.listing-actions {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-    margin-bottom: 2rem;
-}
-
-.action-button {
-    padding: 1rem 2rem;
-    border: none;
-    border-radius: 15px;
-    font-weight: 600;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    transition: all 0.3s ease;
-    cursor: pointer;
-    text-align: center;
-    justify-content: center;
-}
-
-.action-button.primary {
-    background: var(--primary-gemini);
-    color: white;
-}
-
-.action-button.primary:hover {
-    background: var(--primary-gemini-hover);
-    transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(66, 133, 244, 0.3);
-}
-
-.action-button.secondary {
-    background: transparent;
-    color: var(--text-color);
-    border: 2px solid var(--border-color);
-}
-
-.action-button.secondary:hover {
-    border-color: var(--primary-gemini);
-    color: var(--primary-gemini);
-    transform: translateY(-2px);
-}
-
-/* Specifications Table */
-.specifications {
-    margin-bottom: 2rem;
-}
-
-.specs-table {
-    background: var(--card-bg-hover);
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid var(--border-color);
-}
-
-.spec-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.spec-row:last-child {
-    border-bottom: none;
-}
-
-.spec-label {
-    font-weight: 600;
-    color: var(--text-color);
-}
-
-.spec-value {
-    color: var(--text-muted);
-}
-
-/* Shipping Information */
-.shipping-info {
-    background: rgba(66, 133, 244, 0.1);
-    border: 1px solid rgba(66, 133, 244, 0.2);
-    border-radius: 15px;
-    padding: 1.5rem;
-    margin-bottom: 2rem;
-}
-
-.shipping-option, .shipping-time, .shipping-cost {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid rgba(66, 133, 244, 0.2);
-    color: var(--text-color);
-}
-
-.shipping-option:last-child,
-.shipping-time:last-child, 
-.shipping-cost:last-child {
-    border-bottom: none;
-}
-
-.shipping-info i {
-    color: var(--primary-gemini);
-    font-size: 1.25rem;
-}
-</style>
 {% endblock %}
-[file content end]

@@ -1,0 +1,105 @@
+{% extends 'listings/listing_form.html' %}
+{% load static %}
+{% block title %}AI Listing Assistant - HomaBay Souq{% endblock %}
+{% extends 'base.html' %}
+
+{% block title %}AI Listing Assistant - HomaBay Souq{% endblock %}
+
+{% block extra_css %}
+<style>
+    .card-custom { padding: var(--spacing-md); border-radius: var(--radius-lg); border:1px solid var(--border-color); background:var(--card-bg); }
+    .form-grid { display:grid; grid-template-columns: 1fr 320px; gap: var(--spacing-md); align-items:start; }
+    .form-group { margin-bottom: 1rem; }
+    .form-control, .form-select { padding: 0.75rem 1rem; border-radius: var(--radius-sm); border:1px solid var(--border-color); }
+    .btn-custom { min-height:44px; padding:0.6rem 1.25rem; border-radius:var(--radius-md); }
+    .btn-custom.btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color:#fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'includes/design_wrapper_start.html' %}
+
+<div class="card-custom">
+    <div class="form-header">
+        <h1 class="form-title"><i class="bi bi-robot"></i> Create a Listing with AI</h1>
+        <p class="form-subtitle">Start from a short prompt and let the assistant suggest the rest.</p>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}" role="status" aria-live="polite">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    {% if ai_error %}
+        <div class="alert alert-danger" role="alert">
+            <i class="bi bi-exclamation-triangle"></i>
+            <strong>AI Unavailable:</strong>
+            <div>{{ ai_error }}</div>
+        </div>
+    {% endif %}
+
+    <div class="form-section">
+        <div class="form-grid">
+            <div>
+                <form method="post" action="{% url 'create_with_ai' %}" aria-label="Create listing with AI">
+                    {% csrf_token %}
+
+                    <div class="form-group">
+                        <label class="form-label required-field" for="prompt">Short Prompt</label>
+                        <input type="text" class="form-control" id="prompt" name="prompt" placeholder="e.g., Red Nike running shoes, size 10" required aria-required="true">
+                        <div class="field-help">Describe the item in a single short sentence.</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="store">Choose Store</label>
+                        <select class="form-select" id="store" name="store">
+                            {% if stores %}
+                                {% for store in stores %}
+                                    <option value="{{ store.pk }}">{{ store.name }}</option>
+                                {% endfor %}
+                            {% elif request.user.is_authenticated %}
+                                {% for store in request.user.stores.all %}
+                                    <option value="{{ store.pk }}">{{ store.name }}</option>
+                                {% empty %}
+                                    <option value="">No stores found — create one first</option>
+                                {% endfor %}
+                            {% else %}
+                                <option value="">Sign in to select a store</option>
+                            {% endif %}
+                        </select>
+                    </div>
+
+                    <div class="form-actions mt-3">
+                        <button type="submit" class="btn-custom btn-primary"><i class="bi bi-magic"></i> Create with AI</button>
+                    </div>
+                </form>
+            </div>
+
+            <aside>
+                <div class="form-section">
+                    <h6 class="section-title"><i class="bi bi-lightbulb"></i> Tips</h6>
+                    <ul>
+                        <li>Be concise: one short sentence</li>
+                        <li>Include brand or key features</li>
+                        <li>Specify size/color if important</li>
+                    </ul>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <div class="form-section mt-3">
+        <h6 class="section-title"><i class="bi bi-info-circle"></i> How AI Helps</h6>
+        <ul class="mb-0">
+            <li>Generates compelling descriptions from minimal input</li>
+            <li>Suggests appropriate categories and pricing</li>
+            <li>Adds SEO-friendly meta descriptions</li>
+            <li>Fills in technical details (dimensions, materials, etc.)</li>
+            <li>Optimizes for the Homa Bay market</li>
+        </ul>
+    </div>
+</div>
+
+{% include 'includes/design_wrapper_end.html' %}
+{% endblock %}

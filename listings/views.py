@@ -5,8 +5,9 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.db.models import Q, Count, Avg, F
 from django.db import utils as db_utils
+from django.conf import settings
 from .models import Listing, Category, Favorite, Activity, RecentlyViewed, Review, Order, OrderItem, Cart, CartItem, Payment, Escrow, ListingImage
-from .forms import ListingForm
+from .forms import ListingForm, AIListingForm
 from storefront.models import Store
 from django.contrib.auth import get_user_model
 from django.contrib import messages
@@ -17,16 +18,23 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.db.models import Q
 from blog.models import BlogPost
+from django.http import JsonResponse, HttpResponse
+import json
+from .decorators import ajax_required
 
 
 from notifications.utils import (
-    notify_new_order, notify_order_shipped, notify_order_delivered,
+    notify_order_created, notify_order_shipped, notify_order_delivered,
     notify_payment_received, notify_listing_favorited, notify_new_review,
-    notify_delivery_assigned, notify_delivery_confirmed
+    notify_delivery_assigned, notify_delivery_confirmed, notify_delivery_status
 )
 
 
 User = get_user_model()
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 # In your views.py - Update the ListingListView
 from django.db.models import Count, Q
@@ -191,14 +199,21 @@ class ListingListView(ListView):
 
         return context
 
+def ai_test_view(request):
+    from .ai_listing_helper import listing_ai
+    return render(request, 'listings/ai_test.html', {
+        'ai_enabled': listing_ai.enabled
+    })
+
+
 class ListingDetailView(DetailView):
     model = Listing
     template_name = 'listings/listing_detail.html'
     context_object_name = 'listing'
-    
+
     def get_object(self, queryset=None):
         obj = super().get_object(queryset)
-        
+
         # Track recently viewed for authenticated users
         if self.request.user.is_authenticated:
             RecentlyViewed.objects.update_or_create(
@@ -206,30 +221,30 @@ class ListingDetailView(DetailView):
                 listing=obj,
                 defaults={'viewed_at': timezone.now()}
             )
-        
+
         return obj
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         listing = self.get_object()
         user = self.request.user
-        
+
         # Get all reviews for the listing
         reviews = listing.reviews.select_related('user').all()
         context['reviews'] = reviews
-        
+
         # Calculate average rating
         avg_rating = listing.reviews.aggregate(
             avg_rating=Avg('rating')
         )['avg_rating']
         context['avg_rating'] = round(avg_rating, 1) if avg_rating else 0
-        
+
         # Calculate rating distribution
         rating_counts = {5: 0, 4: 0, 3: 0, 2: 0, 1: 0}
         for review in reviews:
             if 1 <= review.rating <= 5:
                 rating_counts[review.rating] += 1
-        
+
         total_reviews = reviews.count()
         rating_distribution = []
         for rating in [5, 4, 3, 2, 1]:
@@ -240,62 +255,62 @@ class ListingDetailView(DetailView):
                 'count': count,
                 'percentage': percentage
             })
-        
+
         context['rating_distribution'] = rating_distribution
-        
+
         # Check if the current user has favorited this listing
         if user.is_authenticated:
             context['is_favorited'] = Favorite.objects.filter(
-                user=user, 
+                user=user,
                 listing=listing
             ).exists()
         else:
             context['is_favorited'] = False
-            
+
         # Get similar listings
         context['similar_listings'] = Listing.objects.filter(
             category=listing.category,
             is_active=True,
             is_sold=False
         ).exclude(id=listing.id)[:6]
-        
+
         # Get seller's other listings
         context['seller_other_listings'] = Listing.objects.filter(
             seller=listing.seller,
             is_active=True,
             is_sold=False
         ).exclude(id=listing.id)[:4]
-        
+
         # Get seller statistics
         seller = listing.seller
         seller_listings = Listing.objects.filter(seller=seller, is_active=True)
         seller_reviews = Review.objects.filter(listing__seller=seller)
-        
+
         context['seller_reviews_count'] = seller_reviews.count()
         seller_avg_rating = seller_reviews.aggregate(
             avg_rating=Avg('rating')
         )['avg_rating']
         context['seller_avg_rating'] = round(seller_avg_rating, 1) if seller_avg_rating else 0
-        
+
         # Get FAQs for this listing
         context['faqs'] = listing.faqs.filter(is_active=True).order_by('order')
-        
+
         # Get recently viewed for sidebar
         if user.is_authenticated:
             recently_viewed = RecentlyViewed.objects.filter(
                 user=user
             ).exclude(listing=listing).select_related('listing').order_by('-viewed_at')[:4]
             context['recently_viewed_sidebar'] = [rv.listing for rv in recently_viewed]
-        
+
         # Get price history
         context['price_history'] = listing.price_history.all()[:10]
-            
+
         return context
 
     
 class ListingCreateView(LoginRequiredMixin, CreateView):
     model = Listing
-    form_class = ListingForm
+    form_class = AIListingForm
 
     def dispatch(self, request, *args, **kwargs):
         # If the user is not authenticated, defer to LoginRequiredMixin's handling
@@ -311,9 +326,21 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
+        try:
+            context = super().get_context_data(**kwargs)
+        except AttributeError:
+            # Some mixin chains may call DetailView.get_context_data which expects
+            # `self.object` to exist. For CreateView there is no `object` yet —
+            # fall back to an empty context and populate what we need.
+            context = {}
         # Add categories to context for the form
         context['categories'] = Category.objects.filter(is_active=True)
+        # AI availability flag for templates
+        try:
+            from .ai_listing_helper import listing_ai
+            context['ai_enabled'] = listing_ai.enabled
+        except Exception:
+            context['ai_enabled'] = False
         # Get user's stores for the store selector
         if self.request.user.is_authenticated:
             context['stores'] = Store.objects.filter(owner=self.request.user)
@@ -397,6 +424,34 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
 
         messages.success(self.request, "Listing created successfully!")
         return response
+
+    def post(self, request, *args, **kwargs):
+        """Handle AI-prefill before saving when user requests AI assistance."""
+        # Prepare form with POST data
+        form = self.get_form()
+
+        # If user requested AI assist, generate suggestions and re-render the form
+        use_ai = request.POST.get('use_ai') in ['on', 'true', '1']
+        if use_ai:
+            try:
+                # Generate AI suggestions using the form helper
+                ai_data = form.generate_with_ai()
+                # Re-bind a form instance with current POST (mutable copy handled in generate_with_ai)
+                form = self.get_form()
+
+                context = self.get_context_data(form=form)
+                context.update({
+                    'ai_suggestions': ai_data,
+                    'ai_used': True,
+                    'quick_mode': request.POST.get('quick_mode') == '1'
+                })
+                return render(request, 'listings/listing_form.html', context)
+            except Exception as e:
+                logger.exception('AI generate failed: %s', e)
+                messages.error(request, 'AI generation failed. Showing standard form.')
+
+        # Fallback to default CreateView POST handling
+        return super().post(request, *args, **kwargs)
 
 class ListingUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = Listing
@@ -666,69 +721,7 @@ from django.views.decorators.http import require_POST
 import json
 
 
-@login_required
-def unread_notifications_count(request):
-    """API endpoint to get unread notifications count"""
-    # You'll need to implement your notifications system
-    # For now, returning a placeholder
-    unread_count = 0  # Replace with actual notification count logic
-    return JsonResponse({'count': unread_count})
 
-@login_required
-@require_POST
-def update_cart_item(request, item_id):
-    """AJAX endpoint for updating cart item quantity"""
-    cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
-    quantity = int(request.POST.get('quantity', 1))
-    
-    # Check if quantity doesn't exceed available stock
-    if quantity > cart_item.listing.stock:
-        return JsonResponse({
-            'success': False,
-            'error': f"Only {cart_item.listing.stock} units available."
-        })
-    
-    if quantity <= 0:
-        cart_item.delete()
-        success = True
-        item_count = request.user.cart.items.count() if hasattr(request.user, 'cart') else 0
-    else:
-        cart_item.quantity = quantity
-        cart_item.save()
-        success = True
-        item_count = request.user.cart.items.count() if hasattr(request.user, 'cart') else 0
-    
-    cart_total = request.user.cart.get_total_price() if hasattr(request.user, 'cart') else 0
-    
-    return JsonResponse({
-        'success': success,
-        'cart_total': float(cart_total),
-        'item_count': item_count
-    })
-@login_required
-@require_POST
-def remove_from_cart(request, item_id):
-    """AJAX endpoint for removing cart items"""
-    cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
-    cart_item.delete()
-    
-    item_count = request.user.cart.items.count() if hasattr(request.user, 'cart') else 0
-    cart_total = request.user.cart.get_total_price() if hasattr(request.user, 'cart') else 0
-    
-    return JsonResponse({
-        'success': True,
-        'cart_total': float(cart_total),
-        'item_count': item_count
-    })
-
-@login_required
-@require_POST
-def clear_cart(request):
-    """Clear entire cart"""
-    cart = get_object_or_404(Cart, user=request.user)
-    cart.items.all().delete()
-    
-    return JsonResponse({'success': True})
 
 # Update the existing view_cart function to handle AJAX
 @login_required
@@ -762,58 +755,219 @@ def view_cart(request):
     
     return render(request, 'listings/cart.html', {'cart': cart})
 
-# Update the add_to_cart function for AJAX
+# In listings/views.py
+
+import json
+from django.http import JsonResponse
+
 @login_required
+@require_POST
+@ajax_required
+def update_cart_item(request, item_id):
+    """AJAX endpoint for updating cart item quantity - FIXED RESPONSE"""
+    try:
+        data = json.loads(request.body)
+    except:
+        data = request.POST
+    
+    action = data.get('action')
+    quantity = data.get('quantity')
+    
+    cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
+    cart = cart_item.cart
+    
+    if action == 'increase':
+        if cart_item.quantity < cart_item.listing.stock:
+            cart_item.quantity += 1
+            cart_item.save()
+    elif action == 'decrease':
+        if cart_item.quantity > 1:
+            cart_item.quantity -= 1
+            cart_item.save()
+    elif action == 'set' and quantity is not None:
+        try:
+            quantity = int(quantity)
+            if 1 <= quantity <= cart_item.listing.stock:
+                cart_item.quantity = quantity
+                cart_item.save()
+        except (ValueError, TypeError):
+            pass
+    
+    # Get updated cart totals
+    cart.refresh_from_db()
+    item_count = cart.items.count()
+    cart_total = cart.get_total_price()
+    
+    # Calculate individual item totals for UI updates
+    item_totals = {}
+    for item in cart.items.all():
+        item_totals[str(item.id)] = {
+            'quantity': item.quantity,
+            'item_total': float(item.get_total_price()),
+            'stock': item.listing.stock,
+            'item_id': item.id
+        }
+    
+    return JsonResponse({
+        'success': True,
+        'message': 'Cart updated successfully',
+        'cart_item_count': item_count,
+        'cart_total': float(cart_total),
+        'item_count': item_count,
+        'item_totals': item_totals
+    })
+
+@login_required
+@require_POST
+@ajax_required
+def remove_from_cart(request, item_id):
+    """AJAX endpoint for removing cart items - FIXED RESPONSE"""
+    cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
+    cart = cart_item.cart
+    
+    # Store listing title for message
+    listing_title = cart_item.listing.title
+    
+    # Remove the item
+    cart_item.delete()
+    
+    # Get updated cart totals
+    cart.refresh_from_db()
+    item_count = cart.items.count()
+    cart_total = cart.get_total_price()
+    
+    return JsonResponse({
+        'success': True,
+        'message': f'{listing_title} removed from cart',
+        'cart_item_count': item_count,
+        'cart_total': float(cart_total),
+        'item_count': item_count,
+        'removed_item_id': item_id
+    })
+
+@login_required
+@require_POST
+@ajax_required
+def clear_cart(request):
+    """Clear entire cart - FIXED RESPONSE"""
+    cart = get_object_or_404(Cart, user=request.user)
+    cart_items_count = cart.items.count()
+    
+    # Clear all items
+    cart.items.all().delete()
+    
+    return JsonResponse({
+        'success': True,
+        'message': f'Cart cleared ({cart_items_count} items removed)',
+        'cart_item_count': 0,
+        'cart_total': 0,
+        'item_count': 0
+    })
+
+from django.http import JsonResponse, HttpResponse
+import json
+
+@login_required
+@require_POST
+@ajax_required
 def add_to_cart(request, listing_id):
+    """Add item to cart - FIXED for AJAX handling"""
     listing = get_object_or_404(Listing, id=listing_id, is_sold=False)
+    
+    # Check if this is an AJAX request
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     
     # Check if item is in stock
     if listing.stock <= 0:
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return JsonResponse({'success': False, 'error': "This item is out of stock."})
-        messages.warning(request, "This item is out of stock.")
-        return redirect('listing-detail', pk=listing_id)
+        response_data = {
+            'success': False, 
+            'error': 'This item is out of stock.',
+            'redirect_url': reverse('listing-detail', args=[listing_id])
+        }
+        
+        if is_ajax:
+            return JsonResponse(response_data)
+        else:
+            messages.error(request, response_data['error'])
+            return redirect(response_data['redirect_url'])
     
     # Users shouldn't add their own listings to cart
     if listing.seller == request.user:
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return JsonResponse({'success': False, 'error': "You cannot add your own listing to cart."})
-        messages.warning(request, "You cannot add your own listing to cart.")
-        return redirect('listing-detail', pk=listing_id)
+        response_data = {
+            'success': False, 
+            'error': 'You cannot add your own listing to cart.',
+            'redirect_url': reverse('listing-detail', args=[listing_id])
+        }
+        
+        if is_ajax:
+            return JsonResponse(response_data)
+        else:
+            messages.error(request, response_data['error'])
+            return redirect(response_data['redirect_url'])
+    
+    # Get quantity from request
+    try:
+        if request.content_type == 'application/json':
+            data = json.loads(request.body)
+            quantity = int(data.get('quantity', 1))
+        else:
+            quantity = int(request.POST.get('quantity', 1))
+    except (ValueError, TypeError, json.JSONDecodeError):
+        quantity = 1
     
     cart, created = Cart.objects.get_or_create(user=request.user)
     cart_item, created = CartItem.objects.get_or_create(
         cart=cart,
         listing=listing,
-        defaults={'quantity': 1}
+        defaults={'quantity': quantity}
     )
     
     if not created:
         # Check if we're not exceeding available stock
-        if cart_item.quantity + 1 > listing.stock:
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'success': False, 'error': f"Only {listing.stock} units available."})
-            messages.warning(request, f"Only {listing.stock} units of '{listing.title}' are available.")
-            return redirect('listing-detail', pk=listing_id)
+        if cart_item.quantity + quantity > listing.stock:
+            response_data = {
+                'success': False, 
+                'error': f'Only {listing.stock} units available.',
+                'redirect_url': reverse('listing-detail', args=[listing_id])
+            }
+            
+            if is_ajax:
+                return JsonResponse(response_data)
+            else:
+                messages.error(request, response_data['error'])
+                return redirect(response_data['redirect_url'])
         
-        cart_item.quantity += 1
+        cart_item.quantity += quantity
         cart_item.save()
-        message = f"Updated quantity of {listing.title} in your cart."
+        message = f'Updated quantity of {listing.title} in your cart.'
+        action = 'updated'
     else:
-        message = f"Added {listing.title} to your cart."
+        message = f'Added {listing.title} to your cart.'
+        action = 'added'
     
-    # Handle AJAX requests
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return JsonResponse({
-            'success': True,
-            'message': message,
-            'cart_total': float(cart.get_total_price()),
-            'item_count': cart.items.count()
-        })
+    # Get updated cart info
+    cart.refresh_from_db()
+    cart_item_count = cart.items.count()
+    cart_total = float(cart.get_total_price())
     
-    messages.success(request, message)
-    return redirect('listing-detail', pk=listing_id)
-
+    response_data = {
+        'success': True,
+        'message': message,
+        'action': action,
+        'cart_item_count': cart_item_count,
+        'cart_total': cart_total,
+        'item_count': cart_item_count,
+        'listing_title': listing.title,
+        'redirect_url': reverse('listing-detail', args=[listing_id])
+    }
+    
+    if is_ajax:
+        return JsonResponse(response_data)
+    else:
+        # For non-AJAX requests, show message and redirect
+        messages.success(request, message)
+        return redirect(reverse('listing-detail', args=[listing_id]))
+    
 @login_required
 def checkout(request):
     cart = get_object_or_404(Cart, user=request.user)
@@ -825,6 +979,7 @@ def checkout(request):
             return redirect('view_cart')
     
     if request.method == 'POST':
+        logger.info('Checkout POST received for user=%s; POST keys=%s', request.user, list(request.POST.keys()))
         # Initialize form with user's existing info
         initial_data = {
             'first_name': request.user.first_name,
@@ -846,16 +1001,20 @@ def checkout(request):
                 'postal_code': latest_order.postal_code,
             })
         
-        form = CheckoutForm(request.POST, initial=initial_data)
-        
         # Check if using alternate shipping
         use_alternate = request.POST.get('use_alternate_shipping') == 'on'
+
+        # If not using alternate shipping, merge user's account info into POST before binding
         if not use_alternate:
-            # If not using alternate shipping, copy user's info
-            form.data = form.data.copy()  # Make mutable
-            form.data.update(initial_data)
+            merged_post = request.POST.copy()
+            merged_post.update(initial_data)
+            logger.debug('Merged POST for checkout (using account info) keys=%s', list(merged_post.keys()))
+            form = CheckoutForm(merged_post)
+        else:
+            form = CheckoutForm(request.POST)
         
         if form.is_valid():
+            logger.info('Checkout form is valid for user=%s; cleaned keys=%s', request.user, list(form.cleaned_data.keys()))
             try:
                 with transaction.atomic():
                     # Create order
@@ -894,11 +1053,15 @@ def checkout(request):
                     
                     # Clear cart
                     cart.items.all().delete()
+
+                    notify_order_created(request.user, order)
                     
                     messages.success(request, "Order created successfully! Please complete payment.")
+                    logger.info('Order %s created for user=%s, redirecting to payment', order.id, request.user)
                     return redirect('process_payment', order_id=order.id)
                     
             except Exception as e:
+                logger.exception('Exception creating order for user=%s: %s', request.user, e)
                 messages.error(request, f"An error occurred during checkout: {str(e)}")
                 return render(request, 'listings/checkout.html', {
                     'cart': cart,
@@ -906,6 +1069,13 @@ def checkout(request):
                     'use_alternate_shipping': use_alternate
                 })
         else:
+            # Log validation errors for debugging
+            try:
+                logger.warning('Checkout form invalid for user=%s; errors=%s; POST keys=%s', request.user, form.errors.as_json(), list(request.POST.keys()))
+            except Exception:
+                logger.warning('Checkout form invalid for user=%s; could not serialize errors; POST keys=%s', request.user, list(request.POST.keys()))
+            # Inform the user that some fields are invalid
+            messages.error(request, 'Please correct the highlighted fields before placing your order.')
             return render(request, 'listings/checkout.html', {
                 'cart': cart,
                 'form': form,
@@ -1303,13 +1473,53 @@ def order_list(request):
     buyer_orders_count = buyer_orders.count()
     seller_orders_count = seller_orders.distinct().count()
     
-    # Paginate
-    paginator = Paginator(all_orders, 10)
+    # Prepare order data with all necessary calculations
+    orders_data = []
+    for order in all_orders:
+        # Get all order items for this order
+        order_items = order.order_items.all()
+        
+        # Calculate seller-specific data
+        seller_items = []
+        seller_total = 0
+        shipped_count = 0
+        is_seller_for_this_order = False
+        
+        # Check if current user is a seller for this order
+        for item in order_items:
+            if item.listing.seller == request.user:
+                is_seller_for_this_order = True
+                seller_items.append(item)
+                seller_total += float(item.get_total_price())
+                if item.shipped:
+                    shipped_count += 1
+        
+        # Calculate unique sellers for buyer view
+        unique_sellers = set()
+        for item in order_items:
+            unique_sellers.add(item.listing.seller)
+        
+        orders_data.append({
+            'order': order,
+            'order_items': order_items,
+            'is_buyer': order.user == request.user,
+            'is_seller_for_this_order': is_seller_for_this_order,
+            'seller_items': seller_items,
+            'seller_total': seller_total,
+            'shipped_count': shipped_count,
+            'seller_items_count': len(seller_items),
+            'unique_sellers': list(unique_sellers),
+            'unique_sellers_count': len(unique_sellers),
+        })
+    
+    # Paginate the orders_data list
+    paginator = Paginator(orders_data, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
     context = {
         'orders': page_obj,
+        'page_obj': page_obj,
         'status_filter': status_filter,
         'role_filter': role_filter,
         'buyer_orders_count': buyer_orders_count,
@@ -1318,7 +1528,6 @@ def order_list(request):
     }
     
     return render(request, 'listings/order_list.html', context)
-
 @login_required
 def order_detail(request, order_id):
     """Order detail view that works for both buyers and sellers"""
@@ -1353,6 +1562,17 @@ def order_detail(request, order_id):
         'can_confirm': is_buyer and order.status == 'shipped',
         'can_dispute': is_buyer and order.status in ['shipped', 'delivered'],
     }
+    # Attach delivery request information if available (for display of status/proof)
+    try:
+        from delivery.models import DeliveryRequest
+        delivery = None
+        if getattr(order, 'delivery_request_id', None):
+            delivery = DeliveryRequest.objects.filter(id=order.delivery_request_id).first()
+        if not delivery and order.tracking_number:
+            delivery = DeliveryRequest.objects.filter(tracking_number=order.tracking_number).first()
+        context['delivery_request'] = delivery
+    except Exception:
+        context['delivery_request'] = None
     
     return render(request, 'listings/order_detail.html', context) # Seller views
 
@@ -1376,10 +1596,10 @@ def mark_order_shipped(request, order_id):
         messages.error(request, "You don't have permission to modify this order.")
         return redirect('seller_orders')
     
-    # Allow marking shipments when order is paid or already partially shipped
-    if order.status not in ['paid', 'partially_shipped']:
-        messages.warning(request, "Only paid orders can be marked as shipped.")
-        return redirect('seller_orders')
+    # Shipping must be handled via the Delivery app; redirect sellers there
+    # Informational note: if you use the Delivery app you can manage shipments there,
+    # but still allow marking items as shipped here so multi-seller orders work.
+    messages.info(request, "If you use the Delivery app you can manage shipments there, but you can also mark your items as shipped here.")
 
     # Mark only the items that belong to this seller as shipped
     seller_items = order.order_items.filter(listing__seller=request.user, shipped=False)
@@ -1411,6 +1631,8 @@ def mark_order_shipped(request, order_id):
         notify_order_shipped(order.user, request.user, order, first_tracking.tracking_number if first_tracking else None)
 
         messages.success(request, f"Your items for Order #{order.id} have been marked as shipped. Waiting on other sellers to complete their shipments.")
+
+
 
         # Remind remaining sellers when only a few are left
         try:
@@ -1459,6 +1681,22 @@ def mark_order_shipped(request, order_id):
     # If no remaining items, finalize order as shipped
     order.status = 'shipped'
     order.shipped_at = now
+    # After marking as shipped, send webhook
+    from .webhook_service import webhook_service
+    
+    if order.status == 'shipped' and webhook_service.send_order_event(order, 'order_shipped'):
+        # Log successful webhook
+        Activity.objects.create(
+            user=request.user,
+            action=f"Order #{order.id} shipped and sent to delivery system"
+        )
+        
+        # If tracking number was provided by webhook service, update messages
+        if order.tracking_number:
+            messages.success(request, f"Order #{order.id} shipped! Tracking: {order.tracking_number}")
+        else:
+            messages.success(request, f"Order #{order.id} shipped successfully!")
+    
     order.save()
 
     # Consolidated delivery request for whole order (for single-seller orders this behaves as before)
@@ -1491,6 +1729,126 @@ def mark_order_shipped(request, order_id):
 
     return redirect('seller_orders')
 
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+import json
+import hmac
+import hashlib
+import os
+
+
+@csrf_exempt
+@require_POST
+def delivery_webhook_receiver(request):
+    """
+    Receive status updates from delivery system
+    Example events: delivery_out_for_delivery, delivery_delivered, delivery_failed
+    """
+    try:
+        # Verify signature
+        signature = request.headers.get('X-Webhook-Signature')
+        # Use raw request body bytes to compute HMAC to avoid any decode/encode differences
+        body_bytes = request.body
+
+        # Normalize signature header (support formats like 'sha256=...')
+        if signature and signature.startswith('sha256='):
+            signature = signature.split('=', 1)[1]
+
+        # Validate signature — prefer environment variable for uniformity with tests
+        secret_val = os.environ.get('DELIVERY_WEBHOOK_SECRET', getattr(settings, 'DELIVERY_WEBHOOK_SECRET', ''))
+        # Ensure no surrounding whitespace or comments
+        secret_val = (secret_val or '').strip()
+        secret = secret_val.encode('utf-8')
+
+        # Decode body once for logging/parsing
+        body_text = body_bytes.decode('utf-8', errors='replace')
+
+        # Compute expected signature for raw body
+        expected_raw = hmac.new(secret, body_bytes, hashlib.sha256).hexdigest()
+
+        # Also compute expected signature for canonicalized JSON (sorted keys)
+        expected_sorted = None
+        try:
+            parsed = json.loads(body_text)
+            canonical = json.dumps(parsed, separators=(',', ':'), ensure_ascii=False, sort_keys=True).encode('utf-8')
+            expected_sorted = hmac.new(secret, canonical, hashlib.sha256).hexdigest()
+        except Exception:
+            expected_sorted = None
+
+        # If in DEBUG, allow skipping verification for local testing
+        if getattr(settings, 'DEBUG', False):
+            logger.info('DEBUG mode: skipping webhook signature verification')
+            # proceed to parse and handle the payload
+        else:
+            # Accept if signature matches either raw or canonical form
+            if not ((signature or '') and (hmac.compare_digest(signature, expected_raw) or (expected_sorted and hmac.compare_digest(signature, expected_sorted)))):
+                # Log details for debugging signature mismatches (local/dev only)
+                expected_display = expected_raw if not expected_sorted else f"raw:{expected_raw} sorted:{expected_sorted}"
+                logger.warning(
+                    "Webhook signature mismatch. received=%r expected=%r body=%r",
+                    signature,
+                    expected_display,
+                    (body_text[:1000])
+                )
+                # Also print to stdout so it's visible in the devserver console
+                try:
+                    print(f"Webhook signature mismatch. received={signature!r} expected={expected_display!r} body={(body_text[:1000])!r}")
+                except Exception:
+                    pass
+                return JsonResponse({'error': 'Invalid signature'}, status=403)
+
+        # Parse payload
+        data = json.loads(body_text)
+        event_type = data.get('event')
+        order_id = data.get('order_id')
+        tracking_number = data.get('tracking_number')
+        
+        # Get order
+        try:
+            order = Order.objects.get(id=order_id)
+        except Order.DoesNotExist:
+            return JsonResponse({'error': 'Order not found'}, status=404)
+        
+        # Handle different event types
+        if event_type == 'delivery_out_for_delivery':
+            order.delivery_status = 'out_for_delivery'
+            order.save()
+            
+            # Notify buyer
+            notify_delivery_status(order.user, order, "Your order is out for delivery!")
+            
+        elif event_type == 'delivery_delivered':
+            order.delivery_status = 'delivered'
+            order.delivered_at = timezone.now()
+            order.save()
+            
+            # Notify seller and buyer
+            notify_delivery_confirmed(order.user, order.seller, order)
+            
+        elif event_type == 'delivery_failed':
+            order.delivery_status = 'failed'
+            order.save()
+            
+            # Notify both parties
+            messages = {
+                'buyer': "Delivery failed. We'll contact you to reschedule.",
+                'seller': f"Delivery failed for order #{order.id}"
+            }
+            notify_delivery_status(order.user, order, messages['buyer'])
+            notify_delivery_status(order.seller, order, messages['seller'])
+        
+        # Log activity
+        Activity.objects.create(
+            user=order.user,
+            action=f"Delivery status updated via webhook: {event_type} for order #{order.id}"
+        )
+        
+        return JsonResponse({'status': 'success', 'message': 'Webhook processed'})
+        
+    except Exception as e:
+        logger.error(f"Webhook processing error: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
 def _create_delivery_request(order):
     """Create delivery request in the delivery system"""
     try:
@@ -1512,11 +1870,28 @@ def _create_delivery_request(order):
 def confirm_delivery(request, order_id):
     """Buyer confirms delivery - MANDATORY for fund release"""
     order = get_object_or_404(Order, id=order_id, user=request.user)
-    
-    if order.status != 'shipped':
-        messages.warning(request, "This order has not been shipped yet or has already been delivered.")
+    # Ensure delivery app has recorded proof of delivery before allowing buyer to confirm
+    from delivery.models import DeliveryRequest
+    delivery = None
+    if getattr(order, 'delivery_request_id', None):
+        delivery = DeliveryRequest.objects.filter(id=order.delivery_request_id).first()
+    if not delivery and order.tracking_number:
+        delivery = DeliveryRequest.objects.filter(tracking_number=order.tracking_number).first()
+
+    if not delivery or delivery.status != 'delivered':
+        messages.warning(request, "Delivery confirmation is not yet available. Please wait until the delivery app records the delivered status and proof of delivery.")
         return redirect('order_detail', order_id=order.id)
-    
+
+    # Require proof of delivery to exist on the delivery record
+    proof = getattr(delivery, 'proof_of_delivery', None) or (delivery.metadata or {}).get('proof')
+    if not proof:
+        messages.warning(request, "Cannot confirm delivery: proof of delivery not yet recorded. Please contact support or wait for delivery proof.")
+        return redirect('order_detail', order_id=order.id)
+
+    if order.status == 'delivered':
+        messages.info(request, "Order already confirmed delivered.")
+        return redirect('order_detail', order_id=order.id)
+
     # Update order status
     order.status = 'delivered'
     order.delivered_at = timezone.now()
@@ -1596,84 +1971,315 @@ def create_dispute(request, order_id):
 
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.decorators import login_required
-from .models import Review, Order
+from .models import Review, Order, ReviewPhoto, Listing
 from .forms import ReviewForm
 
+# Add these imports at the top
+from django.forms import modelformset_factory
+from .forms import ReviewForm, OrderReviewForm, ReviewPhotoForm
+
+# Replace the existing leave_review function with this comprehensive version
 @login_required
-def leave_review(request, listing_id=None, seller_id=None):
-    from django.contrib.auth import get_user_model
-    User = get_user_model()
-
-    if listing_id:
-        listing = get_object_or_404(Listing, id=listing_id)
+def leave_review(request, review_type=None, object_id=None):
+    """Handle all types of reviews: listing, seller, and order"""
+    
+    context = {}
+    
+    # Determine what we're reviewing
+    if review_type == 'listing':
+        listing = get_object_or_404(Listing, id=object_id)
         seller = listing.seller
-
+        
         if request.user == seller:
             messages.error(request, "You cannot review your own listing.")
             return redirect('listing-detail', pk=listing.id)
-
+        
+        # Check if user can review (must have purchased this listing)
+        can_review = OrderItem.objects.filter(
+            order__user=request.user,
+            order__status='delivered',
+            listing=listing
+        ).exists()
+        
+        if not can_review:
+            messages.error(request, "You can only review items you've purchased and received.")
+            return redirect('listing-detail', pk=listing.id)
+        
         existing_review = Review.objects.filter(
             user=request.user,
+            review_type='listing',
             listing=listing
         ).first()
-
-        if request.method == 'POST':
-            form = ReviewForm(request.POST, instance=existing_review)
-            if form.is_valid():
-                review = form.save(commit=False)
-                review.user = request.user
-                review.listing = listing
-                review.save()
-                
-                # Notify seller about the new review
-                notify_new_review(seller, request.user, review, listing)
-                
-                messages.success(request, "Thank you for your review!")
-                return redirect('listing-detail', pk=listing.id)
-        else:
-            form = ReviewForm(instance=existing_review)
-
-        return render(request, 'reviews/create_review.html', {
-            'form': form,
+        
+        form = ReviewForm(request.POST or None, instance=existing_review, review_type='listing')
+        context.update({
+            'review_type': 'listing',
             'listing': listing,
             'seller': seller,
+            'title': f"Review: {listing.title}"
         })
-
-    elif seller_id:
-        seller = get_object_or_404(User, id=seller_id)
-
+        
+    elif review_type == 'seller':
+        seller = get_object_or_404(User, id=object_id)
+        
         if request.user == seller:
             messages.error(request, "You cannot review yourself.")
             return redirect('profile', pk=seller.id)
-
-        listings = Listing.objects.filter(seller=seller)
+        
+        # Check if user has purchased from this seller
+        can_review = OrderItem.objects.filter(
+            order__user=request.user,
+            order__status='delivered',
+            listing__seller=seller
+        ).exists()
+        
+        if not can_review:
+            messages.error(request, "You can only review sellers you've purchased from.")
+            return redirect('profile', pk=seller.id)
+        
         existing_review = Review.objects.filter(
             user=request.user,
-            listing__seller=seller
+            review_type='seller',
+            seller=seller
         ).first()
-
+        
+        form = ReviewForm(request.POST or None, instance=existing_review, review_type='seller')
+        context.update({
+            'review_type': 'seller',
+            'seller': seller,
+            'title': f"Review Seller: {seller.username}"
+        })
+        
+    elif review_type == 'order':
+        order = get_object_or_404(Order, id=object_id, user=request.user)
+        
+        if order.status != 'delivered':
+            messages.error(request, "You can only review delivered orders.")
+            return redirect('order_detail', order_id=order.id)
+        
+        existing_review = Review.objects.filter(
+            user=request.user,
+            review_type='order',
+            order=order
+        ).first()
+        
+        # Get all sellers in this order
+        sellers = set(item.listing.seller for item in order.order_items.all())
+        
         if request.method == 'POST':
-            form = ReviewForm(request.POST, instance=existing_review)
-            if form.is_valid():
+            form = OrderReviewForm(request.POST, instance=existing_review)
+            photo_form = ReviewPhotoForm(request.POST, request.FILES)
+            
+            if form.is_valid() and photo_form.is_valid():
                 review = form.save(commit=False)
                 review.user = request.user
-                # Use the first listing or let user choose - you might want to improve this
-                review.listing = listings.first()
+                review.review_type = 'order'
+                review.order = order
+                review.seller = sellers.pop() if sellers else None  # Use first seller if multiple
                 review.save()
                 
-                # Use review.listing instead of undefined 'listing' variable
-                notify_new_review(seller, request.user, review, review.listing)
+                # Handle photo uploads
+                photos = request.FILES.getlist('photos')
+                for photo in photos[:5]:  # Limit to 5 photos
+                    if photo.content_type.startswith('image/') and photo.size <= 10 * 1024 * 1024:
+                        ReviewPhoto.objects.create(
+                            review=review,  # This is the review instance
+                            image=photo
+                        )
+                # Notify all sellers in the order
+                for seller in sellers:
+                    notify_new_review(seller, request.user, review, review_type='order')
                 
-                messages.success(request, "Thank you for your review!")
-                return redirect('profile', pk=seller.id)
+                messages.success(request, "Thank you for your comprehensive order review!")
+                return redirect('order_detail', order_id=order.id)
         else:
-            form = ReviewForm(instance=existing_review)
-
-        return render(request, 'reviews/create_review.html', {
-            'form': form,
-            'seller': seller,
-            'listings': listings,
+            form = OrderReviewForm(instance=existing_review)
+            photo_form = ReviewPhotoForm()
+        
+        context.update({
+            'review_type': 'order',
+            'order': order,
+            'sellers': sellers,
+            'items': order.order_items.all(),
+            'photo_form': photo_form,
+            'title': f"Review Order #{order.id}"
         })
+        context['form'] = form
+        return render(request, 'listings/review_order.html', context)
+
+    
     else:
-        messages.error(request, "No listing or seller specified for review.")
+        messages.error(request, "Invalid review type.")
         return redirect('home')
+    
+    # Handle listing and seller reviews
+    if request.method == 'POST':
+        if form.is_valid():
+            review = form.save(commit=False)
+            review.user = request.user
+            review.review_type = review_type
+            
+            if review_type == 'listing':
+                review.listing = listing
+                review.seller = seller
+            elif review_type == 'seller':
+                review.seller = seller
+            
+            review.save()
+            
+            # Notify seller
+            if review_type == 'listing':
+                notify_new_review(seller, request.user, review, listing)
+            elif review_type == 'seller':
+                notify_new_review(seller, request.user, review, review_type='seller')
+            
+            messages.success(request, "Thank you for your review!")
+            
+            if review_type == 'listing':
+                return redirect('listing-detail', pk=listing.id)
+            else:
+                return redirect('profile', pk=seller.id)
+    
+    context['form'] = form
+    return render(request, 'listings/create_review.html', context)
+
+
+@login_required
+def create_order_review(request, order_id):
+    """Legacy function that redirects to the new review system"""
+    return redirect('leave_review', review_type='order', object_id=order_id)
+
+
+def get_reviews(request, review_type=None, object_id=None):
+    """API endpoint to get reviews for different types"""
+    if review_type == 'listing':
+        reviews = Review.objects.filter(
+            review_type='listing',
+            listing_id=object_id,
+            is_public=True
+        ).select_related('user').order_by('-created_at')
+    elif review_type == 'seller':
+        reviews = Review.objects.filter(
+            review_type='seller',
+            seller_id=object_id,
+            is_public=True
+        ).select_related('user').order_by('-created_at')
+    elif review_type == 'order':
+        reviews = Review.objects.filter(
+            review_type='order',
+            order_id=object_id,
+            is_public=True
+        ).select_related('user').order_by('-created_at')
+    else:
+        return JsonResponse({'error': 'Invalid review type'}, status=400)
+    
+    reviews_data = []
+    for review in reviews:
+        reviews_data.append({
+            'id': review.id,
+            'user': review.user.username,
+            'user_avatar': review.user.profile_picture.url if hasattr(review.user, 'profile_picture') else '',
+            'rating': review.rating,
+            'comment': review.comment,
+            'created_at': review.created_at.strftime('%B %d, %Y'),
+            'communication_rating': review.communication_rating,
+            'delivery_rating': review.delivery_rating,
+            'accuracy_rating': review.accuracy_rating,
+            'is_verified': review.is_verified_purchase,
+            'photos': [photo.image.url for photo in review.review_photos.all()]
+        })
+    
+    # Calculate averages
+    avg_rating = reviews.aggregate(Avg('rating'))['rating__avg'] or 0
+    avg_communication = reviews.aggregate(Avg('communication_rating'))['communication_rating__avg'] or 0
+    avg_delivery = reviews.aggregate(Avg('delivery_rating'))['delivery_rating__avg'] or 0
+    avg_accuracy = reviews.aggregate(Avg('accuracy_rating'))['accuracy_rating__avg'] or 0
+    
+    return JsonResponse({
+        'reviews': reviews_data,
+        'count': reviews.count(),
+        'average_rating': round(avg_rating, 1),
+        'average_communication': round(avg_communication, 1),
+        'average_delivery': round(avg_delivery, 1),
+        'average_accuracy': round(avg_accuracy, 1)
+    })
+
+@login_required
+def delivery_status_api(request, tracking_number):
+    """API endpoint to get delivery status from external system"""
+    try:
+        order = Order.objects.get(tracking_number=tracking_number)
+        
+        # Check if user has permission: buyer or any seller in the order
+        is_buyer = request.user == order.user
+        is_seller = order.order_items.filter(listing__seller=request.user).exists()
+        if not (is_buyer or is_seller):
+            return JsonResponse({'error': 'Unauthorized'}, status=403)
+        
+        # In a real implementation, you'd query the delivery system API
+        # For now, simulate with order status
+        status_map = {
+            'pending': {'icon': 'clock', 'status_display': 'Processing', 'message': 'Preparing for dispatch'},
+            'shipped': {'icon': 'truck', 'status_display': 'In Transit', 'message': 'On the way to delivery hub'},
+            'in_transit': {'icon': 'truck', 'status_display': 'In Transit', 'message': 'On the way to delivery hub'},
+            'out_for_delivery': {'icon': 'geo-alt', 'status_display': 'Out for Delivery', 'message': 'Delivery driver en route'},
+            'delivered': {'icon': 'check-circle', 'status_display': 'Delivered', 'message': 'Package delivered successfully'},
+            'failed': {'icon': 'exclamation-triangle', 'status_display': 'Delivery Failed', 'message': 'Delivery attempt failed'},
+            'delivery_failed': {'icon': 'exclamation-triangle', 'status_display': 'Delivery Failed', 'message': 'Delivery attempt failed'},
+            'assigned': {'icon': 'person', 'status_display': 'Assigned', 'message': 'Driver assigned to pickup'},
+            'accepted': {'icon': 'clock', 'status_display': 'Accepted', 'message': 'Delivery accepted by carrier'},
+            'picked_up': {'icon': 'box-seam', 'status_display': 'Picked Up', 'message': 'Package picked up from seller'},
+        }
+        
+        status_data = status_map.get(
+            order.delivery_status or 'pending',
+            status_map['pending']
+        )
+        
+        status_data.update({
+            'status': order.delivery_status or 'pending',
+            'last_updated': order.updated_at.strftime('%Y-%m-%d %H:%M'),
+            'estimated_delivery': (order.created_at + timedelta(days=3)).strftime('%b %d, %Y')
+                if order.delivery_status != 'delivered' else None
+        })
+        
+        return JsonResponse(status_data)
+        
+    except Order.DoesNotExist:
+        return JsonResponse({'error': 'Order not found'}, status=404)
+
+@login_required
+def create_order_review(request, order_id):
+    """Create review page for an order - lets user choose which item/seller to review"""
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    
+    # Only allow reviews for delivered orders
+    if order.status != 'delivered':
+        messages.error(request, "You can only review delivered orders.")
+        return redirect('order_detail', order_id=order.id)
+    
+    # Get unique sellers and items from this order
+    sellers = set()
+    items = []
+    
+    for item in order.order_items.all():
+        sellers.add(item.listing.seller)
+        items.append({
+            'item': item,
+            'has_listing_review': Review.objects.filter(
+                user=request.user,
+                listing=item.listing
+            ).exists(),
+            'has_seller_review': Review.objects.filter(
+                user=request.user,
+                listing__seller=item.listing.seller
+            ).exists()
+        })
+    
+    context = {
+        'order': order,
+        'sellers': list(sellers),
+        'items': items,
+    }
+    
+    return render(request, 'listings/order_review.html', context)

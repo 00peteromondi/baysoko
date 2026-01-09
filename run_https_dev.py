@@ -23,8 +23,8 @@ except Exception as exc:
 
 CERT_PATH = os.path.join(os.path.dirname(__file__), 'cert.crt')
 KEY_PATH = os.path.join(os.path.dirname(__file__), 'cert.key')
-HOST = os.environ.get('DEV_HTTPS_HOST', '127.0.0.1')
-PORT = int(os.environ.get('DEV_HTTPS_PORT', '8443'))
+HOST = os.environ.get('DEV_HTTPS_HOST', 'localhost')
+PORT = int(os.environ.get('DEV_HTTPS_PORT', '8000'))
 
 try:
     from werkzeug.serving import run_simple
@@ -40,8 +40,44 @@ if not (os.path.exists(CERT_PATH) and os.path.exists(KEY_PATH)):
     print("Or use the cert.crt and cert.key files already present in the project root if you have them.")
     sys.exit(1)
 
-print(f"Starting HTTPS dev server on https://{HOST}:{PORT}/")
-print("Press CTRL+C to stop")
+def main():
+    print(f"Starting HTTPS dev server on https://{HOST}:{PORT}/")
+    print("Press CTRL+C to stop")
 
-# run_simple accepts an ssl_context tuple (cert_file, key_file)
-run_simple(HOST, PORT, application, ssl_context=(CERT_PATH, KEY_PATH), use_reloader=True)
+    # If uvicorn is available, prefer running the ASGI application so WebSockets work.
+    try:
+        import uvicorn
+        import sys as _sys
+        print("Found uvicorn — starting ASGI server for websocket support")
+
+        # Use the reloader; multiprocessing.freeze_support() will be called
+        # in the if __name__ == '__main__' guard to make spawn-based reload
+        # safe on Windows.
+        should_reload = True
+
+        # Run the project's ASGI application (homabay_souq.asgi.application)
+        uvicorn.run(
+            "homabay_souq.asgi:application",
+            host=HOST,
+            port=PORT,
+            ssl_certfile=CERT_PATH,
+            ssl_keyfile=KEY_PATH,
+            reload=should_reload,
+        )
+    except Exception:
+        # Fallback to WSGI dev server if uvicorn isn't available
+        # run_simple accepts an ssl_context tuple (cert_file, key_file)
+        use_reloader = True
+        run_simple(HOST, PORT, application, ssl_context=(CERT_PATH, KEY_PATH), use_reloader=use_reloader)
+
+
+if __name__ == '__main__':
+    # On Windows, multiprocessing spawn can require freeze_support for child
+    # processes to initialize correctly when using reloaders.
+    try:
+        import multiprocessing
+        multiprocessing.freeze_support()
+    except Exception:
+        pass
+
+    main()

@@ -1,0 +1,274 @@
+{% extends 'delivery/base.html' %}
+{% load humanize %}
+
+{% block title %}Track Delivery #{{ delivery.tracking_number }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <!-- Tracking Header -->
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <h1 class="mb-3">Track Your Delivery</h1>
+                <div class="input-group input-group-lg mb-3">
+                    <input type="text" class="form-control" value="{{ delivery.tracking_number }}" id="trackingNumber" readonly>
+                    <button class="btn btn-primary" onclick="copyTracking()">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-2">
+                        <p class="mb-1"><strong>Recipient:</strong> {{ delivery.recipient_name }}</p>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <p class="mb-1"><strong>Status:</strong> 
+                            <span class="status-badge status-{{ delivery.status }}">
+                                {{ delivery.get_status_display }}
+                            </span>
+                        </p>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <p class="mb-1"><strong>Order ID:</strong> {{ delivery.order_id|default:"N/A" }}</p>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <p class="mb-1"><strong>Created:</strong> {{ delivery.created_at|date:"M d, Y" }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Status Timeline -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4 class="mb-0">Delivery Status</h4>
+            </div>
+            <div class="card-body">
+                <div class="timeline">
+                    {% for history in status_history %}
+                    <div class="timeline-item">
+                        <div class="row">
+                            <div class="col-2 text-center">
+                                <div class="timeline-icon">
+                                    {% if history.new_status == 'delivered' %}
+                                    <i class="fas fa-check-circle fa-2x text-success"></i>
+                                    {% elif history.new_status == 'failed' %}
+                                    <i class="fas fa-times-circle fa-2x text-danger"></i>
+                                    {% else %}
+                                    <i class="fas fa-info-circle fa-2x text-primary"></i>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-10">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h5 class="mb-1">{{ history.get_new_status_display }}</h5>
+                                        <p class="mb-1">{{ history.notes|default:"Status updated" }}</p>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="text-muted">{{ history.created_at|date:"M d, Y" }}</div>
+                                        <small class="text-muted">{{ history.created_at|time }}</small>
+                                        <small>
+                                            {% if history.changed_by %}
+                                                {{ history.changed_by.get_full_name|default:history.changed_by.username }}
+                                            {% else %}
+                                                System
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% if not forloop.last %}
+                        <div class="row">
+                            <div class="col-2 text-center">
+                                <div class="timeline-line"></div>
+                            </div>
+                            <div class="col-10"></div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-history fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No status updates yet</h5>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Delivery Information -->
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">Pickup Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-2">
+                            <strong>{{ delivery.pickup_name }}</strong><br>
+                            {{ delivery.pickup_address|linebreaksbr }}<br>
+                            <i class="fas fa-phone"></i> {{ delivery.pickup_phone }}
+                        </p>
+                        {% if delivery.pickup_time %}
+                        <div class="alert alert-light mt-3">
+                            <i class="fas fa-clock"></i> 
+                            <strong>Picked Up:</strong><br>
+                            {{ delivery.pickup_time|date:"M d, Y H:i" }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">Delivery Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-2">
+                            <strong>{{ delivery.recipient_name }}</strong><br>
+                            {{ delivery.recipient_address|linebreaksbr }}<br>
+                            <i class="fas fa-phone"></i> {{ delivery.recipient_phone }}
+                        </p>
+                        {% if estimated_time %}
+                        <div class="alert alert-info mt-3">
+                            <i class="fas fa-clock"></i> 
+                            <strong>Estimated Delivery:</strong><br>
+                            {{ estimated_time|date:"M d, Y H:i" }}
+                        </div>
+                        {% endif %}
+                        {% if delivery.actual_delivery_time %}
+                        <div class="alert alert-success mt-3">
+                            <i class="fas fa-check-circle"></i> 
+                            <strong>Delivered:</strong><br>
+                            {{ delivery.actual_delivery_time|date:"M d, Y H:i" }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Package & Service Information -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Package & Service Details</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Package Details</h6>
+                        <p class="mb-2">
+                            <strong>Description:</strong> {{ delivery.package_description }}<br>
+                            <strong>Weight:</strong> {{ delivery.package_weight }} kg<br>
+                            {% if delivery.is_fragile %}
+                            <span class="badge bg-warning">Fragile</span>
+                            {% endif %}
+                            {% if delivery.requires_signature %}
+                            <span class="badge bg-info">Signature Required</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Service Information</h6>
+                        <p class="mb-2">
+                            {% if delivery.delivery_service %}
+                            <strong>Service:</strong> {{ delivery.delivery_service.name }}<br>
+                            {% endif %}
+                            {% if delivery.delivery_person %}
+                            <strong>Driver:</strong> {{ delivery.delivery_person.user.get_full_name|default:delivery.delivery_person.employee_id }}<br>
+                            <strong>Vehicle:</strong> {{ delivery.delivery_person.vehicle_type|title }}
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Track Another Package -->
+        <div class="card">
+            <div class="card-body text-center">
+                <h5 class="mb-3">Track Another Package</h5>
+                <form class="row g-2 justify-content-center" onsubmit="trackAnother(event)">
+                    <div class="col-md-6">
+                        <input type="text" class="form-control" id="anotherTracking" placeholder="Enter tracking number" required>
+                    </div>
+                    <div class="col-md-auto">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Track
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    function copyTracking() {
+        const trackingInput = document.getElementById('trackingNumber');
+        trackingInput.select();
+        trackingInput.setSelectionRange(0, 99999);
+        
+        navigator.clipboard.writeText(trackingInput.value)
+            .then(() => {
+                const button = document.querySelector('button[onclick="copyTracking()"]');
+                const originalHTML = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                button.classList.remove('btn-primary');
+                button.classList.add('btn-success');
+                
+                setTimeout(() => {
+                    button.innerHTML = originalHTML;
+                    button.classList.remove('btn-success');
+                    button.classList.add('btn-primary');
+                }, 2000);
+            });
+    }
+    
+    function trackAnother(event) {
+        event.preventDefault();
+        const trackingNumber = document.getElementById('anotherTracking').value.trim();
+        if (trackingNumber) {
+            window.location.href = `/delivery/track/${trackingNumber}/`;
+        }
+    }
+    
+    // Auto-refresh tracking every 30 seconds if not delivered
+    {% if delivery.status != 'delivered' and delivery.status != 'cancelled' %}
+    setTimeout(() => {
+        location.reload();
+    }, 30000);
+    {% endif %}
+</script>
+
+<style>
+    .timeline-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: #f8f9fa;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+    }
+    
+    .timeline-line {
+        width: 2px;
+        height: 30px;
+        background: #dee2e6;
+        margin: 0 auto;
+    }
+    
+    #trackingNumber {
+        font-family: monospace;
+        font-size: 1.2rem;
+        letter-spacing: 1px;
+    }
+</style>
+{% endblock %}
+{% endblock %}

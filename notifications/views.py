@@ -1,3 +1,4 @@
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -10,11 +11,13 @@ from .forms import NotificationPreferenceForm
 @login_required
 def notification_list(request):
     """View all notifications for the user"""
-    notifications = Notification.objects.filter(recipient=request.user)
+    notifications = Notification.objects.filter(recipient=request.user).order_by('-created_at')
+    
+    # Get unread count - use a fresh query to avoid issues
+    unread_count = Notification.objects.filter(recipient=request.user, is_read=False).count()
     
     # Handle AJAX requests for real-time updates
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        unread_count = notifications.filter(is_read=False).count()
         recent_notifications = notifications[:5]
         
         notifications_data = []
@@ -52,12 +55,10 @@ def notification_list(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
-    # Get unread count for display
-    unread_count = notifications.filter(is_read=False).count()
-    
     return render(request, 'notifications/notification_list.html', {
         'page_obj': page_obj,
         'unread_count': unread_count,
+        'unread_notifications_count': unread_count,  # For base.html compatibility
         'notification_types': Notification.NOTIFICATION_TYPES,
         'selected_type': notification_type,
         'selected_status': read_status,
@@ -73,7 +74,7 @@ def mark_notification_read(request, notification_id):
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return JsonResponse({'success': True})
     
-    return redirect('notification-list')
+    return redirect('notifications')
 
 @login_required
 @require_POST
@@ -84,7 +85,7 @@ def mark_all_read(request):
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return JsonResponse({'success': True})
     
-    return redirect('notification-list')
+    return redirect('notifications')
 
 @login_required
 @require_POST
@@ -96,7 +97,7 @@ def delete_notification(request, notification_id):
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return JsonResponse({'success': True})
     
-    return redirect('notification-list')
+    return redirect('notifications')
 
 @login_required
 @require_POST
@@ -107,12 +108,15 @@ def clear_all_notifications(request):
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return JsonResponse({'success': True})
     
-    return redirect('notification-list')
+    return redirect('notifications')
 
 @login_required
 def notification_preferences(request):
     """Manage notification preferences"""
     preferences, created = NotificationPreference.objects.get_or_create(user=request.user)
+    
+    # Get unread count for base template
+    unread_notifications_count = Notification.objects.filter(recipient=request.user, is_read=False).count()
     
     if request.method == 'POST':
         form = NotificationPreferenceForm(request.POST, instance=preferences)
@@ -124,7 +128,10 @@ def notification_preferences(request):
     else:
         form = NotificationPreferenceForm(instance=preferences)
     
-    return render(request, 'notifications/preferences.html', {'form': form})
+    return render(request, 'notifications/preferences.html', {
+        'form': form,
+        'unread_notifications_count': unread_notifications_count
+    })
 
 @login_required
 def get_unread_count(request):

@@ -12,7 +12,6 @@ urlpatterns = [
     path('dashboard/store/create/', views.store_create, name='store_create'),
     path('dashboard/store/<slug:slug>/edit/', views.store_edit, name='store_edit'),
     
-    path('dashboard/store/<slug:slug>/upgrade/', views.store_upgrade, name='upgrade'),
     # Legacy/alternate name kept for backwards compatibility with tests and callers
     path('dashboard/store/<slug:slug>/upgrade/', views.store_upgrade, name='store_upgrade'),
     path('dashboard/store/<slug:store_slug>/product/create/', views.product_create, name='product_create'),
@@ -22,8 +21,7 @@ urlpatterns = [
     
     # Store image management
     path('dashboard/store/<slug:slug>/logo/delete/', views.delete_logo, name='delete_logo'),
-    path('dashboard/store/<slug:slug>/cover/delete/', views.delete_cover, name='delete_cover'),
-    
+    path('dashboard/store/<slug:slug>/cover/delete/', views.delete_cover, name='delete_cover'),    
     # Subscription management
     path('dashboard/store/<slug:slug>/subscription/', views.subscription_manage, name='subscription_manage'),
     path('dashboard/store/<slug:slug>/subscription/retry/', views.retry_payment, name='retry_payment'),

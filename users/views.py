@@ -161,3 +161,30 @@ def oauth_diagnostics(request):
         'env_vars': env_vars,
         'social_providers': settings.SOCIALACCOUNT_PROVIDERS if hasattr(settings, 'SOCIALACCOUNT_PROVIDERS') else {},
     })
+
+from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth.forms import PasswordChangeForm
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
+
+@login_required
+def ajax_password_change(request):
+    if request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        form = PasswordChangeForm(request.user, request.POST)
+        if form.is_valid():
+            user = form.save()
+            # Update session to prevent logout
+            update_session_auth_hash(request, user)
+            return JsonResponse({
+                'success': True,
+                'message': 'Your password has been changed successfully!'
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'errors': form.errors.get_json_data()
+            })
+    return JsonResponse({
+        'success': False,
+        'errors': {'__all__': ['Invalid request']}
+    })

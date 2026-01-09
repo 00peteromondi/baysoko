@@ -1,0 +1,180 @@
+{% extends 'delivery/base.html' %}
+
+{% block title %}Login - Delivery Management{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center min-vh-75">
+    <div class="col-md-6 col-lg-5">
+        <div class="card shadow-lg">
+            <div class="card-body p-5">
+                <!-- Logo -->
+                <div class="text-center mb-4">
+                    <div class="mb-3">
+                        <i class="fas fa-truck fa-3x text-primary"></i>
+                    </div>
+                    <h2 class="mb-1">Delivery Management</h2>
+                    <p class="text-muted">Sign in to your account</p>
+                </div>
+                
+                <!-- Login Form -->
+                <form method="post" action="{% url 'delivery:login' %}">
+                    {% csrf_token %}
+                    
+                    {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-circle"></i>
+                        Invalid username or password. Please try again.
+                    </div>
+                    {% endif %}
+                    
+                    {% if next %}
+                        {% if user.is_authenticated %}
+                        <div class="alert alert-warning">
+                            Your account doesn't have access to this page. Please login with an account that has access.
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info">
+                            Please login to access this page.
+                        </div>
+                        {% endif %}
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label for="id_username" class="form-label">Username or Email</label>
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="fas fa-user"></i>
+                            </span>
+                            <input type="text" name="username" id="id_username" 
+                                   class="form-control" placeholder="Enter username or email" 
+                                   required autofocus>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_password" class="form-label">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="fas fa-lock"></i>
+                            </span>
+                            <input type="password" name="password" id="id_password" 
+                                   class="form-control" placeholder="Enter password" required>
+                            <button class="btn btn-outline-secondary" type="button" 
+                                    onclick="togglePassword()">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="rememberMe">
+                        <label class="form-check-label" for="rememberMe">Remember me</label>
+                        <a href="#" class="float-end">Forgot password?</a>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100 mb-3">
+                        <i class="fas fa-sign-in-alt"></i> Sign In
+                    </button>
+                    
+                    <input type="hidden" name="next" value="{{ next }}">
+                </form>
+                
+                <div class="text-center mt-4">
+                    <p class="text-muted">Don't have an account? 
+                        {% if request.GET.next %}
+                        <a href="{% url 'users:register' %}?next={{ request.GET.next }}">Sign up</a>
+                        {% else %}
+                        <a href="{% url 'users:register' %}">Sign up</a>
+                        {% endif %}
+                    </p>
+                </div>
+                
+                <hr class="my-4">
+                
+                <!-- Driver Login -->
+                <div class="text-center">
+                    <p class="text-muted mb-2">Are you a delivery driver?</p>
+                    <a href="#" class="btn btn-outline-success">
+                        <i class="fas fa-truck"></i> Driver Login
+                    </a>
+                </div>
+            </div>
+            
+            <div class="card-footer text-center py-3">
+                <small class="text-muted">
+                    &copy; {% now "Y" %} HomaBay Souq Delivery Management System
+                </small>
+            </div>
+        </div>
+        
+        <!-- Login Help -->
+        <div class="text-center mt-4">
+            <div class="alert alert-light">
+                <small class="text-muted">
+                    <i class="fas fa-info-circle"></i>
+                    Need help? Contact support at 
+                    <a href="mailto:support@homabaysouq.com">support@homabaysouq.com</a>
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    function togglePassword() {
+        const passwordField = document.getElementById('id_password');
+        const toggleIcon = event.currentTarget.querySelector('i');
+        
+        if (passwordField.type === 'password') {
+            passwordField.type = 'text';
+            toggleIcon.classList.remove('fa-eye');
+            toggleIcon.classList.add('fa-eye-slash');
+        } else {
+            passwordField.type = 'password';
+            toggleIcon.classList.remove('fa-eye-slash');
+            toggleIcon.classList.add('fa-eye');
+        }
+    }
+    
+    // Auto-focus on username field
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('id_username').focus();
+    });
+    
+    // Handle Enter key for form submission
+    document.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && !e.target.matches('button, a')) {
+            const form = document.querySelector('form');
+            if (form) {
+                const submitButton = form.querySelector('button[type="submit"]');
+                if (submitButton) {
+                    submitButton.click();
+                }
+            }
+        }
+    });
+</script>
+
+<style>
+    .min-vh-75 {
+        min-height: 75vh;
+    }
+    
+    .card {
+        border: none;
+        border-radius: 15px;
+    }
+    
+    .input-group-text {
+        background: #f8f9fa;
+        border-right: none;
+    }
+    
+    .form-control:focus {
+        border-color: #3498db;
+        box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+    }
+</style>
+{% endblock %}
+{% endblock %}

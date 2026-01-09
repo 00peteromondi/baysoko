@@ -1,182 +1,400 @@
-[file name]: store_list.html
-[file content begin]
 {% extends 'base.html' %}
+{% load humanize %}
 
-{% block title %}Stores - HomaBay Souq{% endblock %}
+{% block title %}Stores - Baysoko{% endblock %}
 
 {% block content %}
-<div class="apple-container py-4">
-    <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1 class="fw-bold mb-2">Browse Stores</h1>
-            <p class="text-muted mb-0">Discover amazing local stores in Homabay County</p>
+<div class="container-custom py-var(--spacing-xl)">
+    <!-- Header Section -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-2">
+        <div class="mb-3 mb-md-0">
+            <h1 class="display-4 fw-bold mb-2">Discover Stores</h1>
+            <p class="lead text-muted mb-0">Shop from premium businesses in your community</p>
         </div>
         <div class="d-flex gap-2">
-            <div class="dropdown">
-                <button class="apple-btn apple-btn-secondary dropdown-toggle" data-bs-toggle="dropdown">
-                    <i class="bi bi-filter me-2"></i>Filter
-                </button>
-                <ul class="dropdown-menu">
-                    <li><a class="dropdown-item" href="?sort=popular">Most Popular</a></li>
-                    <li><a class="dropdown-item" href="?sort=newest">Newest First</a></li>
-                    <li><a class="dropdown-item" href="?sort=premium">Premium Stores</a></li>
-                    <li><a class="dropdown-item" href="?sort=rating">Highest Rated</a></li>
-                </ul>
-            </div>
             {% if user.is_authenticated %}
-            <a href="{% url 'storefront:store_create' %}" class="apple-btn apple-btn-primary">
-                <i class="bi bi-plus-circle me-2"></i>Create Store
+            <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-primary">
+                <i class="bi bi-plus-circle me-2"></i>
+                Create Store
+            </a>
+            {% else %}
+            <a href="{% url 'register' %}" class="btn-custom btn-primary">
+                <i class="bi bi-person-plus me-2"></i>
+                Join to Create
             </a>
             {% endif %}
         </div>
     </div>
 
-    <!-- Search and Stats -->
-    <div class="row mb-4">
-        <div class="col-lg-6">
-            <form class="apple-search-form" role="search">
-                <input class="apple-search-input" name="q" type="search" placeholder="Search stores...">
-                <button class="apple-search-button" type="submit"><i class="bi bi-search"></i></button>
-            </form>
-        </div>
-        <div class="col-lg-6 text-lg-end">
-            <p class="text-muted mb-0 mt-2 mt-lg-0">
-                Showing <strong>{{ stores.count }}</strong> stores in Homabay County
-            </p>
-        </div>
-    </div>
-
-    <!-- Stores Grid -->
-    {% if stores %}
-    <div class="row g-4">
-        {% for store in stores %}
-        <div class="col-md-6 col-lg-4">
-            <div class="apple-card store-card h-100">
-                <div class="position-relative">
-                    <!-- Store Cover Image -->
-                    <div class="store-cover" {% if store.cover_image %} style="height:120px; background-image: linear-gradient(rgba(0,0,0,0.22), rgba(0,0,0,0.06)), url('{{ store.cover_image.url }}'); background-size: cover; background-position: center; border-radius: var(--apple-radius-lg) var(--apple-radius-lg) 0 0;" {% else %} style="height:120px; background: linear-gradient(135deg, var(--accent-blue) 0%, var(--apple-purple) 100%); border-radius: var(--apple-radius-lg) var(--apple-radius-lg) 0 0;" {% endif %}>
-                    </div>
-                    
-                    <!-- Store Logo -->
-                    <div class="position-absolute top-100 start-50 translate-middle">
-                    <img src="{{ store.get_logo_url|default:'https://placehold.co/80x80/c2c2c2/1f1f1f?text=Store' }}"
-                        data-default="https://placehold.co/80x80/c2c2c2/1f1f1f?text=Store"
-                        alt="{{ store.name }}"
-                        class="rounded-circle border-4 border-white shadow-sm"
-                        style="width: 80px; height: 80px; object-fit: cover;"
-                        onerror="this.onerror=null;this.src=this.getAttribute('data-default');">
-                    </div>
-                    
-                    <!-- Premium Badge -->
-                    {% if store.is_premium %}
-                    <span class="position-absolute top-0 end-0 bg-warning text-dark px-3 py-1 m-3 rounded-pill small">
-                        <i class="bi bi-star-fill me-1"></i>Premium
-                    </span>
-                    {% endif %}
-                </div>
-                
-                <div class="card-body pt-5 text-center">
-                    <h5 class="card-title fw-bold mb-2">{{ store.name }}</h5>
-                    <p class="card-text text-muted small line-clamp-2 mb-3">{{ store.description|default:"No description provided" }}</p>
-                    
-                    <!-- Store Stats -->
-                    <div class="row text-center mb-3">
-                        <div class="col-4">
-                            <h6 class="fw-bold text-primary mb-1">{{ store.listings.count }}</h6>
-                            <small class="text-muted">Products</small>
-                        </div>
-                        <div class="col-4">
-                            <h6 class="fw-bold text-success mb-1">{{ store.get_rating|default:"4.5" }}</h6>
-                            <small class="text-muted">Rating</small>
-                        </div>
-                        <div class="col-4">
-                            <h6 class="fw-bold text-info mb-1">{{ store.get_sales_count|default:"50" }}+</h6>
-                            <small class="text-muted">Sales</small>
-                        </div>
-                    </div>
-                    
-                    <!-- Store Tags -->
+    <!-- Stats Row -->
+    <div class="row g-3 mb-2">
+        <div class="col-md-4 col-6">
+            <div class="card-custom text-center h-100">
+                <div class="card-body p-4">
                     <div class="mb-3">
-                        {% if store.is_premium %}
-                        <span class="badge bg-warning text-dark me-1">Verified</span>
-                        {% endif %}
-                        <span class="badge bg-light text-dark me-1">Local</span>
-                        <span class="badge bg-light text-dark">Homabay</span>
+                        <i class="bi bi-shop text-primary fs-2"></i>
                     </div>
-                </div>
-                
-                <div class="card-footer bg-transparent border-0 pt-0">
-                    <a href="{% url 'storefront:store_detail' slug=store.slug %}" 
-                       class="apple-btn apple-btn-primary w-100">
-                        <i class="bi bi-eye me-1"></i>Visit Store
-                    </a>
+                    <h2 class="fw-bold mb-1">{{ stores.count|default:0 }}</h2>
+                    <p class="text-muted mb-0 small">Active Stores</p>
                 </div>
             </div>
         </div>
-        {% endfor %}
+        <div class="col-md-4 col-6">
+            <div class="card-custom text-center h-100">
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <i class="bi bi-star text-warning fs-2"></i>
+                    </div>
+                    <h2 class="fw-bold mb-1">{{ premium_count|default:0 }}</h2>
+                    <p class="text-muted mb-0 small">Premium Stores</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 col-6">
+            <div class="card-custom text-center h-100">
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <i class="bi bi-grid text-success fs-2"></i>
+                    </div>
+                    <h2 class="fw-bold mb-1">{{ total_products|default:0 }}</h2>
+                    <p class="text-muted mb-0 small">Total Products</p>
+                </div>
+            </div>
+        </div>
     </div>
-    {% else %}
-    <div class="text-center py-5">
-        <i class="bi bi-shop display-1 text-muted mb-3"></i>
-        <h3 class="text-muted mb-3">No Stores Found</h3>
-        <p class="text-muted mb-4">There are no stores matching your search criteria.</p>
-        {% if user.is_authenticated %}
-        <a href="{% url 'storefront:store_create' %}" class="apple-btn apple-btn-primary px-4">
-            <i class="bi bi-plus-circle me-2"></i>
-            Create the First Store
-        </a>
+
+    <!-- Search and Filter -->
+    <div class="card-custom mb-2">
+        <div class="card-body p-4">
+            <form method="get" action="{% url 'storefront:store_list' %}">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold">Search Stores</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">
+                                <i class="bi bi-search"></i>
+                            </span>
+                            <input type="search" 
+                                   name="q" 
+                                   class="form-control" 
+                                   placeholder="Search by store name, category, or description..."
+                                   value="{{ request.GET.q|default:'' }}">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Sort By</label>
+                        <select name="sort" class="form-select" onchange="this.form.submit()">
+                            <option value="popular" {% if request.GET.sort == 'popular' or not request.GET.sort %}selected{% endif %}>Most Popular</option>
+                            <option value="newest" {% if request.GET.sort == 'newest' %}selected{% endif %}>Newest</option>
+                            <option value="premium" {% if request.GET.sort == 'premium' %}selected{% endif %}>Premium First</option>
+                            <option value="rating" {% if request.GET.sort == 'rating' %}selected{% endif %}>Highest Rated</option>
+                        </select>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Stores Section -->
+    <div class="mb-2">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h3 class="fw-bold mb-0 mt-2">All Stores</h3>
+            <span class="text-muted">{{ stores.count }} stores</span>
+        </div>
+        
+        {% if stores %}
+        <div class="row g-4">
+            {% for store in stores %}
+            <div class="col-lg-6">
+                <div class="card-custom store-card h-100">
+                    <!-- Store Header with Protected Text -->
+                    <div class="store-card-header protected-text-container rounded-top position-relative overflow-hidden"
+                         style="{% if store.cover_image %}background-image: url('{{ store.cover_image.url }}');{% else %}background: linear-gradient(135deg, var(--primary) 0%, var(--info) 100%);{% endif %}">
+                        <!-- Overlay for text protection -->
+                        <div class="store-card-overlay position-absolute top-0 start-0 w-100 h-100"></div>
+                        
+                        <!-- Protected text content -->
+                        <div class="protected-text position-relative z-2">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="store-title-protected">
+                                    <h4 class="fw-bold mb-1 text-white text-shadow-3d">{{ store.name }}</h4>
+                                    <p class="mb-0 text-white opacity-90 text-protected-bg">{{ store.listings.count }} products</p>
+                                </div>
+                                {% if store.is_premium %}
+                                <span class="badge bg-warning text-dark badge-protected">
+                                    <i class="bi bi-star-fill me-1"></i>Premium
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body">
+                        <!-- Store Logo and Info -->
+                        <div class="d-flex align-items-start gap-3 mb-3">
+                            <div class="store-logo-protected-small">
+                                <div class="store-logo-background-list"></div>
+                                <img src="{{ store.get_logo_url|default:'https://placehold.co/80x80/c2c2c2/1f1f1f?text=Store' }}"
+                                     alt="{{ store.name }}"
+                                     class="rounded-circle border border-3 position-relative z-1"
+                                     style="width: 80px; height: 80px; object-fit: cover; border-color: var(--border-color) !important;">
+                            </div>
+                            <div class="flex-grow-1">
+                                <p class="text-muted mb-2 line-clamp-2">{{ store.description|default:"No description provided"|truncatechars:120 }}</p>
+                                <div class="d-flex gap-2">
+                                    <span class="badge bg-light text-muted">
+                                        <i class="bi bi-star me-1"></i>
+                                        {{ store.get_rating|default:"New" }}
+                                    </span>
+                                    <span class="badge bg-light text-muted">
+                                        <i class="bi bi-calendar me-1"></i>
+                                        {{ store.created_at|date:"M d, Y" }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Store Actions -->
+                        <div class="d-flex flex-wrap gap-2 mb-4">
+                            <a href="{% url 'storefront:store_detail' slug=store.slug %}" 
+                               class="btn-custom btn-primary">
+                                <i class="bi bi-eye me-1"></i>View Store
+                            </a>
+                            
+                            <!-- Show Analytics only for store owner -->
+                            {% if user == store.owner %}
+                            <a href="{% url 'storefront:store_analytics' slug=store.slug %}" 
+                               class="btn-custom btn-info">
+                                <i class="bi bi-graph-up me-1"></i>Analytics
+                            </a>
+                            {% endif %}
+                            
+                            <button class="btn-custom btn-ghost save-store-btn" data-store-id="{{ store.id }}">
+                                <i class="bi bi-bookmark me-1"></i>Save
+                            </button>
+                        </div>
+                        
+                        <!-- Recent Products -->
+                        <h6 class="fw-bold mb-3">Recent Products</h6>
+                        <div class="row g-2">
+                            {% for listing in store.listings.all|slice:":4" %}
+                            <div class="col-6 col-sm-3">
+                                <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=listing.slug %}" 
+                                   class="text-decoration-none">
+                                    <div class="position-relative rounded overflow-hidden product-image-protected">
+                                        <!-- Product image with overlay -->
+                                        <div class="product-image-overlay-small position-absolute top-0 start-0 w-100 h-100"></div>
+                                        <img src="{{ listing.get_image_url }}" 
+                                             alt="{{ listing.title }}"
+                                             class="img-fluid w-100 position-relative z-1"
+                                             style="height: 80px; object-fit: cover;"
+                                             onerror="this.src='https://placehold.co/100x80/c2c2c2/1f1f1f?text=Product'">
+                                        <div class="position-absolute bottom-0 start-0 end-0 bg-dark bg-opacity-75 text-white p-1 z-2">
+                                            <small class="d-block text-truncate text-protected-inline">{{ listing.title }}</small>
+                                            <small class="d-block text-truncate text-protected-inline">KSh {{ listing.price|intcomma }}</small>
+                                        </div>
+                                    </div>
+                                </a>
+                            </div>
+                            {% empty %}
+                            <div class="col-12">
+                                <div class="text-center py-3 border rounded">
+                                    <i class="bi bi-inbox text-muted fs-4 mb-2"></i>
+                                    <p class="text-muted mb-0">No products yet</p>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        {% if is_paginated %}
+        <nav class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">
+                        <i class="bi bi-chevron-left"></i>
+                        Previous
+                    </a>
+                </li>
+                {% endif %}
+                
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ num }}</span>
+                    </li>
+                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">
+                            {{ num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">
+                        Next
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+        
         {% else %}
-        <a href="{% url 'register' %}" class="apple-btn apple-btn-primary px-4">
-            <i class="bi bi-person-plus me-2"></i>
-            Join to Create a Store
-        </a>
+        <!-- Empty State -->
+        <div class="card-custom text-center py-5">
+            <div class="empty-state-icon mb-4">
+                <i class="bi bi-shop display-1 text-muted"></i>
+            </div>
+            <h3 class="mb-3">No Stores Found</h3>
+            <p class="text-muted mb-4">There are no stores matching your search criteria.</p>
+            <div class="d-flex gap-3 justify-content-center">
+                <a href="{% url 'storefront:store_list' %}" class="btn-custom btn-ghost">
+                    <i class="bi bi-arrow-clockwise me-2"></i>
+                    Clear Filters
+                </a>
+                {% if user.is_authenticated %}
+                <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-primary">
+                    <i class="bi bi-plus-circle me-2"></i>
+                    Create the First Store
+                </a>
+                {% else %}
+                <a href="{% url 'register' %}" class="btn-custom btn-primary">
+                    <i class="bi bi-person-plus me-2"></i>
+                    Join to Create a Store
+                </a>
+                {% endif %}
+            </div>
+        </div>
         {% endif %}
     </div>
-    {% endif %}
 
-    <!-- Pagination -->
-    {% if is_paginated %}
-    <nav aria-label="Store pagination" class="mt-5">
-        <ul class="apple-pagination">
-            {% if page_obj.has_previous %}
-            <li class="apple-page-item">
-                <a class="apple-page-button" href="?page={{ page_obj.previous_page_number }}">Previous</a>
-            </li>
-            {% endif %}
-            
-            {% for num in page_obj.paginator.page_range %}
-            <li class="apple-page-item {% if page_obj.number == num %}active{% endif %}">
-                <a class="apple-page-button" href="?page={{ num }}">{{ num }}</a>
-            </li>
-            {% endfor %}
-            
-            {% if page_obj.has_next %}
-            <li class="apple-page-item">
-                <a class="apple-page-button" href="?page={{ page_obj.next_page_number }}">Next</a>
-            </li>
-            {% endif %}
-        </ul>
-    </nav>
-    {% endif %}
+    <!-- CTA Section -->
+    <div class="card-custom protected-text-container text-center position-relative overflow-hidden"
+         style="background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);">
+        <!-- Gradient overlay for text protection -->
+        <div class="cta-overlay position-absolute top-0 start-0 w-100 h-100"></div>
+        
+        <div class="protected-text position-relative z-2">
+            <h2 class="display-6 fw-bold mb-3 text-white text-shadow-3d">Ready to Start Selling?</h2>
+            <p class="lead mb-4 text-white opacity-90 text-protected-bg">Join thousands of sellers on Baysoko</p>
+            <div class="d-flex gap-3 justify-content-center">
+                {% if user.is_authenticated %}
+                <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-light">
+                    <i class="bi bi-plus-circle me-2"></i>
+                    Create Your Store
+                </a>
+                <a href="{% url 'storefront:seller_dashboard' %}" class="btn-custom btn-outline-light">
+                    <i class="bi bi-speedometer2 me-2"></i>
+                    Go to Dashboard
+                </a>
+                {% else %}
+                <a href="{% url 'register' %}" class="btn-custom btn-light">
+                    <i class="bi bi-person-plus me-2"></i>
+                    Sign Up Free
+                </a>
+                <a href="{% url 'login' %}" class="btn-custom btn-outline-light">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>
+                    Login
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
 </div>
 
 <style>
 .store-card {
-    transition: var(--apple-transition);
+    transition: var(--transition);
 }
 
 .store-card:hover {
     transform: translateY(-5px);
-    box-shadow: var(--apple-shadow-lg);
+    box-shadow: var(--shadow-lg);
 }
 
-.store-cover {
-    transition: var(--apple-transition);
+/* Store card header with overlay */
+.store-card-header {
+    height: 150px;
+    background-size: cover;
+    background-position: center;
+    position: relative;
 }
 
-.store-card:hover .store-cover {
-    transform: scale(1.02);
+.store-card-overlay {
+    background: linear-gradient(to top, 
+        rgba(0,0,0,0.8) 0%, 
+        rgba(0,0,0,0.6) 50%, 
+        rgba(0,0,0,0.4) 100%);
+}
+
+.store-card-header .protected-text {
+    padding: var(--spacing-md);
+    color: white;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+
+.store-title-protected {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-sm);
+    backdrop-filter: blur(4px);
+}
+
+.store-card-header h4 {
+    font-weight: 800;
+}
+
+/* Store logo protection */
+.store-logo-protected-small {
+    position: relative;
+}
+
+.store-logo-background-list {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(8px);
+    border-radius: 50%;
+}
+
+/* Product image protection */
+.product-image-protected {
+    position: relative;
+}
+
+.product-image-overlay-small {
+    background: linear-gradient(to bottom, 
+        transparent 40%, 
+        rgba(0, 0, 0, 0.6) 100%);
+    z-index: 1;
+}
+
+.text-protected-inline {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* CTA section overlay */
+.cta-overlay {
+    background: linear-gradient(to right, 
+        rgba(0,0,0,0.3) 0%, 
+        rgba(0,0,0,0.2) 50%, 
+        rgba(0,0,0,0.3) 100%);
 }
 
 .line-clamp-2 {
@@ -186,9 +404,108 @@
     overflow: hidden;
 }
 
-.border-4 {
-    border-width: 4px !important;
+/* Badge protection */
+.badge-protected {
+    backdrop-filter: blur(10px);
+    background: rgba(0, 0, 0, 0.85) !important;
+    color: white !important;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    font-weight: 600;
+}
+
+.badge-protected.bg-warning {
+    background: rgba(255, 193, 7, 0.95) !important;
+    color: #333 !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .store-card-header {
+        height: 120px;
+    }
+}
+
+@media (max-width: 576px) {
+    .store-card-header {
+        height: 100px;
+    }
+    
+    .store-card-header .protected-text {
+        padding: var(--spacing-sm);
+    }
 }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Save store functionality
+    const saveButtons = document.querySelectorAll('.save-store-btn');
+    saveButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const storeId = this.dataset.storeId;
+            const icon = this.querySelector('i');
+            
+            // Toggle save state
+            if (icon.classList.contains('bi-bookmark')) {
+                icon.classList.remove('bi-bookmark');
+                icon.classList.add('bi-bookmark-fill');
+                icon.style.color = 'var(--primary)';
+                this.innerHTML = '<i class="bi bi-bookmark-fill me-1" style="color: var(--primary);"></i>Saved';
+                showToast('Store saved to favorites', 'success');
+            } else {
+                icon.classList.remove('bi-bookmark-fill');
+                icon.classList.add('bi-bookmark');
+                icon.style.color = '';
+                this.innerHTML = '<i class="bi bi-bookmark me-1"></i>Save';
+                showToast('Store removed from favorites', 'info');
+            }
+            
+            // Animation
+            this.style.transform = 'scale(1.1)';
+            setTimeout(() => {
+                this.style.transform = 'scale(1)';
+            }, 150);
+        });
+    });
+    
+    function showToast(message, type = 'info') {
+        // Create toast container if it doesn't exist
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '9999';
+            document.body.appendChild(toastContainer);
+        }
+        
+        const toastId = 'toast-' + Date.now();
+        const toast = document.createElement('div');
+        toast.id = toastId;
+        toast.className = `toast align-items-center text-white bg-${type} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body d-flex align-items-center">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : 'info-circle'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        `;
+        
+        toastContainer.appendChild(toast);
+        const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+        bsToast.show();
+        
+        // Remove toast after it hides
+        toast.addEventListener('hidden.bs.toast', function() {
+            toast.remove();
+        });
+    }
+});
+</script>
 {% endblock %}
-[file content end]

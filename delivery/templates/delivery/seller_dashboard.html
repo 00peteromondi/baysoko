@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Seller Delivery Dashboard</h1>
+
+<div>
+  <form method="get" class="inline-filters">
+    <input type="text" name="search" placeholder="Search deliveries" value="{{ search }}" />
+    <select name="status">
+      <option value="">All statuses</option>
+      {% for code,label in status_choices %}
+        <option value="{{ code }}" {% if filter_status==code %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit">Filter</button>
+  </form>
+</div>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Tracking</th>
+      <th>Order ID</th>
+      <th>Status</th>
+      <th>Recipient</th>
+      <th>Delivery Fee</th>
+      <th>Created</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for d in deliveries %}
+      <tr>
+        <td>{{ d.tracking_number }}</td>
+        <td>{{ d.order_id }}</td>
+        <td>{{ d.get_status_display }}</td>
+        <td>{{ d.recipient_name }}<br>{{ d.recipient_phone }}</td>
+        <td>{{ d.delivery_fee }}</td>
+        <td>{{ d.created_at|date:"Y-m-d H:i" }}</td>
+        <td><a href="{% url 'delivery:delivery_detail' d.pk %}">View</a></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7">No deliveries found for your stores.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if is_paginated %}
+  <div class="pagination">
+    {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}">Previous</a>
+    {% endif %}
+    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}">Next</a>
+    {% endif %}
+  </div>
+{% endif %}
+
+{% endblock %}

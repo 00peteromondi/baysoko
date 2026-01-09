@@ -1235,7 +1235,7 @@
                                         </button>
                                     </form>
                                     {% endif %}
-                                    <a href="{% url 'leave_listing_review' listing.id %}" class="action-button secondary">
+                                    <a href="/review/listing/{{ listing.id }}/" class="action-button secondary">
                                         <i class="bi bi-star"></i> Leave Review
                                     </a>
                                 {% elif not user.is_authenticated %}
@@ -1350,7 +1350,7 @@
                     <h4>No reviews yet</h4>
                     <p class="mb-3">Be the first to review this listing!</p>
                     {% if user.is_authenticated and user != listing.seller %}
-                    <a href="{% url 'leave_listing_review' listing.id %}" class="action-button primary">
+                    <a href="{% url 'leave_review' 'listing' listing.id %}" class="action-button primary">
                         <i class="bi bi-star me-1"></i> Write First Review
                     </a>
                     {% endif %}
@@ -1419,8 +1419,8 @@
                         <h3 class="seller-name">{{ listing.seller.get_full_name|default:listing.seller.username }}</h3>
                         <p class="seller-username">@{{ listing.seller.username }}</p>
                         
-                        {% if listing.seller.profile.bio %}
-                        <p class="seller-bio">{{ listing.seller.profile.bio }}</p>
+                        {% if listing.seller.bio %}
+                        <p class="seller-bio">{{ listing.seller.bio }}</p>
                         {% else %}
                         <p class="seller-bio">This seller hasn't added a bio yet.</p>
                         {% endif %}
@@ -1934,5 +1934,120 @@
     initHorizontalScrolling();
     window.addEventListener('resize', initHorizontalScrolling);
 });
+// Add to cart functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const addToCartBtn = document.getElementById('add-to-cart-btn');
+    
+    if (addToCartBtn) {
+        addToCartBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const listingId = this.dataset.listingId;
+            
+            // Disable button and show loading
+            const originalText = this.innerHTML;
+            this.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> Adding...';
+            this.disabled = true;
+            
+            // Send AJAX request
+            fetch(`/cart/add/${listingId}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update cart in header
+                    updateHeaderCart(data.cart_item_count, data.cart_total);
+                    
+                    // Show success message
+                    showCartMessage(data.message, 'success');
+                    
+                    // Update button to show "View Cart"
+                    this.innerHTML = '<i class="bi bi-cart-check"></i> View Cart';
+                    this.classList.remove('btn-primary');
+                    this.classList.add('btn-success');
+                    this.href = '/cart/';
+                    
+                    // Revert after 3 seconds
+                    setTimeout(() => {
+                        this.innerHTML = originalText;
+                        this.classList.remove('btn-success');
+                        this.classList.add('btn-primary');
+                        this.disabled = false;
+                        this.href = '#';
+                    }, 3000);
+                } else {
+                    // Show error
+                    showCartMessage(data.error, 'danger');
+                    this.innerHTML = originalText;
+                    this.disabled = false;
+                }
+            })
+            .catch(error => {
+                showCartMessage('Failed to add item to cart', 'danger');
+                this.innerHTML = originalText;
+                this.disabled = false;
+            });
+        });
+    }
+});
+
+// Helper functions (same as cart page)
+function updateHeaderCart(itemCount, total) {
+    // Update cart badges
+    document.querySelectorAll('.cart-count-badge, .mobile-cart-badge').forEach(badge => {
+        if (itemCount > 0) {
+            badge.textContent = itemCount;
+            badge.style.display = 'flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    });
+    
+    // Update cart total in header
+    document.querySelectorAll('.cart-total').forEach(element => {
+        if (itemCount > 0) {
+            element.textContent = `KSh ${total.toFixed(2)}`;
+            element.style.display = 'inline';
+        } else {
+            element.style.display = 'none';
+        }
+    });
+}
+
+function showCartMessage(message, type = 'success') {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `update-cart-message bg-${type}`;
+    messageDiv.innerHTML = `
+        <i class="bi ${type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill'}"></i>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(messageDiv);
+    
+    setTimeout(() => {
+        messageDiv.style.opacity = '0';
+        messageDiv.style.transform = 'translateX(100%)';
+        setTimeout(() => messageDiv.remove(), 300);
+    }, 3000);
+}
+
+// Add CSS for spinning icon
+const style = document.createElement('style');
+style.textContent = `
+    .spin {
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+`;
+document.head.appendChild(style);
 </script>
 {% endblock %}

@@ -1,0 +1,303 @@
+{% extends 'delivery/base.html' %}
+{% load humanize %}
+
+{% block title %}All Deliveries - Delivery Management{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">All Deliveries</h2>
+    <div>
+        <a href="{% url 'delivery:create_delivery' %}" class="btn btn-delivery">
+            <i class="fas fa-plus-circle"></i> Create Delivery
+        </a>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label for="status" class="form-label">Status</label>
+                <select name="status" id="status" class="form-select">
+                    <option value="">All Statuses</option>
+                    {% for status_code, status_name in status_choices %}
+                    <option value="{{ status_code }}" {% if filter_status == status_code %}selected{% endif %}>
+                        {{ status_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="col-md-2">
+                <label for="date_from" class="form-label">From Date</label>
+                <input type="date" name="date_from" id="date_from" class="form-control" value="{{ date_from }}">
+            </div>
+            
+            <div class="col-md-2">
+                <label for="date_to" class="form-label">To Date</label>
+                <input type="date" name="date_to" id="date_to" class="form-control" value="{{ date_to }}">
+            </div>
+            
+            <div class="col-md-3">
+                <label for="search" class="form-label">Search</label>
+                <input type="text" name="search" id="search" class="form-control" placeholder="Search..." value="{{ search }}">
+            </div>
+            
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-filter"></i> Filter
+                </button>
+            </div>
+            
+            {% if user.delivery_person %}
+            <div class="col-md-12">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="my_deliveries" id="my_deliveries" {% if my_deliveries %}checked{% endif %}>
+                    <label class="form-check-label" for="my_deliveries">
+                        Show only my deliveries
+                    </label>
+                </div>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+<!-- Deliveries Table -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Deliveries ({{ deliveries.paginator.count }})</h5>
+        <div>
+            {% if user.is_staff %}
+            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bulkUpdateModal">
+                <i class="fas fa-edit"></i> Bulk Update
+            </button>
+            {% endif %}
+            <a href="?export=csv" class="btn btn-sm btn-outline-success">
+                <i class="fas fa-download"></i> Export CSV
+            </a>
+        </div>
+    </div>
+    
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-delivery mb-0">
+                <thead>
+                    <tr>
+                        {% if user.is_staff %}
+                        <th width="30">
+                            <input type="checkbox" id="selectAll">
+                        </th>
+                        {% endif %}
+                        <th>Tracking #</th>
+                        <th>Order ID</th>
+                        <th>Recipient</th>
+                        <th>Pickup</th>
+                        <th>Status</th>
+                        <th>Driver</th>
+                        <th>Fee</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for delivery in deliveries %}
+                    <tr>
+                        {% if user.is_staff %}
+                        <td>
+                            <input type="checkbox" class="delivery-checkbox" value="{{ delivery.id }}">
+                        </td>
+                        {% endif %}
+                        <td>
+                            <strong>{{ delivery.tracking_number }}</strong><br>
+                            <small class="text-muted">{{ delivery.priority }}</small>
+                        </td>
+                        <td>{{ delivery.order_id|default:"-" }}</td>
+                        <td>
+                            <strong>{{ delivery.recipient_name }}</strong><br>
+                            <small class="text-muted">{{ delivery.recipient_phone }}</small>
+                        </td>
+                        <td>
+                            <small>{{ delivery.pickup_name }}</small><br>
+                            <small class="text-muted">{{ delivery.pickup_phone }}</small>
+                        </td>
+                        <td>
+                            <span class="status-badge status-{{ delivery.status }}">
+                                {{ delivery.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if delivery.delivery_person %}
+                            <div class="d-flex align-items-center">
+                                <span class="driver-status status-{{ delivery.delivery_person.current_status }}"></span>
+                                {{ delivery.delivery_person.user.get_short_name|default:delivery.delivery_person.employee_id }}
+                            </div>
+                            {% else %}
+                            <span class="text-muted">Not assigned</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong>KES {{ delivery.delivery_fee|intcomma }}</strong><br>
+                            <small class="{% if delivery.payment_status == 'paid' %}text-success{% else %}text-warning{% endif %}">
+                                {{ delivery.get_payment_status_display }}
+                            </small>
+                        </td>
+                        <td>{{ delivery.created_at|date:"M d, Y" }}</td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'delivery:delivery_detail' delivery.pk %}" class="btn btn-sm btn-outline-primary" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{% url 'delivery:update_status' delivery.pk %}" class="btn btn-sm btn-outline-warning" title="Update Status">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="/delivery/track/{{ delivery.tracking_number }}/" class="btn btn-sm btn-outline-info" title="Track" target="_blank">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="{% if user.is_staff %}10{% else %}9{% endif %}" class="text-center py-5">
+                            <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No deliveries found</h5>
+                            <p class="text-muted">Try adjusting your filters</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    {% if deliveries.paginator.num_pages > 1 %}
+    <div class="card-footer">
+        <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-center mb-0">
+                {% if deliveries.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">First</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ deliveries.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Previous</a>
+                </li>
+                {% endif %}
+                
+                {% for num in deliveries.paginator.page_range %}
+                    {% if deliveries.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% elif num > deliveries.number|add:'-3' and num < deliveries.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if deliveries.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ deliveries.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ deliveries.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Last</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Bulk Update Modal -->
+{% if user.is_staff %}
+<div class="modal fade" id="bulkUpdateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Bulk Update Status</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Select Status</label>
+                    <select id="bulkStatus" class="form-select">
+                        <option value="">Select status...</option>
+                        {% for status_code, status_name in status_choices %}
+                        <option value="{{ status_code }}">{{ status_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Notes (Optional)</label>
+                    <textarea id="bulkNotes" class="form-control" rows="3" placeholder="Add notes..."></textarea>
+                </div>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> This will update all selected deliveries.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="bulkUpdate()">Update Selected</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% block extra_js %}
+<script>
+    // Select all checkboxes
+    document.getElementById('selectAll').addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('.delivery-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+        });
+    });
+    
+    // Bulk update function
+    function bulkUpdate() {
+        const checkboxes = document.querySelectorAll('.delivery-checkbox:checked');
+        const status = document.getElementById('bulkStatus').value;
+        const notes = document.getElementById('bulkNotes').value;
+        
+        if (checkboxes.length === 0) {
+            alert('Please select at least one delivery.');
+            return;
+        }
+        
+        if (!status) {
+            alert('Please select a status.');
+            return;
+        }
+        
+        const deliveryIds = Array.from(checkboxes).map(cb => cb.value);
+        
+        fetch('{% url "delivery:bulk_update_status" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                delivery_ids: deliveryIds,
+                status: status,
+                notes: notes
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error);
+        });
+    }
+</script>
+{% endblock %}
+{% endblock %}

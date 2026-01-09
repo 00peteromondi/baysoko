@@ -1,0 +1,412 @@
+{% extends 'delivery/base.html' %}
+{% load humanize %}
+{% load delivery_filters %}
+
+{% block title %}Delivery Analytics - Delivery Management{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2 class="mb-0">Delivery Analytics</h2>
+        <p class="text-muted">
+            {% if is_admin %}
+            System-wide analytics
+            {% elif is_delivery_person %}
+            Your delivery performance
+            {% else %}
+            Your store delivery analytics
+            {% endif %}
+        </p>
+    </div>
+    <div class="col-md-4 text-md-end">
+        <!-- Period Selector -->
+        <div class="btn-group" role="group">
+            <a href="?period=week" class="btn btn-sm {% if period == 'week' %}btn-primary{% else %}btn-outline-primary{% endif %}">Week</a>
+            <a href="?period=month" class="btn btn-sm {% if period == 'month' %}btn-primary{% else %}btn-outline-primary{% endif %}">Month</a>
+            <a href="?period=quarter" class="btn btn-sm {% if period == 'quarter' %}btn-primary{% else %}btn-outline-primary{% endif %}">Quarter</a>
+        </div>
+    </div>
+</div>
+
+<!-- Key Metrics -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h1 class="display-5 mb-1">{{ total_deliveries|intcomma }}</h1>
+                <p class="text-muted mb-0">Total Deliveries</p>
+                <small class="text-muted">{{ start_date|date:"M d" }} - {{ end_date|date:"M d" }}</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h1 class="display-5 mb-1">{{ completed_deliveries|intcomma }}</h1>
+                <p class="text-muted mb-0">Completed</p>
+                <small class="text-success">
+                    {{ success_rate|floatformat:1 }}% Success Rate
+                </small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h1 class="display-5 mb-1">
+                    {% if average_delivery_time_hours %}
+                    {{ average_delivery_time_hours|floatformat:1 }}h
+                    {% else %}
+                    N/A
+                    {% endif %}
+                </h1>
+                <p class="text-muted mb-0">Avg. Delivery Time</p>
+                <small class="text-muted">Door to door</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h1 class="display-5 mb-1">KES {{ revenue|intcomma }}</h1>
+                <p class="text-muted mb-0">Total Revenue</p>
+                <small class="text-muted">From completed deliveries</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Status Distribution -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Status Distribution</h5>
+            </div>
+            <div class="card-body">
+                {% if status_distribution %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Count</th>
+                                <th>Percentage</th>
+                                <th width="150"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in status_distribution %}
+                            <tr>
+                                <td>
+                                    <span class="status-badge status-{{ item.status }}">
+                                        {{ item.get_status_display }}
+                                    </span>
+                                </td>
+                                <td>{{ item.count }}</td>
+                                <td>{{ item.count|percentage:total_deliveries|floatformat:1 }}%</td>
+                                <td>
+                                    <div class="progress" style="height: 6px;">
+                                        <div class="progress-bar" 
+                                            role="progressbar" 
+                                            style="width: {{ item.count|percentage:total_deliveries|floatformat:0 }}%">
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-chart-pie fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No data available for this period</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Weekly Activity -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Weekly Activity</h5>
+            </div>
+            <div class="card-body">
+                {% if weekly_activity %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Day</th>
+                                <th>Date</th>
+                                <th>Deliveries</th>
+                                <th width="150"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for day in weekly_activity %}
+                            <tr>
+                                <td>{{ day.day }}</td>
+                                <td>{{ day.date }}</td>
+                                <td>{{ day.count }}</td>
+                                <td>
+                                    <div class="progress" style="height: 6px;">
+                                        {% with max_count=weekly_activity|dictsort:"count"|last %}
+                                        <div class="progress-bar bg-info" 
+                                             role="progressbar" 
+                                             style="width: {% widthratio day.count max_count.count 100 %}%">
+                                        </div>
+                                        {% endwith %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No activity data available</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Zone Performance (Admin/Seller Only) -->
+{% if zone_performance %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    {% if is_admin %}
+                    Zone Performance
+                    {% else %}
+                    Store Delivery Performance by Zone
+                    {% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Zone</th>
+                                <th>Deliveries</th>
+                                <th>Avg. Fee</th>
+                                <th>Total Revenue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for zone in zone_performance %}
+                            <tr>
+                                <td>{{ zone.name }}</td>
+                                <td>{{ zone.delivery_count|intcomma }}</td>
+                                <td>KES {{ zone.avg_fee|floatformat:0|intcomma }}</td>
+                                <td>
+                                    <strong>KES 
+                                        {% if zone.total_revenue %}
+                                        {{ zone.total_revenue|floatformat:0|intcomma }}
+                                        {% else %}
+                                        {{ zone.delivery_count|multiply:zone.avg_fee|floatformat:0|intcomma }}
+                                        {% endif %}
+                                    </strong>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Top Drivers (Admin Only) -->
+{% if is_admin and top_drivers %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Top Performing Drivers</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Driver</th>
+                                <th>Employee ID</th>
+                                <th>Deliveries</th>
+                                <th>Avg. Rating</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for driver in top_drivers %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="driver-status status-{{ driver.current_status }} me-2"></div>
+                                        {{ driver.user.get_full_name|default:driver.user.username }}
+                                    </div>
+                                </td>
+                                <td>{{ driver.employee_id }}</td>
+                                <td>{{ driver.delivery_count }}</td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <span class="me-2">{{ driver.avg_rating|floatformat:1 }}</span>
+                                        <div>
+                                            {% for i in "12345"|make_list %}
+                                            {% if forloop.counter <= driver.avg_rating %}
+                                            <i class="fas fa-star text-warning" style="font-size: 0.8rem;"></i>
+                                            {% else %}
+                                            <i class="far fa-star text-warning" style="font-size: 0.8rem;"></i>
+                                            {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="driver-status status-{{ driver.current_status }}"></span>
+                                    {{ driver.get_current_status_display }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Charts Section -->
+{% if total_deliveries > 0 %}
+<div class="row mt-4">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Status Distribution Chart</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="statusChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Weekly Activity Chart</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="weeklyChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% block extra_js %}
+<script>
+    // Status Distribution Chart
+    {% if total_deliveries > 0 %}
+    const statusCtx = document.getElementById('statusChart').getContext('2d');
+    const statusChart = new Chart(statusCtx, {
+        type: 'pie',
+        data: {
+            labels: [
+                {% for item in status_distribution %}
+                '{{ item.get_status_display }}',
+                {% endfor %}
+            ],
+            datasets: [{
+                data: [
+                    {% for item in status_distribution %}
+                    {{ item.count }},
+                    {% endfor %}
+                ],
+                backgroundColor: [
+                    '#ffc107', '#17a2b8', '#20c997', '#6f42c1',
+                    '#fd7e14', '#e83e8c', '#28a745', '#dc3545',
+                    '#6c757d', '#0dcaf0'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        boxWidth: 12,
+                        padding: 15
+                    }
+                }
+            }
+        }
+    });
+    
+    // Weekly Activity Chart
+    const weeklyCtx = document.getElementById('weeklyChart').getContext('2d');
+    const weeklyChart = new Chart(weeklyCtx, {
+        type: 'line',
+        data: {
+            labels: [
+                {% for day in weekly_activity %}
+                '{{ day.day }}',
+                {% endfor %}
+            ],
+            datasets: [{
+                label: 'Deliveries',
+                data: [
+                    {% for day in weekly_activity %}
+                    {{ day.count }},
+                    {% endfor %}
+                ],
+                backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                borderColor: '#3498db',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `Deliveries: ${context.raw}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+    {% endif %}
+</script>
+{% endblock %}
+{% endblock %}

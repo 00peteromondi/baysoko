@@ -1,0 +1,207 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_modify %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .webhook-config {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+    
+    .config-item {
+        margin-bottom: 15px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .config-label {
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 5px;
+    }
+    
+    .config-value {
+        color: #666;
+        padding: 8px;
+        background: #f8f9fa;
+        border-radius: 4px;
+    }
+    
+    .status-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.9em;
+        font-weight: 500;
+    }
+    
+    .status-active {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .status-inactive {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+    }
+    
+    .action-buttons button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: 500;
+    }
+    
+    .btn-test {
+        background: #007bff;
+        color: white;
+    }
+    
+    .btn-test:hover {
+        background: #0056b3;
+    }
+    
+    .btn-sync {
+        background: #28a745;
+        color: white;
+    }
+    
+    .btn-sync:hover {
+        background: #1e7e34;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="webhook-config">
+    <h2>🔄 Delivery System Webhook Configuration</h2>
+    <p>Configure automatic order tracking with the delivery management system.</p>
+    
+    <div class="config-item">
+        <div class="config-label">Webhook Status</div>
+        <div class="config-value">
+            <span class="status-badge {% if webhook_enabled %}status-active{% else %}status-inactive{% endif %}">
+                {% if webhook_enabled %}ACTIVE{% else %}INACTIVE{% endif %}
+            </span>
+        </div>
+    </div>
+    
+    <div class="config-item">
+        <div class="config-label">Webhook URL</div>
+        <div class="config-value">{{ webhook_url }}</div>
+    </div>
+    
+    <div class="config-item">
+        <div class="config-label">Delivery System URL</div>
+        <div class="config-value">{{ delivery_system_url }}</div>
+    </div>
+    
+    <div class="config-item">
+        <div class="config-label">How it works</div>
+        <div class="config-value">
+            <ol>
+                <li>When an order is created/updated in HomaBay Souq, a webhook is sent to the delivery system</li>
+                <li>The delivery system automatically creates/updates a delivery request</li>
+                <li>Delivery status changes are tracked in real-time</li>
+                <li>Customers can track their deliveries using the tracking number</li>
+            </ol>
+        </div>
+    </div>
+    
+    <div class="action-buttons">
+        <form method="post" action="{% url 'admin:configure_webhooks' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn-test" name="action" value="test">
+                🔍 Test Webhook Connection
+            </button>
+        </form>
+        
+        <form method="post" action="{% url 'admin:sync_all_orders' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn-sync" name="action" value="sync">
+                🔄 Sync All Orders
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="webhook-config">
+    <h3>📋 Recent Webhook Events</h3>
+    <p>View and manage recent webhook events sent to the delivery system.</p>
+    
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background: #f8f9fa;">
+                <th style="padding: 10px; text-align: left;">Event</th>
+                <th style="padding: 10px; text-align: left;">Order</th>
+                <th style="padding: 10px; text-align: left;">Time</th>
+                <th style="padding: 10px; text-align: left;">Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% comment %}
+            This would be populated from your database
+            For now, we'll show placeholder data
+            {% endcomment %}
+            <tr>
+                <td style="padding: 10px; border-bottom: 1px solid #eee;">order_created</td>
+                <td style="padding: 10px; border-bottom: 1px solid #eee;">#ORD-1001</td>
+                <td style="padding: 10px; border-bottom: 1px solid #eee;">Just now</td>
+                <td style="padding: 10px; border-bottom: 1px solid #eee;">
+                    <span style="color: green;">✓ Sent</span>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border-bottom: 1px solid #eee;">order_paid</td>
+                <td style="padding: 10px; border-bottom: 1px solid #eee;">#ORD-1000</td>
+                <td style="padding: 10px; border-bottom: 1px solid #eee;">5 minutes ago</td>
+                <td style="padding: 10px; border-bottom: 1px solid #eee;">
+                    <span style="color: green;">✓ Sent</span>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <p style="margin-top: 15px; font-size: 0.9em; color: #666;">
+        <i>Webhook events are automatically logged in the delivery system admin.</i>
+    </p>
+</div>
+
+<div class="webhook-config">
+    <h3>⚙️ Manual Webhook Testing</h3>
+    <p>Test webhook with custom data:</p>
+    
+    <form method="post" action="{% url 'admin:test_webhook_manual' %}">
+        {% csrf_token %}
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px;">Order ID:</label>
+            <input type="text" name="order_id" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px;">Event Type:</label>
+            <select name="event_type" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="order_created">Order Created</option>
+                <option value="order_updated">Order Updated</option>
+                <option value="order_paid">Order Paid</option>
+                <option value="order_cancelled">Order Cancelled</option>
+            </select>
+        </div>
+        
+        <button type="submit" style="background: #6c757d; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+            Send Test Webhook
+        </button>
+    </form>
+</div>
+{% endblock %}

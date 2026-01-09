@@ -1,0 +1,201 @@
+{% extends 'delivery/base.html' %}
+
+{% block title %}Update Status - Delivery #{{ delivery.tracking_number }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-6 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0">
+                    <i class="fas fa-edit me-2"></i>Update Delivery Status
+                </h3>
+                <p class="text-muted mb-0">
+                    Delivery #{{ delivery.tracking_number }} - Current Status: 
+                    <span class="status-badge status-{{ delivery.status }}">
+                        {{ delivery.get_status_display }}
+                    </span>
+                </p>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <!-- Current Delivery Info -->
+                    <div class="alert alert-info mb-4">
+                        <div class="row">
+                            <div class="col-6">
+                                <strong>Recipient:</strong><br>
+                                {{ delivery.recipient_name }}<br>
+                                {{ delivery.recipient_phone }}
+                            </div>
+                            <div class="col-6">
+                                <strong>Driver:</strong><br>
+                                {% if delivery.delivery_person %}
+                                {{ delivery.delivery_person.user.get_full_name|default:delivery.delivery_person.employee_id }}
+                                {% else %}
+                                <span class="text-muted">Unassigned</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Status Update -->
+                    <div class="mb-4">
+                        <h5 class="border-bottom pb-2 mb-3">Status Update</h5>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.status.id_for_label }}" class="form-label">New Status</label>
+                                <select name="status" id="{{ form.status.id_for_label }}" class="form-select form-select-lg" required>
+                                    {% for status_code, status_name in form.fields.status.choices %}
+                                    <option value="{{ status_code }}" 
+                                        {% if status_code == delivery.status %}selected{% endif %}
+                                        {% if status_code not in valid_transitions %}disabled{% endif %}>
+                                        {{ status_name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text mt-1">
+                                    Current status: <strong>{{ delivery.get_status_display }}</strong>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="notes" class="form-label">Notes</label>
+                                <textarea name="notes" id="notes" class="form-control" rows="4" placeholder="Add notes about this status change..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Status Flow Diagram -->
+                    <div class="card bg-light mb-4">
+                        <div class="card-body">
+                            <h6 class="card-title">Status Flow</h6>
+                            <div class="status-flow">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    {% for status_code, status_name in status_choices %}
+                                    <div class="text-center">
+                                        <div class="status-node {% if status_code == delivery.status %}current{% endif %}">
+                                            {{ forloop.counter }}
+                                        </div>
+                                        <small class="d-block mt-1">{{ status_name|truncatechars:10 }}</small>
+                                    </div>
+                                    {% if not forloop.last %}
+                                    <div class="flex-grow-1 border-top"></div>
+                                    {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Proof of Delivery (if marking as delivered) -->
+                    <div class="mb-4" id="proofSection" style="display: none;">
+                        <h5 class="border-bottom pb-2 mb-3">Proof of Delivery</h5>
+                        <div class="mb-3">
+                            <label class="form-label">Proof Type</label>
+                            <select class="form-select" name="proof_type">
+                                <option value="">Select proof type...</option>
+                                <option value="signature">Signature</option>
+                                <option value="photo">Photo</option>
+                                <option value="code">Verification Code</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Upload File (Optional)</label>
+                            <input type="file" class="form-control" name="proof_file">
+                        </div>
+                    </div>
+                    
+                    <!-- Form Actions -->
+                    <div class="d-flex justify-content-between align-items-center">
+                        <a href="{% url 'delivery:delivery_detail' delivery.pk %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="fas fa-check me-1"></i> Update Status
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Status History -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-history me-2"></i>Recent Status History</h5>
+            </div>
+            <div class="card-body">
+                {% if delivery.status_history.all %}
+                <div class="list-group list-group-flush">
+                    {% for history in delivery.status_history.all|slice:":5" %}
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">
+                                <span class="badge bg-{% if history.new_status == 'delivered' %}success{% elif history.new_status == 'failed' %}danger{% else %}info{% endif %}">
+                                    {{ history.get_new_status_display }}
+                                </span>
+                            </h6>
+                            <small>{{ history.created_at|timesince }} ago</small>
+                        </div>
+                        <p class="mb-1">{{ history.notes|default:"No notes provided" }}</p>
+                        <small class="text-muted">Changed by: 
+                            {% if history.changed_by %}
+                                {{ history.changed_by.get_full_name|default:history.changed_by.username }}
+                            {% else %}
+                                System
+                            {% endif %}
+                        </small>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted text-center mb-0">No status history yet</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    // Show proof section when marking as delivered (safe guards)
+    document.addEventListener('DOMContentLoaded', function() {
+        const statusSelect = document.getElementById('{{ form.status.id_for_label }}');
+        const proofSection = document.getElementById('proofSection');
+        if (!statusSelect) return;
+
+        function updateProofVisibility() {
+            if (statusSelect.value === 'delivered') {
+                proofSection.style.display = 'block';
+            } else {
+                proofSection.style.display = 'none';
+            }
+        }
+
+        statusSelect.addEventListener('change', updateProofVisibility);
+        updateProofVisibility();
+    });
+</script>
+
+<style>
+    .status-node {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: #e9ecef;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin: 0 auto;
+    }
+    
+    .status-node.current {
+        background: var(--secondary-color);
+        color: white;
+        transform: scale(1.2);
+    }
+</style>
+{% endblock %}
+{% endblock %}

@@ -1,0 +1,457 @@
+{% extends 'delivery/base.html' %}
+{% load humanize %}
+
+{% block title %}Dashboard - Delivery Management{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2 class="mb-0">Delivery Dashboard</h2>
+        <p class="text-muted">
+            Welcome back, {{ user.get_full_name|default:user.username }}
+            {% if is_seller and stores %}
+            | 
+            <span class="badge bg-info">
+                <i class="fas fa-store"></i> Seller
+            </span>
+            {% endif %}
+        </p>
+    </div>
+    <div class="col-md-4 text-md-end">
+        {% if is_admin or is_seller or is_delivery_person %}
+        <a href="{% url 'delivery:create_delivery' %}" class="btn btn-delivery">
+            <i class="fas fa-plus-circle"></i> Create New Delivery
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Store Filter for Sellers -->
+{% if is_seller and stores.count > 0 %}
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body py-2">
+                <div class="d-flex align-items-center">
+                    <span class="me-2"><i class="fas fa-filter"></i> Filter by Store:</span>
+                    <div class="btn-group" role="group">
+                        <a href="?{% if filter_status %}status={{ filter_status }}&{% endif %}" 
+                           class="btn btn-sm {% if not selected_store_id %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            All Stores ({{ stores.count }})
+                        </a>
+                        {% for store in stores %}
+                        <a href="?{% if filter_status %}status={{ filter_status }}&{% endif %}store_id={{ store.id }}" 
+                           class="btn btn-sm {% if selected_store_id == store.id|stringformat:"i" %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            {{ store.name }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# Quick create for order context when redirected from orders list #}
+{% if request.GET.order_id %}
+    {% if is_admin or is_seller %}
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="alert alert-info">
+                <strong>Quick action:</strong> Create a delivery for Order #{{ request.GET.order_id }}
+                <a href="{% url 'delivery:create_delivery' %}?order_id={{ request.GET.order_id }}" class="btn btn-sm btn-primary ms-3">Create Delivery</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+{% endif %}
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-muted mb-0">Total Deliveries</h6>
+                        <h3 class="mb-0">{{ total_deliveries|intcomma }}</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-boxes fa-2x text-primary"></i>
+                    </div>
+                </div>
+                {% if is_seller and selected_store_id %}
+                <small class="text-info">
+                    <i class="fas fa-store"></i> For selected store
+                </small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card stat-card pending">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-muted mb-0">Pending</h6>
+                        <h3 class="mb-0">{{ pending_deliveries|intcomma }}</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-clock fa-2x text-warning"></i>
+                    </div>
+                </div>
+                <small>Awaiting processing</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card stat-card in-transit">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-muted mb-0">In Transit</h6>
+                        <h3 class="mb-0">{{ in_transit_deliveries|intcomma }}</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-truck fa-2x text-info"></i>
+                    </div>
+                </div>
+                <small>On the way to customers</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card stat-card delivered">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-muted mb-0">Completed</h6>
+                        <h3 class="mb-0">{{ completed_deliveries|intcomma }}</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-check-circle fa-2x text-success"></i>
+                    </div>
+                </div>
+                <small>Successfully delivered</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Revenue Card (for sellers and admins) -->
+{% if monthly_revenue > 0 or is_admin %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card bg-light">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted mb-0">Monthly Revenue</h6>
+                        <h2 class="mb-0">KES {{ monthly_revenue|intcomma }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-money-bill-wave fa-2x text-success"></i>
+                    </div>
+                </div>
+                <small class="text-muted">
+                    {% if is_seller %}
+                    Revenue from your store{% if selected_store_id %} (selected){% endif %} deliveries
+                    {% else %}
+                    Total delivery revenue
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row">
+    <!-- Recent Deliveries -->
+    <div class="col-lg-8 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    Recent Deliveries
+                    {% if is_seller and stores %}
+                    <span class="badge bg-info ms-2">Your Stores</span>
+                    {% endif %}
+                </h5>
+                <a href="{% url 'delivery:delivery_list' %}{% if selected_store_id %}?store={{ selected_store_id }}{% endif %}" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body">
+                <!-- Status Filter -->
+                {% if is_admin or total_deliveries > 0 %}
+                <div class="mb-3">
+                    <form method="get" class="row g-2">
+                        <div class="col-md-4">
+                            <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                                <option value="">All Statuses</option>
+                                {% for key, label in status_choices %}
+                                <option value="{{ key }}" {% if filter_status == key %}selected{% endif %}>
+                                    {{ label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% if selected_store_id %}
+                        <input type="hidden" name="store_id" value="{{ selected_store_id }}">
+                        {% endif %}
+                    </form>
+                </div>
+                {% endif %}
+                
+                <div class="table-responsive">
+                    <table class="table table-delivery table-hover">
+                        <thead>
+                            <tr>
+                                <th>Tracking #</th>
+                                <th>Order ID</th>
+                                <th>Recipient</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for delivery in recent_deliveries %}
+                            <tr>
+                                <td>
+                                    <strong>{{ delivery.tracking_number|truncatechars:12 }}</strong>
+                                    {% if delivery.metadata.store_id and is_seller %}
+                                    <br><small class="text-info">Store: {{ delivery.metadata.store_id }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>{{ delivery.order_id|default:"-" }}</td>
+                                <td>
+                                    {{ delivery.recipient_name }}<br>
+                                    <small class="text-muted">{{ delivery.recipient_phone }}</small>
+                                </td>
+                                <td>
+                                    <span class="status-badge status-{{ delivery.status }}">
+                                        {{ delivery.get_status_display }}
+                                    </span>
+                                </td>
+                                <td>{{ delivery.created_at|date:"M d, Y" }}</td>
+                                <td>
+                                    <a href="{% url 'delivery:delivery_detail' delivery.pk %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center py-4">
+                                    <i class="fas fa-box-open fa-2x text-muted mb-3"></i>
+                                    <p class="text-muted">
+                                        {% if is_seller %}
+                                        No deliveries found for your stores
+                                        {% else %}
+                                        No deliveries yet
+                                        {% endif %}
+                                    </p>
+                                    {% if is_seller %}
+                                    <a href="{% url 'delivery:create_delivery' %}" class="btn btn-delivery btn-sm">
+                                        <i class="fas fa-plus"></i> Create Your First Delivery
+                                    </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Column -->
+    <div class="col-lg-4">
+        {% if is_delivery_person %}
+        <!-- Driver Statistics -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">My Statistics</h5>
+            </div>
+            <div class="card-body">
+                <!-- ... existing driver stats code ... -->
+            </div>
+        </div>
+        {% elif is_seller and stores %}
+        <!-- Seller Store Info -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Your Stores</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    {% for store in stores %}
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">{{ store.name }}</h6>
+                            {% if selected_store_id == store.id|stringformat:"i" %}
+                            <span class="badge bg-primary">Selected</span>
+                            {% endif %}
+                        </div>
+                        <p class="mb-1 small">{{ store.address|truncatechars:30|default:"No address" }}</p>
+                        <div class="mt-2">
+                            <a href="?store_id={{ store.id }}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-filter"></i> Filter
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Quick Actions -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6 mb-3">
+                        <a href="{% url 'delivery:create_delivery' %}" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-plus"></i><br>
+                            <small>New Delivery</small>
+                        </a>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <a href="{% url 'delivery:delivery_list' %}" class="btn btn-outline-success w-100">
+                            <i class="fas fa-list"></i><br>
+                            <small>All Deliveries</small>
+                        </a>
+                    </div>
+                    <div class="col-6">
+                        <a href="#" onclick="promptTracking()" class="btn btn-outline-info w-100">
+                            <i class="fas fa-search"></i><br>
+                            <small>Track Package</small>
+                        </a>
+                    </div>
+                    <div class="col-6">
+                        {% if is_admin %}
+                        <a href="{% url 'delivery:analytics' %}" class="btn btn-outline-warning w-100">
+                            <i class="fas fa-chart-bar"></i><br>
+                            <small>Analytics</small>
+                        </a>
+                        {% else %}
+                        <a href="mailto:support@homabaysouq.com" class="btn btn-outline-secondary w-100">
+                            <i class="fas fa-question-circle"></i><br>
+                            <small>Help</small>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Section (only show if there's data) -->
+{% if total_deliveries > 0 %}
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Status Distribution</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="statusChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Weekly Activity</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="weeklyChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% block extra_js %}
+<script>
+    // Status Distribution Chart
+    {% if total_deliveries > 0 %}
+    const statusCtx = document.getElementById('statusChart').getContext('2d');
+    const statusChart = new Chart(statusCtx, {
+        type: 'doughnut',
+        data: {
+            labels: [
+                {% for item in status_distribution %}
+                '{{ item.status|title }}',
+                {% endfor %}
+            ],
+            datasets: [{
+                data: [
+                    {% for item in status_distribution %}
+                    {{ item.count }},
+                    {% endfor %}
+                ],
+                backgroundColor: [
+                    '#ffc107', '#17a2b8', '#20c997', '#6f42c1',
+                    '#fd7e14', '#e83e8c', '#28a745'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+    
+    // Weekly Activity Chart
+    const weeklyCtx = document.getElementById('weeklyChart').getContext('2d');
+    const weeklyChart = new Chart(weeklyCtx, {
+        type: 'bar',
+        data: {
+            labels: [
+                {% for day in weekly_activity %}
+                '{{ day.day }}',
+                {% endfor %}
+            ],
+            datasets: [{
+                label: 'Deliveries',
+                data: [
+                    {% for day in weekly_activity %}
+                    {{ day.count }},
+                    {% endfor %}
+                ],
+                backgroundColor: '#3498db',
+                borderRadius: 5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+    {% endif %}
+</script>
+{% endblock %}
+{% endblock %}

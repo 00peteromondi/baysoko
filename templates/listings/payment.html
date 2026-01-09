@@ -138,6 +138,7 @@
 
 {% block content %}
 <div class="container py-4 payment-container">
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:1060;" aria-live="polite" aria-atomic="true"></div>
     <!-- Breadcrumb -->
     <nav aria-label="breadcrumb" class="mb-4">
         <ol class="breadcrumb">
@@ -622,15 +623,26 @@ document.addEventListener('DOMContentLoaded', function() {
         return cookieValue;
     }
     
-    // Toast function
+    // Toast function (safe fallback if container or Bootstrap not available)
     function showToast(message, type = 'info') {
+        const container = document.querySelector('.toast-container');
+        if (!container || typeof bootstrap === 'undefined' || typeof bootstrap.Toast !== 'function') {
+            try {
+                console.log('TOAST', type, message);
+                if (type === 'error') alert(message);
+            } catch (e) {
+                // swallow errors
+            }
+            return;
+        }
+
         // Create toast element
         const toast = document.createElement('div');
         toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} border-0`;
         toast.setAttribute('role', 'alert');
         toast.setAttribute('aria-live', 'assertive');
         toast.setAttribute('aria-atomic', 'true');
-        
+
         toast.innerHTML = `
             <div class="d-flex">
                 <div class="toast-body d-flex align-items-center">
@@ -640,16 +652,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
             </div>
         `;
-        
-        // Add to container
-        const container = document.querySelector('.toast-container');
+
         container.appendChild(toast);
-        
-        // Show toast
+
         const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 5000 });
         bsToast.show();
-        
-        // Remove after hide
+
         toast.addEventListener('hidden.bs.toast', () => {
             toast.remove();
         });
@@ -667,6 +675,36 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('paymentSuccessSection').style.display = 'block';
         processPaymentBtn.style.display = 'none';
     }
+});
+</script>
+<script>
+// Render Django messages as toasts
+document.addEventListener('DOMContentLoaded', function() {
+    const djangoMessages = [
+        {% for msg in messages %}
+        { message: "{{ msg|escapejs }}", tags: "{{ msg.tags }}" }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+
+    const mapTag = (tags) => {
+        if (!tags) return 'info';
+        if (tags.indexOf('error') !== -1) return 'error';
+        if (tags.indexOf('warning') !== -1) return 'warning';
+        if (tags.indexOf('success') !== -1) return 'success';
+        return 'info';
+    };
+
+    setTimeout(() => {
+        djangoMessages.forEach(m => {
+            try {
+                const t = mapTag(m.tags);
+                if (typeof showToast === 'function') showToast(m.message, t);
+                else console.log('Message:', t, m.message);
+            } catch (e) {
+                console.error('Error showing toast for message', m, e);
+            }
+        });
+    }, 150);
 });
 </script>
 {% endblock %}

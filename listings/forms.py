@@ -1,22 +1,30 @@
 # listings/forms.py
 from django import forms
 from .models import Listing, Category, Review, Payment
+from . import ai_listing_helper
 
 class ListingForm(forms.ModelForm):
     # Remove the multiple images field from here for now
     # We'll handle multiple images in the view
     class Meta:
         model = Listing
-        fields = ['title', 'description', 'price', 'category', 'store', 'location', 'image', 'condition', 'delivery_option', 'stock']
+        fields = ['title', 'description', 'price', 'category', 'store', 'location', 'image', 'condition', 'delivery_option', 'stock', 'brand', 'model', 'dimensions', 'weight', 'color', 'material', 'meta_description']
         widgets = {
-            'title': forms.TextInput(attrs={'placeholder': 'Enter a catchy title for your item'}),
-            'price': forms.NumberInput(attrs={'min': '0', 'step': '0.01', 'placeholder': '0.00'}),
-            'stock': forms.NumberInput(attrs={'min': '1', 'step': '1', 'placeholder': '1'}),
-            'description': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Describe your item in detail...'}),
-            'category': forms.Select(attrs={'class': 'form-select'}),
-            'location': forms.Select(attrs={'class': 'form-select'}),
-            'condition': forms.Select(attrs={'class': 'form-select'}),
-            'delivery_option': forms.Select(attrs={'class': 'form-select'}),
+            'title': forms.TextInput(attrs={'placeholder': 'Enter a catchy title for your item', 'class': 'form-control'}),
+            'price': forms.NumberInput(attrs={'min': '0', 'step': '0.01', 'placeholder': '0.00', 'class': 'form-control'}),
+            'stock': forms.NumberInput(attrs={'min': '1', 'step': '1', 'placeholder': '1', 'class': 'form-control'}),
+            'description': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Describe your item in detail...', 'class': 'form-control'}),
+            'category': forms.Select(attrs={'class': 'form-select form-control'}),
+            'location': forms.Select(attrs={'class': 'form-select form-control'}),
+            'condition': forms.Select(attrs={'class': 'form-select form-control'}),
+            'delivery_option': forms.Select(attrs={'class': 'form-select form-control'}),
+            'brand': forms.TextInput(attrs={'placeholder': 'e.g., Samsung, Nike, Apple, etc.', 'class': 'form-control'}),
+            'model': forms.TextInput(attrs={'placeholder': 'Model name/number', 'class': 'form-control'}),
+            'dimensions': forms.TextInput(attrs={'placeholder': 'e.g., 10x5x3 inches or 30x20x15 cm', 'class': 'form-control'}),
+            'weight': forms.TextInput(attrs={'placeholder': 'e.g., 0.5 kg or 150g', 'class': 'form-control'}),
+            'color': forms.TextInput(attrs={'placeholder': 'e.g., Black, White, Blue, Red', 'class': 'form-control'}),
+            'material': forms.TextInput(attrs={'placeholder': 'e.g., Metal, Wood, Cotton, Plastic', 'class': 'form-control'}),
+            'meta_description': forms.Textarea(attrs={'rows': 2, 'placeholder': 'SEO description (auto-generated if empty)', 'maxlength': '160', 'class': 'form-control'}),
         }
 
     def clean_image(self):
@@ -80,10 +88,218 @@ class CheckoutForm(forms.Form):
         help_text="Your postal code"
     )
 
+# listings/forms.py (add these forms)
+
 class ReviewForm(forms.ModelForm):
     class Meta:
         model = Review
-        fields = ['rating', 'comment']
+        fields = ['rating', 'comment', 'communication_rating', 'delivery_rating', 'accuracy_rating']
         widgets = {
-            'comment': forms.Textarea(attrs={'rows': 4}),
+            'comment': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Share your experience...'}),
         }
+    
+    def __init__(self, *args, **kwargs):
+        review_type = kwargs.pop('review_type', 'listing')
+        super().__init__(*args, **kwargs)
+        
+        # Customize form based on review type
+        if review_type == 'seller':
+            self.fields['communication_rating'].required = True
+            self.fields['delivery_rating'].required = True
+        elif review_type == 'order':
+            self.fields['communication_rating'].required = True
+            self.fields['delivery_rating'].required = True
+            self.fields['accuracy_rating'].required = True
+
+
+class OrderReviewForm(forms.ModelForm):
+    """Special form for reviewing an entire order"""
+    class Meta:
+        model = Review
+        fields = ['rating', 'comment', 'communication_rating', 'delivery_rating', 'accuracy_rating']
+        widgets = {
+            'comment': forms.Textarea(attrs={'rows': 5, 'placeholder': 'Share your overall experience with this order...'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make all detailed ratings required for order reviews
+        for field in ['communication_rating', 'delivery_rating', 'accuracy_rating']:
+            self.fields[field].required = True
+            self.fields[field].widget.attrs.update({'class': 'detailed-rating'})
+
+
+# Create a custom widget in forms.py
+
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+class MultipleFileField(forms.FileField):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("widget", MultipleFileInput())
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None):
+        single_file_clean = super().clean
+        if isinstance(data, (list, tuple)):
+            result = [single_file_clean(d, initial) for d in data]
+        else:
+            result = single_file_clean(data, initial)
+        return result
+
+
+class ReviewPhotoForm(forms.Form):
+    photos = MultipleFileField(
+        required=False,
+        label="Upload photos (optional)",
+        help_text="Upload up to 5 images (max 10MB each)"
+    )
+    
+    def clean_photos(self):
+        photos = self.cleaned_data.get('photos')
+        if photos:
+            if not isinstance(photos, list):
+                photos = [photos]
+            
+            if len(photos) > 5:
+                raise forms.ValidationError("You can upload up to 5 photos.")
+            
+            for photo in photos:
+                if not photo.content_type.startswith('image/'):
+                    raise forms.ValidationError("Only image files are allowed.")
+                if photo.size > 10 * 1024 * 1024:  # 10MB
+                    raise forms.ValidationError(f"Image {photo.name} is too large (max 10MB).")
+        return photos
+    
+class AIListingForm(ListingForm):
+    """AI-assisted listing form that can auto-fill missing fields."""
+    use_ai = forms.BooleanField(
+        required=False,
+        initial=False,
+        label='Use AI to auto-fill missing fields',
+        help_text='Let AI help complete your listing based on the information you provide'
+    )
+    
+    class Meta:
+        model = Listing
+        fields = ['title', 'description', 'price', 'category', 'store', 'location', 
+                 'image', 'condition', 'delivery_option', 'stock', 'brand', 
+                 'model', 'dimensions', 'weight', 'color', 'material', 'meta_description']
+        widgets = {
+            'title': forms.TextInput(attrs={
+                'placeholder': 'Enter a catchy title for your item',
+                'class': 'form-control ai-suggestable'
+            }),
+            'description': forms.Textarea(attrs={
+                'rows': 6, 
+                'placeholder': 'Describe your item in detail...',
+                'class': 'form-control ai-suggestable'
+            }),
+            'price': forms.NumberInput(attrs={'min': '0', 'step': '0.01', 'placeholder': '0.00', 'class': 'form-control'}),
+            'stock': forms.NumberInput(attrs={'min': '1', 'step': '1', 'placeholder': '1', 'class': 'form-control'}),
+            'category': forms.Select(attrs={'class': 'form-select form-control ai-suggestable'}),
+            'location': forms.Select(attrs={'class': 'form-select form-control ai-suggestable'}),
+            'condition': forms.Select(attrs={'class': 'form-select form-control ai-suggestable'}),
+            'delivery_option': forms.Select(attrs={'class': 'form-select form-control ai-suggestable'}),
+            'brand': forms.TextInput(attrs={'placeholder': 'e.g., Samsung, Nike, Apple, etc.'}),
+            'model': forms.TextInput(attrs={'placeholder': 'Model name/number'}),
+            'dimensions': forms.TextInput(attrs={'placeholder': 'e.g., 10x5x3 inches or 30x20x15 cm'}),
+            'weight': forms.TextInput(attrs={'placeholder': 'e.g., 0.5 kg or 150g'}),
+            'color': forms.TextInput(attrs={'placeholder': 'e.g., Black, White, Blue, Red'}),
+            'material': forms.TextInput(attrs={'placeholder': 'e.g., Metal, Wood, Cotton, Plastic'}),
+            'meta_description': forms.Textarea(attrs={
+                'rows': 2,
+                'placeholder': 'SEO description (auto-generated if empty)',
+                'maxlength': '160'
+            }),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        
+        # Add store field if user has stores
+        try:
+            from storefront.models import Store
+            if Store and user and user.is_authenticated:
+                user_stores_qs = Store.objects.filter(owner=user)
+                self.fields['store'] = forms.ModelChoiceField(
+                    queryset=user_stores_qs,
+                    required=(user_stores_qs.exists()),
+                    label='Store',
+                    help_text='Select which store/business this listing belongs to'
+                )
+        except:
+            pass
+    
+    def generate_with_ai(self):
+        """Generate missing fields using AI."""
+        from .ai_listing_helper import listing_ai
+        from django.http import QueryDict
+        
+        user_input = {
+            'title': self.data.get('title', ''),
+            'description': self.data.get('description', ''),
+            'category': self.data.get('category', ''),
+            'condition': self.data.get('condition', ''),
+            'price': self.data.get('price', ''),
+            'brand': self.data.get('brand', ''),
+            'model': self.data.get('model', ''),
+            'dimensions': self.data.get('dimensions', ''),
+            'weight': self.data.get('weight', ''),
+            'color': self.data.get('color', ''),
+            'material': self.data.get('material', ''),
+            'delivery_option': self.data.get('delivery_option', ''),
+            'location': self.data.get('location', ''),
+            'meta_description': self.data.get('meta_description', ''),
+        }
+        
+        ai_data = listing_ai.generate_listing_data(user_input)
+
+        # Ensure self.data is mutable (QueryDict from request.POST is immutable by default)
+        if hasattr(self, 'data'):
+            try:
+                # QueryDict.copy() returns a mutable QueryDict
+                if isinstance(self.data, QueryDict):
+                    self.data = self.data.copy()
+                else:
+                    # If it's a different mapping, try to make a shallow copy
+                    self.data = dict(self.data)
+            except Exception:
+                # If copying fails, fall back to a new dict
+                try:
+                    self.data = dict(self.data)
+                except Exception:
+                    self.data = {}
+
+        # Update form data with AI suggestions (only when appropriate)
+        for field, value in ai_data.items():
+            if field in self.fields:
+                current_value = ''
+                try:
+                    current_value = self.data.get(field, '')
+                except Exception:
+                    # data might be a plain dict now
+                    current_value = self.data.get(field, '') if isinstance(self.data, dict) else ''
+
+                # Always fill empty fields
+                if not current_value or str(current_value).strip() == '':
+                    # For QueryDict, assignment via [] works on the mutable copy
+                    try:
+                        self.data[field] = value
+                    except Exception:
+                        # fallback: set in cleaned_data or initial
+                        self.initial[field] = value
+                # For description and meta_description, use AI if user input is minimal
+                elif field == 'description' and len(str(current_value)) < 50:
+                    try:
+                        self.data[field] = value
+                    except Exception:
+                        self.initial[field] = value
+                elif field == 'meta_description' and len(str(current_value)) < 20:
+                    try:
+                        self.data[field] = value
+                    except Exception:
+                        self.initial[field] = value
+
+        return ai_data

@@ -6,6 +6,8 @@ import cloudinary
 import cloudinary.uploader
 import cloudinary.api
 import dj_database_url
+from decimal import Decimal
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -17,6 +19,19 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-default-key-for-dev')
 DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
+
+# Normalize ALLOWED_HOSTS to a safe default if empty or misconfigured
+try:
+    # If Csv returned an empty list or list with empty string, replace with sensible defaults
+    if not ALLOWED_HOSTS or (isinstance(ALLOWED_HOSTS, (list, tuple)) and all((not h) for h in ALLOWED_HOSTS)):
+        ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+    # If a single string slipped through, wrap it
+    if isinstance(ALLOWED_HOSTS, str):
+        ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS.split(',') if h.strip()]
+        if not ALLOWED_HOSTS:
+            ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+except Exception:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 # Add Render external hostname
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
@@ -69,6 +84,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.sites',
     'django.contrib.humanize',
+    'delivery.apps.DeliveryConfig',
+    'channels',
     
     # Third-party apps
     'crispy_forms',
@@ -76,6 +93,7 @@ INSTALLED_APPS = [
     'cloudinary',
     'cloudinary_storage',
     'django_extensions',
+    'rest_framework',
     
     # Allauth apps
     'allauth',
@@ -96,6 +114,20 @@ INSTALLED_APPS = [
     'storefront.apps.StorefrontConfig',
 ]
 
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ],
+}
+
 # Custom user model
 AUTH_USER_MODEL = 'users.User'
 
@@ -107,12 +139,15 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'homabay_souq.middleware.ClearCorruptedSessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
+    'delivery.middleware.SellerStoreMiddleware',
+    'notifications.middleware.NotificationsMiddleware',
 ]
 
 ROOT_URLCONF = 'homabay_souq.urls'
@@ -136,6 +171,7 @@ TEMPLATES = [
                 'listings.context_processors.cart_context',
                 'chats.context_processors.messages_context',
                 'notifications.context_processors.notifications_context',
+                'delivery.context_processors.delivery_user_context',
             ],
         },
     },
@@ -202,26 +238,68 @@ os.makedirs(MEDIA_ROOT, exist_ok=True)
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Channels (WebSocket) configuration - in-memory layer for development
+ASGI_APPLICATION = 'homabay_souq.asgi.application'
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer'
+    }
+}
+
 # Login/Logout redirects
 LOGIN_REDIRECT_URL = 'home'
 LOGIN_URL = 'login'
 LOGOUT_REDIRECT_URL = 'home'
 
-# Security settings for production
+# Security settings (configurable via environment). These default to
+# secure values in production but remain permissive in development.
+from django.core.exceptions import ImproperlyConfigured
+
+# Enforce a strong SECRET_KEY in production
 if not DEBUG:
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SECURE_BROWSER_XSS_FILTER = True
-    SECURE_HSTS_SECONDS = 31536000  # 1 year
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
-    SECURE_CONTENT_TYPE_NOSNIFF = True
-else:
-    # Development settings - explicitly disable HTTPS redirect
-    SECURE_SSL_REDIRECT = False
-    SESSION_COOKIE_SECURE = False
-    CSRF_COOKIE_SECURE = False
+    if SECRET_KEY.startswith('django-insecure') or len(SECRET_KEY) < 50:
+        raise ImproperlyConfigured(
+            'In production, set a strong SECRET_KEY via the SECRET_KEY environment variable.'
+        )
+
+# If running in development and SECRET_KEY is weak, generate a stable random one
+# and persist it to a local file so it survives process reloads (avoids session corruption)
+if DEBUG and (SECRET_KEY.startswith('django-insecure') or len(SECRET_KEY) < 50):
+    SECRET_FILE = BASE_DIR / '.secret_key'
+    try:
+        if SECRET_FILE.exists():
+            SECRET_KEY = SECRET_FILE.read_text().strip()
+        else:
+            from django.core.management.utils import get_random_secret_key
+            new_key = get_random_secret_key()
+            try:
+                SECRET_FILE.write_text(new_key)
+            except Exception:
+                # If we can't write the file, still use the generated key in-memory
+                pass
+            SECRET_KEY = new_key
+            print('⚠️  Generated and saved SECRET_KEY to .secret_key for development/testing')
+    except Exception:
+        try:
+            from django.core.management.utils import get_random_secret_key
+            SECRET_KEY = get_random_secret_key()
+            print('⚠️  Using generated SECRET_KEY for development/testing (not persisted)')
+        except Exception:
+            pass
+
+# HSTS settings
+SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=31536000, cast=int)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = config('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=True, cast=bool)
+SECURE_HSTS_PRELOAD = config('SECURE_HSTS_PRELOAD', default=True, cast=bool)
+
+# SSL / cookie settings (default to secure values; tests and localhost can
+# still override them later)
+SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
+SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=True, cast=bool)
+CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=True, cast=bool)
+
+SECURE_BROWSER_XSS_FILTER = config('SECURE_BROWSER_XSS_FILTER', default=True, cast=bool)
+SECURE_CONTENT_TYPE_NOSNIFF = config('SECURE_CONTENT_TYPE_NOSNIFF', default=True, cast=bool)
 
 # When running tests, avoid enforcing HTTPS redirects which cause 301 responses
 RUNNING_TESTS = len(sys.argv) > 1 and sys.argv[1] == 'test'
@@ -238,8 +316,39 @@ if RUNNING_TESTS:
     except Exception:
         ALLOWED_HOSTS = ['testserver']
 
+# Safety: if running on local hosts, ensure we do not redirect to HTTPS even if
+# DEBUG is False in the environment. This prevents local webhook/testing clients
+# from being redirected to HTTPS when the dev server isn't serving TLS.
+try:
+    hosts = ALLOWED_HOSTS if isinstance(ALLOWED_HOSTS, (list, tuple)) else [ALLOWED_HOSTS]
+    # Only disable SSL redirect automatically for local development or tests
+    if any(h in ('localhost', '127.0.0.1') for h in hosts) and (DEBUG or RUNNING_TESTS):
+        SECURE_SSL_REDIRECT = False
+except Exception:
+    pass
+
+# Ensure SSL redirect is enabled for deployment checks unless running tests
+if RUNNING_TESTS:
+    SECURE_SSL_REDIRECT = False
+else:
+    SECURE_SSL_REDIRECT = True
+
 # Site ID
 SITE_ID = 1
+SITE_URL = config('SITE_URL', default='http://localhost:8000')
+
+# OpenAI Configuration for AI Listing Assistant
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
+
+# Feature flag for AI listing assistant
+AI_LISTING_ENABLED = bool(OPENAI_API_KEY)
+
+# Delivery integration settings
+# Controls whether Orders are automatically synchronized to DeliveryRequest
+DELIVERY_AUTO_SYNC_ENABLED = config('DELIVERY_AUTO_SYNC_ENABLED', default=True, cast=bool)
+# Controls whether Delivery status changes should update the originating Order
+DELIVERY_UPDATE_ORDER_STATUS = config('DELIVERY_UPDATE_ORDER_STATUS', default=True, cast=bool)
 
 # Authentication backends
 AUTHENTICATION_BACKENDS = [
@@ -314,6 +423,13 @@ SOCIALACCOUNT_FORMS = {
     'signup': 'users.social_forms.CustomSocialSignupForm',
 }
 
+# OpenAI Configuration
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
+
+# AI Listing Assistant flag
+AI_LISTING_ENABLED = bool(OPENAI_API_KEY)
+
 # Auto connect social accounts to existing users by email
 SOCIALACCOUNT_AUTO_SIGNUP = True
 
@@ -322,8 +438,42 @@ AFRICASTALKING_API_KEY = os.environ.get('AFRICASTALKING_API_KEY', '')
 SMS_ENABLED = os.environ.get('SMS_ENABLED', 'False').lower() == 'true'
 
 # Delivery System Integration
-DELIVERY_SYSTEM_URL = os.environ.get('DELIVERY_SYSTEM_URL', 'http://localhost:8001')
-DELIVERY_SYSTEM_API_KEY = os.environ.get('DELIVERY_SYSTEM_API_KEY', '')
+# Delivery settings
+DELIVERY_SYSTEM_ENABLED = config('DELIVERY_SYSTEM_ENABLED', default=True, cast=bool)
+DELIVERY_SYSTEM_URL = config('DELIVERY_SYSTEM_URL', default='')
+DELIVERY_SYSTEM_API_KEY = config('DELIVERY_SYSTEM_API_KEY', default='')
+DELIVERY_WEBHOOK_KEY = config('DELIVERY_WEBHOOK_KEY', default='')
+
+# Default pickup information
+DEFAULT_PICKUP_ADDRESS = config('DEFAULT_PICKUP_ADDRESS', default='Main Store, HomaBay')
+DEFAULT_PICKUP_PHONE = config('DEFAULT_PICKUP_PHONE', default='+254700000000')
+DEFAULT_PICKUP_EMAIL = config('DEFAULT_PICKUP_EMAIL', default='store@homabaysouq.com')
+
+# Delivery fee settings
+BASE_DELIVERY_FEE = Decimal('100.00')
+MAX_PACKAGE_WEIGHT = 100  # kg
+MAX_PACKAGE_VOLUME = 1000000  # cubic cm (1 cubic meter)
+
+# Google Maps API for distance calculation
+GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')
+
+# Delivery notification settings
+ENABLE_EMAIL_NOTIFICATIONS = config('ENABLE_EMAIL_NOTIFICATIONS', default=True, cast=bool)
+ENABLE_SMS_NOTIFICATIONS = config('ENABLE_SMS_NOTIFICATIONS', default=False, cast=bool)
+# E-commerce platform configuration
+ECOMMERCE_PLATFORM_NAME = config('ECOMMERCE_PLATFORM_NAME', default='HomaBay Souq')
+ECOMMERCE_WEBHOOK_URL = config('ECOMMERCE_WEBHOOK_URL', default='http://localhost:8000/api/delivery/webhook/homabay-souq/')
+# E-commerce platforms
+ECOMMERCE_PLATFORMS = [
+    {
+        'name': 'HomaBay Souq',
+        'platform_type': 'homabay_souq',
+        'base_url': 'http://localhost:8000',
+        'api_key': '',
+        'webhook_secret': DELIVERY_WEBHOOK_KEY,
+        'sync_enabled': True,
+    }
+]
 
 # Email configuration (for production)
 if not DEBUG:

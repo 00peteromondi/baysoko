@@ -1,57 +1,79 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}My Favorites - HomaBay Souq{% endblock %}
+{% block title %}My Favorites - Baysoko{% endblock %}
 
 {% block extra_css %}
 <style>
     .favorites-container {
-        padding: 2rem 0;
+        padding: var(--spacing-xl) 0;
+        animation: fadeIn 0.6s ease-out;
     }
     
     .page-header {
-        margin-bottom: 2rem;
-        text-align: center;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        border-radius: var(--radius-xl);
+        padding: var(--spacing-xl);
+        color: white;
+        margin-bottom: var(--spacing-xl);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .page-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url('{% static "images/pattern.png" %}') center/cover;
+        opacity: 0.1;
     }
     
     .page-header h1 {
-        font-weight: 700;
-        color: var(--text-color);
+        font-weight: 800;
         margin-bottom: 0.5rem;
+        position: relative;
+        z-index: 2;
     }
     
     .page-header p {
-        color: var(--text-muted);
-        font-size: 1.1rem;
+        font-size: 1.2rem;
+        opacity: 0.9;
+        position: relative;
+        z-index: 2;
     }
     
     .favorites-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 1.5rem;
-        margin-bottom: 2rem;
+        gap: var(--spacing-lg);
+        margin-bottom: var(--spacing-xl);
     }
     
     .favorite-card {
-        background-color: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 1rem;
+        background: var(--card-bg);
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-lg);
         overflow: hidden;
-        box-shadow: var(--shadow);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        box-shadow: var(--shadow-sm);
+        transition: var(--transition);
         height: 100%;
         display: flex;
         flex-direction: column;
+        position: relative;
     }
     
     .favorite-card:hover {
-        transform: translateY(-5px);
-        box-shadow: var(--shadow-hover);
+        transform: translateY(-10px) scale(1.02);
+        border-color: var(--primary);
+        box-shadow: var(--shadow-xl);
     }
     
     .favorite-image {
         position: relative;
-        height: 200px;
+        height: 220px;
         overflow: hidden;
     }
     
@@ -59,165 +81,233 @@
         width: 100%;
         height: 100%;
         object-fit: cover;
-        transition: transform 0.5s ease;
+        transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
     }
     
     .favorite-card:hover .favorite-image img {
-        transform: scale(1.05);
+        transform: scale(1.15);
     }
     
     .favorite-badges {
         position: absolute;
-        top: 10px;
-        left: 10px;
+        top: var(--spacing-md);
+        left: var(--spacing-md);
         display: flex;
         flex-direction: column;
-        gap: 5px;
+        gap: var(--spacing-xs);
+        z-index: 3;
     }
     
     .favorite-badge {
         font-size: 0.75rem;
-        padding: 0.25rem 0.5rem;
-        border-radius: 0.5rem;
-        font-weight: 600;
+        padding: 0.4rem 0.8rem;
+        border-radius: var(--radius-full);
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
     }
     
     .favorite-actions {
         position: absolute;
-        top: 10px;
-        right: 10px;
+        top: var(--spacing-md);
+        right: var(--spacing-md);
         display: flex;
-        gap: 5px;
+        gap: var(--spacing-xs);
+        z-index: 3;
     }
     
     .favorite-actions .btn {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        border-radius: var(--radius-full);
         display: flex;
         align-items: center;
         justify-content: center;
-        background-color: rgba(255, 255, 255, 0.9);
-        backdrop-filter: blur(10px);
-        border: none;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        transition: all 0.3s ease;
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
     
     .favorite-actions .btn:hover {
-        transform: scale(1.1);
-        background-color: white;
+        transform: scale(1.15) rotate(5deg);
+        background: white;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
     }
     
     .favorite-actions .btn-remove {
-        color: var(--danger-gemini);
+        color: var(--danger);
+    }
+    
+    .favorite-actions .btn-remove:hover {
+        background: var(--danger);
+        color: white;
     }
     
     .favorite-content {
-        padding: 1.25rem;
+        padding: var(--spacing-lg);
         flex-grow: 1;
         display: flex;
         flex-direction: column;
     }
     
     .favorite-title {
-        font-size: 1.1rem;
-        font-weight: 600;
-        margin-bottom: 0.5rem;
+        font-size: 1.2rem;
+        font-weight: 700;
+        margin-bottom: var(--spacing-sm);
         line-height: 1.4;
-        color: var(--text-color);
+        color: var(--text-primary);
+        font-family: var(--font-heading);
     }
     
     .favorite-description {
-        color: var(--text-muted);
-        font-size: 0.9rem;
-        margin-bottom: 1rem;
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        margin-bottom: var(--spacing-lg);
         flex-grow: 1;
+        line-height: 1.6;
     }
     
     .favorite-meta {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 1rem;
+        margin-bottom: var(--spacing-lg);
+        padding-top: var(--spacing-md);
+        border-top: 1px solid var(--border-color);
     }
     
     .favorite-price {
-        font-size: 1.25rem;
-        font-weight: 700;
-        color: var(--primary-gemini);
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: var(--primary);
+        font-family: var(--font-heading);
     }
     
     .favorite-location {
         display: flex;
         align-items: center;
-        gap: 0.25rem;
+        gap: var(--spacing-xs);
         font-size: 0.85rem;
         color: var(--text-muted);
     }
     
     .favorite-footer {
         display: flex;
-        gap: 0.5rem;
+        gap: var(--spacing-sm);
+        margin-top: auto;
     }
     
     .favorite-footer .btn {
         flex: 1;
-        border-radius: 0.5rem;
-        font-weight: 500;
-        padding: 0.5rem;
+        border-radius: var(--radius-md);
+        font-weight: 600;
+        padding: 0.75rem;
+        text-transform: uppercase;
+        font-size: 0.9rem;
+        letter-spacing: 0.5px;
     }
     
     .empty-state {
         text-align: center;
-        padding: 4rem 2rem;
-        color: var(--text-muted);
+        padding: var(--spacing-xxl) var(--spacing-xl);
+        background: var(--bg-secondary);
+        border: 2px dashed var(--border-color);
+        border-radius: var(--radius-xl);
+        margin: var(--spacing-xl) 0;
     }
     
     .empty-state-icon {
-        font-size: 4rem;
-        margin-bottom: 1.5rem;
-        opacity: 0.5;
+        font-size: 5rem;
+        margin-bottom: var(--spacing-lg);
+        color: var(--primary);
+        opacity: 0.3;
+        animation: float 4s ease-in-out infinite;
     }
     
     .empty-state h3 {
-        margin-bottom: 1rem;
-        color: var(--text-color);
+        margin-bottom: var(--spacing-md);
+        color: var(--text-primary);
+        font-weight: 700;
     }
     
     .empty-state p {
-        margin-bottom: 2rem;
+        margin-bottom: var(--spacing-xl);
         max-width: 500px;
         margin-left: auto;
         margin-right: auto;
+        font-size: 1.1rem;
+        line-height: 1.6;
     }
     
     .filters-bar {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 1.5rem;
-        flex-wrap: wrap;
-        gap: 1rem;
+        margin-bottom: var(--spacing-lg);
+        padding: var(--spacing-lg);
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 2px solid var(--border-color);
     }
     
     .sort-options {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        gap: var(--spacing-sm);
     }
     
     .sort-select {
-        background-color: var(--input-bg);
-        border: 1px solid var(--border-color);
-        color: var(--text-color);
-        border-radius: 0.5rem;
-        padding: 0.5rem 0.75rem;
+        background: var(--bg-primary);
+        border: 2px solid var(--border-color);
+        color: var(--text-primary);
+        border-radius: var(--radius-md);
+        padding: 0.6rem 1rem;
+        font-weight: 500;
+        transition: var(--transition);
+    }
+    
+    .sort-select:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+        outline: none;
     }
     
     .results-count {
-        color: var(--text-muted);
-        font-size: 0.9rem;
+        color: var(--text-secondary);
+        font-size: 1rem;
+        font-weight: 500;
+    }
+    
+    @keyframes cardAppear {
+        from {
+            opacity: 0;
+            transform: translateY(30px) scale(0.95);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+    
+    .favorite-card {
+        animation: cardAppear 0.6s ease-out forwards;
+        animation-delay: calc(var(--index) * 0.1s);
+    }
+    
+    .badge.bg-success {
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%) !important;
+    }
+    
+    .badge.bg-danger {
+        background: linear-gradient(135deg, var(--danger) 0%, #d42a5e 100%) !important;
+    }
+    
+    .badge.bg-info {
+        background: linear-gradient(135deg, var(--info) 0%, #0d6f9c 100%) !important;
     }
     
     @media (max-width: 768px) {
@@ -228,10 +318,15 @@
         .filters-bar {
             flex-direction: column;
             align-items: stretch;
+            gap: var(--spacing-md);
         }
         
         .sort-options {
             justify-content: space-between;
+        }
+        
+        .favorite-image {
+            height: 180px;
         }
     }
 </style>
@@ -239,7 +334,6 @@
 
 {% block content %}
 <div class="container favorites-container">
-    <!-- Breadcrumb -->
     <nav aria-label="breadcrumb" class="mb-4">
         <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
@@ -248,13 +342,11 @@
         </ol>
     </nav>
 
-    <!-- Page Header -->
     <div class="page-header">
         <h1>My Favorites</h1>
         <p>Items you've saved for later</p>
     </div>
 
-    <!-- Filters and Sort Bar -->
     <div class="filters-bar">
         <div class="results-count">
             {% if favorites %}
@@ -274,11 +366,10 @@
         </div>
     </div>
 
-    <!-- Favorites Grid -->
     {% if favorites %}
     <div class="favorites-grid">
         {% for favorite in favorites %}
-        <div class="favorite-card" data-price="{{ favorite.listing.price }}" data-date="{{ favorite.date_added|date:'Y-m-d' }}" data-name="{{ favorite.listing.title }}">
+        <div class="favorite-card" data-price="{{ favorite.listing.price }}" data-date="{{ favorite.date_added|date:'Y-m-d' }}" data-name="{{ favorite.listing.title }}" style="--index: {{ forloop.counter0 }}">
             <div class="favorite-image">
                 <img src="{{ favorite.listing.get_image_url }}" alt="{{ favorite.listing.title }}">
                 <div class="favorite-badges">
@@ -321,7 +412,6 @@
         {% endfor %}
     </div>
     {% else %}
-    <!-- Empty State -->
     <div class="empty-state">
         <div class="empty-state-icon">
             <i class="bi bi-heart"></i>
@@ -335,9 +425,7 @@
     </div>
     {% endif %}
 </div>
-{% endblock %}
 
-{% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const sortSelect = document.getElementById('sort-favorites');
@@ -362,17 +450,14 @@
                     }
                 });
                 
-                // Clear the grid
                 favoritesGrid.innerHTML = '';
                 
-                // Append sorted cards
                 favoriteCards.forEach(card => {
                     favoritesGrid.appendChild(card);
                 });
             });
         }
         
-        // Add confirmation for removing favorites
         const removeButtons = document.querySelectorAll('.favorite-actions .btn-remove');
         removeButtons.forEach(button => {
             button.addEventListener('click', function(e) {

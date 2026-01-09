@@ -41,16 +41,28 @@ class OrderManager:
         """
         OrderManager.validate_order_status_transition(order, new_status)
 
+        # Statuses controlled by the delivery system should go through
+        # `Order.set_delivery_status` so guards in the model are respected.
+        delivery_controlled = {
+            'shipped', 'delivered', 'in_transit', 'out_for_delivery',
+            'picked_up', 'failed', 'cancelled'
+        }
+
         with transaction.atomic():
             old_status = order.status
-            order.status = new_status
-            
-            if new_status == 'shipped':
-                order.shipped_at = timezone.now()
-            elif new_status == 'delivered':
-                order.delivered_at = timezone.now()
-            
-            order.save()
+
+            if new_status in delivery_controlled:
+                # Use delivery-controlled setter which will save the order
+                order.set_delivery_status(new_status)
+                # Refresh to get any timestamps set by the model
+                order.refresh_from_db()
+            else:
+                order.status = new_status
+                if new_status == 'shipped':
+                    order.shipped_at = timezone.now()
+                elif new_status == 'delivered':
+                    order.delivered_at = timezone.now()
+                order.save()
 
             # Log the activity
             Activity.objects.create(

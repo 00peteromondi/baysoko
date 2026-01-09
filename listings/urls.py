@@ -1,8 +1,10 @@
 from django.urls import path
 from .views import ListingListView, ListingDetailView, ListingCreateView, ListingUpdateView, ListingDeleteView
 from . import views
+from . import ai_views
 from . import order_views
-
+from django.shortcuts import redirect
+from notifications.views import notification_list
 
 urlpatterns = [
     path('', ListingListView.as_view(), name='home'),
@@ -27,6 +29,7 @@ urlpatterns = [
     path('api/mpesa-callback/', views.mpesa_callback, name='mpesa_callback'),
     path('order/<int:order_id>/', views.order_detail, name='order_detail'),
     path('orders/', views.order_list, name='order_list'),
+    path('api/orders/<str:tracking_number>/delivery-status/', views.delivery_status_api, name='delivery_status_api'),
     path('seller/orders/', views.seller_orders, name='seller_orders'),
     path('order/<int:order_id>/ship/', order_views.mark_order_shipped, name='mark_order_shipped'),
     path('order/<int:order_id>/deliver/', order_views.confirm_delivery, name='confirm_delivery'),
@@ -34,7 +37,18 @@ urlpatterns = [
     path('order/<int:order_id>/update-status/', order_views.update_order_status, name='update_order_status'),
     path('order/<int:order_id>/resolve-dispute/', order_views.resolve_dispute, name='resolve_dispute'),
     path('order/<int:order_id>/mediate-dispute/', order_views.mediate_dispute, name='mediate_dispute'),
-    path('listing/<int:listing_id>/review/', views.leave_review, name='leave_listing_review'),
-    path('seller/<int:seller_id>/review/', views.leave_review, name='leave_seller_review'),
+    path('review/<str:review_type>/<int:object_id>/', views.leave_review, name='leave_review'),
+    path('order/<int:order_id>/review/', views.create_order_review, name='create_order_review'),
+    path('api/reviews/<str:review_type>/<int:object_id>/', views.get_reviews, name='get_reviews'),
+    
+    # Legacy URLs for backward compatibility
+    path('listing/<int:listing_id>/review/', lambda request, listing_id: redirect('leave_review', review_type='listing', object_id=listing_id)),
+    path('seller/<int:seller_id>/review/', lambda request, seller_id: redirect('leave_review', review_type='seller', object_id=seller_id)),
+    path('api/delivery-webhook/', views.delivery_webhook_receiver, name='delivery_webhook_receiver'),
+    # AI Listing URLs (AI features handled in canonical listing form)
+    path('listing/ai-generate/', ai_views.ai_generate_listing, name='ai_generate_listing'),
+    path('listing/ai-quick/', ai_views.ai_quick_listing, name='ai_quick_listing'),
+    path('listing/ai-test/', views.ai_test_view, name='ai_test'),
+    path('order/<int:order_id>/review/', views.create_order_review, name='create_review'),
     
 ]

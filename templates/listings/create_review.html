@@ -1,0 +1,247 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}
+    {{ title }} - HomaBay Souq
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header {% if review_type == 'listing' %}bg-primary{% elif review_type == 'seller' %}bg-info{% else %}bg-success{% endif %} text-white py-3">
+                    <h2 class="h4 mb-0">
+                        <i class="bi 
+                            {% if review_type == 'listing' %}bi-box-seam
+                            {% elif review_type == 'seller' %}bi-person
+                            {% else %}bi-stars{% endif %} me-2"></i> 
+                        {{ title }}
+                    </h2>
+                </div>
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center mb-4">
+                        {% if review_type == 'listing' %}
+                            <img src="{{ listing.get_image_url }}" alt="{{ listing.title }}" class="rounded me-3" width="80" height="80" style="object-fit: cover;">
+                            <div>
+                                <h5 class="mb-0">Reviewing: {{ listing.title }}</h5>
+                                <p class="text-muted mb-0">Seller: {{ seller.username }}</p>
+                                <small class="text-success">
+                                    <i class="bi bi-check-circle me-1"></i>Verified Purchase
+                                </small>
+                            </div>
+                        {% elif review_type == 'seller' %}
+                            <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-3" style="width: 80px; height: 80px;">
+                                <i class="bi bi-person fs-1"></i>
+                            </div>
+                            <div>
+                                <h5 class="mb-0">Reviewing Seller: {{ seller.username }}</h5>
+                                <p class="text-muted mb-0">Your experience with this seller</p>
+                                <small class="text-success">
+                                    <i class="bi bi-check-circle me-1"></i>Verified Customer
+                                </small>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <!-- Overall Rating -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                {% if review_type == 'listing' %}Item Quality
+                                {% elif review_type == 'seller' %}Overall Experience
+                                {% else %}Order Experience{% endif %}
+                            </label>
+                            <div class="rating-input">
+                                {% for i in "54321" %}
+                                <input type="radio" id="star{{ i }}" name="rating" value="{{ i }}" 
+                                       {% if form.rating.value == i or not form.rating.value and forloop.first %}checked{% endif %}>
+                                <label for="star{{ i }}" title="{{ i }} stars">
+                                    <i class="bi bi-star{% if form.rating.value >= i|add:"0" %}-fill{% endif %}"></i>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            {% if form.rating.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.rating.errors }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Additional ratings for seller reviews -->
+                        {% if review_type == 'seller' %}
+                        <div class="mb-4">
+                            <h6 class="mb-3">Detailed Ratings</h6>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Communication</label>
+                                    <div class="detailed-rating-input">
+                                        {% for i in "54321" %}
+                                        <input type="radio" id="comm{{ i }}" name="communication_rating" value="{{ i }}"
+                                               {% if form.communication_rating.value == i or not form.communication_rating.value and forloop.first %}checked{% endif %}>
+                                        <label for="comm{{ i }}" title="{{ i }} stars">
+                                            <i class="bi bi-chat{% if form.communication_rating.value >= i|add:"0" %}-fill{% endif %}"></i>
+                                        </label>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Delivery</label>
+                                    <div class="detailed-rating-input">
+                                        {% for i in "54321" %}
+                                        <input type="radio" id="delivery{{ i }}" name="delivery_rating" value="{{ i }}"
+                                               {% if form.delivery_rating.value == i or not form.delivery_rating.value and forloop.first %}checked{% endif %}>
+                                        <label for="delivery{{ i }}" title="{{ i }} stars">
+                                            <i class="bi bi-truck{% if form.delivery_rating.value >= i|add:"0" %}-fill{% endif %}"></i>
+                                        </label>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Comment -->
+                        <div class="mb-4">
+                            {{ form.comment|as_crispy_field }}
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            {% if review_type == 'listing' %}
+                                <a href="{% url 'listing-detail' listing.pk %}" class="btn btn-outline-secondary">Cancel</a>
+                            {% elif review_type == 'seller' %}
+                                <a href="{% url 'profile' seller.pk %}" class="btn btn-outline-secondary">Cancel</a>
+                            {% endif %}
+                            <button type="submit" class="btn {% if review_type == 'listing' %}btn-primary{% elif review_type == 'seller' %}btn-info{% else %}btn-success{% endif %}">
+                                {% if existing_review %}Update Review{% else %}Submit Review{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Review Guidelines -->
+            <div class="card mt-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="bi bi-info-circle me-1"></i> 
+                        {% if review_type == 'listing' %}Item Review Guidelines
+                        {% elif review_type == 'seller' %}Seller Review Guidelines
+                        {% else %}Order Review Guidelines{% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if review_type == 'listing' %}
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> Focus on the item quality and condition</li>
+                        <li class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> Mention if it matches the description</li>
+                        <li class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> Note any defects or issues</li>
+                        <li><i class="bi bi-check-circle text-success me-1"></i> Be specific about what you liked/disliked</li>
+                    </ul>
+                    {% elif review_type == 'seller' %}
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> Rate communication responsiveness</li>
+                        <li class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> Comment on packaging and shipping</li>
+                        <li class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> Note professionalism and honesty</li>
+                        <li><i class="bi bi-check-circle text-success me-1"></i> Be objective about your experience</li>
+                    </ul>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Same styles as before for rating inputs */
+.rating-input, .detailed-rating-input {
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+    gap: 5px;
+}
+
+.rating-input label, .detailed-rating-input label {
+    cursor: pointer;
+    color: #ddd;
+    font-size: 1.5rem;
+    transition: color 0.2s;
+}
+
+.detailed-rating-input label {
+    font-size: 1.25rem;
+}
+
+.rating-input input:checked ~ label,
+.rating-input label:hover,
+.rating-input label:hover ~ label,
+.detailed-rating-input input:checked ~ label,
+.detailed-rating-input label:hover,
+.detailed-rating-input label:hover ~ label {
+    color: #ffc107;
+}
+
+.rating-input input:checked + label,
+.detailed-rating-input input:checked + label {
+    color: #ffc107;
+}
+
+input[type="radio"] {
+    display: none;
+}
+
+.card {
+    border: none;
+    border-radius: 15px;
+    overflow: hidden;
+}
+
+.card-header {
+    border-radius: 15px 15px 0 0 !important;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Update star icons based on initial values
+    function updateStarIcons(rating, container) {
+        const labels = container.querySelectorAll('label');
+        labels.forEach((label, index) => {
+            const starValue = 5 - index;
+            const icon = label.querySelector('i');
+            
+            if (starValue <= rating) {
+                if (icon.classList.contains('bi-star')) {
+                    icon.classList.replace('bi-star', 'bi-star-fill');
+                } else if (icon.classList.contains('bi-chat')) {
+                    icon.classList.replace('bi-chat', 'bi-chat-fill');
+                } else if (icon.classList.contains('bi-truck')) {
+                    icon.classList.replace('bi-truck', 'bi-truck-fill');
+                }
+            }
+        });
+    }
+    
+    // Initialize star icons
+    const overallRating = parseInt(document.querySelector('input[name="rating"]:checked')?.value || 0);
+    const overallContainer = document.querySelector('.rating-input');
+    if (overallRating > 0 && overallContainer) {
+        updateStarIcons(overallRating, overallContainer);
+    }
+    
+    const commRating = parseInt(document.querySelector('input[name="communication_rating"]:checked')?.value || 0);
+    const commContainer = document.querySelector('.detailed-rating-input:has([name="communication_rating"])');
+    if (commRating > 0 && commContainer) {
+        updateStarIcons(commRating, commContainer);
+    }
+    
+    const deliveryRating = parseInt(document.querySelector('input[name="delivery_rating"]:checked')?.value || 0);
+    const deliveryContainer = document.querySelector('.detailed-rating-input:has([name="delivery_rating"])');
+    if (deliveryRating > 0 && deliveryContainer) {
+        updateStarIcons(deliveryRating, deliveryContainer);
+    }
+});
+</script>
+{% endblock %}
