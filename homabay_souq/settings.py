@@ -234,6 +234,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
+    'users.middleware.SocialAuthExceptionMiddleware',
     'delivery.middleware.SellerStoreMiddleware',
     'notifications.middleware.NotificationsMiddleware',
 ]

@@ -1,3 +1,4 @@
+# users/forms.py - Updated with better validation
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
@@ -21,6 +22,10 @@ class CustomUserCreationForm(forms.ModelForm):
             'placeholder': 'Confirm your password',
             'autocomplete': 'new-password'
         })
+    )
+    terms = forms.BooleanField(
+        required=True,
+        error_messages={'required': 'You must agree to the Terms of Service and Privacy Policy.'}
     )
 
     class Meta:
@@ -52,6 +57,30 @@ class CustomUserCreationForm(forms.ModelForm):
                 'placeholder': 'Your area in Homabay'
             }),
         }
+        error_messages = {
+            'username': {
+                'required': 'Username is required.',
+                'unique': 'This username is already taken.',
+                'max_length': 'Username is too long.',
+            },
+            'email': {
+                'required': 'Email address is required.',
+                'unique': 'This email is already registered.',
+                'invalid': 'Please enter a valid email address.',
+            },
+            'first_name': {
+                'required': 'First name is required.',
+                'max_length': 'First name is too long.',
+            },
+            'last_name': {
+                'required': 'Last name is required.',
+                'max_length': 'Last name is too long.',
+            },
+            'location': {
+                'required': 'Location is required.',
+                'max_length': 'Location is too long.',
+            },
+        }
 
     def clean_password1(self):
         password1 = self.cleaned_data.get('password1')
@@ -63,7 +92,6 @@ class CustomUserCreationForm(forms.ModelForm):
             raise ValidationError("Password must contain at least one letter.")
         return password1
 
-    # In forms.py, update the CustomUserCreationForm clean_email method
     def clean_email(self):
         email = self.cleaned_data.get('email')
         if email:  # Check if email is not None or empty
@@ -94,6 +122,15 @@ class CustomUserCreationForm(forms.ModelForm):
                 raise ValidationError("Username can only contain letters, numbers, and @/./+/-/_ characters.")
         
         return username
+
+    def clean_phone_number(self):
+        phone_number = self.cleaned_data.get('phone_number')
+        if phone_number:
+            # Basic phone number validation
+            phone_number = phone_number.strip()
+            if not re.match(r'^\+?[\d\s\-\(\)]+$', phone_number):
+                raise ValidationError("Please enter a valid phone number.")
+        return phone_number
 
     def clean(self):
         cleaned_data = super().clean()

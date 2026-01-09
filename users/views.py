@@ -1,3 +1,4 @@
+# users/views.py - Updated register function
 from django.shortcuts import render, redirect
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
@@ -21,27 +22,58 @@ import os
 import logging
 from urllib.parse import urlencode
 import secrets
-
-logger = logging.getLogger(__name__)
-
-from django.shortcuts import redirect
-from django.conf import settings
-from django.contrib.auth import login
-from allauth.socialaccount.models import SocialApp
-from allauth.socialaccount.providers.oauth2.client import OAuth2Client
-from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
-from allauth.socialaccount.providers.facebook.views import FacebookOAuth2Adapter
-from allauth.socialaccount.helpers import complete_social_login
-from allauth.socialaccount.models import SocialToken, SocialAccount
 import requests
-import logging
+from django.views.decorators.csrf import csrf_exempt
+
 
 logger = logging.getLogger(__name__)
 
-# In views.py, update google_login function:
+def register(request):
+    if request.user.is_authenticated:
+        messages.info(request, 'You are already logged in!')
+        return redirect('home')
+    
+    if request.method == 'POST':
+        form = CustomUserCreationForm(request.POST)
+        if form.is_valid():
+            try:
+                user = form.save(commit=False)
+                # Ensure location has a default value
+                if not user.location:
+                    user.location = 'Homabay'
+                user.save()
+                
+                # Log the user in
+                login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+                
+                messages.success(request, f'Registration successful! Welcome to Baysoko, {user.first_name}!')
+                
+                # Check if they came from a specific page
+                next_url = request.GET.get('next', 'home')
+                return redirect(next_url)
+                
+            except Exception as e:
+                logger.error(f"Registration error: {str(e)}", exc_info=True)
+                messages.error(request, 'An error occurred during registration. Please try again.')
+        else:
+            # Show form errors
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f"{field}: {error}")
+            # Add the form back to context with errors
+            return render(request, 'users/register.html', {
+                'form': form,
+            })
+    else:
+        form = CustomUserCreationForm()
+    
+    return render(request, 'users/register.html', {
+        'form': form,
+    })
 
+# Update the google_login function to handle registration
 def google_login(request):
-    """Redirect directly to Google OAuth login"""
+    """Redirect to Google OAuth for login/registration"""
     try:
         # Get the current site domain
         from django.contrib.sites.models import Site
@@ -61,7 +93,7 @@ def google_login(request):
             client_id = os.environ.get('GOOGLE_OAUTH_CLIENT_ID')
             if not client_id:
                 messages.error(request, "Google OAuth is not configured.")
-                return redirect('login')
+                return redirect('register')
         
         # Google OAuth URL
         auth_url = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -72,12 +104,13 @@ def google_login(request):
             'response_type': 'code',
             'scope': 'email profile',
             'access_type': 'online',
-            'prompt': 'select_account',
+            'prompt': 'consent',  # Always show consent screen for registration
         }
         
         # Add state parameter
         state = secrets.token_urlsafe(32)
         request.session['oauth_state'] = state
+        request.session['oauth_action'] = 'register'  # Indicate this is for registration
         params['state'] = state
         
         # Build and redirect
@@ -88,50 +121,22 @@ def google_login(request):
     except Exception as e:
         logger.error(f"Google login error: {str(e)}", exc_info=True)
         messages.error(request, "Unable to initiate Google login.")
-        return redirect('login')
-        
-def facebook_login(request):
-    """Redirect directly to Facebook OAuth login"""
-    try:
-        # Get Facebook app from database
-        app = SocialApp.objects.get(provider='facebook')
-        
-        # Build authorization URL
-        params = {
-            'client_id': app.client_id,
-            'redirect_uri': request.build_absolute_uri('/accounts/facebook/callback/'),
-            'response_type': 'code',
-            'scope': 'email,public_profile',
-            'auth_type': 'rerequest',
-            'display': 'popup',
-        }
-        
-        auth_url = 'https://www.facebook.com/v13.0/dialog/oauth'
-        url = f"{auth_url}?{'&'.join([f'{k}={v}' for k, v in params.items()])}"
-        
-        return redirect(url)
-        
-    except SocialApp.DoesNotExist:
-        logger.error("Facebook SocialApp not configured")
-        messages.error(request, "Facebook login is not configured. Please contact administrator.")
-        return redirect('login')
+        return redirect('register')
 
-from django.views.decorators.csrf import csrf_exempt
-import json
-
+# Update google_callback to handle registration
 @csrf_exempt
 def google_callback(request):
-    """Handle Google OAuth callback"""
+    """Handle Google OAuth callback for both login and registration"""
     code = request.GET.get('code')
     error = request.GET.get('error')
     
     if error:
-        messages.error(request, f"Google login error: {error}")
-        return redirect('login')
+        messages.error(request, f"Google authorization error: {error}")
+        return redirect('register')
     
     if not code:
         messages.error(request, "Authorization code not received")
-        return redirect('login')
+        return redirect('register')
     
     try:
         app = SocialApp.objects.get(provider='google')
@@ -159,7 +164,7 @@ def google_callback(request):
         
         if 'access_token' not in token_data:
             messages.error(request, "Failed to get access token from Google")
-            return redirect('login')
+            return redirect('register')
         
         # Get user info
         userinfo_url = 'https://www.googleapis.com/oauth2/v2/userinfo'
@@ -170,23 +175,31 @@ def google_callback(request):
         email = userinfo.get('email')
         if not email:
             messages.error(request, "Email not provided by Google")
-            return redirect('login')
+            return redirect('register')
         
         # Check if user exists
-        from .models import User
         try:
             user = User.objects.get(email=email)
             # User exists, log them in
             login(request, user)
-            messages.success(request, "Successfully logged in with Google!")
+            messages.success(request, f"Welcome back, {user.first_name}!")
             return redirect('home')
         except User.DoesNotExist:
             # Create new user from Google data
+            username = email.split('@')[0]
+            # Ensure username is unique
+            counter = 1
+            original_username = username
+            while User.objects.filter(username=username).exists():
+                username = f"{original_username}{counter}"
+                counter += 1
+            
             user = User.objects.create(
                 email=email,
-                username=email.split('@')[0],
+                username=username,
                 first_name=userinfo.get('given_name', ''),
                 last_name=userinfo.get('family_name', ''),
+                location='Homabay',  # Default location
                 is_active=True
             )
             user.set_unusable_password()  # Social users don't need password
@@ -194,27 +207,59 @@ def google_callback(request):
             
             # Log the user in
             login(request, user)
-            messages.success(request, "Account created with Google! Please complete your profile.")
+            messages.success(request, "Account created with Google! Welcome to Baysoko!")
+            
+            # Redirect to profile completion
             return redirect('profile-edit', pk=user.pk)
             
     except Exception as e:
         logger.error(f"Google callback error: {str(e)}")
-        messages.error(request, "Error during Google login")
-        return redirect('login')
+        messages.error(request, "Error during Google login. Please try again.")
+        return redirect('register')
+
+# Similarly update facebook functions
+def facebook_login(request):
+    """Redirect to Facebook OAuth for login/registration"""
+    try:
+        # Get Facebook app
+        app = SocialApp.objects.get(provider='facebook')
+        
+        # Build authorization URL
+        params = {
+            'client_id': app.client_id,
+            'redirect_uri': request.build_absolute_uri('/accounts/facebook/callback/'),
+            'response_type': 'code',
+            'scope': 'email,public_profile',
+            'auth_type': 'rerequest',
+            'display': 'popup',
+        }
+        
+        auth_url = 'https://www.facebook.com/v13.0/dialog/oauth'
+        url = f"{auth_url}?{'&'.join([f'{k}={v}' for k, v in params.items()])}"
+        
+        # Store action in session
+        request.session['oauth_action'] = 'register'
+        
+        return redirect(url)
+        
+    except SocialApp.DoesNotExist:
+        logger.error("Facebook SocialApp not configured")
+        messages.error(request, "Facebook login is not configured.")
+        return redirect('register')
 
 @csrf_exempt
 def facebook_callback(request):
-    """Handle Facebook OAuth callback"""
+    """Handle Facebook OAuth callback for both login and registration"""
     code = request.GET.get('code')
     error = request.GET.get('error')
     
     if error:
-        messages.error(request, f"Facebook login error: {error}")
-        return redirect('login')
+        messages.error(request, f"Facebook authorization error: {error}")
+        return redirect('register')
     
     if not code:
         messages.error(request, "Authorization code not received")
-        return redirect('login')
+        return redirect('register')
     
     try:
         app = SocialApp.objects.get(provider='facebook')
@@ -233,7 +278,7 @@ def facebook_callback(request):
         
         if 'access_token' not in token_data:
             messages.error(request, "Failed to get access token from Facebook")
-            return redirect('login')
+            return redirect('register')
         
         # Get user info
         userinfo_url = 'https://graph.facebook.com/v13.0/me'
@@ -246,24 +291,32 @@ def facebook_callback(request):
         # Create or get user
         email = userinfo.get('email')
         if not email:
-            # Facebook might not return email if user hasn't verified it
+            # Facebook might not return email
             email = f"{userinfo.get('id')}@facebook.com"
         
-        from .models import User
+        # Check if user exists
         try:
             user = User.objects.get(email=email)
             # User exists, log them in
             login(request, user)
-            messages.success(request, "Successfully logged in with Facebook!")
+            messages.success(request, f"Welcome back, {user.first_name}!")
             return redirect('home')
         except User.DoesNotExist:
             # Create new user from Facebook data
             username = email.split('@')[0] if '@' in email else userinfo.get('id')
+            # Ensure username is unique
+            counter = 1
+            original_username = username
+            while User.objects.filter(username=username).exists():
+                username = f"{original_username}{counter}"
+                counter += 1
+            
             user = User.objects.create(
                 email=email,
                 username=username,
                 first_name=userinfo.get('first_name', ''),
                 last_name=userinfo.get('last_name', ''),
+                location='Homabay',  # Default location
                 is_active=True
             )
             user.set_unusable_password()  # Social users don't need password
@@ -271,92 +324,16 @@ def facebook_callback(request):
             
             # Log the user in
             login(request, user)
-            messages.success(request, "Account created with Facebook! Please complete your profile.")
+            messages.success(request, "Account created with Facebook! Welcome to Baysoko!")
+            
+            # Redirect to profile completion
             return redirect('profile-edit', pk=user.pk)
             
     except Exception as e:
         logger.error(f"Facebook callback error: {str(e)}")
-        messages.error(request, "Error during Facebook login")
-        return redirect('login')
-
-def social_login_callback(request, provider):
-    """Handle social login callback"""
-    from allauth.socialaccount.helpers import complete_social_login
-    from allauth.socialaccount.models import SocialLogin
-    
-    # Get parameters from request
-    code = request.GET.get('code')
-    state = request.GET.get('state')
-    error = request.GET.get('error')
-    
-    if error:
-        messages.error(request, f'Error during {provider} login: {error}')
-        return redirect('login')
-    
-    try:
-        if provider == 'google':
-            from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
-            adapter = GoogleOAuth2Adapter(request)
-        elif provider == 'facebook':
-            from allauth.socialaccount.providers.facebook.views import FacebookOAuth2Adapter
-            adapter = FacebookOAuth2Adapter(request)
-        else:
-            messages.error(request, 'Invalid OAuth provider')
-            return redirect('login')
-        
-        # Complete the social login
-        token = adapter.get_access_token(request)
-        login = adapter.complete_login(request, token=token)
-        
-        # Complete social login process
-        ret = complete_social_login(request, login)
-        
-        if ret:
-            return ret
-        
-        # If we get here, there might be an issue with the user creation
+        messages.error(request, "Error during Facebook login. Please try again.")
         return redirect('register')
-        
-    except Exception as e:
-        logger.error(f'Error during {provider} login callback: {str(e)}')
-        messages.error(request, f'Error during {provider} login. Please try again.')
-        return redirect('login')
-
-# Keep all your existing views below this point
-# (register, ProfileDetailView, ProfileUpdateView, CustomPasswordChangeView, oauth_diagnostics, ajax_password_change)
-
-def register(request):
-    if request.method == 'POST':
-        form = CustomUserCreationForm(request.POST)
-        if form.is_valid():
-            try:
-                user = form.save(commit=False)
-                # Ensure location has a default value
-                if not user.location:
-                    user.location = 'Homabay'
-                user.save()
-                
-                # Log the user in
-                login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-                
-                messages.success(request, f'Registration successful! Welcome {user.username}!')
-                return redirect('home')
-                
-            except Exception as e:
-                logger.error(f"Registration error: {str(e)}", exc_info=True)
-                messages.error(request, 'An error occurred during registration. Please try again.')
-        else:
-            # Show form errors
-            for field, errors in form.errors.items():
-                for error in errors:
-                    messages.error(request, f"{field}: {error}")
-    else:
-        form = CustomUserCreationForm()
     
-    return render(request, 'users/register.html', {
-        'form': form,
-    })
-
 class ProfileDetailView(DetailView):
     model = User
     template_name = 'users/profile.html'
