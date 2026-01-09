@@ -14,10 +14,7 @@ if django.VERSION < (4, 2):
     raise RuntimeError("Django 4.2 or higher required")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-# Database configuration
-# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-
+# Database configuration - simplified and robust
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -25,34 +22,39 @@ DATABASES = {
     }
 }
 
-# Use PostgreSQL if DATABASE_URL is set
+# Only override with PostgreSQL if DATABASE_URL is set
 DATABASE_URL = os.environ.get('DATABASE_URL')
 if DATABASE_URL and DATABASE_URL.strip():
     try:
-        # Parse DATABASE_URL
         db_config = dj_database_url.parse(DATABASE_URL, conn_max_age=600)
         
+        # Print debug info
+        print(f"🔍 Parsed database config: {db_config}")
+        
         # Ensure ENGINE is set
-        if 'ENGINE' not in db_config:
+        if 'ENGINE' not in db_config or db_config['ENGINE'] == 'django.db.backends.postgresql_psycopg2':
             db_config['ENGINE'] = 'django.db.backends.postgresql'
         
-        # For Render PostgreSQL compatibility
-        if db_config['ENGINE'] == 'django.db.backends.postgresql':
-            db_config.setdefault('OPTIONS', {})
-            # Remove any problematic SSL settings
-            db_config['OPTIONS'].pop('sslmode', None)
-            db_config['OPTIONS'].pop('ssl', None)
+        # Set DATABASES
+        DATABASES = {
+            'default': db_config
+        }
         
-        DATABASES['default'] = db_config
         print(f"✅ Using PostgreSQL database: {db_config.get('NAME', 'Unknown')}")
         print(f"✅ Database host: {db_config.get('HOST', 'Unknown')}")
+        print(f"✅ Database engine: {db_config.get('ENGINE', 'Unknown')}")
         
     except Exception as e:
         print(f"⚠️  Error parsing DATABASE_URL: {e}")
         print("⚠️  Falling back to SQLite")
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
+else:
+    print("⚠️  Using SQLite for development - DATABASE_URL not set")
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-default-key-for-dev')
