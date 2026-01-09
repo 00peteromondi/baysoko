@@ -9,6 +9,7 @@ import dj_database_url
 from decimal import Decimal
 
 
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -178,17 +179,40 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'homabay_souq.wsgi.application'
+# Database configuration - Robust version
 
-# Database configuration - Simplified for Render
-if os.environ.get('DATABASE_URL'):
-    # Use PostgreSQL on Render
-    DATABASES = {
-        'default': dj_database_url.config(
-            default=os.environ.get('DATABASE_URL'),
-            conn_max_age=600,
-            ssl_require=True
-        )
-    }
+
+# Get database URL from environment
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if DATABASE_URL and DATABASE_URL.strip():
+    try:
+        # Try to parse the DATABASE_URL
+        db_config = dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=True)
+        
+        # Ensure all required fields are present
+        if 'ENGINE' not in db_config:
+            db_config['ENGINE'] = 'django.db.backends.postgresql'
+        
+        # Ensure PostgreSQL-specific settings
+        db_config.setdefault('OPTIONS', {})
+        
+        DATABASES = {
+            'default': db_config
+        }
+        
+        print(f"✅ Using PostgreSQL database: {db_config.get('NAME', 'Unknown')}")
+        print(f"✅ Database host: {db_config.get('HOST', 'Unknown')}")
+        
+    except Exception as e:
+        print(f"⚠️  Error parsing DATABASE_URL: {e}")
+        print("⚠️  Falling back to SQLite")
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
 else:
     # Use SQLite for development
     DATABASES = {
@@ -197,7 +221,7 @@ else:
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
-
+    print("⚠️  Using SQLite for development - DATABASE_URL not set")
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {
