@@ -63,18 +63,36 @@ class CustomUserCreationForm(forms.ModelForm):
             raise ValidationError("Password must contain at least one letter.")
         return password1
 
+    # In forms.py, update the CustomUserCreationForm clean_email method
     def clean_email(self):
         email = self.cleaned_data.get('email')
-        if User.objects.filter(email=email).exists():
-            raise ValidationError("This email is already registered.")
+        if email:  # Check if email is not None or empty
+            # Normalize the email
+            email = email.lower().strip()
+            
+            # Check if user exists (case-insensitive)
+            if User.objects.filter(email__iexact=email).exists():
+                raise ValidationError("This email is already registered.")
         return email
 
     def clean_username(self):
         username = self.cleaned_data.get('username')
-        if User.objects.filter(username=username).exists():
-            raise ValidationError("This username is already taken.")
-        if len(username) < 3:
-            raise ValidationError("Username must be at least 3 characters.")
+        if username:
+            # Remove whitespace and normalize
+            username = username.strip()
+            
+            # Check if username exists (case-insensitive)
+            if User.objects.filter(username__iexact=username).exists():
+                raise ValidationError("This username is already taken.")
+            
+            # Check length after trimming
+            if len(username) < 3:
+                raise ValidationError("Username must be at least 3 characters.")
+                
+            # Optional: Add username format validation
+            if not re.match(r'^[\w.@+-]+$', username):
+                raise ValidationError("Username can only contain letters, numbers, and @/./+/-/_ characters.")
+        
         return username
 
     def clean(self):
@@ -82,8 +100,10 @@ class CustomUserCreationForm(forms.ModelForm):
         password1 = cleaned_data.get('password1')
         password2 = cleaned_data.get('password2')
         
-        if password1 and password2 and password1 != password2:
-            self.add_error('password2', "Passwords do not match.")
+        # Only validate if both fields are present
+        if password1 and password2:
+            if password1 != password2:
+                self.add_error('password2', "Passwords do not match.")
         
         return cleaned_data
 

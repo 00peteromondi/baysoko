@@ -11,10 +11,6 @@ urlpatterns = [
     path('register/', register, name='register'),
     path('login/', auth_views.LoginView.as_view(template_name='users/login.html'), name='login'),
     path('logout/', auth_views.LogoutView.as_view(template_name='users/logout.html'), name='logout'),
-    # Social Authentication URLs (direct to provider login)
-    path('accounts/google/login/', google_login, name='google_login'),
-    path('accounts/facebook/login/', facebook_login, name='facebook_login'),
-    
     # Social account signup (for completing profile after social login)
     path('social/signup/', SignupView.as_view(), name='socialaccount_signup'),
     # Social Authentication URLs

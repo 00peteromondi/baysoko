@@ -3,6 +3,7 @@ from allauth.socialaccount.models import SocialApp
 from django.contrib.sites.models import Site
 from django.http import Http404
 import os
+from django.conf import settings
 
 class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
     def get_app(self, request, provider, client_id=None):
@@ -90,3 +91,25 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         
         user.save()
         return user
+    
+    def get_redirect_uri(self, request, provider):
+        """
+        Get the correct redirect URI for social authentication
+        """
+        # For Google, build the absolute URI
+        if provider == 'google':
+            from django.contrib.sites.models import Site
+            site = Site.objects.get_current()
+            
+            # Try to get the domain from environment or settings
+            domain = os.environ.get('SITE_DOMAIN', site.domain)
+            
+            # Ensure the domain has proper format
+            if not domain.startswith('http'):
+                scheme = 'https' if not settings.DEBUG else 'http'
+                domain = f"{scheme}://{domain}"
+            
+            # Google callback URL
+            return f"{domain.rstrip('/')}/accounts/google/callback/"
+        
+        return super().get_redirect_uri(request, provider)
