@@ -17,7 +17,11 @@ if django.VERSION < (4, 2):
     raise RuntimeError("Django 4.2 or higher required")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-# Database configuration - ALWAYS SET DATABASES
+# ================================================
+# DATABASE CONFIGURATION - FIXED VERSION
+# ================================================
+
+# Default configuration - ALWAYS set this at module level
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -25,30 +29,77 @@ DATABASES = {
     }
 }
 
-# PostgreSQL configuration
+# Handle PostgreSQL if DATABASE_URL exists
 DATABASE_URL = os.environ.get('DATABASE_URL')
+
+# Debug: Print what we're working with
+print(f"🔍 DATABASE_URL found: {bool(DATABASE_URL)}")
 if DATABASE_URL:
+    print(f"🔍 DATABASE_URL length: {len(DATABASE_URL)}")
+    print(f"🔍 DATABASE_URL first 50 chars: {DATABASE_URL[:50]}...")
+
+if DATABASE_URL and DATABASE_URL.strip():
     try:
+        # Parse the DATABASE_URL
+        import dj_database_url
         db_config = dj_database_url.parse(DATABASE_URL, conn_max_age=600)
         
-        # Ensure ENGINE is properly set
-        if 'ENGINE' not in db_config:
-            db_config['ENGINE'] = 'django.db.backends.postgresql'
+        # CRITICAL: Make sure ENGINE is explicitly set
+        db_config['ENGINE'] = 'django.db.backends.postgresql'
         
-        # Override with PostgreSQL
+        # Remove any problematic SSL options
+        if 'OPTIONS' in db_config:
+            db_config['OPTIONS'].pop('sslmode', None)
+            db_config['OPTIONS'].pop('ssl', None)
+        
+        # Set the DATABASES dict
         DATABASES = {
             'default': db_config
         }
         
-        print(f"✅ Using PostgreSQL database: {db_config.get('NAME', 'Unknown')}")
-        print(f"✅ Database host: {db_config.get('HOST', 'Unknown')}")
-        print(f"✅ Database engine: {db_config.get('ENGINE', 'Unknown')}")
+        print(f"✅ DATABASES['default']['ENGINE']: {DATABASES['default'].get('ENGINE')}")
+        print(f"✅ Using PostgreSQL: {db_config.get('NAME', 'Unknown')}")
+        print(f"✅ Host: {db_config.get('HOST', 'Unknown')}")
         
     except Exception as e:
         print(f"⚠️  Error parsing DATABASE_URL: {e}")
-        print("⚠️  Falling back to SQLite")
+        print("⚠️  Using SQLite as fallback")
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
 else:
-    print("⚠️  Using SQLite for development - DATABASE_URL not set")
+    print("⚠️  No DATABASE_URL found, using SQLite")
+
+# ================================================
+# DEBUG: Verify DATABASES is properly configured
+# ================================================
+print("🔍 DEBUG: Checking DATABASES configuration...")
+print(f"🔍 DATABASES type: {type(DATABASES)}")
+print(f"🔍 DATABASES keys: {DATABASES.keys() if DATABASES else 'No DATABASES'}")
+print(f"🔍 DATABASES['default'] type: {type(DATABASES.get('default'))}")
+print(f"🔍 DATABASES['default'] keys: {DATABASES.get('default', {}).keys()}")
+print(f"🔍 DATABASES['default']['ENGINE']: {DATABASES.get('default', {}).get('ENGINE', 'NOT SET')}")
+
+# Force verification
+if 'default' in DATABASES and 'ENGINE' in DATABASES['default']:
+    print(f"✅ DATABASE ENGINE CONFIRMED: {DATABASES['default']['ENGINE']}")
+else:
+    print("❌ DATABASE ENGINE NOT FOUND!")
+    # Emergency fallback
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': 'baysoko2',
+            'USER': 'baysoko2_user',
+            'PASSWORD': 'Da8a4VMjdk7X0QOuJtBxtZs3Q4ym7VzG',
+            'HOST': 'dpg-d5gd8m7pm1nc73e44la0-a',
+            'PORT': '5432',
+        }
+    }
+    print("⚠️  Using hardcoded PostgreSQL configuration as emergency fallback")
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-default-key-for-dev')
 
@@ -570,4 +621,42 @@ MPESA_ENVIRONMENT = os.environ.get('MPESA_ENVIRONMENT', 'sandbox')  # or 'produc
 
 # How many remaining sellers (with unshipped items) should trigger reminder notifications
 SELLER_SHIPMENT_REMINDER_THRESHOLD = int(os.environ.get('SELLER_SHIPMENT_REMINDER_THRESHOLD', '2'))
+
+# ================================================
+# FINAL VERIFICATION AND FALLBACK
+# ================================================
+
+# Final check: If DATABASES is still messed up, use hardcoded config
+import sys
+
+# Check if we're running migrations or any management command
+if 'manage.py' in ' '.join(sys.argv) or 'migrate' in sys.argv:
+    print(f"🔍 Running command: {' '.join(sys.argv)}")
+    
+    # Force database configuration for management commands
+    if 'DATABASE_URL' in os.environ:
+        DATABASE_URL = os.environ['DATABASE_URL']
+        print(f"🔍 Re-verifying DATABASE_URL for command execution")
+        
+        # Emergency override if engine is wrong
+        if DATABASES.get('default', {}).get('ENGINE') == 'django.db.backends.dummy':
+            print("🚨 EMERGENCY: Dummy backend detected, forcing PostgreSQL")
+            DATABASES = {
+                'default': {
+                    'ENGINE': 'django.db.backends.postgresql',
+                    'NAME': 'baysoko2',
+                    'USER': 'baysoko2_user',
+                    'PASSWORD': 'Da8a4VMjdk7X0QOuJtBxtZs3Q4ym7VzG',
+                    'HOST': 'dpg-d5gd8m7pm1nc73e44la0-a',
+                    'PORT': '5432',
+                }
+            }
+
+# Final debug output
+print("=" * 50)
+print("FINAL DATABASE CONFIGURATION:")
+print(f"ENGINE: {DATABASES.get('default', {}).get('ENGINE', 'UNKNOWN')}")
+print(f"NAME: {DATABASES.get('default', {}).get('NAME', 'UNKNOWN')}")
+print(f"HOST: {DATABASES.get('default', {}).get('HOST', 'UNKNOWN')}")
+print("=" * 50)
 
