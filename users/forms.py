@@ -2,6 +2,7 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
 import re
+from .models import User
 
 class CustomUserCreationForm(forms.ModelForm):
     password1 = forms.CharField(
