@@ -13,9 +13,53 @@ import django
 if django.VERSION < (4, 2):
     raise RuntimeError("Django 4.2 or higher required")
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Get database URL from environment
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if DATABASE_URL and DATABASE_URL.strip():
+    try:
+        # Try to parse the DATABASE_URL
+        db_config = dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=True)
+        
+        # Ensure all required fields are present
+        if 'ENGINE' not in db_config:
+            db_config['ENGINE'] = 'django.db.backends.postgresql'
+        
+        # Ensure PostgreSQL-specific settings
+        db_config.setdefault('OPTIONS', {})
+        
+        DATABASES = {
+            'default': db_config
+        }
+        
+        print(f"✅ Using PostgreSQL database: {db_config.get('NAME', 'Unknown')}")
+        print(f"✅ Database host: {db_config.get('HOST', 'Unknown')}")
+        
+    except Exception as e:
+        print(f"⚠️  Error parsing DATABASE_URL: {e}")
+        print("⚠️  Falling back to SQLite")
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
+else:
+    # Use SQLite for development
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+    print("⚠️  Using SQLite for development - DATABASE_URL not set")
+
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-default-key-for-dev')
@@ -186,42 +230,7 @@ WSGI_APPLICATION = 'homabay_souq.wsgi.application'
 # Database configuration - Robust version
 
 
-# Early database configuration to avoid dummy backend issues
-DATABASE_URL = os.environ.get('DATABASE_URL')
-
-if DATABASE_URL:
-    # Direct configuration without dj_database_url.config
-    url_parts = DATABASE_URL.replace('postgresql://', '').split('@')
-    if len(url_parts) == 2:
-        credentials, host_db = url_parts
-        user_pass = credentials.split(':')
-        host_port_db = host_db.split('/')
-        host_port = host_port_db[0].split(':')
-        
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.postgresql_psycopg2',
-                'NAME': host_port_db[1],
-                'USER': user_pass[0],
-                'PASSWORD': user_pass[1] if len(user_pass) > 1 else '',
-                'HOST': host_port[0],
-                'PORT': host_port[1] if len(host_port) > 1 else '5432',
-                'CONN_MAX_AGE': 600,
-            }
-        }
-        
-        if not DEBUG:
-            DATABASES['default']['OPTIONS'] = {'sslmode': 'require'}
-        
-        print(f"✅ Direct PostgreSQL configuration loaded")
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
-    # Password validation
+# Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
