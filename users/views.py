@@ -18,6 +18,109 @@ from django.conf import settings
 from allauth.socialaccount.models import SocialApp
 from django.contrib.sites.models import Site
 import os
+import logging
+
+logger = logging.getLogger(__name__)
+
+def google_login(request):
+    """Redirect to Google OAuth"""
+    # Check if Google OAuth is configured
+    try:
+        google_app = SocialApp.objects.get(provider='google')
+    except SocialApp.DoesNotExist:
+        messages.error(request, 'Google OAuth is not configured. Please contact the administrator.')
+        return redirect('login')
+    
+    # Get the Google OAuth URL
+    from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+    from allauth.socialaccount.providers.oauth2.client import OAuth2Client
+    
+    callback_url = request.build_absolute_uri('/users/accounts/google/login/callback/')
+    
+    # Create OAuth2 client
+    client = OAuth2Client(
+        request,
+        GoogleOAuth2Adapter,
+        callback_url=callback_url
+    )
+    
+    # Get authorization URL
+    auth_url = client.get_redirect_url(request)
+    
+    return redirect(auth_url)
+
+def facebook_login(request):
+    """Redirect to Facebook OAuth"""
+    # Check if Facebook OAuth is configured
+    try:
+        facebook_app = SocialApp.objects.get(provider='facebook')
+    except SocialApp.DoesNotExist:
+        messages.error(request, 'Facebook OAuth is not configured. Please contact the administrator.')
+        return redirect('login')
+    
+    # Get the Facebook OAuth URL
+    from allauth.socialaccount.providers.facebook.views import FacebookOAuth2Adapter
+    from allauth.socialaccount.providers.oauth2.client import OAuth2Client
+    
+    callback_url = request.build_absolute_uri('/users/accounts/facebook/login/callback/')
+    
+    # Create OAuth2 client
+    client = OAuth2Client(
+        request,
+        FacebookOAuth2Adapter,
+        callback_url=callback_url
+    )
+    
+    # Get authorization URL
+    auth_url = client.get_redirect_url(request)
+    
+    return redirect(auth_url)
+
+def social_login_callback(request, provider):
+    """Handle social login callback"""
+    from allauth.socialaccount.helpers import complete_social_login
+    from allauth.socialaccount.models import SocialLogin
+    
+    # Get parameters from request
+    code = request.GET.get('code')
+    state = request.GET.get('state')
+    error = request.GET.get('error')
+    
+    if error:
+        messages.error(request, f'Error during {provider} login: {error}')
+        return redirect('login')
+    
+    try:
+        if provider == 'google':
+            from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+            adapter = GoogleOAuth2Adapter(request)
+        elif provider == 'facebook':
+            from allauth.socialaccount.providers.facebook.views import FacebookOAuth2Adapter
+            adapter = FacebookOAuth2Adapter(request)
+        else:
+            messages.error(request, 'Invalid OAuth provider')
+            return redirect('login')
+        
+        # Complete the social login
+        token = adapter.get_access_token(request)
+        login = adapter.complete_login(request, token=token)
+        
+        # Complete social login process
+        ret = complete_social_login(request, login)
+        
+        if ret:
+            return ret
+        
+        # If we get here, there might be an issue with the user creation
+        return redirect('register')
+        
+    except Exception as e:
+        logger.error(f'Error during {provider} login callback: {str(e)}')
+        messages.error(request, f'Error during {provider} login. Please try again.')
+        return redirect('login')
+
+# Keep all your existing views below this point
+# (register, ProfileDetailView, ProfileUpdateView, CustomPasswordChangeView, oauth_diagnostics, ajax_password_change)
 
 def register(request):
     if request.method == 'POST':

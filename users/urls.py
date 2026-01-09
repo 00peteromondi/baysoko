@@ -1,13 +1,28 @@
-from django.urls import path
+from django.urls import path, include
 from django.contrib.auth import views as auth_views
 from .views import register, ProfileDetailView, ProfileUpdateView, CustomPasswordChangeView
-from .views import oauth_diagnostics
+from .views import oauth_diagnostics, google_login, facebook_login, social_login_callback
 from . import views
 
 urlpatterns = [
     path('register/', register, name='register'),
     path('login/', auth_views.LoginView.as_view(template_name='users/login.html'), name='login'),
     path('logout/', auth_views.LogoutView.as_view(template_name='users/logout.html'), name='logout'),
+    
+    # Social authentication URLs
+    path('accounts/google/login/', google_login, name='google_login'),
+    path('accounts/facebook/login/', facebook_login, name='facebook_login'),
+    
+    # Callback URLs
+    path('accounts/google/login/callback/', 
+         lambda request: social_login_callback(request, 'google'), 
+         name='google_callback'),
+    
+    path('accounts/facebook/login/callback/', 
+         lambda request: social_login_callback(request, 'facebook'), 
+         name='facebook_callback'),
+    
+    # Password reset URLs
     path('password-reset/', 
          auth_views.PasswordResetView.as_view(
              template_name='users/password_reset.html',
@@ -54,5 +69,4 @@ urlpatterns = [
     path('profile/<int:pk>/edit/', ProfileUpdateView.as_view(), name='profile-edit'),
     path('oauth-diagnostics/', oauth_diagnostics, name='oauth-diagnostics'),
     path('ajax/password-change/', views.ajax_password_change, name='ajax_password_change'),
-    
 ]

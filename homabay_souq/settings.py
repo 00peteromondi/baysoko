@@ -441,13 +441,59 @@ ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
 ACCOUNT_EMAIL_VERIFICATION = 'optional'
 ACCOUNT_UNIQUE_EMAIL = True
 
-# Social account settings
-SOCIALACCOUNT_AUTO_SIGNUP = True  # Show signup form to collect additional data
+# Add this after the existing SOCIALACCOUNT_PROVIDERS configuration
+# Update SOCIALACCOUNT_PROVIDERS with the improved structure
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'SCOPE': ['profile', 'email'],
+        'AUTH_PARAMS': {'access_type': 'online'},
+        'APP': {
+            'client_id': os.environ.get('GOOGLE_OAUTH_CLIENT_ID', ''),
+            'secret': os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET', ''),
+            'key': ''
+        }
+    },
+    'facebook': {
+        'METHOD': 'oauth2',
+        'SCOPE': ['email', 'public_profile'],
+        'AUTH_PARAMS': {'auth_type': 'reauthenticate'},
+        'INIT_PARAMS': {'cookie': True},
+        'FIELDS': [
+            'id',
+            'first_name',
+            'last_name',
+            'middle_name',
+            'name',
+            'name_format',
+            'picture',
+            'short_name'
+        ],
+        'EXCHANGE_TOKEN': True,
+        'VERIFIED_EMAIL': False,
+        'VERSION': 'v13.0',
+        'APP': {
+            'client_id': os.environ.get('FACEBOOK_OAUTH_CLIENT_ID', ''),
+            'secret': os.environ.get('FACEBOOK_OAUTH_CLIENT_SECRET', ''),
+            'key': ''
+        }
+    }
+}
+
+# Update these settings for better OAuth experience
+LOGIN_REDIRECT_URL = '/'
+ACCOUNT_LOGOUT_REDIRECT_URL = '/'
+SOCIALACCOUNT_LOGIN_ON_GET = True  # Auto-redirect for social login
+SOCIALACCOUNT_AUTO_SIGNUP = True
 SOCIALACCOUNT_EMAIL_VERIFICATION = 'optional'
 SOCIALACCOUNT_EMAIL_REQUIRED = True
 SOCIALACCOUNT_QUERY_EMAIL = True
 SOCIALACCOUNT_STORE_TOKENS = True
 
+# Custom adapter and forms (keep these as they are)
+SOCIALACCOUNT_ADAPTER = 'users.adapters.CustomSocialAccountAdapter'
+SOCIALACCOUNT_FORMS = {
+    'signup': 'users.social_forms.CustomSocialSignupForm',
+}
 # Disable the problematic 3rdparty signup if it's causing issues
 SOCIALACCOUNT_ENABLED = True
 
