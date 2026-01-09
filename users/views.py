@@ -36,32 +36,57 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# In views.py, update google_login function:
+
 def google_login(request):
     """Redirect directly to Google OAuth login"""
     try:
-        # Get Google app from database
-        app = SocialApp.objects.get(provider='google')
+        # Build Google OAuth URL with proper parameters
+        auth_url = "https://accounts.google.com/o/oauth2/v2/auth"
         
-        # Build authorization URL
+        # Get base URL from settings
+        from django.conf import settings
+        redirect_uri = request.build_absolute_uri('/accounts/google/callback/')
+        
+        # If you're using SocialApp from database:
+        try:
+            from allauth.socialaccount.models import SocialApp
+            app = SocialApp.objects.get(provider='google')
+            client_id = app.client_id
+        except:
+            # Fallback to environment variables
+            client_id = os.environ.get('GOOGLE_OAUTH_CLIENT_ID')
+            if not client_id:
+                messages.error(request, "Google OAuth is not configured. Please contact administrator.")
+                return redirect('login')
+        
         params = {
-            'client_id': app.client_id,
-            'redirect_uri': request.build_absolute_uri('/accounts/google/callback/'),
+            'client_id': client_id,
+            'redirect_uri': redirect_uri,
             'response_type': 'code',
-            'scope': 'email profile',
-            'access_type': 'online',
+            'scope': 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
+            'access_type': 'offline' if request.GET.get('prompt') == 'consent' else 'online',
             'prompt': 'select_account',
         }
         
-        auth_url = 'https://accounts.google.com/o/oauth2/v2/auth'
-        url = f"{auth_url}?{'&'.join([f'{k}={v}' for k, v in params.items()])}"
+        # Add state parameter for security
+        import secrets
+        state = secrets.token_urlsafe(32)
+        request.session['oauth_state'] = state
+        params['state'] = state
         
+        # Build URL
+        from urllib.parse import urlencode
+        url = f"{auth_url}?{urlencode(params)}"
+        
+        logger.info(f"Redirecting to Google OAuth: {url}")
         return redirect(url)
         
-    except SocialApp.DoesNotExist:
-        logger.error("Google SocialApp not configured")
-        messages.error(request, "Google login is not configured. Please contact administrator.")
+    except Exception as e:
+        logger.error(f"Google login error: {str(e)}")
+        messages.error(request, "Unable to initiate Google login. Please try again.")
         return redirect('login')
-
+    
 def facebook_login(request):
     """Redirect directly to Facebook OAuth login"""
     try:
@@ -293,29 +318,41 @@ def register(request):
     if request.method == 'POST':
         form = CustomUserCreationForm(request.POST)
         if form.is_valid():
-            user = form.save()
-            
-            # Fix: Explicitly set the backend and then login
-            user.backend = 'django.contrib.auth.backends.ModelBackend'
-            login(request, user)
-            
-            messages.success(request, 'Registration successful. Welcome!')
-            return redirect('home')
+            try:
+                user = form.save()
+                
+                # Explicitly set backend
+                from django.contrib.auth import login
+                user.backend = 'django.contrib.auth.backends.ModelBackend'
+                login(request, user)
+                
+                messages.success(request, f'Registration successful! Welcome {user.username}!')
+                return redirect('home')
+                
+            except Exception as e:
+                logger.error(f"Registration error: {str(e)}")
+                messages.error(request, f'Registration failed: {str(e)}')
         else:
-            messages.error(request, 'Please correct the errors below.')
+            # Collect all form errors
+            error_messages = []
+            for field, errors in form.errors.items():
+                for error in errors:
+                    if field == '__all__':
+                        error_messages.append(error)
+                    else:
+                        field_name = form.fields[field].label if field in form.fields else field
+                        error_messages.append(f"{field_name}: {error}")
+            
+            if error_messages:
+                messages.error(request, ' '.join(error_messages))
+            else:
+                messages.error(request, 'Please correct the errors below.')
     else:
         form = CustomUserCreationForm()
     
-    # Check if there are social account tokens in session (for social registration)
-    social_account = None
-    if request.session.get('socialaccount_sociallogin'):
-        social_account = request.session['socialaccount_sociallogin']
-    
     return render(request, 'users/register.html', {
         'form': form,
-        'social_account': social_account
     })
-
 class ProfileDetailView(DetailView):
     model = User
     template_name = 'users/profile.html'
