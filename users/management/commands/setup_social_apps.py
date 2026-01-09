@@ -1,3 +1,4 @@
+# users/management/commands/verify_oauth.py
 from django.core.management.base import BaseCommand
 from django.contrib.sites.models import Site
 from allauth.socialaccount.models import SocialApp
@@ -5,68 +6,66 @@ from django.conf import settings
 import os
 
 class Command(BaseCommand):
-    help = 'Setup social applications for OAuth providers'
+    help = 'Verify OAuth configuration and redirect URIs'
 
     def handle(self, *args, **options):
-        # Get or create the current site
-        site, created = Site.objects.get_or_create(
-            id=settings.SITE_ID,
-            defaults={
-                'domain': 'homabaysouq.onrender.com',
-                'name': 'HomaBay Souq'
-            }
-        )
+        self.stdout.write("🔍 Verifying OAuth Configuration...")
         
-        if created:
-            self.stdout.write(self.style.SUCCESS(f'Created site: {site.domain}'))
-        else:
-            # Update the site domain if it's still example.com
-            if site.domain in ['example.com', 'localhost:8000', 'homabaysouq.onrender.com']:
-                site.domain = 'homabaysouq.onrender.com'
-                site.name = 'HomaBay Souq'
-                site.save()
-                self.stdout.write(self.style.SUCCESS(f'Updated site to: {site.domain}'))
-
-        # Google SocialApp
+        # Check current site
+        site = Site.objects.get_current()
+        self.stdout.write(f"✅ Current Site: {site.name} - {site.domain}")
+        
+        # Check Google OAuth
+        try:
+            google_app = SocialApp.objects.get(provider='google')
+            self.stdout.write(f"✅ Google OAuth App: {google_app.name}")
+            self.stdout.write(f"✅ Google Client ID: {google_app.client_id[:20]}...")
+            self.stdout.write(f"✅ Google Sites: {list(google_app.sites.all())}")
+            
+            # Verify redirect URI
+            from users.adapters import CustomSocialAccountAdapter
+            adapter = CustomSocialAccountAdapter()
+            redirect_uri = adapter.get_redirect_uri(None, 'google')
+            self.stdout.write(f"✅ Google Redirect URI: {redirect_uri}")
+            
+            # Verify it matches hardcoded value
+            expected_uri = "https://homabaysouq.onrender.com/accounts/google/callback/"
+            if redirect_uri == expected_uri:
+                self.stdout.write("✅ Google Redirect URI matches expected value!")
+            else:
+                self.stdout.write(f"❌ Google Redirect URI mismatch!")
+                self.stdout.write(f"   Expected: {expected_uri}")
+                self.stdout.write(f"   Got: {redirect_uri}")
+                
+        except SocialApp.DoesNotExist:
+            self.stdout.write("❌ Google OAuth app not configured!")
+        
+        # Check Facebook OAuth
+        try:
+            facebook_app = SocialApp.objects.get(provider='facebook')
+            self.stdout.write(f"✅ Facebook OAuth App: {facebook_app.name}")
+            self.stdout.write(f"✅ Facebook Client ID: {facebook_app.client_id[:20]}...")
+            self.stdout.write(f"✅ Facebook Sites: {list(facebook_app.sites.all())}")
+            
+            # Verify redirect URI
+            from users.adapters import CustomSocialAccountAdapter
+            adapter = CustomSocialAccountAdapter()
+            redirect_uri = adapter.get_redirect_uri(None, 'facebook')
+            self.stdout.write(f"✅ Facebook Redirect URI: {redirect_uri}")
+            
+        except SocialApp.DoesNotExist:
+            self.stdout.write("❌ Facebook OAuth app not configured!")
+        
+        # Check environment variables
+        self.stdout.write("\n🔍 Checking Environment Variables:")
         google_client_id = os.environ.get('GOOGLE_OAUTH_CLIENT_ID')
         google_secret = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET')
-        
-        if google_client_id and google_secret:
-            google_app, created = SocialApp.objects.update_or_create(
-                provider='google',
-                defaults={
-                    'name': 'Google',
-                    'client_id': google_client_id,
-                    'secret': google_secret,
-                }
-            )
-            google_app.sites.add(site)
-            if created:
-                self.stdout.write(self.style.SUCCESS('✅ Google SocialApp created successfully'))
-            else:
-                self.stdout.write(self.style.SUCCESS('✅ Google SocialApp updated successfully'))
-        else:
-            self.stdout.write(self.style.WARNING('⚠️  Google OAuth credentials not found in environment variables'))
-
-        # Facebook SocialApp
         facebook_client_id = os.environ.get('FACEBOOK_OAUTH_CLIENT_ID')
         facebook_secret = os.environ.get('FACEBOOK_OAUTH_CLIENT_SECRET')
         
-        if facebook_client_id and facebook_secret:
-            facebook_app, created = SocialApp.objects.update_or_create(
-                provider='facebook',
-                defaults={
-                    'name': 'Facebook',
-                    'client_id': facebook_client_id,
-                    'secret': facebook_secret,
-                }
-            )
-            facebook_app.sites.add(site)
-            if created:
-                self.stdout.write(self.style.SUCCESS('✅ Facebook SocialApp created successfully'))
-            else:
-                self.stdout.write(self.style.SUCCESS('✅ Facebook SocialApp updated successfully'))
-        else:
-            self.stdout.write(self.style.WARNING('⚠️  Facebook OAuth credentials not found in environment variables'))
-
-        self.stdout.write(self.style.SUCCESS('🎉 Social app setup completed!'))
+        self.stdout.write(f"✅ GOOGLE_OAUTH_CLIENT_ID: {'✓' if google_client_id else '✗'}")
+        self.stdout.write(f"✅ GOOGLE_OAUTH_CLIENT_SECRET: {'✓' if google_secret else '✗'}")
+        self.stdout.write(f"✅ FACEBOOK_OAUTH_CLIENT_ID: {'✓' if facebook_client_id else '✗'}")
+        self.stdout.write(f"✅ FACEBOOK_OAUTH_CLIENT_SECRET: {'✓' if facebook_secret else '✗'}")
+        
+        self.stdout.write("\n✅ OAuth Verification Complete!")
