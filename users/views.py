@@ -22,59 +22,226 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from django.shortcuts import redirect
+from django.conf import settings
+from django.contrib.auth import login
+from allauth.socialaccount.models import SocialApp
+from allauth.socialaccount.providers.oauth2.client import OAuth2Client
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+from allauth.socialaccount.providers.facebook.views import FacebookOAuth2Adapter
+from allauth.socialaccount.helpers import complete_social_login
+from allauth.socialaccount.models import SocialToken, SocialAccount
+import requests
+import logging
+
+logger = logging.getLogger(__name__)
+
 def google_login(request):
-    """Redirect to Google OAuth"""
-    # Check if Google OAuth is configured
+    """Redirect directly to Google OAuth login"""
     try:
-        google_app = SocialApp.objects.get(provider='google')
+        # Get Google app from database
+        app = SocialApp.objects.get(provider='google')
+        
+        # Build authorization URL
+        params = {
+            'client_id': app.client_id,
+            'redirect_uri': request.build_absolute_uri('/accounts/google/callback/'),
+            'response_type': 'code',
+            'scope': 'email profile',
+            'access_type': 'online',
+            'prompt': 'select_account',
+        }
+        
+        auth_url = 'https://accounts.google.com/o/oauth2/v2/auth'
+        url = f"{auth_url}?{'&'.join([f'{k}={v}' for k, v in params.items()])}"
+        
+        return redirect(url)
+        
     except SocialApp.DoesNotExist:
-        messages.error(request, 'Google OAuth is not configured. Please contact the administrator.')
+        logger.error("Google SocialApp not configured")
+        messages.error(request, "Google login is not configured. Please contact administrator.")
         return redirect('login')
-    
-    # Get the Google OAuth URL
-    from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
-    from allauth.socialaccount.providers.oauth2.client import OAuth2Client
-    
-    callback_url = request.build_absolute_uri('/users/accounts/google/login/callback/')
-    
-    # Create OAuth2 client
-    client = OAuth2Client(
-        request,
-        GoogleOAuth2Adapter,
-        callback_url=callback_url
-    )
-    
-    # Get authorization URL
-    auth_url = client.get_redirect_url(request)
-    
-    return redirect(auth_url)
 
 def facebook_login(request):
-    """Redirect to Facebook OAuth"""
-    # Check if Facebook OAuth is configured
+    """Redirect directly to Facebook OAuth login"""
     try:
-        facebook_app = SocialApp.objects.get(provider='facebook')
+        # Get Facebook app from database
+        app = SocialApp.objects.get(provider='facebook')
+        
+        # Build authorization URL
+        params = {
+            'client_id': app.client_id,
+            'redirect_uri': request.build_absolute_uri('/accounts/facebook/callback/'),
+            'response_type': 'code',
+            'scope': 'email,public_profile',
+            'auth_type': 'rerequest',
+            'display': 'popup',
+        }
+        
+        auth_url = 'https://www.facebook.com/v13.0/dialog/oauth'
+        url = f"{auth_url}?{'&'.join([f'{k}={v}' for k, v in params.items()])}"
+        
+        return redirect(url)
+        
     except SocialApp.DoesNotExist:
-        messages.error(request, 'Facebook OAuth is not configured. Please contact the administrator.')
+        logger.error("Facebook SocialApp not configured")
+        messages.error(request, "Facebook login is not configured. Please contact administrator.")
+        return redirect('login')
+
+from django.views.decorators.csrf import csrf_exempt
+import json
+
+@csrf_exempt
+def google_callback(request):
+    """Handle Google OAuth callback"""
+    code = request.GET.get('code')
+    error = request.GET.get('error')
+    
+    if error:
+        messages.error(request, f"Google login error: {error}")
         return redirect('login')
     
-    # Get the Facebook OAuth URL
-    from allauth.socialaccount.providers.facebook.views import FacebookOAuth2Adapter
-    from allauth.socialaccount.providers.oauth2.client import OAuth2Client
+    if not code:
+        messages.error(request, "Authorization code not received")
+        return redirect('login')
     
-    callback_url = request.build_absolute_uri('/users/accounts/facebook/login/callback/')
+    try:
+        app = SocialApp.objects.get(provider='google')
+        
+        # Exchange code for token
+        token_url = 'https://oauth2.googleapis.com/token'
+        data = {
+            'client_id': app.client_id,
+            'client_secret': app.secret,
+            'code': code,
+            'grant_type': 'authorization_code',
+            'redirect_uri': request.build_absolute_uri('/accounts/google/callback/'),
+        }
+        
+        response = requests.post(token_url, data=data)
+        token_data = response.json()
+        
+        if 'access_token' not in token_data:
+            messages.error(request, "Failed to get access token from Google")
+            return redirect('login')
+        
+        # Get user info
+        userinfo_url = 'https://www.googleapis.com/oauth2/v2/userinfo'
+        headers = {'Authorization': f'Bearer {token_data["access_token"]}'}
+        userinfo = requests.get(userinfo_url, headers=headers).json()
+        
+        # Create or get user
+        email = userinfo.get('email')
+        if not email:
+            messages.error(request, "Email not provided by Google")
+            return redirect('login')
+        
+        # Check if user exists
+        from .models import User
+        try:
+            user = User.objects.get(email=email)
+            # User exists, log them in
+            login(request, user)
+            messages.success(request, "Successfully logged in with Google!")
+            return redirect('home')
+        except User.DoesNotExist:
+            # Create new user from Google data
+            user = User.objects.create(
+                email=email,
+                username=email.split('@')[0],
+                first_name=userinfo.get('given_name', ''),
+                last_name=userinfo.get('family_name', ''),
+                is_active=True
+            )
+            user.set_unusable_password()  # Social users don't need password
+            user.save()
+            
+            # Log the user in
+            login(request, user)
+            messages.success(request, "Account created with Google! Please complete your profile.")
+            return redirect('profile-edit', pk=user.pk)
+            
+    except Exception as e:
+        logger.error(f"Google callback error: {str(e)}")
+        messages.error(request, "Error during Google login")
+        return redirect('login')
+
+@csrf_exempt
+def facebook_callback(request):
+    """Handle Facebook OAuth callback"""
+    code = request.GET.get('code')
+    error = request.GET.get('error')
     
-    # Create OAuth2 client
-    client = OAuth2Client(
-        request,
-        FacebookOAuth2Adapter,
-        callback_url=callback_url
-    )
+    if error:
+        messages.error(request, f"Facebook login error: {error}")
+        return redirect('login')
     
-    # Get authorization URL
-    auth_url = client.get_redirect_url(request)
+    if not code:
+        messages.error(request, "Authorization code not received")
+        return redirect('login')
     
-    return redirect(auth_url)
+    try:
+        app = SocialApp.objects.get(provider='facebook')
+        
+        # Exchange code for token
+        token_url = 'https://graph.facebook.com/v13.0/oauth/access_token'
+        params = {
+            'client_id': app.client_id,
+            'client_secret': app.secret,
+            'code': code,
+            'redirect_uri': request.build_absolute_uri('/accounts/facebook/callback/'),
+        }
+        
+        response = requests.get(token_url, params=params)
+        token_data = response.json()
+        
+        if 'access_token' not in token_data:
+            messages.error(request, "Failed to get access token from Facebook")
+            return redirect('login')
+        
+        # Get user info
+        userinfo_url = 'https://graph.facebook.com/v13.0/me'
+        params = {
+            'access_token': token_data['access_token'],
+            'fields': 'id,name,email,first_name,last_name,picture'
+        }
+        userinfo = requests.get(userinfo_url, params=params).json()
+        
+        # Create or get user
+        email = userinfo.get('email')
+        if not email:
+            # Facebook might not return email if user hasn't verified it
+            email = f"{userinfo.get('id')}@facebook.com"
+        
+        from .models import User
+        try:
+            user = User.objects.get(email=email)
+            # User exists, log them in
+            login(request, user)
+            messages.success(request, "Successfully logged in with Facebook!")
+            return redirect('home')
+        except User.DoesNotExist:
+            # Create new user from Facebook data
+            username = email.split('@')[0] if '@' in email else userinfo.get('id')
+            user = User.objects.create(
+                email=email,
+                username=username,
+                first_name=userinfo.get('first_name', ''),
+                last_name=userinfo.get('last_name', ''),
+                is_active=True
+            )
+            user.set_unusable_password()  # Social users don't need password
+            user.save()
+            
+            # Log the user in
+            login(request, user)
+            messages.success(request, "Account created with Facebook! Please complete your profile.")
+            return redirect('profile-edit', pk=user.pk)
+            
+    except Exception as e:
+        logger.error(f"Facebook callback error: {str(e)}")
+        messages.error(request, "Error during Facebook login")
+        return redirect('login')
 
 def social_login_callback(request, provider):
     """Handle social login callback"""
