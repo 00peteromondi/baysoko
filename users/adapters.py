@@ -1,3 +1,4 @@
+# users/adapters.py - Fixed version
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from allauth.socialaccount.models import SocialApp
 from django.contrib.sites.models import Site
@@ -95,21 +96,18 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
     def get_redirect_uri(self, request, provider):
         """
         Get the correct redirect URI for social authentication
+        Hardcoded to use render.com URL
         """
-        # For Google, build the absolute URI
+        # For Google, use hardcoded render.com URL
         if provider == 'google':
-            from django.contrib.sites.models import Site
-            site = Site.objects.get_current()
-            
-            # Try to get the domain from environment or settings
-            domain = os.environ.get('SITE_DOMAIN', site.domain)
-            
-            # Ensure the domain has proper format
-            if not domain.startswith('http'):
-                scheme = 'https' if not settings.DEBUG else 'http'
-                domain = f"{scheme}://{domain}"
-            
-            # Google callback URL
-            return f"{domain.rstrip('/')}/accounts/google/callback/"
+            # Hardcoded Render.com URL
+            return "https://homabaysouq.onrender.com/accounts/google/callback/"
         
-        return super().get_redirect_uri(request, provider)
+        # For Facebook
+        if provider == 'facebook':
+            # Hardcoded Render.com URL
+            return "https://homabaysouq.onrender.com/accounts/facebook/callback/"
+        
+        # Fallback - return the default allauth behavior for other providers
+        # Note: DefaultSocialAccountAdapter doesn't have get_redirect_uri, so we return a default
+        return f"https://homabaysouq.onrender.com/accounts/{provider}/callback/"

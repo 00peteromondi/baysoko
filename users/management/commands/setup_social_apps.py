@@ -1,4 +1,4 @@
-# users/management/commands/verify_oauth.py
+# users/management/commands/setup_social_apps.py - Updated version
 from django.core.management.base import BaseCommand
 from django.contrib.sites.models import Site
 from allauth.socialaccount.models import SocialApp
@@ -6,66 +6,84 @@ from django.conf import settings
 import os
 
 class Command(BaseCommand):
-    help = 'Verify OAuth configuration and redirect URIs'
+    help = 'Setup social apps for OAuth authentication'
 
     def handle(self, *args, **options):
-        self.stdout.write("🔍 Verifying OAuth Configuration...")
+        self.stdout.write("🚀 Setting up OAuth for production...")
         
-        # Check current site
-        site = Site.objects.get_current()
-        self.stdout.write(f"✅ Current Site: {site.name} - {site.domain}")
+        # Get or create the site
+        site, created = Site.objects.get_or_create(
+            id=1,
+            defaults={
+                'domain': 'homabaysouq.onrender.com',
+                'name': 'Baysoko Marketplace'
+            }
+        )
         
-        # Check Google OAuth
-        try:
-            google_app = SocialApp.objects.get(provider='google')
-            self.stdout.write(f"✅ Google OAuth App: {google_app.name}")
-            self.stdout.write(f"✅ Google Client ID: {google_app.client_id[:20]}...")
-            self.stdout.write(f"✅ Google Sites: {list(google_app.sites.all())}")
-            
-            # Verify redirect URI
-            from users.adapters import CustomSocialAccountAdapter
-            adapter = CustomSocialAccountAdapter()
-            redirect_uri = adapter.get_redirect_uri(None, 'google')
-            self.stdout.write(f"✅ Google Redirect URI: {redirect_uri}")
-            
-            # Verify it matches hardcoded value
-            expected_uri = "https://homabaysouq.onrender.com/accounts/google/callback/"
-            if redirect_uri == expected_uri:
-                self.stdout.write("✅ Google Redirect URI matches expected value!")
-            else:
-                self.stdout.write(f"❌ Google Redirect URI mismatch!")
-                self.stdout.write(f"   Expected: {expected_uri}")
-                self.stdout.write(f"   Got: {redirect_uri}")
-                
-        except SocialApp.DoesNotExist:
-            self.stdout.write("❌ Google OAuth app not configured!")
+        if created:
+            self.stdout.write(f"✅ Created new site: {site.name}")
+        else:
+            site.domain = 'homabaysouq.onrender.com'
+            site.name = 'Baysoko Marketplace'
+            site.save()
+            self.stdout.write(f"✅ Updated site: {site.name}")
         
-        # Check Facebook OAuth
-        try:
-            facebook_app = SocialApp.objects.get(provider='facebook')
-            self.stdout.write(f"✅ Facebook OAuth App: {facebook_app.name}")
-            self.stdout.write(f"✅ Facebook Client ID: {facebook_app.client_id[:20]}...")
-            self.stdout.write(f"✅ Facebook Sites: {list(facebook_app.sites.all())}")
-            
-            # Verify redirect URI
-            from users.adapters import CustomSocialAccountAdapter
-            adapter = CustomSocialAccountAdapter()
-            redirect_uri = adapter.get_redirect_uri(None, 'facebook')
-            self.stdout.write(f"✅ Facebook Redirect URI: {redirect_uri}")
-            
-        except SocialApp.DoesNotExist:
-            self.stdout.write("❌ Facebook OAuth app not configured!")
-        
-        # Check environment variables
-        self.stdout.write("\n🔍 Checking Environment Variables:")
+        # Set up Google OAuth
         google_client_id = os.environ.get('GOOGLE_OAUTH_CLIENT_ID')
         google_secret = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET')
+        
+        if google_client_id and google_secret:
+            google_app, created = SocialApp.objects.get_or_create(
+                provider='google',
+                defaults={
+                    'name': 'Google',
+                    'client_id': google_client_id,
+                    'secret': google_secret,
+                }
+            )
+            
+            if not created:
+                google_app.client_id = google_client_id
+                google_app.secret = google_secret
+                google_app.save()
+            
+            google_app.sites.add(site)
+            google_app.sites.add(site)
+            self.stdout.write(f"✅ Google OAuth app {'created' if created else 'updated'}")
+        else:
+            self.stdout.write("❌ Google OAuth credentials not found in environment")
+        
+        # Set up Facebook OAuth
         facebook_client_id = os.environ.get('FACEBOOK_OAUTH_CLIENT_ID')
         facebook_secret = os.environ.get('FACEBOOK_OAUTH_CLIENT_SECRET')
         
-        self.stdout.write(f"✅ GOOGLE_OAUTH_CLIENT_ID: {'✓' if google_client_id else '✗'}")
-        self.stdout.write(f"✅ GOOGLE_OAUTH_CLIENT_SECRET: {'✓' if google_secret else '✗'}")
-        self.stdout.write(f"✅ FACEBOOK_OAUTH_CLIENT_ID: {'✓' if facebook_client_id else '✗'}")
-        self.stdout.write(f"✅ FACEBOOK_OAUTH_CLIENT_SECRET: {'✓' if facebook_secret else '✗'}")
+        if facebook_client_id and facebook_secret:
+            facebook_app, created = SocialApp.objects.get_or_create(
+                provider='facebook',
+                defaults={
+                    'name': 'Facebook',
+                    'client_id': facebook_client_id,
+                    'secret': facebook_secret,
+                }
+            )
+            
+            if not created:
+                facebook_app.client_id = facebook_client_id
+                facebook_app.secret = facebook_secret
+                facebook_app.save()
+            
+            facebook_app.sites.add(site)
+            self.stdout.write(f"✅ Facebook OAuth app {'created' if created else 'updated'}")
+        else:
+            self.stdout.write("❌ Facebook OAuth credentials not found in environment")
         
-        self.stdout.write("\n✅ OAuth Verification Complete!")
+        self.stdout.write("\n✅ OAuth setup complete!")
+        self.stdout.write(f"🌐 Site Domain: {site.domain}")
+        self.stdout.write(f"🔗 Google Callback: https://homabaysouq.onrender.com/accounts/google/callback/")
+        self.stdout.write(f"🔗 Facebook Callback: https://homabaysouq.onrender.com/accounts/facebook/callback/")
+        
+        # Display the actual redirect URIs that will be used
+        self.stdout.write("\n📋 Google OAuth Configuration in Google Console:")
+        self.stdout.write(f"Authorized redirect URI: https://homabaysouq.onrender.com/accounts/google/callback/")
+        self.stdout.write("\n📋 Facebook OAuth Configuration in Facebook Developer:")
+        self.stdout.write(f"Valid OAuth Redirect URIs: https://homabaysouq.onrender.com/accounts/facebook/callback/")
