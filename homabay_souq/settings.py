@@ -8,6 +8,9 @@ import cloudinary.api
 import dj_database_url
 from decimal import Decimal
 
+# Check if we're running migrations - if so, delay some settings
+RUNNING_MIGRATE = 'migrate' in sys.argv
+
 # Force Django version compatibility
 import django
 if django.VERSION < (4, 2):
@@ -530,13 +533,24 @@ else:
     # Password reset timeout in seconds (24 hours)
     PASSWORD_RESET_TIMEOUT = 86400
 
-# Import logging settings
-from .logging_settings import LOGGING
+# Basic logging configuration for production
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+}
 
 # Ensure logs directory exists
 import os
 os.makedirs('logs', exist_ok=True)
-
 # Additional security settings
 X_FRAME_OPTIONS = 'DENY'
 SECURE_REFERRER_POLICY = 'same-origin'
