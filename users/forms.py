@@ -93,3 +93,33 @@ class CustomUserCreationForm(forms.ModelForm):
         if commit:
             user.save()
         return user
+    
+class CustomUserChangeForm(forms.ModelForm):
+    class Meta:
+        model = User
+        fields = [
+            'first_name', 
+            'last_name', 
+            'username', 
+            'email', 
+            'phone_number', 
+            'bio', 
+            'profile_picture',
+            'show_contact_info'
+        ]
+        widgets = {
+            'bio': forms.Textarea(attrs={'rows': 4, 'maxlength': 500}),
+            'profile_picture': forms.FileInput(attrs={'accept': 'image/*'}),
+        }
+    
+    def clean_username(self):
+        username = self.cleaned_data.get('username')
+        if User.objects.filter(username=username).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError('This username is already taken.')
+        return username
+    
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if User.objects.filter(email=email).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError('This email is already registered.')
+        return email
