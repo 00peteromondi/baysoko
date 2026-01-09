@@ -9,7 +9,7 @@ from listings import admin_views
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('listings.urls')),
-    path('users/', include('users.urls')),
+    path('', include('users.urls')),
     path('chats/', include('chats.urls')),
     path('reviews/', include('reviews.urls')),
     path('blog/', include('blog.urls')),
@@ -20,7 +20,7 @@ urlpatterns = [
     path('delivery/', include('delivery.urls')),
     
     # Social authentication
-    
+    path('accounts/', include('allauth.urls')),
     path('admin/webhook-config/', admin_views.configure_webhooks, name='admin_configure_webhooks'),
 ]
 
