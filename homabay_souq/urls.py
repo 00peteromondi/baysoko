@@ -20,7 +20,7 @@ urlpatterns = [
     path('delivery/', include('delivery.urls')),
     
     # Social authentication
-    path('accounts/', include('allauth.urls')),
+    
     path('admin/webhook-config/', admin_views.configure_webhooks, name='admin_configure_webhooks'),
 ]
 
