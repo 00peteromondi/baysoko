@@ -2,14 +2,15 @@ from django.conf import settings
 from django.db import models
 from django.urls import reverse
 from django.core.exceptions import ValidationError
+from django.db.models import Sum, Avg
 
 
 class Store(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='stores')
     name = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255, unique=True)
+    
     # Optional logo and cover image for storefronts
-    # Use CloudinaryField when Cloudinary is configured (keeps behavior consistent with ListingImage)
     if 'cloudinary' in __import__('django.conf').conf.settings.INSTALLED_APPS and hasattr(__import__('django.conf').conf.settings, 'CLOUDINARY_CLOUD_NAME') and __import__('django.conf').conf.settings.CLOUDINARY_CLOUD_NAME:
         from cloudinary.models import CloudinaryField
         logo = CloudinaryField('logo', folder='homabay_souq/stores/logos/', null=True, blank=True)
@@ -17,6 +18,7 @@ class Store(models.Model):
     else:
         logo = models.ImageField(upload_to='store_logos/', null=True, blank=True)
         cover_image = models.ImageField(upload_to='store_covers/', null=True, blank=True)
+    
     description = models.TextField(blank=True)
     is_premium = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -47,6 +49,31 @@ class Store(models.Model):
 
     def get_absolute_url(self):
         return reverse('storefront:store_detail', kwargs={'slug': self.slug})
+    
+    def get_sales_count(self):
+        """Return total sales count for all listings in this store."""
+        from listings.models import OrderItem
+        
+        # Get the sum of quantities from all order items for this store's listings
+        total_quantity = OrderItem.objects.filter(
+            listing__store=self
+        ).aggregate(
+            total_quantity=Sum('quantity')
+        )['total_quantity']
+        
+        return total_quantity or 0
+    
+    def get_rating(self):
+        """Return average rating for all listings in this store."""
+        from listings.models import Review
+        
+        # Get reviews for all listings in this store
+        reviews = Review.objects.filter(listing__store=self)
+        
+        if reviews.exists():
+            avg_rating = reviews.aggregate(avg_rating=Avg('rating'))['avg_rating']
+            return round(avg_rating, 1) if avg_rating else 0
+        return 0
 
     def clean(self):
         """

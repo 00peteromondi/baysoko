@@ -28,6 +28,7 @@ def store_detail(request, slug):
     store = get_object_or_404(Store, slug=slug)
     # Only show listings associated with this specific store
     products = Listing.objects.filter(store=store, is_active=True)
+    
     return render(request, 'storefront/store_detail.html', {'store': store, 'products': products})
 
 

@@ -168,6 +168,27 @@ class Listing(models.Model):
             return self.reviews.aggregate(Avg('rating'))['rating__avg']
         return 0
     
+    @property
+    def rating_average(self):
+        """Get average rating for this specific listing"""
+        reviews = self.reviews.filter(review_type='listing')
+        if reviews.exists():
+            avg = reviews.aggregate(Avg('rating'))['rating__avg']
+            return round(avg, 1)
+        return 0.0
+
+    @property 
+    def rating_count(self):
+        """Get number of reviews for this listing"""
+        return self.reviews.filter(review_type='listing').count()
+    
+    def get_rating_display(self):
+        """Get rating for display (with star icons)"""
+        avg = self.rating_average
+        if avg == 0:
+            return "No ratings yet"
+        return f"{avg} ⭐ ({self.rating_count} review{'s' if self.rating_count != 1 else ''})"
+    
     def get_image_url(self):
         """Safe method to get image URL that works with both Cloudinary and local storage"""
         if self.image:

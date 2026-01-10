@@ -15,6 +15,73 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
 
+    <!-- Toast Notification Styles -->
+    <style>
+        .toast-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 350px;
+        }
+        
+        .custom-toast {
+            border: none;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            margin-bottom: 1rem;
+            animation: slideInRight 0.3s ease-out;
+        }
+        
+        .toast-success {
+            background: linear-gradient(135deg, var(--success) 0%, var(--accent-dark) 100%);
+            color: white;
+        }
+        
+        .toast-error {
+            background: linear-gradient(135deg, var(--danger) 0%, #d12a4e 100%);
+            color: white;
+        }
+        
+        .toast-warning {
+            background: linear-gradient(135deg, var(--warning) 0%, #e68900 100%);
+            color: white;
+        }
+        
+        .toast-info {
+            background: linear-gradient(135deg, var(--info) 0%, #0d6f8c 100%);
+            color: white;
+        }
+        
+        .toast-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+        }
+        
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideOutRight {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+    </style>
+
     <!-- Modern Design System -->
     <style>
         :root {
@@ -775,33 +842,6 @@
             position: absolute;
         }
 
-        /* Mobile-specific styles */
-        @media (max-width: 768px) {
-            .cart-header-link .cart-text {
-                display: none;
-            }
-            
-            .cart-header-link .cart-count-badge {
-                position: absolute;
-                top: -5px;
-                right: -5px;
-            }
-            
-            .mobile-cart-badge {
-                top: -5px;
-                right: -5px;
-                min-width: 16px;
-                height: 16px;
-                font-size: 0.65rem;
-            }
-            
-            .notification-badge {
-                min-width: 16px;
-                height: 16px;
-                font-size: 0.65rem;
-            }
-        }
-
         /* Global Cart Message Styling */
         .global-cart-message {
             position: fixed;
@@ -1173,29 +1213,7 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- Add this at the top of your base.html content block or in a messages.html partial -->
-
-    {% if messages %}
-    <div class="container mt-3" style="position: fixed; z-index: 1050; max-width: 500px; min-width: 300px; right: 10px; top: 50px;">
-        {% for message in messages %}
-        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-            <div class="d-flex align-items-center">
-                {% if message.tags == 'success' %}
-                <i class="bi bi-check-circle-fill me-2"></i>
-                {% elif message.tags == 'error' or message.tags == 'danger' %}
-                <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                {% elif message.tags == 'warning' %}
-                <i class="bi bi-exclamation-circle-fill me-2"></i>
-                {% elif message.tags == 'info' %}
-                <i class="bi bi-info-circle-fill me-2"></i>
-                {% endif %}
-                <div>{{ message }}</div>
-            </div>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
+    
     <!-- Theme Initialization -->
     <script>
         (function() {
@@ -1203,6 +1221,9 @@
             document.documentElement.setAttribute('data-theme', storedTheme);
         })();
     </script>
+
+    <!-- Toast Container for Notifications -->
+    <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
     <!-- Navigation Overlay -->
     <div class="nav-overlay" id="navOverlay"></div>
@@ -1550,6 +1571,87 @@
     <!-- Modern JavaScript -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // Toast notification system
+            window.showToast = function(message, type = 'info', duration = 5000) {
+                const toastContainer = document.getElementById('toastContainer');
+                if (!toastContainer) return;
+                
+                const toast = document.createElement('div');
+                toast.className = `custom-toast toast-${type}`;
+                toast.setAttribute('role', 'alert');
+                toast.setAttribute('aria-live', 'assertive');
+                toast.setAttribute('aria-atomic', 'true');
+                
+                const iconMap = {
+                    'success': 'check-circle-fill',
+                    'error': 'exclamation-circle-fill',
+                    'warning': 'exclamation-triangle-fill',
+                    'info': 'info-circle-fill',
+                    'primary': 'info-circle-fill'
+                };
+                
+                toast.innerHTML = `
+                    <div class="d-flex align-items-center p-3">
+                        <i class="bi bi-${iconMap[type] || 'info-circle-fill'} fs-4 me-3"></i>
+                        <div class="flex-grow-1">
+                            <div class="fw-medium">${message}</div>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white ms-3" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                `;
+                
+                toastContainer.appendChild(toast);
+                
+                // Initialize Bootstrap toast
+                const bsToast = new bootstrap.Toast(toast, {
+                    autohide: true,
+                    delay: duration
+                });
+                
+                bsToast.show();
+                
+                // Remove from DOM after hidden
+                toast.addEventListener('hidden.bs.toast', () => {
+                    toast.remove();
+                });
+                
+                return bsToast;
+            };
+            
+            // Convert Django messages to toasts
+            const djangoMessages = [
+                {% for msg in messages %}
+                { 
+                    message: "{{ msg|escapejs }}", 
+                    tags: "{{ msg.tags }}" 
+                }{% if not forloop.last %},{% endif %}
+                {% endfor %}
+            ];
+            
+            const mapDjangoTag = (tags) => {
+                if (!tags) return 'info';
+                if (tags.indexOf('error') !== -1 || tags.indexOf('danger') !== -1) return 'error';
+                if (tags.indexOf('warning') !== -1) return 'warning';
+                if (tags.indexOf('success') !== -1) return 'success';
+                if (tags.indexOf('info') !== -1) return 'info';
+                return 'info';
+            };
+            
+            setTimeout(() => {
+                djangoMessages.forEach(msg => {
+                    const type = mapDjangoTag(msg.tags);
+                    showToast(msg.message, type);
+                });
+            }, 300);
+            
+            // Update showGlobalCartMessage to use new toast system
+            const originalShowGlobalCartMessage = window.showGlobalCartMessage;
+            window.showGlobalCartMessage = function(message, type = 'success') {
+                // Keep backward compatibility with existing calls
+                if (type === 'danger') type = 'error';
+                showToast(message, type);
+            };
+
             // Side Navigation Toggle
             const sideNav = document.getElementById('sideNav');
             const sideNavToggle = document.getElementById('sideNavToggle');
@@ -1601,6 +1703,9 @@
                 const newIconClass = newTheme === 'dark' ? 'bi bi-moon' : 'bi bi-sun';
                 if (themeIconMobile) themeIconMobile.className = newIconClass;
                 if (themeIconDesktop) themeIconDesktop.className = newIconClass;
+                
+                // Show toast notification
+                showToast(`Switched to ${newTheme} mode`, 'info', 2000);
             }
 
             if (themeToggleMobile) {
@@ -1798,45 +1903,6 @@
                 handleGlobalCartUpdate(initialCartCount, initialCartTotal);
             }
             
-            // Global cart message function
-            window.showGlobalCartMessage = function(message, type = 'success') {
-                // Remove existing messages
-                const existingMessages = document.querySelectorAll('.global-cart-message');
-                existingMessages.forEach(msg => msg.remove());
-                
-                // Create new message
-                const messageDiv = document.createElement('div');
-                messageDiv.className = `global-cart-message ${type}`;
-                messageDiv.style.cssText = `
-                    position: fixed;
-                    top: 80px;
-                    right: 20px;
-                    padding: 0.75rem 1.5rem;
-                    border-radius: var(--radius-lg);
-                    box-shadow: var(--shadow-lg);
-                    z-index: 9999;
-                    animation: slideInRight 0.3s ease-out;
-                    display: flex;
-                    align-items: center;
-                    gap: 0.5rem;
-                    max-width: 300px;
-                    background: ${type === 'success' ? 'var(--success)' : 'var(--danger)'};
-                    color: white;
-                `;
-                messageDiv.innerHTML = `
-                    <i class="bi ${type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill'}"></i>
-                    <span>${message}</span>
-                `;
-                
-                document.body.appendChild(messageDiv);
-                
-                // Auto remove after 3 seconds
-                setTimeout(() => {
-                    messageDiv.style.animation = 'slideOutRight 0.3s ease-out';
-                    setTimeout(() => messageDiv.remove(), 300);
-                }, 3000);
-            };
-            
             // CSRF token helper
             window.getCookie = function(name) {
                 let cookieValue = null;
@@ -1865,6 +1931,7 @@
                 document.body.style.overflow = '';
             }
         });
+        
         // Enhanced add-to-cart functionality for product pages
         document.addEventListener('DOMContentLoaded', function() {
             // Handle add-to-cart forms globally
@@ -1906,9 +1973,9 @@
                                 }
                             }));
                             
-                            // Show success message
-                            if (window.showGlobalCartMessage) {
-                                window.showGlobalCartMessage(data.message || 'Added to cart');
+                            // Show success message using new toast system
+                            if (window.showToast) {
+                                window.showToast(data.message || 'Added to cart successfully', 'success');
                             }
                             
                             // If it was an update (not add), we might want to update the page
@@ -1920,9 +1987,9 @@
                                 }
                             }
                         } else {
-                            // Show error
-                            if (window.showGlobalCartMessage) {
-                                window.showGlobalCartMessage(data.error || 'Failed to add to cart', 'danger');
+                            // Show error using new toast system
+                            if (window.showToast) {
+                                window.showToast(data.error || 'Failed to add to cart', 'error');
                             }
                             
                             // Redirect if needed
@@ -1935,8 +2002,8 @@
                     })
                     .catch(error => {
                         console.error('Add to cart error:', error);
-                        if (window.showGlobalCartMessage) {
-                            window.showGlobalCartMessage('Error adding to cart', 'danger');
+                        if (window.showToast) {
+                            window.showToast('Error adding to cart', 'error');
                         }
                     })
                     .finally(() => {
@@ -1977,130 +2044,24 @@
                                 }
                             }));
                             
-                            if (window.showGlobalCartMessage) {
-                                window.showGlobalCartMessage(data.message || 'Added to cart');
+                            if (window.showToast) {
+                                window.showToast(data.message || 'Added to cart successfully', 'success');
                             }
                         } else {
-                            if (window.showGlobalCartMessage) {
-                                window.showGlobalCartMessage(data.error || 'Failed to add to cart', 'danger');
+                            if (window.showToast) {
+                                window.showToast(data.error || 'Failed to add to cart', 'error');
                             }
                         }
                     })
                     .catch(error => {
                         console.error('Add to cart error:', error);
-                        if (window.showGlobalCartMessage) {
-                            window.showGlobalCartMessage('Error adding to cart', 'danger');
+                        if (window.showToast) {
+                            window.showToast('Error adding to cart', 'error');
                         }
                     });
                 });
             });
         });
-        // Global cart update handler with enhanced AJAX support
-        function handleGlobalCartUpdate(itemCount, total) {
-            console.log('Global cart update:', { itemCount, total });
-            
-            // Update all cart badges
-            document.querySelectorAll('.cart-count-badge, .mobile-cart-badge').forEach(badge => {
-                if (itemCount > 0) {
-                    badge.textContent = itemCount;
-                    badge.style.display = 'flex';
-                } else {
-                    badge.style.display = 'none';
-                }
-            });
-            
-            // Update cart total in header
-            const cartTotalElements = document.querySelectorAll('.cart-total');
-            cartTotalElements.forEach(element => {
-                if (itemCount > 0) {
-                    element.textContent = `KSh ${total.toFixed(2)}`;
-                    element.style.display = 'inline';
-                } else {
-                    element.style.display = 'none';
-                }
-            });
-            
-            // Update cart empty text
-            const cartEmptyTextElements = document.querySelectorAll('.cart-empty-text');
-            cartEmptyTextElements.forEach(element => {
-                if (itemCount > 0) {
-                    element.style.display = 'none';
-                } else {
-                    element.style.display = 'inline';
-                }
-            });
-        }
-
-        // Global cart message function
-        window.showGlobalCartMessage = function(message, type = 'success') {
-            // Remove existing messages
-            const existingMessages = document.querySelectorAll('.global-cart-message');
-            existingMessages.forEach(msg => msg.remove());
-            
-            // Create new message
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `global-cart-message`;
-            messageDiv.style.cssText = `
-                position: fixed;
-                top: 80px;
-                right: 20px;
-                padding: 0.75rem 1.5rem;
-                border-radius: var(--radius-lg);
-                box-shadow: var(--shadow-lg);
-                z-index: 9999;
-                animation: slideInRight 0.3s ease-out;
-                display: flex;
-                align-items: center;
-                gap: 0.5rem;
-                max-width: 300px;
-                background: ${type === 'success' ? 'var(--success)' : 'var(--danger)'};
-                color: white;
-            `;
-            messageDiv.innerHTML = `
-                <i class="bi ${type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill'}"></i>
-                <span>${message}</span>
-            `;
-            
-            document.body.appendChild(messageDiv);
-            
-            // Auto remove after 3 seconds
-            setTimeout(() => {
-                messageDiv.style.animation = 'slideOutRight 0.3s ease-out';
-                setTimeout(() => messageDiv.remove(), 300);
-            }, 3000);
-        };
-
-        // Listen for cart update events
-        document.addEventListener('cartUpdated', function(event) {
-            const { itemCount, total } = event.detail;
-            handleGlobalCartUpdate(itemCount, total);
-        });
-
-        // Initialize cart on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            const initialCartCount = parseInt("{{ cart_item_count|default:0 }}");
-            const initialCartTotal = parseFloat("{{ cart_total|default:0 }}");
-            
-            if (!isNaN(initialCartCount) && !isNaN(initialCartTotal)) {
-                handleGlobalCartUpdate(initialCartCount, initialCartTotal);
-            }
-        });
-
-        // Add slideOutRight animation to CSS
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideOutRight {
-                from {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-                to {
-                    transform: translateX(100%);
-                    opacity: 0;
-                }
-            }
-        `;
-        document.head.appendChild(style);
     </script>
     
     {% block extra_js %}{% endblock %}
