@@ -76,3 +76,108 @@ class StoreForm(forms.ModelForm):
 # Reuse ListingForm for creating/editing storefront "products" (listings)
 class ProductForm(ListingForm):
     pass
+
+# storefront/forms.py - Add to existing forms
+
+from django import forms
+from .models import StoreReview, Subscription
+from django.core.validators import MinValueValidator, MaxValueValidator
+
+
+class StoreReviewForm(forms.ModelForm):
+    class Meta:
+        model = StoreReview
+        fields = ['rating', 'comment']
+        widgets = {
+            'comment': forms.Textarea(attrs={
+                'rows': 5,
+                'placeholder': 'Share your experience with this store...',
+                'class': 'form-control'
+            }),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['comment'].required = True
+        self.fields['rating'].required = True
+
+class SubscriptionPlanForm(forms.Form):
+    """Form for selecting subscription plan"""
+    PLAN_CHOICES = (
+        ('basic', 'Basic - KSh 999/month'),
+        ('premium', 'Premium - KSh 1,999/month'),
+        ('enterprise', 'Enterprise - KSh 4,999/month'),
+    )
+    
+    plan = forms.ChoiceField(
+        choices=PLAN_CHOICES,
+        widget=forms.RadioSelect,
+        initial='basic'
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['plan'].label = "Select Plan"
+
+
+class UpgradeForm(forms.Form):
+    """Form for upgrading to premium - Enhanced"""
+    phone_number = forms.CharField(
+        max_length=10,
+        min_length=10,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control form-control-lg',
+            'placeholder': '7XXXXXXXX',
+            'pattern': '[0-9]{9}'
+        })
+    )
+    plan = forms.ChoiceField(
+        choices=Subscription.PLAN_CHOICES,
+        widget=forms.HiddenInput(),
+        required=False,
+        initial='basic'
+    )
+    
+    def clean_phone_number(self):
+        phone = self.cleaned_data['phone_number']
+        
+        # Remove any non-digit characters
+        phone = ''.join(filter(str.isdigit, phone))
+        
+        # Validate Kenyan phone number
+        if len(phone) != 9 or not phone.startswith('7'):
+            raise forms.ValidationError('Please enter a valid Kenyan phone number (e.g., 712345678)')
+        
+        # Format as +254XXXXXXXXX
+        return f"+254{phone}"
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        return cleaned_data
+
+
+class CancelSubscriptionForm(forms.Form):
+    """Form for cancelling subscription"""
+    reason = forms.ChoiceField(
+        choices=[
+            ('too_expensive', 'Too expensive'),
+            ('missing_features', 'Missing features'),
+            ('not_using', 'Not using it enough'),
+            ('poor_experience', 'Poor experience'),
+            ('other', 'Other')
+        ],
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    feedback = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'rows': 3,
+            'class': 'form-control',
+            'placeholder': 'Optional feedback...'
+        })
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['reason'].label = "Reason for cancelling"
+        self.fields['feedback'].label = "Additional feedback"

@@ -22,10 +22,28 @@ urlpatterns = [
     # Store image management
     path('dashboard/store/<slug:slug>/logo/delete/', views.delete_logo, name='delete_logo'),
     path('dashboard/store/<slug:slug>/cover/delete/', views.delete_cover, name='delete_cover'),    
-    # Subscription management
-    path('dashboard/store/<slug:slug>/subscription/', views.subscription_manage, name='subscription_manage'),
+   # Store Reviews
+    path('store/<slug:slug>/review/', views.store_review_create, name='store_review_create'),
+    path('store/<slug:slug>/reviews/', views.store_reviews, name='store_reviews'),
+    path('store/<slug:slug>/review/<int:review_id>/update/', views.store_review_update, name='store_review_update'),
+    path('store/<slug:slug>/review/<int:review_id>/delete/', views.store_review_delete, name='store_review_delete'),
+    path('store/<slug:slug>/review/<int:review_id>/helpful/', views.mark_review_helpful, name='mark_review_helpful'),
+    
+    # Enhanced Subscription Management
+    path('dashboard/store/<slug:slug>/upgrade/plan/', views.subscription_plan_select, name='subscription_plan_select'),
+    path('dashboard/store/<slug:slug>/upgrade/', views.store_upgrade, name='store_upgrade'),
+    path('dashboard/store/<slug:slug>/subscription/manage/', views.subscription_manage, name='subscription_manage'),
+    path('dashboard/store/<slug:slug>/subscription/cancel/', views.subscription_cancel, name='cancel_subscription'),
+    path('dashboard/store/<slug:slug>/subscription/renew/', views.subscription_renew, name='subscription_renew'),
+    path('dashboard/store/<slug:slug>/subscription/invoice/<int:payment_id>/', views.subscription_invoice, name='subscription_invoice'),
+    path('dashboard/store/<slug:slug>/subscription/settings/', views.subscription_settings, name='subscription_settings'),
+
     path('dashboard/store/<slug:slug>/subscription/retry/', views.retry_payment, name='retry_payment'),
-    path('dashboard/store/<slug:slug>/subscription/cancel/', views.cancel_subscription, name='cancel_subscription'),
+    
+    # Admin subscription views
+    path('admin/subscriptions/', views.admin_subscription_list, name='admin_subscription_list'),
+    path('admin/subscriptions/<int:subscription_id>/', views.admin_subscription_detail, name='admin_subscription_detail'),
+     
     
     # Analytics
     path('dashboard/analytics/', views.seller_analytics, name='seller_analytics'),

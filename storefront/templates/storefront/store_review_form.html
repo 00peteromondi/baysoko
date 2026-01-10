@@ -1,0 +1,343 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% if editing %}Edit{% else %}Write{% endif %} Review - {{ store.name }} - Baysoko{% endblock %}
+
+{% block content %}
+<div class="container py-var(--spacing-xl)">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card-custom shadow-lg">
+                <div class="card-body p-var(--spacing-xl)">
+                    <div class="text-center mb-var(--spacing-lg)">
+                        <h1 class="display-5 fw-bold mb-3">
+                            {% if editing %}
+                            Edit Your Review
+                            {% else %}
+                            Write a Review for {{ store.name }}
+                            {% endif %}
+                        </h1>
+                        <p class="text-muted">
+                            Share your experience to help other buyers
+                        </p>
+                    </div>
+                    
+                    <div class="store-review-info mb-var(--spacing-lg)">
+                        <div class="d-flex align-items-center gap-3">
+                            <img src="{{ store.get_logo_url|default:'https://placehold.co/80x80/c2c2c2/1f1f1f?text=Store' }}"
+                                 alt="{{ store.name }}"
+                                 class="rounded-circle"
+                                 width="80"
+                                 height="80">
+                            <div>
+                                <h3 class="mb-1">{{ store.name }}</h3>
+                                <div class="rating-stars">
+                                    {% with rating=store.get_rating|default:0 %}
+                                    {% for i in "12345" %}
+                                        {% if forloop.counter <= rating|floatformat:0|add:"0" %}
+                                            <i class="bi bi-star-fill text-warning"></i>
+                                        {% else %}
+                                            <i class="bi bi-star text-warning"></i>
+                                        {% endif %}
+                                    {% endfor %}
+                                    {% endwith %}
+                                    <span class="ms-2">{{ store.get_rating|default:"0.0" }} ({{ store.get_review_count }} reviews)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <form method="post" class="review-form">
+                        {% csrf_token %}
+                        
+                        <!-- Debug: Show all form errors -->
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger mb-4">
+                            <strong>Form errors:</strong>
+                            <ul class="mb-0">
+                                {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Rating Field (Custom) -->
+                        <div class="mb-var(--spacing-lg)">
+                            <label class="form-label fw-bold">Rating *</label>
+                            <div class="rating-input mb-3">
+                                {% for i in "12345" %}
+                                {% with forloop.counter as star_value %}
+                                <i class="bi bi-star rating-star 
+                                    {% if form.rating.value and star_value <= form.rating.value|add:0 %}bi-star-fill active
+                                    {% elif not form.rating.value and star_value <= 5 %}bi-star-fill active
+                                    {% else %}bi-star{% endif %}" 
+                                   data-value="{{ star_value }}"></i>
+                                {% endwith %}
+                                {% endfor %}
+                                <!-- Hidden input for rating -->
+                                <input type="hidden" name="rating" id="ratingValue" 
+                                       value="{{ form.rating.value|default:'5' }}">
+                                {% if form.rating.errors %}
+                                <div class="text-danger mt-2 small">
+                                    {{ form.rating.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="rating-labels d-flex justify-content-between">
+                                <small class="text-muted">Poor</small>
+                                <small class="text-muted">Fair</small>
+                                <small class="text-muted">Good</small>
+                                <small class="text-muted">Very Good</small>
+                                <small class="text-muted">Excellent</small>
+                            </div>
+                        </div>
+                        
+                        <!-- Comment Field -->
+                        <div class="mb-var(--spacing-lg)">
+                            <label class="form-label fw-bold" for="id_comment">Review Comment *</label>
+                            <textarea name="comment" id="id_comment" class="form-control" 
+                                      rows="5" placeholder="Share your experience with this store..."
+                                      required>{{ form.comment.value|default:'' }}</textarea>
+                            {% if form.comment.errors %}
+                            <div class="text-danger mt-2 small">
+                                {{ form.comment.errors }}
+                            </div>
+                            {% endif %}
+                            <small class="text-muted">Maximum 1000 characters</small>
+                        </div>
+                        
+                        <!-- Hidden Fields (if any) -->
+                        {% for hidden in form.hidden_fields %}
+                            {{ hidden }}
+                        {% endfor %}
+                        
+                        <div class="button-group mt-var(--spacing-xl) d-flex gap-3">
+                            <button type="submit" class="btn-custom btn-primary btn-lg flex-fill">
+                                <i class="bi bi-check-circle me-2"></i>
+                                {% if editing %}Update Review{% else %}Submit Review{% endif %}
+                            </button>
+                            <a href="{% if request.GET.next %}{{ request.GET.next }}{% else %}{% url 'storefront:store_reviews' slug=store.slug %}{% endif %}" class="btn-custom btn-ghost">
+                                <i class="bi bi-arrow-left me-2"></i>
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.rating-input {
+    font-size: 2.5rem;
+    cursor: pointer;
+}
+
+.rating-star {
+    color: #ddd;
+    transition: color 0.3s ease, transform 0.2s ease;
+    padding: 0 0.25rem;
+}
+
+.rating-star:hover,
+.rating-star.active {
+    color: #ffc107;
+    transform: scale(1.1);
+}
+
+.rating-star.bi-star-fill {
+    color: #ffc107;
+}
+
+.rating-labels {
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.button-group {
+    display: flex;
+    gap: var(--spacing-md);
+}
+
+.button-group .btn-custom {
+    flex: 1;
+}
+
+.form-control {
+    padding: var(--spacing-md);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    transition: all 0.3s ease;
+}
+
+.form-control:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.25rem rgba(var(--primary-rgb), 0.25);
+}
+
+.alert-danger {
+    background-color: rgba(220, 53, 69, 0.1);
+    border-color: rgba(220, 53, 69, 0.3);
+    color: var(--danger);
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ratingStars = document.querySelectorAll('.rating-star');
+    const ratingValue = document.getElementById('ratingValue');
+    const commentField = document.getElementById('id_comment');
+    
+    // Initialize rating stars
+    if (ratingStars.length > 0 && ratingValue) {
+        const currentRating = ratingValue.value;
+        ratingStars.forEach((star, index) => {
+            const starValue = index + 1;
+            if (starValue <= currentRating) {
+                star.classList.add('active', 'bi-star-fill');
+                star.classList.remove('bi-star');
+            }
+        });
+    }
+    
+    // Star rating functionality
+    ratingStars.forEach(star => {
+        star.addEventListener('click', function() {
+            const value = parseInt(this.getAttribute('data-value'));
+            ratingValue.value = value;
+            
+            // Update star display
+            ratingStars.forEach((s, index) => {
+                const starValue = index + 1;
+                if (starValue <= value) {
+                    s.classList.add('active', 'bi-star-fill');
+                    s.classList.remove('bi-star');
+                } else {
+                    s.classList.remove('active', 'bi-star-fill');
+                    s.classList.add('bi-star');
+                }
+            });
+        });
+        
+        // Hover effect
+        star.addEventListener('mouseover', function() {
+            const value = parseInt(this.getAttribute('data-value'));
+            ratingStars.forEach((s, index) => {
+                const starValue = index + 1;
+                if (starValue <= value) {
+                    s.style.color = '#ffc107';
+                }
+            });
+        });
+        
+        star.addEventListener('mouseout', function() {
+            ratingStars.forEach((s, index) => {
+                const currentRating = parseInt(ratingValue.value);
+                const starValue = index + 1;
+                if (starValue <= currentRating) {
+                    s.style.color = '#ffc107';
+                } else {
+                    s.style.color = '#ddd';
+                }
+            });
+        });
+    });
+    
+    // Form validation
+    const form = document.querySelector('.review-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            let isValid = true;
+            let errorMessages = [];
+            
+            // Check rating
+            const rating = parseInt(ratingValue.value);
+            if (isNaN(rating) || rating < 1 || rating > 5) {
+                isValid = false;
+                errorMessages.push('Please select a rating between 1 and 5 stars.');
+                
+                // Highlight rating area
+                const ratingInput = document.querySelector('.rating-input');
+                ratingInput.style.border = '2px solid var(--danger)';
+                ratingInput.style.padding = '10px';
+                ratingInput.style.borderRadius = 'var(--radius-md)';
+            }
+            
+            // Check comment
+            if (commentField) {
+                const comment = commentField.value.trim();
+                if (!comment) {
+                    isValid = false;
+                    errorMessages.push('Please write a review comment.');
+                    commentField.classList.add('is-invalid');
+                } else if (comment.length > 1000) {
+                    isValid = false;
+                    errorMessages.push('Review comment must be 1000 characters or less.');
+                    commentField.classList.add('is-invalid');
+                } else {
+                    commentField.classList.remove('is-invalid');
+                }
+            }
+            
+            if (!isValid) {
+                e.preventDefault();
+                
+                // Show error messages
+                let existingAlert = document.querySelector('.validation-alert');
+                if (existingAlert) {
+                    existingAlert.remove();
+                }
+                
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-danger validation-alert mb-4';
+                alertDiv.innerHTML = `
+                    <strong>Please fix the following errors:</strong>
+                    <ul class="mb-0 mt-2">
+                        ${errorMessages.map(msg => `<li>${msg}</li>`).join('')}
+                    </ul>
+                `;
+                
+                // Insert after the form header or before the form
+                const cardBody = document.querySelector('.card-body');
+                const formElement = document.querySelector('.review-form');
+                cardBody.insertBefore(alertDiv, formElement);
+                
+                // Scroll to top of form
+                window.scrollTo({
+                    top: 0,
+                    behavior: 'smooth'
+                });
+                
+                return false;
+            }
+        });
+    }
+    
+    // Real-time character count for comment
+    if (commentField) {
+        const charCountDiv = document.createElement('div');
+        charCountDiv.className = 'text-end mt-2 small';
+        charCountDiv.id = 'charCount';
+        commentField.parentNode.appendChild(charCountDiv);
+        
+        function updateCharCount() {
+            const length = commentField.value.length;
+            charCountDiv.textContent = `${length}/1000 characters`;
+            
+            if (length > 1000) {
+                charCountDiv.style.color = 'var(--danger)';
+            } else if (length > 900) {
+                charCountDiv.style.color = 'var(--warning)';
+            } else {
+                charCountDiv.style.color = 'var(--text-muted)';
+            }
+        }
+        
+        commentField.addEventListener('input', updateCharCount);
+        updateCharCount(); // Initial call
+    }
+});
+</script>
+{% endblock %}

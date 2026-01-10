@@ -1129,3 +1129,678 @@ def store_upgrade(request, slug):
         form = UpgradeForm()
 
     return render(request, 'storefront/confirm_upgrade.html', {'store': store, 'form': form})
+
+
+# storefront/views.py - Add these views
+
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.utils import timezone
+from datetime import timedelta
+from django.db.models import Q, Count, Avg
+from django.http import JsonResponse
+from .decorators import store_owner_required
+from .models import Store, StoreReview, Subscription, MpesaPayment, ReviewHelpful
+from .forms import StoreReviewForm, UpgradeForm, CancelSubscriptionForm, SubscriptionPlanForm
+from .mpesa import MpesaGateway
+from listings.models import Listing
+from listings.models import Review  
+
+
+# Store Review Views
+
+@login_required
+def store_review_create(request, slug):
+    """
+    Create or update a store review
+    """
+    store = get_object_or_404(Store, slug=slug)
+    
+    # Check if user owns the store
+    if store.owner == request.user:
+        messages.error(request, "You cannot review your own store.")
+        return redirect('storefront:store_detail', slug=slug)
+    
+    # Check if user already reviewed
+    existing_review = StoreReview.objects.filter(store=store, reviewer=request.user).first()
+
+    from listings.models import Review
+    has_product_review = Review.objects.filter(
+        listing__store=store,
+        user=request.user
+    ).exists()
+    
+    if has_product_review and not existing_review:
+        messages.info(request, "You've already reviewed products from this store. You can still leave a direct store review.")
+    
+    if request.method == 'POST':
+        form = StoreReviewForm(request.POST, instance=existing_review)
+        if form.is_valid():
+            review = form.save(commit=False)
+            review.store = store
+            review.reviewer = request.user
+            
+            if existing_review:
+                messages.success(request, "Your review has been updated.")
+            else:
+                messages.success(request, "Thank you for your review!")
+            
+            review.save()
+            
+            # Redirect back to the product page if coming from there
+            next_url = request.GET.get('next')
+            if next_url:
+                return redirect(next_url)
+            return redirect('storefront:store_reviews', slug=slug)
+        else:
+            messages.error(request, "Please correct the errors below.")
+    else:
+        form = StoreReviewForm(instance=existing_review)
+    
+    context = {
+        'store': store,
+        'form': form,
+        'existing_review': existing_review,
+        'editing': bool(existing_review),
+    }
+    
+    # If coming from product page, show product-specific template
+    if request.GET.get('from') == 'product':
+        return render(request, 'storefront/store_review_product.html', context)
+    return render(request, 'storefront/store_review_form.html', context)
+
+
+
+def store_reviews(request, slug):
+    """
+    Display all reviews for a store (both product reviews and direct store reviews)
+    """
+    store = get_object_or_404(Store, slug=slug)
+    
+    # Get page number from query params
+    page = request.GET.get('page', 1)
+    
+    # Get paginated reviews
+    reviews_page = store.get_all_reviews_paginated(page=page, per_page=10)
+    
+    # Calculate rating distribution for all reviews
+    from collections import defaultdict
+    rating_distribution = defaultdict(int)
+    all_reviews = store.get_all_reviews()
+    
+    for review in all_reviews:
+        rating_distribution[review['rating']] += 1
+    
+    # Get average rating
+    avg_rating = store.get_rating()
+    
+    # Check if user has reviewed
+    user_has_reviewed = False
+    user_review = None
+    
+    if request.user.is_authenticated:
+        user_has_reviewed = store.has_user_reviewed(request.user)
+        if user_has_reviewed:
+            # Try to get user's direct store review
+            user_review = store.reviews.filter(reviewer=request.user).first()
+    
+    context = {
+        'store': store,
+        'reviews': reviews_page,
+        'avg_rating': avg_rating,
+        'rating_distribution': dict(sorted(rating_distribution.items())),
+        'user_has_reviewed': user_has_reviewed,
+        'user_review': user_review,
+        'total_reviews': len(all_reviews),
+    }
+    
+    return render(request, 'storefront/store_reviews.html', context)
+
+@login_required
+def store_review_update(request, slug, review_id):
+    """
+    Update an existing review
+    """
+    review = get_object_or_404(StoreReview, id=review_id, reviewer=request.user)
+    store = review.store
+    
+    if request.method == 'POST':
+        form = StoreReviewForm(request.POST, instance=review)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Your review has been updated.")
+            return redirect('storefront:store_reviews', slug=slug)
+    else:
+        form = StoreReviewForm(instance=review)
+    
+    context = {
+        'store': store,
+        'form': form,
+        'review': review,
+        'editing': True,
+    }
+    
+    return render(request, 'storefront/store_review_form.html', context)
+
+
+@login_required
+def store_review_delete(request, slug, review_id):
+    """
+    Delete a review
+    """
+    review = get_object_or_404(StoreReview, id=review_id, reviewer=request.user)
+    
+    if request.method == 'POST':
+        review.delete()
+        messages.success(request, "Your review has been deleted.")
+        return redirect('storefront:store_reviews', slug=slug)
+    
+    context = {
+        'store': review.store,
+        'review': review,
+    }
+    
+    return render(request, 'storefront/store_review_confirm_delete.html', context)
+
+
+@login_required
+def mark_review_helpful(request, slug, review_id):
+    """
+    Mark a review as helpful (AJAX)
+    """
+    if request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        review = get_object_or_404(StoreReview, id=review_id)
+        success = review.mark_helpful(request.user)
+        
+        return JsonResponse({
+            'success': success,
+            'helpful_count': review.helpful_count,
+        })
+    
+    return JsonResponse({'success': False}, status=400)
+
+
+# Enhanced Subscription Management Views
+
+@login_required
+@store_owner_required
+def subscription_plan_select(request, slug):
+    """
+    Select subscription plan before payment
+    """
+    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    
+    # Check if already has active subscription
+    active_subscription = Subscription.objects.filter(
+        store=store,
+        status__in=['active', 'trialing']
+    ).first()
+    
+    if active_subscription:
+        messages.info(request, "You already have an active subscription.")
+        return redirect('storefront:subscription_manage', slug=slug)
+    
+    if request.method == 'POST':
+        plan_form = SubscriptionPlanForm(request.POST)
+        upgrade_form = UpgradeForm(request.POST)
+        
+        if plan_form.is_valid() and upgrade_form.is_valid():
+            # Store plan selection in session
+            request.session['selected_plan'] = plan_form.cleaned_data['plan']
+            request.session['phone_number'] = upgrade_form.cleaned_data['phone_number']
+            
+            return redirect('storefront:store_upgrade', slug=slug)
+    else:
+        plan_form = SubscriptionPlanForm()
+        upgrade_form = UpgradeForm()
+    
+    # Plan details
+    plan_details = {
+        'basic': {
+            'price': 999,
+            'features': [
+                'Priority Listing',
+                'Basic Analytics',
+                'Store Customization',
+                'Verified Badge',
+                'Up to 50 products'
+            ]
+        },
+        'premium': {
+            'price': 1999,
+            'features': [
+                'Everything in Basic',
+                'Advanced Analytics',
+                'Bulk Product Upload',
+                'Marketing Tools',
+                'Up to 200 products',
+                'Dedicated Support'
+            ]
+        },
+        'enterprise': {
+            'price': 4999,
+            'features': [
+                'Everything in Premium',
+                'Custom Integrations',
+                'API Access',
+                'Unlimited Products',
+                'Priority Support',
+                'Custom Domain'
+            ]
+        }
+    }
+    
+    context = {
+        'store': store,
+        'plan_form': plan_form,
+        'upgrade_form': upgrade_form,
+        'plan_details': plan_details,
+    }
+    
+    return render(request, 'storefront/subscription_plan_select.html', context)
+
+
+@login_required
+@store_owner_required
+def store_upgrade(request, slug):
+    """
+    Enhanced upgrade view with plan selection from session
+    """
+    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    
+    # Get plan from session
+    selected_plan = request.session.get('selected_plan', 'basic')
+    phone_number = request.session.get('phone_number')
+    
+    if not phone_number:
+        messages.warning(request, "Please select a plan and provide your phone number.")
+        return redirect('storefront:subscription_plan_select', slug=slug)
+    
+    # Plan pricing
+    plan_pricing = {
+        'basic': 999,
+        'premium': 1999,
+        'enterprise': 4999
+    }
+    
+    amount = plan_pricing.get(selected_plan, 999)
+    
+    if request.method == 'POST':
+        form = UpgradeForm(request.POST)
+        if form.is_valid():
+            phone_number = form.cleaned_data['phone_number']
+            
+            try:
+                mpesa = MpesaGateway()
+                
+                # Check for existing trialing subscription
+                subscription = Subscription.objects.filter(
+                    store=store,
+                    status='trialing'
+                ).first()
+                
+                if not subscription:
+                    subscription = Subscription.objects.create(
+                        store=store,
+                        plan=selected_plan,
+                        status='trialing',
+                        amount=amount,
+                        trial_ends_at=timezone.now() + timedelta(days=7),
+                        mpesa_phone=phone_number,
+                        metadata={'plan_selected': selected_plan}
+                    )
+                
+                # Initiate M-Pesa payment
+                response = mpesa.initiate_stk_push(
+                    phone=phone_number,
+                    amount=amount,
+                    account_reference=f"Store-{store.id}-{selected_plan}"
+                )
+                
+                # Create payment record
+                MpesaPayment.objects.create(
+                    subscription=subscription,
+                    checkout_request_id=response['CheckoutRequestID'],
+                    merchant_request_id=response['MerchantRequestID'],
+                    phone_number=phone_number,
+                    amount=amount,
+                    status='pending'
+                )
+                
+                # Activate store premium features for trial period
+                store.is_premium = True
+                store.save()
+                
+                # Clear session data
+                if 'selected_plan' in request.session:
+                    del request.session['selected_plan']
+                if 'phone_number' in request.session:
+                    del request.session['phone_number']
+                
+                messages.success(request, 
+                    f"Payment of KSh {amount} initiated for {selected_plan.capitalize()} plan. "
+                    "Please complete the M-Pesa payment on your phone."
+                )
+                return redirect('storefront:seller_dashboard')
+                
+            except Exception as e:
+                messages.error(request, f'Payment initiation failed: {str(e)}')
+                return render(request, 'storefront/confirm_upgrade.html', {
+                    'store': store,
+                    'form': form,
+                    'selected_plan': selected_plan,
+                    'amount': amount
+                })
+        else:
+            return render(request, 'storefront/confirm_upgrade.html', {
+                'store': store,
+                'form': form,
+                'selected_plan': selected_plan,
+                'amount': amount
+            })
+    else:
+        form = UpgradeForm(initial={'phone_number': phone_number, 'plan': selected_plan})
+    
+    return render(request, 'storefront/confirm_upgrade.html', {
+        'store': store,
+        'form': form,
+        'selected_plan': selected_plan,
+        'amount': amount,
+        'plan_pricing': plan_pricing
+    })
+
+
+@login_required
+@store_owner_required
+def subscription_manage(request, slug):
+    """
+    Enhanced subscription management view
+    """
+    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    
+    # Get active subscription
+    subscription = Subscription.objects.filter(
+        store=store
+    ).order_by('-created_at').first()
+    
+    if not subscription:
+        messages.info(request, "No subscription found. Upgrade to premium to access features.")
+        return redirect('storefront:subscription_plan_select', slug=slug)
+    
+    # Get payment history
+    recent_payments = subscription.payments.order_by('-created_at')[:10]
+    
+    # Calculate next billing date
+    next_billing_date = None
+    if subscription.status == 'active' and subscription.current_period_end:
+        next_billing_date = subscription.current_period_end
+    elif subscription.status == 'trialing' and subscription.trial_ends_at:
+        next_billing_date = subscription.trial_ends_at
+    
+    # Get usage statistics
+    if store.is_premium:
+        listings_count = store.listings.count()
+        # You can add more usage stats here
+    
+    context = {
+        'store': store,
+        'subscription': subscription,
+        'recent_payments': recent_payments,
+        'next_billing_date': next_billing_date,
+        'listings_count': listings_count if store.is_premium else 0,
+    }
+    
+    return render(request, 'storefront/subscription_manage.html', context)
+
+
+@login_required
+@store_owner_required
+def subscription_cancel(request, slug):
+    """
+    Cancel subscription with feedback
+    """
+    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    subscription = Subscription.objects.filter(
+        store=store,
+        status__in=['active', 'trialing']
+    ).first()
+    
+    if not subscription:
+        messages.error(request, "No active subscription found.")
+        return redirect('storefront:subscription_manage', slug=slug)
+    
+    if request.method == 'POST':
+        form = CancelSubscriptionForm(request.POST)
+        if form.is_valid():
+            try:
+                # Store cancellation reason
+                reason = form.cleaned_data['reason']
+                feedback = form.cleaned_data['feedback']
+                
+                subscription.metadata['cancellation'] = {
+                    'reason': reason,
+                    'feedback': feedback,
+                    'cancelled_at': timezone.now().isoformat()
+                }
+                subscription.save()
+                
+                # Cancel subscription
+                subscription.cancel()
+                
+                messages.success(request, 
+                    "Subscription cancelled successfully. "
+                    "Premium features will be available until the end of your current billing period."
+                )
+                
+                # Log cancellation for admin
+                from django.core.mail import send_mail
+                try:
+                    send_mail(
+                        subject=f"Subscription Cancelled - {store.name}",
+                        message=f"Store: {store.name}\nReason: {reason}\nFeedback: {feedback}\nUser: {request.user.email}",
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[settings.ADMIN_EMAIL],
+                        fail_silently=True,
+                    )
+                except:
+                    pass
+                
+                return redirect('storefront:seller_dashboard')
+                
+            except Exception as e:
+                messages.error(request, f'Failed to cancel subscription: {str(e)}')
+        else:
+            messages.error(request, "Please provide a cancellation reason.")
+    else:
+        form = CancelSubscriptionForm()
+    
+    context = {
+        'store': store,
+        'subscription': subscription,
+        'form': form,
+    }
+    
+    return render(request, 'storefront/subscription_cancel.html', context)
+
+
+@login_required
+@store_owner_required
+def subscription_renew(request, slug):
+    """
+    Renew expired subscription
+    """
+    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    subscription = Subscription.objects.filter(
+        store=store,
+        status__in=['past_due', 'canceled']
+    ).order_by('-created_at').first()
+    
+    if not subscription:
+        messages.error(request, "No subscription found to renew.")
+        return redirect('storefront:subscription_manage', slug=slug)
+    
+    if request.method == 'POST':
+        form = UpgradeForm(request.POST)
+        if form.is_valid():
+            phone_number = form.cleaned_data['phone_number']
+            
+            try:
+                mpesa = MpesaGateway()
+                
+                # Update subscription status
+                subscription.status = 'trialing'
+                subscription.save()
+                
+                # Initiate payment
+                response = mpesa.initiate_stk_push(
+                    phone=phone_number,
+                    amount=subscription.amount,
+                    account_reference=f"Renew-{store.id}-{subscription.plan}"
+                )
+                
+                # Create payment record
+                MpesaPayment.objects.create(
+                    subscription=subscription,
+                    checkout_request_id=response['CheckoutRequestID'],
+                    merchant_request_id=response['MerchantRequestID'],
+                    phone_number=phone_number,
+                    amount=subscription.amount,
+                    status='pending'
+                )
+                
+                messages.success(request, "Payment initiated for subscription renewal.")
+                return redirect('storefront:subscription_manage', slug=slug)
+                
+            except Exception as e:
+                messages.error(request, f'Payment initiation failed: {str(e)}')
+        else:
+            messages.error(request, "Please correct the errors below.")
+    else:
+        # Pre-fill with last used phone number
+        last_payment = subscription.payments.filter(
+            status='completed'
+        ).order_by('-created_at').first()
+        
+        initial = {}
+        if last_payment:
+            # Extract phone number from +254XXXXXXXXX format
+            phone = last_payment.phone_number.replace('+254', '')
+            initial['phone_number'] = phone
+        
+        form = UpgradeForm(initial=initial)
+    
+    context = {
+        'store': store,
+        'subscription': subscription,
+        'form': form,
+    }
+    
+    return render(request, 'storefront/subscription_renew.html', context)
+
+
+@login_required
+@store_owner_required
+def subscription_invoice(request, slug, payment_id):
+    """
+    View invoice for a payment
+    """
+    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    payment = get_object_or_404(MpesaPayment, id=payment_id, subscription__store=store)
+    
+    context = {
+        'store': store,
+        'payment': payment,
+        'subscription': payment.subscription,
+    }
+    
+    return render(request, 'storefront/subscription_invoice.html', context)
+
+
+@login_required
+@store_owner_required
+def subscription_settings(request, slug):
+    """
+    Subscription settings (update payment method, etc.)
+    """
+    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    subscription = Subscription.objects.filter(store=store).order_by('-created_at').first()
+    
+    if request.method == 'POST':
+        # Handle settings update
+        phone_number = request.POST.get('phone_number')
+        
+        if phone_number:
+            # Validate phone number
+            if len(phone_number) == 9 and phone_number.startswith('7'):
+                if subscription:
+                    subscription.mpesa_phone = f"+254{phone_number}"
+                    subscription.save()
+                    messages.success(request, "Payment method updated successfully.")
+                else:
+                    messages.error(request, "No subscription found.")
+            else:
+                messages.error(request, "Please enter a valid Kenyan phone number.")
+        
+        return redirect('storefront:subscription_settings', slug=slug)
+    
+    context = {
+        'store': store,
+        'subscription': subscription,
+    }
+    
+    return render(request, 'storefront/subscription_settings.html', context)
+
+
+# Admin Views for Subscription Management
+
+@login_required
+def admin_subscription_list(request):
+    """
+    Admin view to list all subscriptions
+    """
+    if not request.user.is_staff:
+        return redirect('storefront:seller_dashboard')
+    
+    subscriptions = Subscription.objects.all().order_by('-created_at')
+    
+    # Filter by status
+    status_filter = request.GET.get('status')
+    if status_filter:
+        subscriptions = subscriptions.filter(status=status_filter)
+    
+    # Search
+    search_query = request.GET.get('q')
+    if search_query:
+        subscriptions = subscriptions.filter(
+            Q(store__name__icontains=search_query) |
+            Q(store__owner__username__icontains=search_query) |
+            Q(mpesa_phone__icontains=search_query)
+        )
+    
+    context = {
+        'subscriptions': subscriptions,
+        'status_filter': status_filter,
+        'search_query': search_query,
+    }
+    
+    return render(request, 'storefront/admin_subscription_list.html', context)
+
+
+@login_required
+def admin_subscription_detail(request, subscription_id):
+    """
+    Admin view for subscription details
+    """
+    if not request.user.is_staff:
+        return redirect('storefront:seller_dashboard')
+    
+    subscription = get_object_or_404(Subscription, id=subscription_id)
+    payments = subscription.payments.all().order_by('-created_at')
+    
+    context = {
+        'subscription': subscription,
+        'payments': payments,
+    }
+    
+    return render(request, 'storefront/admin_subscription_detail.html', context)

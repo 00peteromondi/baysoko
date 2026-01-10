@@ -261,6 +261,7 @@ TEMPLATES = [
                 'chats.context_processors.messages_context',
                 'notifications.context_processors.notifications_context',
                 'delivery.context_processors.delivery_user_context',
+                'storefront.context_processors.store_context',
             ],
         },
     },

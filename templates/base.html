@@ -910,6 +910,12 @@
             background: var(--bg-secondary);
         }
 
+        /* Side Navigation Section */
+        .side-nav-section {
+            margin-top: var(--spacing-md);
+            border-top: 1px solid var(--border-color);
+        }
+
         /* Responsive Design */
         @media (max-width: 1200px) {
             .side-nav.expanded ~ .main-content,
@@ -1326,12 +1332,31 @@
                             <li><a class="dropdown-item" href="{% url 'profile' user.pk %}"><i class="bi bi-person me-2"></i>Profile</a></li>
                             <li><a class="dropdown-item" href="{% url 'view_cart' %}"><i class="bi bi-cart3 me-2"></i>Cart <span class="badge bg-primary ms-2">{{ cart_item_count }}</span></a></li>
                             <li><a class="dropdown-item" href="{% url 'order_list' %}"><i class="bi bi-bag me-2"></i>Orders</a></li>
-                            <li><a class="dropdown-item" href="{% url 'notifications' %}">
-                                <i class="bi bi-bell me-2"></i>Notifications
+                            <li><a class="dropdown-item" href="{% url 'notifications' %}"><i class="bi bi-bell me-2"></i>Notifications 
                                 {% if unread_notifications_count and unread_notifications_count > 0 %}
                                 <span class="badge bg-danger ms-2">{{ unread_notifications_count }}</span>
                                 {% endif %}
                             </a></li>
+                            
+                            <!-- Subscription Management -->
+                            {% with user_stores=user.stores.all %}
+                                {% if user_stores %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{% url 'storefront:seller_dashboard' %}"><i class="bi bi-speedometer2 me-2"></i>Seller Dashboard</a></li>
+                                    {% for store in user_stores|slice:":2" %}
+                                        <li><a class="dropdown-item" href="{% url 'storefront:subscription_manage' slug=store.slug %}">
+                                            <i class="bi bi-award me-2"></i>{{ store.name|truncatechars:15 }}
+                                            <span class="badge {% if store.is_premium %}bg-warning{% else %}bg-secondary{% endif %} ms-2">
+                                                {% if store.is_premium %}Premium{% else %}Free{% endif %}
+                                            </span>
+                                        </a></li>
+                                    {% endfor %}
+                                    {% if user_stores.count > 2 %}
+                                        <li><a class="dropdown-item" href="{% url 'storefront:seller_dashboard' %}"><i class="bi bi-three-dots me-2"></i>More stores...</a></li>
+                                    {% endif %}
+                                {% endif %}
+                            {% endwith %}
+                            
                             <li><hr class="dropdown-divider"></li>
                             <li>
                                 <form method="post" action="{% url 'logout' %}">
@@ -1406,10 +1431,34 @@
                 <i class="bi bi-person"></i>
                 <span class="link-text">Profile</span>
             </a></li>
+            
+            <!-- Seller Dashboard and Analytics -->
             <li><a href="{% url 'storefront:seller_dashboard' %}" class="side-nav-link">
                 <i class="bi bi-speedometer2"></i>
                 <span class="link-text">Seller Dashboard</span>
             </a></li>
+
+
+            <!-- Subscription Management -->
+            {% with user_stores=user.stores.all %}
+                {% if user_stores %}
+                    <li class="side-nav-section">
+                        <small class="text-muted px-3 py-2 d-block">My Stores</small>
+                    </li>
+                    {% for store in user_stores %}
+                        <li>
+                            <a href="{% url 'storefront:subscription_manage' slug=store.slug %}" class="side-nav-link">
+                                <i class="bi bi-shop"></i>
+                                <span class="link-text">{{ store.name|truncatechars:15 }}</span>
+                                <span class="badge {% if store.is_premium %}bg-warning{% else %}bg-secondary{% endif %}">
+                                    {% if store.is_premium %}P{% else %}F{% endif %}
+                                </span>
+                            </a>
+                        </li>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
             <li><a href="{% url 'inbox' %}" class="side-nav-link">
                 <i class="bi bi-chat-dots"></i>
                 <span class="link-text">Messages</span>

@@ -1,0 +1,464 @@
+{% extends 'base.html' %}
+{% load review_tags %}  <!-- Load the new template tags -->
+{% load store_filters %}
+
+{% block title %}Reviews - {{ store.name }} - Baysoko{% endblock %}
+
+{% block content %}
+<div class="container py-var(--spacing-xl)">
+    <!-- Store Header -->
+    <div class="store-header-protected rounded-lg mb-4 position-relative overflow-hidden"
+         style="{% if store.cover_image %}background-image: url('{{ store.cover_image.url }}');{% else %}background: linear-gradient(135deg, var(--primary) 0%, var(--info) 100%);{% endif %}">
+        <div class="store-header-overlay position-absolute top-0 start-0 w-100 h-100"></div>
+        <div class="protected-text-content position-relative z-2">
+            <div class="container py-var(--spacing-xxl)">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h1 class="display-4 fw-bold mb-3 text-white text-shadow-3d">Customer Reviews</h1>
+                        <p class="lead text-white text-protected-bg">{{ store.name }}</p>
+                        <div class="d-flex align-items-center gap-3 mt-3">
+                            <div class="text-protected-bg">
+                                <i class="bi bi-star-fill text-warning"></i>
+                                <strong>{{ avg_rating|default:"0.0" }}</strong> average rating
+                            </div>
+                            <div class="text-protected-bg">
+                                <i class="bi bi-chat-text-fill"></i>
+                                <strong>{{ total_reviews }}</strong> total reviews
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <div class="rating-summary bg-white rounded-lg p-4 shadow">
+                            <h2 class="display-2 fw-bold text-primary mb-2">{{ avg_rating|default:"0.0" }}</h2>
+                            <div class="rating-stars mb-3">
+                                {% for i in "12345" %}
+                                    {% if forloop.counter <= avg_rating|floatformat:0|add:"0" %}
+                                        <i class="bi bi-star-fill text-warning fs-4"></i>
+                                    {% else %}
+                                        <i class="bi bi-star text-warning fs-4"></i>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                            <p class="text-muted mb-0">{{ total_reviews }} reviews</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="row g-4">
+        <!-- Rating Distribution -->
+        <div class="col-lg-4">
+            <div class="card-custom mb-4">
+                <h3 class="mb-3">Rating Distribution</h3>
+                <div class="rating-bars">
+                    {% for rating, count in rating_distribution.items %}
+                    <div class="rating-bar mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>
+                                {{ rating }} star{{ rating|pluralize }}
+                            </span>
+                            <span class="text-muted">{{ count }}</span>
+                        </div>
+                        <div class="progress" style="height: 10px;">
+                            {% with percentage=count|div:total_reviews|mul:100 %}
+                            <div class="progress-bar bg-warning" 
+                                 role="progressbar" 
+                                 style="width: {{ percentage }}%"
+                                 aria-valuenow="{{ count }}"
+                                 aria-valuemin="0"
+                                 aria-valuemax="{{ total_reviews }}">
+                            </div>
+                            {% endwith %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <!-- Review Actions -->
+                <div class="mt-4">
+                    {% if user.is_authenticated and user != store.owner %}
+                        {% if user_has_reviewed %}
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                You've already reviewed this store.
+                            </div>
+                        {% else %}
+                            <a href="{% url 'storefront:store_review_create' slug=store.slug %}" 
+                               class="btn-custom btn-primary w-100 mb-2">
+                                <i class="bi bi-pencil me-2"></i>Write a Store Review
+                            </a>
+                        {% endif %}
+                    {% elif not user.is_authenticated %}
+                        <a href="{% url 'login' %}?next={{ request.path }}" 
+                           class="btn-custom btn-primary w-100 mb-2">
+                            <i class="bi bi-box-arrow-in-right me-2"></i>Login to Write Review
+                        </a>
+                    {% endif %}
+                    
+                    <a href="{% url 'storefront:store_detail' slug=store.slug %}" 
+                       class="btn-custom btn-ghost w-100">
+                        <i class="bi bi-arrow-left me-2"></i>Back to Store
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Store Info -->
+            <div class="card-custom">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <img src="{{ store.get_logo_url|default:'https://placehold.co/60x60/c2c2c2/1f1f1f?text=Store' }}"
+                         alt="{{ store.name }}"
+                         class="rounded-circle"
+                         width="60"
+                         height="60">
+                    <div>
+                        <h5 class="mb-1">{{ store.name }}</h5>
+                        <small class="text-muted">
+                            {{ store.listings.count }} products • 
+                            Joined {{ store.created_at|date:"M Y" }}
+                        </small>
+                    </div>
+                </div>
+                <a href="{% url 'storefront:store_detail' slug=store.slug %}" 
+                   class="btn-custom btn-outline-primary w-100">
+                    Visit Store
+                </a>
+            </div>
+        </div>
+        
+        <!-- Reviews List -->
+        <div class="col-lg-8">
+            {% if reviews %}
+                {% for review in reviews %}
+                <div class="card-custom mb-4 review-item" id="review-{{ review.id }}">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div class="d-flex align-items-center">
+                            <div class="reviewer-avatar me-3">
+                                <img src="{{ review.reviewer.profile.get_avatar_url|default:'https://placehold.co/50x50/c2c2c2/1f1f1f?text=User' }}"
+                                     alt="{{ review.reviewer.username }}"
+                                     class="rounded-circle"
+                                     width="50"
+                                     height="50">
+                            </div>
+                            <div>
+                                <h5 class="mb-0">{{ review.reviewer.get_full_name|default:review.reviewer.username }}</h5>
+                                <div class="d-flex align-items-center gap-2 mt-1">
+                                    <div class="rating-stars">
+                                        {% for i in "12345" %}
+                                            {% if forloop.counter <= review.rating %}
+                                                <i class="bi bi-star-fill text-warning"></i>
+                                            {% else %}
+                                                <i class="bi bi-star text-warning"></i>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                    {{ review.type|review_type_badge|safe }}
+                                </div>
+                                <small class="text-muted">{{ review.created_at|date:"F d, Y" }}</small>
+                                
+                                {% if review.type == 'product' and review.listing %}
+                                <div class="mt-2">
+                                    <small class="text-muted">
+                                        <i class="bi bi-box me-1"></i>
+                                        Review for: 
+                                        <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=review.listing.slug %}" 
+                                           class="text-decoration-none">
+                                            {{ review.listing.title }}
+                                        </a>
+                                    </small>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        {% if review.type == 'store' and review.reviewer == user %}
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-ghost" type="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-three-dots"></i>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'storefront:store_review_update' slug=store.slug review_id=review.id %}">
+                                        <i class="bi bi-pencil me-2"></i>Edit
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item text-danger" href="#" data-bs-toggle="modal" data-bs-target="#deleteReviewModal-{{ review.id }}">
+                                        <i class="bi bi-trash me-2"></i>Delete
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        
+                        <!-- Delete Confirmation Modal -->
+                        <div class="modal fade" id="deleteReviewModal-{{ review.id }}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Delete Review</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <p>Are you sure you want to delete your review? This action cannot be undone.</p>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn-custom btn-ghost" data-bs-dismiss="modal">Cancel</button>
+                                        <form method="post" action="{% url 'storefront:store_review_delete' slug=store.slug review_id=review.id %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn-custom btn-danger">Delete Review</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="review-content">
+                        <p class="mb-3">{{ review.comment|linebreaks }}</p>
+                        
+                        {% if review.type == 'store' and review.helpful_count > 0 %}
+                        <div class="review-helpful mb-3">
+                            <small class="text-muted">
+                                <i class="bi bi-hand-thumbs-up"></i>
+                                {{ review.helpful_count }} people found this helpful
+                            </small>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    {% if review.type == 'store' and user.is_authenticated and user != review.reviewer %}
+                    <div class="review-actions">
+                        <button class="btn btn-sm btn-outline-primary helpful-btn" 
+                                data-review-id="{{ review.id }}"
+                                data-helpful-count="{{ review.helpful_count }}">
+                            <i class="bi bi-hand-thumbs-up"></i>
+                            <span>Helpful ({{ review.helpful_count }})</span>
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                
+                <!-- Pagination -->
+                {% if reviews.has_other_pages %}
+                <nav aria-label="Reviews pagination">
+                    <ul class="pagination justify-content-center">
+                        {% if reviews.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ reviews.previous_page_number }}">Previous</a>
+                        </li>
+                        {% endif %}
+                        
+                        {% for num in reviews.paginator.page_range %}
+                            {% if reviews.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                            {% elif num > reviews.number|add:'-3' and num < reviews.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if reviews.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ reviews.next_page_number }}">Next</a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+                
+            {% else %}
+                <div class="card-custom text-center py-5">
+                    <div class="empty-state-icon mb-4">
+                        <i class="bi bi-chat-square-text display-1 text-muted"></i>
+                    </div>
+                    <h3 class="mb-3">No Reviews Yet</h3>
+                    <p class="text-muted mb-4">Be the first to review this store!</p>
+                    
+                    {% if user.is_authenticated and user != store.owner %}
+                    <a href="{% url 'storefront:store_review_create' slug=store.slug %}" class="btn-custom btn-primary">
+                        <i class="bi bi-pencil me-2"></i>Write the First Review
+                    </a>
+                    {% elif not user.is_authenticated %}
+                    <a href="{% url 'login' %}?next={{ request.path }}" class="btn-custom btn-primary">
+                        <i class="bi bi-box-arrow-in-right me-2"></i>Login to Review
+                    </a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+.store-header-protected {
+    background-size: cover;
+    background-position: center;
+    min-height: 200px;
+}
+
+.store-header-overlay {
+    background: linear-gradient(to right, 
+        rgba(0,0,0,0.7) 0%, 
+        rgba(0,0,0,0.5) 50%, 
+        rgba(0,0,0,0.3) 100%);
+}
+
+.protected-text-content {
+    z-index: 2;
+}
+
+.rating-summary {
+    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.review-item {
+    transition: transform 0.3s ease;
+}
+
+.review-item:hover {
+    transform: translateY(-2px);
+}
+
+.rating-bars .progress-bar {
+    border-radius: 5px;
+}
+
+.helpful-btn {
+    transition: all 0.3s ease;
+}
+
+.helpful-btn:hover {
+    background-color: var(--primary);
+    color: white;
+}
+
+.badge.bg-info {
+    background-color: var(--info) !important;
+}
+
+.badge.bg-primary {
+    background-color: var(--primary) !important;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Helpful button AJAX (only for store reviews)
+    const helpfulButtons = document.querySelectorAll('.helpful-btn');
+    
+    helpfulButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const reviewId = this.dataset.reviewId;
+            const currentCount = parseInt(this.dataset.helpfulCount);
+            
+            // Disable button temporarily
+            this.disabled = true;
+            this.innerHTML = '<i class="bi bi-hourglass-split"></i> Sending...';
+            
+            // Send AJAX request
+            fetch(`{% url 'storefront:mark_review_helpful' slug=store.slug review_id=0 %}`.replace('0', reviewId), {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update button
+                    this.innerHTML = `<i class="bi bi-hand-thumbs-up-fill"></i> Helpful (${data.helpful_count})`;
+                    this.classList.remove('btn-outline-primary');
+                    this.classList.add('btn-success');
+                    this.disabled = true; // Keep disabled after successful vote
+                    
+                    // Update data attribute
+                    this.dataset.helpfulCount = data.helpful_count;
+                    
+                    // Update helpful count in the text
+                    const helpfulText = this.closest('.review-item').querySelector('.review-helpful');
+                    if (helpfulText) {
+                        helpfulText.innerHTML = `<small class="text-muted"><i class="bi bi-hand-thumbs-up"></i> ${data.helpful_count} people found this helpful</small>`;
+                    }
+                    
+                    // Show success message
+                    showToast('Thanks for your feedback!', 'success');
+                } else {
+                    // Re-enable button
+                    this.disabled = false;
+                    this.innerHTML = `<i class="bi bi-hand-thumbs-up"></i> Helpful (${currentCount})`;
+                    showToast('You have already marked this as helpful', 'info');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                this.disabled = false;
+                this.innerHTML = `<i class="bi bi-hand-thumbs-up"></i> Helpful (${currentCount})`;
+                showToast('An error occurred', 'danger');
+            });
+        });
+    });
+    
+    function showToast(message, type = 'info') {
+        // Create toast container if it doesn't exist
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '9999';
+            document.body.appendChild(toastContainer);
+        }
+        
+        const toastId = 'toast-' + Date.now();
+        const toast = document.createElement('div');
+        toast.id = toastId;
+        toast.className = `toast align-items-center text-white bg-${type} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body d-flex align-items-center">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : 'info-circle'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        `;
+        
+        toastContainer.appendChild(toast);
+        const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+        bsToast.show();
+        
+        // Remove toast after it hides
+        toast.addEventListener('hidden.bs.toast', function() {
+            toast.remove();
+        });
+    }
+    
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+});
+</script>
+{% endblock %}
