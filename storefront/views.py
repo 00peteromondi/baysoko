@@ -1034,7 +1034,7 @@ def store_analytics(request, slug):
     # Add recent reviews
     recent_reviews = Review.objects.filter(
         seller=store.owner
-    ).order_by('-date_created')[:5]
+    ).order_by('-created_at')[:5]
     
     for review in recent_reviews:
         recent_activity.append({
