@@ -427,7 +427,7 @@ DELIVERY_UPDATE_ORDER_STATUS = config('DELIVERY_UPDATE_ORDER_STATUS', default=Tr
 # Authentication backends
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
-    'allauth.account.auth_backends.AuthenticationBackend',
+    
 ]
 
 # Allauth settings (updated to new configuration keys to avoid deprecation warnings)
@@ -441,6 +441,9 @@ ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
 # Keep email verification and uniqueness as configured
 ACCOUNT_EMAIL_VERIFICATION = 'optional'
 ACCOUNT_UNIQUE_EMAIL = True
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_AUTHENTICATION_METHOD = 'username_email'
+ACCOUNT_USERNAME_REQUIRED = True
 
 # Add this after the existing SOCIALACCOUNT_PROVIDERS configuration
 # Update SOCIALACCOUNT_PROVIDERS with the improved structure
