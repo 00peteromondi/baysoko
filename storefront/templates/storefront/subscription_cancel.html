@@ -1,0 +1,742 @@
+{% extends 'base.html' %}
+{% load static humanize %}
+
+{% block title %}Cancel Subscription - {{ store.name }} - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Cancellation Styling */
+    .cancellation-container {
+        min-height: 80vh;
+        padding: var(--spacing-xl) 0;
+        background: linear-gradient(135deg, 
+            rgba(239, 71, 111, 0.05) 0%, 
+            rgba(255, 158, 31, 0.05) 100%);
+    }
+
+    .cancellation-header {
+        text-align: center;
+        margin-bottom: var(--spacing-xl);
+        max-width: 800px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .warning-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(239, 71, 111, 0.1);
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        margin-bottom: 1rem;
+        border: 1px solid rgba(239, 71, 111, 0.2);
+    }
+
+    .warning-badge i {
+        color: var(--danger);
+    }
+
+    .cancellation-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        box-shadow: var(--shadow-lg);
+        border: 2px solid var(--border-color);
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    .subscription-details {
+        background: var(--bg-secondary);
+        padding: 1.5rem;
+        border-radius: var(--radius-md);
+        margin-bottom: var(--spacing-lg);
+        border: 1px solid var(--border-color);
+    }
+
+    .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .detail-item {
+        padding: 1rem;
+        background: var(--bg-primary);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+    }
+
+    .detail-label {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        margin-bottom: 0.25rem;
+        display: block;
+    }
+
+    .detail-value {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .status-badge {
+        display: inline-flex;
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.85rem;
+        font-weight: 700;
+    }
+
+    .status-active {
+        background: rgba(6, 214, 160, 0.1);
+        color: var(--success);
+        border: 1px solid rgba(6, 214, 160, 0.2);
+    }
+
+    .status-trialing {
+        background: rgba(66, 133, 244, 0.1);
+        color: var(--info);
+        border: 1px solid rgba(66, 133, 244, 0.2);
+    }
+
+    /* Warning Box */
+    .warning-box {
+        background: linear-gradient(135deg, rgba(239, 71, 111, 0.1) 0%, rgba(255, 158, 31, 0.1) 100%);
+        padding: 1.5rem;
+        border-radius: var(--radius-md);
+        margin-bottom: var(--spacing-lg);
+        border: 1px solid rgba(239, 71, 111, 0.2);
+        border-left: 4px solid var(--danger);
+    }
+
+    .warning-box-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .warning-icon {
+        color: var(--danger);
+        font-size: 1.5rem;
+        flex-shrink: 0;
+    }
+
+    .warning-content h4 {
+        color: var(--danger);
+        margin-bottom: 0.5rem;
+    }
+
+    .warning-content p {
+        color: var(--text-secondary);
+        margin: 0;
+    }
+
+    /* Cancellation Form */
+    .cancellation-form {
+        margin-top: var(--spacing-lg);
+    }
+
+    .form-group-modern {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-label-modern {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        font-size: 0.95rem;
+    }
+
+    .select-modern {
+        width: 100%;
+        padding: 1rem 1.25rem;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 1rem;
+        transition: var(--transition);
+        outline: none;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%236c757d' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: right 0.75rem center;
+        background-size: 16px 12px;
+    }
+
+    .select-modern:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(6, 214, 160, 0.1);
+    }
+
+    .textarea-modern {
+        width: 100%;
+        padding: 1rem 1.25rem;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 1rem;
+        transition: var(--transition);
+        outline: none;
+        min-height: 120px;
+        resize: vertical;
+    }
+
+    .textarea-modern:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(6, 214, 160, 0.1);
+    }
+
+    .char-count {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        text-align: right;
+        margin-top: 0.25rem;
+    }
+
+    .char-count.warning {
+        color: var(--warning);
+    }
+
+    .char-count.danger {
+        color: var(--danger);
+    }
+
+    /* Action Buttons */
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        margin-top: var(--spacing-xl);
+        padding-top: var(--spacing-lg);
+        border-top: 1px solid var(--border-color);
+    }
+
+    .cancel-btn {
+        flex: 1;
+        padding: 1rem;
+        background: linear-gradient(135deg, var(--danger) 0%, #d12a4e 100%);
+        color: white;
+        border: none;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .cancel-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(239, 71, 111, 0.3);
+    }
+
+    .keep-btn {
+        flex: 1;
+        padding: 1rem;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        text-decoration: none;
+    }
+
+    .keep-btn:hover {
+        background: var(--bg-primary);
+        border-color: var(--accent);
+        color: var(--accent);
+        transform: translateY(-2px);
+    }
+
+    /* Confirmation Modal */
+    .confirmation-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 10000;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+
+    .confirmation-modal.active {
+        display: flex;
+        animation: fadeIn 0.3s ease-out;
+    }
+
+    .confirmation-content {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        max-width: 500px;
+        width: 100%;
+        box-shadow: var(--shadow-xl);
+        animation: scaleIn 0.3s ease-out;
+    }
+
+    .confirmation-header {
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .confirmation-icon {
+        width: 64px;
+        height: 64px;
+        background: linear-gradient(135deg, var(--danger) 0%, #d12a4e 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+        color: white;
+        font-size: 2rem;
+    }
+
+    .confirmation-buttons {
+        display: flex;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+
+    .confirmation-buttons .cancel-btn {
+        flex: 1;
+    }
+
+    .confirmation-buttons .keep-btn {
+        flex: 1;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .cancellation-card {
+            padding: var(--spacing-md);
+        }
+        
+        .detail-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .action-buttons {
+            flex-direction: column;
+        }
+        
+        .confirmation-content {
+            padding: var(--spacing-md);
+        }
+    }
+
+    /* Animations */
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @keyframes scaleIn {
+        from {
+            opacity: 0;
+            transform: scale(0.9);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+        20%, 40%, 60%, 80% { transform: translateX(5px); }
+    }
+
+    .shake {
+        animation: shake 0.5s ease-in-out;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cancellation-container">
+    <div class="container-custom">
+        <!-- Header -->
+        <div class="cancellation-header animate-slide-up">
+            <div class="warning-badge">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <span>Cancel Subscription</span>
+            </div>
+            <h1 class="display-6 fw-bold mb-3">Cancel Your Subscription</h1>
+            <p class="lead text-muted mb-0">
+                We're sorry to see you go. Please let us know why you're cancelling.
+            </p>
+        </div>
+
+        <!-- Cancellation Card -->
+        <div class="cancellation-card animate-scale-in">
+            <!-- Current Subscription Details -->
+            <div class="subscription-details">
+                <h5 class="fw-bold mb-3">Current Subscription</h5>
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <span class="detail-label">Store</span>
+                        <div class="detail-value">{{ store.name }}</div>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Plan</span>
+                        <div class="detail-value">{{ subscription.get_plan_display }}</div>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Status</span>
+                        <div class="detail-value">
+                            <span class="status-badge {% if subscription.status == 'active' %}status-active{% else %}status-trialing{% endif %}">
+                                {{ subscription.get_status_display }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Next Billing</span>
+                        <div class="detail-value">
+                            {% if subscription.next_billing_date %}
+                                {{ subscription.next_billing_date|date:"M d, Y" }}
+                            {% elif subscription.trial_ends_at %}
+                                {{ subscription.trial_ends_at|date:"M d, Y" }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                {% if subscription.is_active %}
+                <div class="text-center">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Premium features will remain active until 
+                        {% if subscription.trial_ends_at %}
+                            {{ subscription.trial_ends_at|date:"M d, Y" }}
+                        {% else %}
+                            the end of your current billing period
+                        {% endif %}
+                    </small>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Warning Box -->
+            <div class="warning-box">
+                <div class="warning-box-header">
+                    <i class="bi bi-exclamation-octagon-fill warning-icon"></i>
+                    <div class="warning-content">
+                        <h4>Important Information</h4>
+                        <p>
+                            By cancelling your subscription, you will lose access to premium features 
+                            {% if subscription.trial_ends_at %}
+                                after {{ subscription.trial_ends_at|date:"M d, Y" }}
+                            {% else %}
+                                at the end of your current billing period
+                            {% endif %}. 
+                            This includes multiple stores, advanced analytics, and featured placement.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cancellation Form -->
+            <form method="post" class="cancellation-form" id="cancellationForm">
+                {% csrf_token %}
+                
+                <!-- Reason for Cancellation -->
+                <div class="form-group-modern">
+                    <label class="form-label-modern" for="id_reason">
+                        Why are you cancelling? <span class="text-danger">*</span>
+                    </label>
+                    <select name="reason" 
+                            class="select-modern {% if form.reason.errors %}error{% endif %}" 
+                            id="id_reason"
+                            required>
+                        <option value="" disabled selected>Select a reason...</option>
+                        <option value="too_expensive">Too expensive</option>
+                        <option value="missing_features">Missing features I need</option>
+                        <option value="not_using">Not using it enough</option>
+                        <option value="found_alternative">Found a better alternative</option>
+                        <option value="technical_issues">Technical issues</option>
+                        <option value="customer_service">Customer service</option>
+                        <option value="other">Other reason</option>
+                    </select>
+                    {% if form.reason.errors %}
+                        <div class="error-message">
+                            <i class="bi bi-exclamation-circle"></i>
+                            {{ form.reason.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Additional Feedback -->
+                <div class="form-group-modern">
+                    <label class="form-label-modern" for="id_feedback">
+                        Additional feedback (optional)
+                    </label>
+                    <textarea name="feedback" 
+                              class="textarea-modern {% if form.feedback.errors %}error{% endif %}" 
+                              id="id_feedback" 
+                              placeholder="Please share any additional feedback that could help us improve..."
+                              maxlength="1000">{{ form.feedback.value|default:'' }}</textarea>
+                    <div class="char-count" id="charCount">
+                        0/1000 characters
+                    </div>
+                    {% if form.feedback.errors %}
+                        <div class="error-message">
+                            <i class="bi bi-exclamation-circle"></i>
+                            {{ form.feedback.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button type="button" 
+                            class="cancel-btn" 
+                            onclick="showConfirmation()"
+                            id="cancelButton">
+                        <i class="bi bi-x-circle"></i>
+                        Cancel Subscription
+                    </button>
+                    <a href="{% url 'storefront:subscription_manage' slug=store.slug %}" 
+                       class="keep-btn">
+                        <i class="bi bi-arrow-left"></i>
+                        Keep Subscription
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Alternative Options -->
+        <div class="card-custom mt-4">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-lightbulb text-warning fs-4 me-3"></i>
+                <div>
+                    <h6 class="fw-bold mb-1">Consider These Options Instead</h6>
+                    <div class="row g-3 mt-2">
+                        <div class="col-md-4">
+                            <a href="{% url 'storefront:subscription_settings' slug=store.slug %}" 
+                               class="btn-custom btn-ghost w-100 text-start">
+                                <i class="bi bi-gear me-2"></i>
+                                Change Payment Method
+                            </a>
+                        </div>
+                        <div class="col-md-4">
+                            <a href="{% url 'storefront:subscription_plan_select' slug=store.slug %}" 
+                               class="btn-custom btn-ghost w-100 text-start">
+                                <i class="bi bi-arrow-down-up me-2"></i>
+                                Switch to a Cheaper Plan
+                            </a>
+                        </div>
+                        <div class="col-md-4">
+                            <a href="{% url 'storefront:subscription_manage' slug=store.slug %}" 
+                               class="btn-custom btn-ghost w-100 text-start">
+                                <i class="bi bi-question-circle me-2"></i>
+                                Contact Support
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div class="confirmation-modal" id="confirmationModal">
+    <div class="confirmation-content">
+        <div class="confirmation-header">
+            <div class="confirmation-icon">
+                <i class="bi bi-exclamation-triangle"></i>
+            </div>
+            <h3 class="fw-bold mb-2">Confirm Cancellation</h3>
+            <p class="text-muted mb-0">
+                Are you sure you want to cancel your subscription? 
+                This action cannot be undone.
+            </p>
+        </div>
+        
+        <div class="warning-box mb-4">
+            <div class="d-flex align-items-start">
+                <i class="bi bi-info-circle text-warning fs-5 me-2"></i>
+                <div>
+                    <small class="text-muted">
+                        You will lose access to premium features on 
+                        <strong>
+                            {% if subscription.trial_ends_at %}
+                                {{ subscription.trial_ends_at|date:"M d, Y" }}
+                            {% elif subscription.current_period_end %}
+                                {{ subscription.current_period_end|date:"M d, Y" }}
+                            {% else %}
+                                the end of your current billing period
+                            {% endif %}
+                        </strong>.
+                        Your store will revert to the free plan.
+                    </small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="confirmation-buttons">
+            <button type="button" class="keep-btn" onclick="hideConfirmation()">
+                <i class="bi bi-arrow-left"></i>
+                Keep Subscription
+            </button>
+            <button type="button" class="cancel-btn" onclick="submitCancellation()">
+                <i class="bi bi-check-circle"></i>
+                Yes, Cancel Subscription
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Character counter for feedback textarea
+        const feedbackTextarea = document.getElementById('id_feedback');
+        const charCount = document.getElementById('charCount');
+        
+        if (feedbackTextarea && charCount) {
+            feedbackTextarea.addEventListener('input', function() {
+                const length = this.value.length;
+                charCount.textContent = `${length}/1000 characters`;
+                
+                if (length > 900) {
+                    charCount.classList.add('warning');
+                    charCount.classList.remove('danger');
+                } else if (length > 990) {
+                    charCount.classList.remove('warning');
+                    charCount.classList.add('danger');
+                } else {
+                    charCount.classList.remove('warning', 'danger');
+                }
+            });
+            
+            // Initial count
+            feedbackTextarea.dispatchEvent(new Event('input'));
+        }
+        
+        // Reason selection validation
+        const reasonSelect = document.getElementById('id_reason');
+        if (reasonSelect) {
+            reasonSelect.addEventListener('change', function() {
+                if (this.value) {
+                    this.classList.remove('error');
+                }
+            });
+        }
+        
+        // Form validation
+        function validateForm() {
+            let isValid = true;
+            
+            if (!reasonSelect.value) {
+                reasonSelect.classList.add('error');
+                reasonSelect.classList.add('shake');
+                setTimeout(() => reasonSelect.classList.remove('shake'), 500);
+                isValid = false;
+            }
+            
+            return isValid;
+        }
+        
+        // Show confirmation modal
+        window.showConfirmation = function() {
+            if (!validateForm()) {
+                showToast('Please select a reason for cancellation', 'error');
+                return;
+            }
+            
+            const modal = document.getElementById('confirmationModal');
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        
+        // Hide confirmation modal
+        window.hideConfirmation = function() {
+            const modal = document.getElementById('confirmationModal');
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+        
+        // Submit cancellation form
+        window.submitCancellation = function() {
+            const form = document.getElementById('cancellationForm');
+            const cancelBtn = document.getElementById('cancelButton');
+            
+            // Show loading state
+            if (cancelBtn) {
+                const originalHTML = cancelBtn.innerHTML;
+                cancelBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Cancelling...';
+                cancelBtn.disabled = true;
+            }
+            
+            // Hide modal
+            hideConfirmation();
+            
+            // Submit form
+            form.submit();
+        }
+        
+        // Close modal on ESC key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                hideConfirmation();
+            }
+        });
+        
+        // Close modal on backdrop click
+        const modal = document.getElementById('confirmationModal');
+        if (modal) {
+            modal.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    hideConfirmation();
+                }
+            });
+        }
+        
+        // Auto-focus reason select if there's an error
+        {% if form.reason.errors %}
+        setTimeout(() => {
+            const reasonSelect = document.getElementById('id_reason');
+            if (reasonSelect) {
+                reasonSelect.focus();
+            }
+        }, 300);
+        {% endif %}
+    });
+
+    // Toast notification function
+    function showToast(message, type = 'info') {
+        if (window.showToast) {
+            window.showToast(message, type);
+        } else {
+            // Fallback alert
+            alert(message);
+        }
+    }
+</script>
+{% endblock %}

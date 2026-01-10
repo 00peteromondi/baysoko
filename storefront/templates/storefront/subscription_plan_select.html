@@ -1,0 +1,767 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Choose Subscription Plan - {{ store.name }} - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Plan Selection Styling */
+    .plan-selection-container {
+        min-height: 80vh;
+        padding: var(--spacing-xl) 0;
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(255, 209, 102, 0.05) 50%, 
+            rgba(255, 107, 53, 0.05) 100%);
+    }
+
+    .plan-header {
+        text-align: center;
+        margin-bottom: var(--spacing-xl);
+        max-width: 800px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .plan-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(6, 214, 160, 0.1);
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        margin-bottom: 1rem;
+        border: 1px solid rgba(6, 214, 160, 0.2);
+    }
+
+    .plan-badge i {
+        color: var(--accent);
+    }
+
+    .plan-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: var(--spacing-lg);
+        margin-bottom: var(--spacing-xl);
+    }
+
+    .plan-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-lg);
+        box-shadow: var(--shadow-md);
+        border: 2px solid var(--border-color);
+        transition: var(--transition);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .plan-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-xl);
+        border-color: var(--accent);
+    }
+
+    .plan-card.popular {
+        border-color: var(--primary);
+        box-shadow: 0 10px 40px rgba(255, 107, 53, 0.15);
+    }
+
+    .plan-card.popular::before {
+        content: 'Most Popular';
+        position: absolute;
+        top: 0;
+        right: 0;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        padding: 0.5rem 1.5rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        border-radius: 0 0 0 20px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .plan-card-header {
+        padding-bottom: var(--spacing-md);
+        border-bottom: 1px solid var(--border-color);
+        margin-bottom: var(--spacing-md);
+    }
+
+    .plan-name {
+        font-size: 1.5rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+        color: var(--text-primary);
+    }
+
+    .plan-price {
+        font-size: 2.5rem;
+        font-weight: 900;
+        color: var(--accent);
+        margin-bottom: 0.5rem;
+        line-height: 1;
+    }
+
+    .plan-period {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+
+    .plan-features {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 var(--spacing-lg) 0;
+    }
+
+    .plan-feature {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+        color: var(--text-primary);
+    }
+
+    .plan-feature i {
+        color: var(--accent);
+        font-size: 1rem;
+        margin-top: 0.125rem;
+        flex-shrink: 0;
+    }
+
+    .plan-feature.disabled {
+        color: var(--text-tertiary);
+    }
+
+    .plan-feature.disabled i {
+        color: var(--text-tertiary);
+    }
+
+    .plan-actions {
+        margin-top: auto;
+    }
+
+    .plan-select-btn {
+        width: 100%;
+        padding: 1rem;
+        background: var(--accent);
+        color: white;
+        border: none;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .plan-select-btn:hover {
+        background: var(--accent-dark);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(6, 214, 160, 0.3);
+    }
+
+    .plan-select-btn.selected {
+        background: var(--primary);
+    }
+
+    .plan-select-btn.selected:hover {
+        background: var(--primary-dark);
+    }
+
+    /* Payment Form */
+    .payment-form-container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border-color);
+    }
+
+    .payment-form-header {
+        text-align: center;
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .payment-form-header h3 {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+        color: var(--text-primary);
+    }
+
+    .payment-form-header p {
+        color: var(--text-secondary);
+    }
+
+    .payment-method {
+        background: var(--bg-secondary);
+        padding: 1.5rem;
+        border-radius: var(--radius-md);
+        margin-bottom: var(--spacing-lg);
+        border: 1px solid var(--border-color);
+    }
+
+    .payment-method-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .payment-method-icon {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, #006600 0%, #00A300 100%);
+        border-radius: var(--radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+    }
+
+    .payment-phone-input {
+        width: 100%;
+        padding: 1rem;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 1rem;
+        transition: var(--transition);
+        outline: none;
+    }
+
+    .payment-phone-input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(6, 214, 160, 0.1);
+    }
+
+    .phone-format-hint {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        margin-top: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .payment-summary {
+        background: linear-gradient(135deg, rgba(6, 214, 160, 0.1) 0%, rgba(255, 107, 53, 0.1) 100%);
+        padding: 1.5rem;
+        border-radius: var(--radius-md);
+        margin-bottom: var(--spacing-lg);
+        border: 1px solid rgba(6, 214, 160, 0.2);
+    }
+
+    .summary-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    }
+
+    .summary-item:last-child {
+        border-bottom: none;
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: var(--primary);
+    }
+
+    .summary-label {
+        color: var(--text-secondary);
+    }
+
+    .summary-value {
+        color: var(--text-primary);
+        font-weight: 600;
+    }
+
+    .payment-submit-btn {
+        width: 100%;
+        padding: 1rem;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        border: none;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        font-size: 1.1rem;
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+    }
+
+    .payment-submit-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(255, 107, 53, 0.3);
+    }
+
+    .payment-submit-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    /* Security Assurance */
+    .security-assurance {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        margin-top: var(--spacing-lg);
+        padding: 1rem;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+    }
+
+    .security-icon {
+        color: var(--accent);
+        font-size: 1.5rem;
+    }
+
+    .security-text {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .plan-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .payment-form-container {
+            padding: var(--spacing-md);
+        }
+        
+        .plan-card.popular::before {
+            font-size: 0.7rem;
+            padding: 0.4rem 1rem;
+        }
+    }
+
+    /* Animation for selected plan */
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.02); }
+        100% { transform: scale(1); }
+    }
+
+    .plan-card.selected {
+        animation: pulse 2s infinite;
+        border-color: var(--accent);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="plan-selection-container">
+    <div class="container-custom">
+        <!-- Header -->
+        <div class="plan-header animate-slide-up">
+            <div class="plan-badge">
+                <i class="bi bi-award-fill"></i>
+                <span>Premium Storefront</span>
+            </div>
+            <h1 class="display-6 fw-bold mb-3">Choose Your Plan</h1>
+            <p class="lead text-muted mb-0">
+                Select the perfect plan for your store. All plans include a 7-day free trial with full premium features.
+            </p>
+        </div>
+
+        <!-- Plan Selection Form -->
+        <form method="post" id="planSelectionForm" class="animate-scale-in">
+            {% csrf_token %}
+            
+            <!-- Store Info -->
+            <input type="hidden" name="store_slug" value="{{ store.slug }}">
+            
+            <!-- Plan Cards -->
+            <div class="plan-grid">
+                {% for plan_key, plan_data in plan_details.items %}
+                <div class="plan-card {% if plan_key == 'premium' %}popular{% endif %}" id="planCard-{{ plan_key }}">
+                    <div class="plan-card-header">
+                        <h3 class="plan-name">{{ plan_key|title }} Plan</h3>
+                        <div class="plan-price">KSh {{ plan_data.price }}</div>
+                        <div class="plan-period">per month</div>
+                    </div>
+                    
+                    <ul class="plan-features">
+                        {% for feature in plan_data.features %}
+                        <li class="plan-feature">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>{{ feature }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    
+                    <div class="plan-actions">
+                        <button type="button" 
+                                class="plan-select-btn" 
+                                data-plan="{{ plan_key }}" 
+                                data-price="{{ plan_data.price }}"
+                                onclick="selectPlan('{{ plan_key }}', {{ plan_data.price }})">
+                            {% if plan_key == 'premium' %}
+                            <i class="bi bi-star-fill"></i>
+                            {% endif %}
+                            Select {{ plan_key|title }} Plan
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Payment Form (Initially Hidden) -->
+            <div id="paymentFormContainer" style="display: none;" class="animate-slide-up">
+                <div class="payment-form-container">
+                    <!-- Payment Header -->
+                    <div class="payment-form-header">
+                        <h3>Complete Your Subscription</h3>
+                        <p>Enter your M-Pesa details to start your 7-day free trial</p>
+                    </div>
+
+                    <!-- Selected Plan Info -->
+                    <div class="payment-summary" id="selectedPlanSummary">
+                        <div class="summary-item">
+                            <span class="summary-label">Selected Plan:</span>
+                            <span class="summary-value" id="summaryPlanName">Premium Plan</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Monthly Price:</span>
+                            <span class="summary-value" id="summaryPlanPrice">KSh 1,999</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Trial Period:</span>
+                            <span class="summary-value">7 days free</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">Total Due Today:</span>
+                            <span class="summary-value">KSh 0</span>
+                        </div>
+                    </div>
+
+                    <!-- M-Pesa Payment Method -->
+                    <div class="payment-method">
+                        <div class="payment-method-header">
+                            <div class="payment-method-icon">
+                                <i class="bi bi-phone-fill"></i>
+                            </div>
+                            <div>
+                                <h4 class="mb-1">M-Pesa Payment</h4>
+                                <p class="text-muted mb-0">We'll send a payment request to your phone</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Phone Number Input -->
+                        <div class="form-group-modern mb-3">
+                            <label class="form-label-modern" for="id_phone_number">
+                                M-Pesa Phone Number <span class="text-danger">*</span>
+                            </label>
+                            <input type="tel" 
+                                   name="phone_number" 
+                                   class="payment-phone-input {% if upgrade_form.phone_number.errors %}error{% endif %}" 
+                                   id="id_phone_number" 
+                                   placeholder="e.g., 0712345678"
+                                   pattern="[0-9]{10}"
+                                   required>
+                            <div class="phone-format-hint">
+                                <i class="bi bi-info-circle"></i>
+                                Enter your M-Pesa registered phone number (10 digits)
+                            </div>
+                            {% if upgrade_form.phone_number.errors %}
+                                <div class="error-message">
+                                    <i class="bi bi-exclamation-circle"></i>
+                                    {{ upgrade_form.phone_number.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Terms Agreement -->
+                    <div class="terms-container mb-4" id="termsContainer">
+                        <div class="checkbox-modern" id="termsCheckbox">
+                            <i class="bi bi-check"></i>
+                        </div>
+                        <div class="terms-text">
+                            I agree to start my 7-day free trial. After the trial, I'll be automatically charged 
+                            <span id="termsPlanPrice">KSh 1,999</span> monthly. I can cancel anytime before the trial ends.
+                            <span class="text-danger">*</span>
+                        </div>
+                        <input type="checkbox" name="terms" id="termsInput" style="display: none;" required>
+                    </div>
+                    {% if upgrade_form.terms.errors %}
+                        <div class="error-message mb-3">
+                            <i class="bi bi-exclamation-circle"></i>
+                            You must agree to the subscription terms
+                        </div>
+                    {% endif %}
+
+                    <!-- Hidden Plan Selection -->
+                    <input type="hidden" name="plan" id="selectedPlanInput" value="">
+                    
+                    <!-- Submit Button -->
+                    <button type="submit" class="payment-submit-btn" id="paymentSubmitBtn" disabled>
+                        <i class="bi bi-lock-fill"></i>
+                        Start 7-Day Free Trial
+                    </button>
+
+                    <!-- Security Assurance -->
+                    <div class="security-assurance">
+                        <i class="bi bi-shield-check security-icon"></i>
+                        <span class="security-text">
+                            Your payment is secure and encrypted. We never store your M-Pesa PIN.
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Back Button -->
+            <div class="text-center mt-4" id="backButton" style="display: none;">
+                <button type="button" class="btn-custom btn-ghost" onclick="goBackToPlans()">
+                    <i class="bi bi-arrow-left me-2"></i>
+                    Back to Plan Selection
+                </button>
+            </div>
+        </form>
+
+        <!-- Existing Subscription Notice -->
+        {% if active_subscription %}
+        <div class="card-custom mt-4" style="border-left: 4px solid var(--warning);">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-info-circle-fill text-warning fs-4 me-3"></i>
+                <div>
+                    <h6 class="fw-bold mb-1">Already Subscribed</h6>
+                    <p class="mb-0 text-muted">
+                        You already have an active subscription. 
+                        <a href="{% url 'storefront:subscription_manage' slug=store.slug %}" class="text-primary">
+                            Manage your current subscription
+                        </a>
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let selectedPlan = null;
+    let selectedPlanPrice = null;
+
+    function selectPlan(plan, price) {
+        // Update selection state
+        selectedPlan = plan;
+        selectedPlanPrice = price;
+        
+        // Remove selected class from all cards
+        document.querySelectorAll('.plan-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+        
+        // Add selected class to clicked card
+        const selectedCard = document.getElementById(`planCard-${plan}`);
+        selectedCard.classList.add('selected');
+        
+        // Update plan select buttons
+        document.querySelectorAll('.plan-select-btn').forEach(btn => {
+            btn.classList.remove('selected');
+            btn.innerHTML = btn.innerHTML.replace('Selected', 'Select');
+        });
+        
+        // Update clicked button
+        const selectedBtn = selectedCard.querySelector('.plan-select-btn');
+        selectedBtn.classList.add('selected');
+        selectedBtn.innerHTML = selectedBtn.innerHTML.replace('Select', 'Selected');
+        
+        // Show payment form
+        document.getElementById('paymentFormContainer').style.display = 'block';
+        document.getElementById('backButton').style.display = 'block';
+        
+        // Update summary
+        document.getElementById('summaryPlanName').textContent = `${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan`;
+        document.getElementById('summaryPlanPrice').textContent = `KSh ${price.toLocaleString()}`;
+        document.getElementById('termsPlanPrice').textContent = `KSh ${price.toLocaleString()}`;
+        
+        // Update hidden input
+        document.getElementById('selectedPlanInput').value = plan;
+        
+        // Scroll to payment form
+        document.getElementById('paymentFormContainer').scrollIntoView({ 
+            behavior: 'smooth',
+            block: 'start'
+        });
+        
+        // Validate form
+        validatePaymentForm();
+    }
+
+    function goBackToPlans() {
+        // Hide payment form
+        document.getElementById('paymentFormContainer').style.display = 'none';
+        document.getElementById('backButton').style.display = 'none';
+        
+        // Reset selection
+        selectedPlan = null;
+        selectedPlanPrice = null;
+        
+        // Remove selected classes
+        document.querySelectorAll('.plan-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+        
+        document.querySelectorAll('.plan-select-btn').forEach(btn => {
+            btn.classList.remove('selected');
+            btn.innerHTML = btn.innerHTML.replace('Selected', 'Select');
+        });
+        
+        // Scroll back to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function validatePaymentForm() {
+        const phoneInput = document.getElementById('id_phone_number');
+        const termsCheckbox = document.getElementById('termsInput');
+        const submitBtn = document.getElementById('paymentSubmitBtn');
+        
+        let isValid = true;
+        
+        // Check phone number
+        if (!phoneInput.value.trim() || !/^\d{10}$/.test(phoneInput.value.trim())) {
+            isValid = false;
+            phoneInput.classList.add('error');
+        } else {
+            phoneInput.classList.remove('error');
+        }
+        
+        // Check terms
+        if (!termsCheckbox.checked) {
+            isValid = false;
+            document.getElementById('termsContainer').style.borderColor = 'var(--danger)';
+        } else {
+            document.getElementById('termsContainer').style.borderColor = 'var(--accent)';
+        }
+        
+        // Check plan selection
+        if (!selectedPlan) {
+            isValid = false;
+        }
+        
+        // Update submit button
+        submitBtn.disabled = !isValid;
+        
+        return isValid;
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Phone number input validation
+        const phoneInput = document.getElementById('id_phone_number');
+        if (phoneInput) {
+            phoneInput.addEventListener('input', function() {
+                // Remove non-digits
+                this.value = this.value.replace(/\D/g, '');
+                
+                // Limit to 10 digits
+                if (this.value.length > 10) {
+                    this.value = this.value.slice(0, 10);
+                }
+                
+                validatePaymentForm();
+            });
+        }
+        
+        // Terms agreement
+        const termsContainer = document.getElementById('termsContainer');
+        const termsCheckbox = document.getElementById('termsCheckbox');
+        const termsInput = document.getElementById('termsInput');
+        
+        if (termsContainer && termsCheckbox && termsInput) {
+            termsContainer.addEventListener('click', function(e) {
+                e.preventDefault();
+                termsInput.checked = !termsInput.checked;
+                
+                if (termsInput.checked) {
+                    termsCheckbox.classList.add('checked');
+                    termsContainer.style.borderColor = 'var(--accent)';
+                } else {
+                    termsCheckbox.classList.remove('checked');
+                    termsContainer.style.borderColor = '';
+                }
+                
+                validatePaymentForm();
+            });
+        }
+        
+        // Form submission
+        const form = document.getElementById('planSelectionForm');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                if (!validatePaymentForm()) {
+                    e.preventDefault();
+                    
+                    // Show error message
+                    if (!selectedPlan) {
+                        showToast('Please select a subscription plan', 'error');
+                    } else if (!phoneInput.value.trim() || !/^\d{10}$/.test(phoneInput.value.trim())) {
+                        showToast('Please enter a valid 10-digit M-Pesa phone number', 'error');
+                    } else if (!termsInput.checked) {
+                        showToast('You must agree to the subscription terms', 'error');
+                    }
+                    
+                    // Scroll to first error
+                    if (!selectedPlan) {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    } else if (!phoneInput.value.trim() || !/^\d{10}$/.test(phoneInput.value.trim())) {
+                        phoneInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        phoneInput.focus();
+                    }
+                    
+                    return false;
+                }
+                
+                // Show loading state
+                const submitBtn = document.getElementById('paymentSubmitBtn');
+                if (submitBtn) {
+                    const originalHTML = submitBtn.innerHTML;
+                    submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
+                    submitBtn.disabled = true;
+                    
+                    // Re-enable after 10 seconds if still on page
+                    setTimeout(() => {
+                        submitBtn.innerHTML = originalHTML;
+                        submitBtn.disabled = false;
+                    }, 10000);
+                }
+            });
+        }
+        
+        // Auto-select premium plan if coming from upgrade flow
+        {% if request.session.selected_plan == 'premium' %}
+        setTimeout(() => {
+            selectPlan('premium', 1999);
+        }, 500);
+        {% endif %}
+    });
+
+    // Toast notification function
+    function showToast(message, type = 'info') {
+        if (window.showToast) {
+            window.showToast(message, type);
+        } else {
+            // Fallback alert
+            alert(message);
+        }
+    }
+</script>
+{% endblock %}
