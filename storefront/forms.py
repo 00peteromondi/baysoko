@@ -4,18 +4,59 @@ from listings.forms import ListingForm
 from .mpesa import MpesaGateway
 
 
+# REPLACE the entire UpgradeForm section (from line 79) with this SINGLE, CORRECTED UpgradeForm:
+
 class UpgradeForm(forms.Form):
-    phone_number = forms.CharField(max_length=32, required=True, label='Phone Number')
-
+    """Form for upgrading to premium - Enhanced"""
+    phone_number = forms.CharField(
+        max_length=12,  # Changed from 10 to 12 to accommodate +254 prefix
+        widget=forms.TextInput(attrs={
+            'class': 'form-control form-control-lg',
+            'placeholder': '07XXXXXXXX or 7XXXXXXXX',
+            'pattern': '^[0-9]{9,12}$'
+        })
+    )
+    
+    # Remove the hidden plan field if you're using session storage
+    # plan = forms.ChoiceField(
+    #     choices=Subscription.PLAN_CHOICES,
+    #     widget=forms.HiddenInput(),
+    #     required=False,
+    #     initial='basic'
+    # )
+    
     def clean_phone_number(self):
-        val = self.cleaned_data.get('phone_number')
-        try:
-            # Use the gateway normalizer to validate and canonicalize
-            norm = MpesaGateway._normalize_phone(None, val)
-            return norm
-        except Exception as e:
-            raise forms.ValidationError(str(e))
-
+        phone = self.cleaned_data.get('phone_number', '')
+        
+        if not phone:
+            raise forms.ValidationError('Phone number is required')
+        
+        # Remove any non-digit characters
+        phone = ''.join(filter(str.isdigit, phone))
+        
+        # Handle various Kenyan phone formats
+        if phone.startswith('0') and len(phone) == 10:  # 07XXXXXXXX
+            phone = '254' + phone[1:]  # Convert to 2547XXXXXXXX
+        elif phone.startswith('7') and len(phone) == 9:  # 7XXXXXXXX
+            phone = '254' + phone  # Convert to 2547XXXXXXXX
+        elif phone.startswith('254') and len(phone) == 12:  # 2547XXXXXXXX
+            pass  # Already correct
+        else:
+            raise forms.ValidationError(
+                'Please enter a valid Kenyan phone number format: '
+                '07XXXXXXXX, 7XXXXXXXX, or 2547XXXXXXXX'
+            )
+        
+        # Final validation - must be 12 digits starting with 254
+        if len(phone) != 12 or not phone.startswith('254'):
+            raise forms.ValidationError('Invalid phone number format')
+        
+        return f"+{phone}"  # Return with + prefix
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        # You can add additional validation here if needed
+        return cleaned_data
 
 class StoreForm(forms.ModelForm):
     class Meta:
@@ -119,41 +160,6 @@ class SubscriptionPlanForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.fields['plan'].label = "Select Plan"
 
-
-class UpgradeForm(forms.Form):
-    """Form for upgrading to premium - Enhanced"""
-    phone_number = forms.CharField(
-        max_length=10,
-        min_length=10,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control form-control-lg',
-            'placeholder': '7XXXXXXXX',
-            'pattern': '[0-9]{9}'
-        })
-    )
-    plan = forms.ChoiceField(
-        choices=Subscription.PLAN_CHOICES,
-        widget=forms.HiddenInput(),
-        required=False,
-        initial='basic'
-    )
-    
-    def clean_phone_number(self):
-        phone = self.cleaned_data['phone_number']
-        
-        # Remove any non-digit characters
-        phone = ''.join(filter(str.isdigit, phone))
-        
-        # Validate Kenyan phone number
-        if len(phone) != 9 or not phone.startswith('7'):
-            raise forms.ValidationError('Please enter a valid Kenyan phone number (e.g., 712345678)')
-        
-        # Format as +254XXXXXXXXX
-        return f"+254{phone}"
-    
-    def clean(self):
-        cleaned_data = super().clean()
-        return cleaned_data
 
 
 class CancelSubscriptionForm(forms.Form):

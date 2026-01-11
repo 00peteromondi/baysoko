@@ -1,667 +1,206 @@
 {% extends 'base.html' %}
-{% load static humanize %}
+{% load humanize %}
 
-{% block title %}Upgrade Store - {{ store.name }} - Baysoko{% endblock %}
-
-{% block extra_css %}
-<style>
-    /* Upgrade Styling */
-    .upgrade-container {
-        min-height: 80vh;
-        padding: var(--spacing-xl) 0;
-        background: linear-gradient(135deg, 
-            rgba(6, 214, 160, 0.05) 0%, 
-            rgba(255, 209, 102, 0.05) 50%, 
-            rgba(255, 107, 53, 0.05) 100%);
-    }
-
-    .upgrade-header {
-        text-align: center;
-        margin-bottom: var(--spacing-xl);
-        max-width: 800px;
-        margin-left: auto;
-        margin-right: auto;
-    }
-
-    .upgrade-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        background: rgba(6, 214, 160, 0.1);
-        padding: 0.5rem 1rem;
-        border-radius: 50px;
-        margin-bottom: 1rem;
-        border: 1px solid rgba(6, 214, 160, 0.2);
-    }
-
-    .upgrade-badge i {
-        color: var(--accent);
-    }
-
-    .upgrade-card {
-        background: var(--card-bg);
-        border-radius: var(--radius-lg);
-        padding: var(--spacing-xl);
-        box-shadow: var(--shadow-lg);
-        border: 2px solid var(--border-color);
-        max-width: 600px;
-        margin: 0 auto;
-    }
-
-    .selected-plan-display {
-        background: linear-gradient(135deg, rgba(6, 214, 160, 0.1) 0%, rgba(255, 107, 53, 0.1) 100%);
-        padding: 1.5rem;
-        border-radius: var(--radius-md);
-        margin-bottom: var(--spacing-lg);
-        border: 1px solid rgba(6, 214, 160, 0.2);
-    }
-
-    .plan-display-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.5rem 0;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-    }
-
-    .plan-display-row:last-child {
-        border-bottom: none;
-        font-weight: 700;
-        font-size: 1.1rem;
-        color: var(--primary);
-    }
-
-    .plan-label {
-        color: var(--text-secondary);
-    }
-
-    .plan-value {
-        color: var(--text-primary);
-        font-weight: 600;
-    }
-
-    .payment-method {
-        background: var(--bg-secondary);
-        padding: 1.5rem;
-        border-radius: var(--radius-md);
-        margin-bottom: var(--spacing-lg);
-        border: 1px solid var(--border-color);
-    }
-
-    .payment-method-header {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        margin-bottom: 1rem;
-    }
-
-    .payment-method-icon {
-        width: 48px;
-        height: 48px;
-        background: linear-gradient(135deg, #006600 0%, #00A300 100%);
-        border-radius: var(--radius-md);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 1.5rem;
-    }
-
-    .payment-form {
-        margin-top: var(--spacing-md);
-    }
-
-    .form-group-modern {
-        margin-bottom: 1.5rem;
-    }
-
-    .form-label-modern {
-        display: block;
-        margin-bottom: 0.5rem;
-        font-weight: 600;
-        color: var(--text-primary);
-        font-size: 0.95rem;
-    }
-
-    .input-modern {
-        width: 100%;
-        padding: 1rem 1.25rem;
-        border: 2px solid var(--border-color);
-        border-radius: var(--radius-md);
-        background: var(--bg-primary);
-        color: var(--text-primary);
-        font-size: 1rem;
-        transition: var(--transition);
-        outline: none;
-    }
-
-    .input-modern:focus {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px rgba(6, 214, 160, 0.1);
-    }
-
-    .input-modern.error {
-        border-color: var(--danger);
-    }
-
-    .phone-input-group {
-        position: relative;
-    }
-
-    .phone-prefix {
-        position: absolute;
-        left: 1rem;
-        top: 50%;
-        transform: translateY(-50%);
-        color: var(--text-secondary);
-        font-weight: 500;
-        z-index: 2;
-    }
-
-    .phone-input {
-        padding-left: 4rem !important;
-    }
-
-    .terms-container {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.75rem;
-        margin-bottom: 2rem;
-        padding: 1rem;
-        background: rgba(6, 214, 160, 0.05);
-        border-radius: var(--radius-lg);
-        border: 1px solid var(--border-color);
-        cursor: pointer;
-    }
-
-    .checkbox-modern {
-        width: 20px;
-        height: 20px;
-        border: 2px solid var(--border-color);
-        border-radius: 4px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.2s ease;
-        background: var(--bg-primary);
-        flex-shrink: 0;
-    }
-
-    .checkbox-modern.checked {
-        background: var(--accent);
-        border-color: var(--accent);
-        color: white;
-    }
-
-    .checkbox-modern i {
-        font-size: 0.75rem;
-        opacity: 0;
-        transition: opacity 0.2s ease;
-    }
-
-    .checkbox-modern.checked i {
-        opacity: 1;
-    }
-
-    .terms-text {
-        font-size: 0.875rem;
-        color: var(--text-color);
-    }
-
-    .terms-text a {
-        color: var(--accent);
-        text-decoration: none;
-        font-weight: 600;
-    }
-
-    .terms-text a:hover {
-        text-decoration: underline;
-    }
-
-    .upgrade-btn {
-        width: 100%;
-        padding: 1rem;
-        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-        color: white;
-        border: none;
-        border-radius: var(--radius-md);
-        font-weight: 700;
-        font-size: 1.1rem;
-        cursor: pointer;
-        transition: var(--transition);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.75rem;
-    }
-
-    .upgrade-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(255, 107, 53, 0.3);
-    }
-
-    .upgrade-btn:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-        transform: none;
-    }
-
-    /* Limit Reached Warning */
-    .limit-warning {
-        background: linear-gradient(135deg, rgba(255, 158, 31, 0.1) 0%, rgba(239, 71, 111, 0.1) 100%);
-        padding: 1.5rem;
-        border-radius: var(--radius-md);
-        margin-bottom: var(--spacing-lg);
-        border: 1px solid rgba(255, 158, 31, 0.2);
-        border-left: 4px solid var(--warning);
-    }
-
-    .limit-warning-header {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        margin-bottom: 1rem;
-    }
-
-    .limit-warning-icon {
-        color: var(--warning);
-        font-size: 1.5rem;
-        flex-shrink: 0;
-    }
-
-    /* Alternative Options */
-    .alternative-options {
-        margin-top: var(--spacing-xl);
-        padding-top: var(--spacing-lg);
-        border-top: 1px solid var(--border-color);
-    }
-
-    .option-card {
-        padding: 1rem;
-        background: var(--bg-secondary);
-        border-radius: var(--radius-md);
-        border: 1px solid var(--border-color);
-        transition: var(--transition);
-        text-decoration: none;
-        color: var(--text-primary);
-        display: block;
-    }
-
-    .option-card:hover {
-        background: var(--bg-primary);
-        border-color: var(--accent);
-        transform: translateY(-2px);
-    }
-
-    /* Responsive Design */
-    @media (max-width: 768px) {
-        .upgrade-card {
-            padding: var(--spacing-md);
-        }
-        
-        .payment-method-header {
-            flex-direction: column;
-            text-align: center;
-            gap: 0.5rem;
-        }
-    }
-</style>
-{% endblock %}
+{% block title %}Manage Subscription - {{ store.name }} - Baysoko{% endblock %}
 
 {% block content %}
-<div class="upgrade-container">
-    <div class="container-custom">
-        <!-- Header -->
-        <div class="upgrade-header animate-slide-up">
-            <div class="upgrade-badge">
-                <i class="bi bi-award-fill"></i>
-                <span>Premium Storefront</span>
-            </div>
-            
-            {% if limit_reached %}
-            <h1 class="display-6 fw-bold mb-3">Upgrade Required</h1>
-            <p class="lead text-muted mb-0">
-                You've reached the free listing limit. Upgrade to premium to add more listings.
-            </p>
-            {% else %}
-            <h1 class="display-6 fw-bold mb-3">Upgrade to Premium</h1>
-            <p class="lead text-muted mb-0">
-                Unlock premium features and grow your store with our flexible subscription plans.
-            </p>
-            {% endif %}
+<div class="container-custom py-var(--spacing-xl)">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="display-6 fw-bold mb-2">Subscription Management</h1>
+            <p class="lead text-muted mb-0">Manage your store subscription and billing</p>
         </div>
+        <a href="{% url 'storefront:seller_dashboard' %}" class="btn-custom btn-ghost">
+            <i class="bi bi-arrow-left me-2"></i>
+            Back to Dashboard
+        </a>
+    </div>
 
-        <!-- Upgrade Card -->
-        <div class="upgrade-card animate-scale-in">
-            <!-- Limit Reached Warning -->
-            {% if limit_reached %}
-            <div class="limit-warning mb-4">
-                <div class="limit-warning-header">
-                    <i class="bi bi-exclamation-triangle-fill limit-warning-icon"></i>
-                    <div>
-                        <h5 class="fw-bold mb-1">Free Limit Reached</h5>
-                        <p class="mb-0">
-                            You've created {{ current_count }} of {{ free_limit }} free listings.
-                            Upgrade to premium for unlimited listings and advanced features.
-                        </p>
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <!-- Subscription Status -->
+            <div class="card-custom mb-4">
+                <div class="card-header border-0">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="fw-bold mb-0">Subscription Status</h5>
+                        {% if subscription.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% elif subscription.status == 'trialing' %}
+                            <span class="badge bg-info">Trial Period</span>
+                        {% elif subscription.status == 'past_due' %}
+                            <span class="badge bg-warning">Payment Due</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inactive</span>
+                        {% endif %}
                     </div>
                 </div>
-            </div>
-            {% endif %}
-
-            <!-- Selected Plan Display -->
-            {% if selected_plan %}
-            <div class="selected-plan-display">
-                <div class="plan-display-row">
-                    <span class="plan-label">Selected Plan:</span>
-                    <span class="plan-value">{{ selected_plan|title }} Plan</span>
-                </div>
-                <div class="plan-display-row">
-                    <span class="plan-label">Monthly Price:</span>
-                    <span class="plan-value">KSh {{ amount|floatformat:0|intcomma }}</span>
-                </div>
-                <div class="plan-display-row">
-                    <span class="plan-label">Trial Period:</span>
-                    <span class="plan-value">7 days free</span>
-                </div>
-                <div class="plan-display-row">
-                    <span class="plan-label">Total Due Today:</span>
-                    <span class="plan-value">KSh 0</span>
-                </div>
-            </div>
-            {% endif %}
-
-            <!-- Payment Method -->
-            <div class="payment-method">
-                <div class="payment-method-header">
-                    <div class="payment-method-icon">
-                        <i class="bi bi-phone-fill"></i>
-                    </div>
-                    <div>
-                        <h4 class="mb-1">M-Pesa Payment</h4>
-                        <p class="text-muted mb-0">We'll send a payment request to your phone</p>
-                    </div>
-                </div>
-                
-                <!-- Payment Form -->
-                <div class="payment-form">
-                    <form method="post" id="upgradeForm">
-                        {% csrf_token %}
-                        
-                        <!-- Phone Number Input -->
-                        <div class="form-group-modern mb-4">
-                            <label class="form-label-modern" for="id_phone_number">
-                                M-Pesa Phone Number <span class="text-danger">*</span>
-                            </label>
-                            <div class="phone-input-group">
-                                <span class="phone-prefix">+254</span>
-                                <input type="tel" 
-                                       name="phone_number" 
-                                       class="input-modern phone-input {% if form.phone_number.errors %}error{% endif %}" 
-                                       id="id_phone_number" 
-                                       placeholder="712345678"
-                                       pattern="[0-9]{9}"
-                                       value="{{ form.phone_number.value|default:'' }}"
-                                       required>
+                <div class="card-body">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <div class="p-3 bg-light rounded">
+                                <h6 class="fw-bold text-muted mb-2">Plan Details</h6>
+                                <p class="mb-1"><strong>Plan:</strong> {{ subscription.plan|title }}</p>
+                                <p class="mb-1"><strong>Status:</strong> {{ subscription.get_status_display }}</p>
+                                <p class="mb-0"><strong>Started:</strong> {{ subscription.started_at|date:"M d, Y" }}</p>
                             </div>
-                            <small class="form-text text-muted">
-                                Enter your M-Pesa registered phone number (without +254)
-                            </small>
-                            {% if form.phone_number.errors %}
-                                <div class="error-message mt-2">
-                                    <i class="bi bi-exclamation-circle me-2"></i>
-                                    {{ form.phone_number.errors.0 }}
-                                </div>
-                            {% endif %}
                         </div>
+                        <div class="col-md-6">
+                            <div class="p-3 bg-light rounded">
+                                <h6 class="fw-bold text-muted mb-2">Important Dates</h6>
+                                {% if subscription.trial_ends_at %}
+                                <p class="mb-1"><strong>Trial Ends:</strong> {{ subscription.trial_ends_at|date:"M d, Y" }}</p>
+                                {% endif %}
+                                {% if subscription.next_billing_date %}
+                                <p class="mb-1"><strong>Next Billing:</strong> {{ subscription.next_billing_date|date:"M d, Y" }}</p>
+                                {% endif %}
+                                {% if subscription.cancelled_at %}
+                                <p class="mb-0"><strong>Cancelled:</strong> {{ subscription.cancelled_at|date:"M d, Y" }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
 
-                        <!-- Hidden Plan Selection -->
-                        {% if selected_plan %}
-                        <input type="hidden" name="plan" value="{{ selected_plan }}">
+                    <!-- Recent Payments -->
+                    <h6 class="fw-bold mb-3">Recent Payments</h6>
+                    <div class="table-responsive mb-4">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Phone Number</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in recent_payments %}
+                                <tr>
+                                    <td>{{ payment.transaction_date|date:"M d, Y" }}</td>
+                                    <td>KSh {{ payment.amount }}</td>
+                                    <td>
+                                        {% if payment.status == 'completed' %}
+                                            <span class="badge bg-success">Completed</span>
+                                        {% elif payment.status == 'pending' %}
+                                            <span class="badge bg-warning">Pending</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Failed</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ payment.phone_number }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted">No payment history available</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex gap-3">
+                        {% if subscription.status == 'past_due' %}
+                        <form method="post" action="{% url 'storefront:retry_payment' store.slug %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-custom btn-warning">
+                                <i class="bi bi-arrow-repeat me-2"></i>
+                                Retry Payment
+                            </button>
+                        </form>
                         {% endif %}
 
-                        <!-- Terms Agreement -->
-                        <div class="terms-container mb-4" id="termsContainer">
-                            <div class="checkbox-modern" id="termsCheckbox">
-                                <i class="bi bi-check"></i>
-                            </div>
-                            <div class="terms-text">
-                                I agree to start my 7-day free trial. After the trial, I'll be automatically charged 
-                                KSh {% if amount %}{{ amount|floatformat:0|intcomma }}{% else %}999{% endif %} monthly. 
-                                I can cancel anytime before the trial ends.
-                                <span class="text-danger">*</span>
-                            </div>
-                            <input type="checkbox" name="terms" id="termsInput" style="display: none;" required>
-                        </div>
-                        {% if form.terms.errors %}
-                            <div class="error-message mb-3">
-                                <i class="bi bi-exclamation-circle me-2"></i>
-                                You must agree to the subscription terms
-                            </div>
+                        {% if subscription.is_active and not subscription.cancelled_at %}
+                        <form method="post" action="{% url 'storefront:cancel_subscription' store.slug %}" 
+                              onsubmit="return confirm('Are you sure you want to cancel your subscription? This will disable premium features at the end of your current billing period.')">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-custom btn-danger">
+                                <i class="bi bi-x-circle me-2"></i>
+                                Cancel Subscription
+                            </button>
+                        </form>
                         {% endif %}
 
-                        <!-- Submit Button -->
-                        <button type="submit" class="upgrade-btn" id="upgradeSubmitBtn" disabled>
-                            <i class="bi bi-lock-fill"></i>
-                            {% if selected_plan %}
-                            Start {{ selected_plan|title }} Plan Trial
-                            {% else %}
-                            Start Premium Trial
-                            {% endif %}
-                        </button>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Security Assurance -->
-            <div class="d-flex align-items-center justify-content-center gap-2 mt-4 pt-3 border-top">
-                <i class="bi bi-shield-check text-success"></i>
-                <small class="text-muted">Your payment is secure and encrypted. We never store your M-Pesa PIN.</small>
-            </div>
-
-            <!-- Alternative Options -->
-            {% if not limit_reached %}
-            <div class="alternative-options">
-                <h6 class="fw-bold mb-3 text-center">Not ready to upgrade?</h6>
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <a href="{% url 'storefront:seller_dashboard' %}" class="option-card">
-                            <div class="d-flex align-items-center">
-                                <i class="bi bi-speedometer2 fs-4 me-3 text-primary"></i>
-                                <div>
-                                    <h6 class="fw-bold mb-1">Continue with Free Plan</h6>
-                                    <p class="small text-muted mb-0">Use basic features for now</p>
-                                </div>
-                            </div>
+                        {% if not subscription.is_active and not subscription.is_in_trial %}
+                        <a href="{% url 'storefront:store_upgrade' store.slug %}" class="btn-custom btn-success">
+                            <i class="bi bi-arrow-up-circle me-2"></i>
+                            Reactivate Subscription
                         </a>
-                    </div>
-                    <div class="col-md-6">
-                        <a href="{% url 'storefront:subscription_plan_select' store.slug %}" class="option-card">
-                            <div class="d-flex align-items-center">
-                                <i class="bi bi-arrow-left-right fs-4 me-3 text-primary"></i>
-                                <div>
-                                    <h6 class="fw-bold mb-1">View All Plans</h6>
-                                    <p class="small text-muted mb-0">Compare different plans</p>
-                                </div>
-                            </div>
-                        </a>
+                        {% endif %}
                     </div>
                 </div>
             </div>
-            {% endif %}
         </div>
-
-        <!-- Premium Features Summary -->
-        <div class="row g-4 mt-4">
-            <div class="col-md-4">
-                <div class="card-custom h-100">
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="me-3 bg-primary bg-opacity-10 p-2 rounded">
-                            <i class="bi bi-shop-window fs-4 text-primary"></i>
-                        </div>
-                        <h5 class="fw-bold mb-0">Multiple Stores</h5>
-                    </div>
-                    <p class="text-muted mb-0">Create and manage multiple storefronts under one account.</p>
+        
+        <!-- Premium Features Sidebar -->
+        <div class="col-lg-4">
+            <div class="card-custom">
+                <div class="card-header bg-gradient-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-star-fill me-2"></i>
+                        Premium Features
+                    </h5>
                 </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card-custom h-100">
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="me-3 bg-success bg-opacity-10 p-2 rounded">
-                            <i class="bi bi-graph-up fs-4 text-success"></i>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-shop-window text-primary fs-4 me-3"></i>
+                            <div>
+                                <h6 class="fw-bold mb-1">Multiple Stores</h6>
+                                <p class="small text-muted mb-0">Create and manage multiple storefronts</p>
+                            </div>
                         </div>
-                        <h5 class="fw-bold mb-0">Advanced Analytics</h5>
                     </div>
-                    <p class="text-muted mb-0">Detailed insights and reports to grow your business.</p>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card-custom h-100">
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="me-3 bg-warning bg-opacity-10 p-2 rounded">
-                            <i class="bi bi-megaphone fs-4 text-warning"></i>
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-graph-up text-success fs-4 me-3"></i>
+                            <div>
+                                <h6 class="fw-bold mb-1">Advanced Analytics</h6>
+                                <p class="small text-muted mb-0">Detailed insights and reports</p>
+                            </div>
                         </div>
-                        <h5 class="fw-bold mb-0">Featured Placement</h5>
                     </div>
-                    <p class="text-muted mb-0">Get featured in search results and homepage promotions.</p>
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-megaphone text-warning fs-4 me-3"></i>
+                            <div>
+                                <h6 class="fw-bold mb-1">Featured Placement</h6>
+                                <p class="small text-muted mb-0">Get featured in search results</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-unlock text-info fs-4 me-3"></i>
+                            <div>
+                                <h6 class="fw-bold mb-1">Unlimited Listings</h6>
+                                <p class="small text-muted mb-0">No limits on product listings</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    {% if not subscription.is_active or not store.is_premium %}
+                    <div class="text-center p-3 bg-warning bg-opacity-10 rounded">
+                        <h6 class="fw-bold text-warning mb-2">🚀 Ready to Grow?</h6>
+                        <p class="small text-muted mb-3">Upgrade to Premium for advanced features</p>
+                        <a href="{% url 'storefront:store_upgrade' slug=store.slug %}" class="btn-custom btn-warning w-100">
+                            <i class="bi bi-lightning-charge me-1"></i>
+                            Upgrade to Premium
+                        </a>
+                    </div>
+                    {% else %}
+                    <div class="text-center p-3 bg-success bg-opacity-10 rounded">
+                        <span class="badge bg-warning text-dark mb-2">
+                            <i class="bi bi-star-fill me-1"></i>Premium Active
+                        </span>
+                        <p class="small text-success mb-0">You're enjoying premium features!</p>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Phone number input validation
-        const phoneInput = document.getElementById('id_phone_number');
-        if (phoneInput) {
-            phoneInput.addEventListener('input', function() {
-                // Remove non-digits
-                this.value = this.value.replace(/\D/g, '');
-                
-                // Limit to 9 digits
-                if (this.value.length > 9) {
-                    this.value = this.value.slice(0, 9);
-                }
-                
-                validateForm();
-            });
-        }
-        
-        // Terms agreement
-        const termsContainer = document.getElementById('termsContainer');
-        const termsCheckbox = document.getElementById('termsCheckbox');
-        const termsInput = document.getElementById('termsInput');
-        
-        if (termsContainer && termsCheckbox && termsInput) {
-            termsContainer.addEventListener('click', function(e) {
-                e.preventDefault();
-                termsInput.checked = !termsInput.checked;
-                
-                if (termsInput.checked) {
-                    termsCheckbox.classList.add('checked');
-                    termsContainer.style.borderColor = 'var(--accent)';
-                } else {
-                    termsCheckbox.classList.remove('checked');
-                    termsContainer.style.borderColor = '';
-                }
-                
-                validateForm();
-            });
-        }
-        
-        // Form validation
-        function validateForm() {
-            const phoneInput = document.getElementById('id_phone_number');
-            const termsCheckbox = document.getElementById('termsInput');
-            const submitBtn = document.getElementById('upgradeSubmitBtn');
-            
-            let isValid = true;
-            
-            // Check phone number
-            if (!phoneInput || !phoneInput.value.trim() || !/^\d{9}$/.test(phoneInput.value.trim())) {
-                isValid = false;
-                if (phoneInput) phoneInput.classList.add('error');
-            } else if (phoneInput) {
-                phoneInput.classList.remove('error');
-            }
-            
-            // Check terms
-            if (!termsCheckbox || !termsCheckbox.checked) {
-                isValid = false;
-                if (document.getElementById('termsContainer')) {
-                    document.getElementById('termsContainer').style.borderColor = 'var(--danger)';
-                }
-            } else if (document.getElementById('termsContainer')) {
-                document.getElementById('termsContainer').style.borderColor = 'var(--accent)';
-            }
-            
-            // Update submit button
-            if (submitBtn) {
-                submitBtn.disabled = !isValid;
-            }
-            
-            return isValid;
-        }
-        
-        // Initial validation
-        validateForm();
-        
-        // Form submission
-        const form = document.getElementById('upgradeForm');
-        if (form) {
-            form.addEventListener('submit', function(e) {
-                if (!validateForm()) {
-                    e.preventDefault();
-                    
-                    // Show error message
-                    if (!phoneInput.value.trim() || !/^\d{9}$/.test(phoneInput.value.trim())) {
-                        showToast('Please enter a valid 9-digit M-Pesa phone number (without +254)', 'error');
-                        phoneInput.focus();
-                    } else if (!termsInput.checked) {
-                        showToast('You must agree to the subscription terms', 'error');
-                    }
-                    
-                    return false;
-                }
-                
-                // Show loading state
-                const submitBtn = document.getElementById('upgradeSubmitBtn');
-                if (submitBtn) {
-                    const originalHTML = submitBtn.innerHTML;
-                    submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
-                    submitBtn.disabled = true;
-                    
-                    // Re-enable after 10 seconds if still on page
-                    setTimeout(() => {
-                        submitBtn.innerHTML = originalHTML;
-                        submitBtn.disabled = false;
-                    }, 10000);
-                }
-            });
-        }
-        
-        // Auto-focus phone input if there's an error
-        {% if form.phone_number.errors %}
-        setTimeout(() => {
-            const phoneInput = document.getElementById('id_phone_number');
-            if (phoneInput) {
-                phoneInput.focus();
-            }
-        }, 300);
-        {% endif %}
-    });
-
-    // Toast notification function
-    function showToast(message, type = 'info') {
-        if (window.showToast) {
-            window.showToast(message, type);
-        } else {
-            // Fallback alert
-            alert(message);
-        }
-    }
-</script>
 {% endblock %}

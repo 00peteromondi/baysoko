@@ -1065,65 +1065,6 @@ def store_analytics(request, slug):
     return render(request, 'storefront/store_analytics.html', context)
 
 
-@login_required
-def store_upgrade(request, slug):
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
-    
-    if request.method == 'POST':
-        form = UpgradeForm(request.POST)
-        if not form.is_valid():
-            # Form-level validation will provide user-friendly feedback
-            return render(request, 'storefront/confirm_upgrade.html', {'store': store, 'form': form})
-
-        phone_number = form.cleaned_data['phone_number']
-
-        try:
-            mpesa = MpesaGateway()
-
-            # Reuse existing trialing subscription if present, otherwise create one
-            subscription = Subscription.objects.filter(store=store, status='trialing').first()
-            if not subscription:
-                subscription = Subscription.objects.create(
-                    store=store,
-                    plan='premium',
-                    status='trialing',
-                    trial_ends_at=timezone.now() + timedelta(days=7)
-                )
-
-            # Initiate M-Pesa payment (phone already normalized by form)
-            response = mpesa.initiate_stk_push(
-                phone=phone_number,
-                amount=999,  # KSh 999 as shown in template
-                account_reference=f"Store-{store.id}"
-            )
-
-            # Create payment record
-            MpesaPayment.objects.create(
-                subscription=subscription,
-                checkout_request_id=response['CheckoutRequestID'],
-                merchant_request_id=response['MerchantRequestID'],
-                phone_number=phone_number,
-                amount=999,
-                status='pending'
-            )
-
-            # Activate store premium features for trial period
-            store.is_premium = True
-            store.save()
-
-            messages.success(request, 'Payment initiated. Please complete the M-Pesa payment on your phone.')
-            return redirect('storefront:seller_dashboard')
-
-        except Exception as e:
-            messages.error(request, f'Payment initiation failed: {str(e)}')
-            return render(request, 'storefront/confirm_upgrade.html', {'store': store})
-
-    else:
-        form = UpgradeForm()
-
-    return render(request, 'storefront/confirm_upgrade.html', {'store': store, 'form': form})
-
-
 # storefront/views.py - Add these views
 
 from django.shortcuts import render, get_object_or_404, redirect
@@ -1314,13 +1255,12 @@ def mark_review_helpful(request, slug, review_id):
     return JsonResponse({'success': False}, status=400)
 
 
-# Enhanced Subscription Management Views
 
 @login_required
 @store_owner_required
 def subscription_plan_select(request, slug):
     """
-    Select subscription plan before payment
+    Select subscription plan before payment - FIXED VERSION
     """
     store = get_object_or_404(Store, slug=slug, owner=request.user)
     
@@ -1330,25 +1270,33 @@ def subscription_plan_select(request, slug):
         status__in=['active', 'trialing']
     ).first()
     
-    if active_subscription:
+    if active_subscription and active_subscription.is_active():
         messages.info(request, "You already have an active subscription.")
         return redirect('storefront:subscription_manage', slug=slug)
     
     if request.method == 'POST':
+        # Handle direct form submission
         plan_form = SubscriptionPlanForm(request.POST)
         upgrade_form = UpgradeForm(request.POST)
         
         if plan_form.is_valid() and upgrade_form.is_valid():
             # Store plan selection in session
             request.session['selected_plan'] = plan_form.cleaned_data['plan']
-            request.session['phone_number'] = upgrade_form.cleaned_data['phone_number']
+            request.session.modified = True  # Ensure session is saved
             
+            # Get phone number from form
+            phone_number = upgrade_form.cleaned_data['phone_number']
+            
+            # Redirect to payment page with parameters
             return redirect('storefront:store_upgrade', slug=slug)
+        else:
+            # Form validation failed
+            messages.error(request, "Please correct the errors below.")
     else:
         plan_form = SubscriptionPlanForm()
         upgrade_form = UpgradeForm()
     
-    # Plan details
+    # Plan details - MUST MATCH pricing in store_upgrade view
     plan_details = {
         'basic': {
             'price': 999,
@@ -1393,24 +1341,18 @@ def subscription_plan_select(request, slug):
     
     return render(request, 'storefront/subscription_plan_select.html', context)
 
-
 @login_required
 @store_owner_required
 def store_upgrade(request, slug):
     """
-    Enhanced upgrade view with plan selection from session
+    Enhanced upgrade view with plan selection from session or direct POST
     """
     store = get_object_or_404(Store, slug=slug, owner=request.user)
     
-    # Get plan from session
+    # Get plan from session or default to basic
     selected_plan = request.session.get('selected_plan', 'basic')
-    phone_number = request.session.get('phone_number')
     
-    if not phone_number:
-        messages.warning(request, "Please select a plan and provide your phone number.")
-        return redirect('storefront:subscription_plan_select', slug=slug)
-    
-    # Plan pricing
+    # Plan pricing - MUST MATCH what's in subscription_plan_select.html
     plan_pricing = {
         'basic': 999,
         'premium': 1999,
@@ -1424,13 +1366,19 @@ def store_upgrade(request, slug):
         if form.is_valid():
             phone_number = form.cleaned_data['phone_number']
             
+            # Extract plan from POST data if available
+            plan_from_post = request.POST.get('plan', selected_plan)
+            if plan_from_post in plan_pricing:
+                selected_plan = plan_from_post
+                amount = plan_pricing[selected_plan]
+            
             try:
                 mpesa = MpesaGateway()
                 
                 # Check for existing trialing subscription
                 subscription = Subscription.objects.filter(
                     store=store,
-                    status='trialing'
+                    status__in=['trialing', 'active']
                 ).first()
                 
                 if not subscription:
@@ -1443,6 +1391,13 @@ def store_upgrade(request, slug):
                         mpesa_phone=phone_number,
                         metadata={'plan_selected': selected_plan}
                     )
+                else:
+                    # Update existing subscription
+                    subscription.plan = selected_plan
+                    subscription.amount = amount
+                    subscription.mpesa_phone = phone_number
+                    subscription.metadata['plan_selected'] = selected_plan
+                    subscription.save()
                 
                 # Initiate M-Pesa payment
                 response = mpesa.initiate_stk_push(
@@ -1468,17 +1423,20 @@ def store_upgrade(request, slug):
                 # Clear session data
                 if 'selected_plan' in request.session:
                     del request.session['selected_plan']
-                if 'phone_number' in request.session:
-                    del request.session['phone_number']
                 
                 messages.success(request, 
-                    f"Payment of KSh {amount} initiated for {selected_plan.capitalize()} plan. "
-                    "Please complete the M-Pesa payment on your phone."
+                    f"✅ Payment of KSh {amount:,} initiated for {selected_plan.capitalize()} plan. "
+                    "Please check your phone to complete the M-Pesa payment."
                 )
                 return redirect('storefront:seller_dashboard')
                 
             except Exception as e:
-                messages.error(request, f'Payment initiation failed: {str(e)}')
+                logger.error(f"Payment initiation failed for store {store.id}: {str(e)}")
+                messages.error(request, 
+                    f'Payment initiation failed: {str(e)}. '
+                    'Please check your phone number and try again.'
+                )
+                # Keep form data for retry
                 return render(request, 'storefront/confirm_upgrade.html', {
                     'store': store,
                     'form': form,
@@ -1486,6 +1444,7 @@ def store_upgrade(request, slug):
                     'amount': amount
                 })
         else:
+            # Form is invalid - show errors
             return render(request, 'storefront/confirm_upgrade.html', {
                 'store': store,
                 'form': form,
@@ -1493,7 +1452,36 @@ def store_upgrade(request, slug):
                 'amount': amount
             })
     else:
-        form = UpgradeForm(initial={'phone_number': phone_number, 'plan': selected_plan})
+        # GET request - show form
+        # Check for existing subscription
+        existing_sub = store.subscriptions.filter(
+            status__in=['active', 'trialing']
+        ).first()
+        
+        if existing_sub:
+            messages.info(request, 
+                f"You already have an active {existing_sub.get_plan_display()} subscription. "
+                f"Status: {existing_sub.get_status_display()}"
+            )
+            return redirect('storefront:subscription_manage', slug=slug)
+        
+        # Pre-fill with last used phone if available
+        initial_data = {}
+        last_payment = MpesaPayment.objects.filter(
+            subscription__store=store,
+            status='completed'
+        ).order_by('-created_at').first()
+        
+        if last_payment:
+            # Extract phone number (remove +254 for display)
+            phone = last_payment.phone_number
+            if phone.startswith('+254'):
+                phone = phone[4:]  # Remove +254
+            elif phone.startswith('254'):
+                phone = phone[3:]  # Remove 254
+            initial_data['phone_number'] = phone
+        
+        form = UpgradeForm(initial=initial_data)
     
     return render(request, 'storefront/confirm_upgrade.html', {
         'store': store,
@@ -1502,7 +1490,6 @@ def store_upgrade(request, slug):
         'amount': amount,
         'plan_pricing': plan_pricing
     })
-
 
 @login_required
 @store_owner_required

@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
-{% load static humanize %}
+{% load static %}
 
 {% block title %}Upgrade Store - {{ store.name }} - Baysoko{% endblock %}
 
 {% block extra_css %}
 <style>
+    /* Upgrade Styling */
     .upgrade-container {
         min-height: 80vh;
         padding: var(--spacing-xl) 0;
@@ -17,6 +18,24 @@
     .upgrade-header {
         text-align: center;
         margin-bottom: var(--spacing-xl);
+        max-width: 800px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .upgrade-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(6, 214, 160, 0.1);
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        margin-bottom: 1rem;
+        border: 1px solid rgba(6, 214, 160, 0.2);
+    }
+
+    .upgrade-badge i {
+        color: var(--accent);
     }
 
     .upgrade-card {
@@ -29,7 +48,7 @@
         margin: 0 auto;
     }
 
-    .plan-summary {
+    .selected-plan-display {
         background: linear-gradient(135deg, rgba(6, 214, 160, 0.1) 0%, rgba(255, 107, 53, 0.1) 100%);
         padding: 1.5rem;
         border-radius: var(--radius-md);
@@ -37,17 +56,28 @@
         border: 1px solid rgba(6, 214, 160, 0.2);
     }
 
-    .plan-detail {
+    .plan-display-row {
         display: flex;
         justify-content: space-between;
+        align-items: center;
         padding: 0.5rem 0;
         border-bottom: 1px solid rgba(0, 0, 0, 0.1);
     }
 
-    .plan-detail:last-child {
+    .plan-display-row:last-child {
         border-bottom: none;
         font-weight: 700;
+        font-size: 1.1rem;
         color: var(--primary);
+    }
+
+    .plan-label {
+        color: var(--text-secondary);
+    }
+
+    .plan-value {
+        color: var(--text-primary);
+        font-weight: 600;
     }
 
     .payment-method {
@@ -55,9 +85,17 @@
         padding: 1.5rem;
         border-radius: var(--radius-md);
         margin-bottom: var(--spacing-lg);
+        border: 1px solid var(--border-color);
     }
 
-    .mpesa-icon {
+    .payment-method-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .payment-method-icon {
         width: 48px;
         height: 48px;
         background: linear-gradient(135deg, #006600 0%, #00A300 100%);
@@ -67,6 +105,61 @@
         justify-content: center;
         color: white;
         font-size: 1.5rem;
+    }
+
+    .payment-form {
+        margin-top: var(--spacing-md);
+    }
+
+    .form-group-modern {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-label-modern {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        font-size: 0.95rem;
+    }
+
+    .input-modern {
+        width: 100%;
+        padding: 1rem 1.25rem;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 1rem;
+        transition: var(--transition);
+        outline: none;
+    }
+
+    .input-modern:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(6, 214, 160, 0.1);
+    }
+
+    .input-modern.error {
+        border-color: var(--danger);
+    }
+
+    .phone-input-group {
+        position: relative;
+    }
+
+    .phone-prefix {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-secondary);
+        font-weight: 500;
+        z-index: 2;
+    }
+
+    .phone-input {
+        padding-left: 4rem !important;
     }
 
     .terms-container {
@@ -100,6 +193,31 @@
         color: white;
     }
 
+    .checkbox-modern i {
+        font-size: 0.75rem;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+
+    .checkbox-modern.checked i {
+        opacity: 1;
+    }
+
+    .terms-text {
+        font-size: 0.875rem;
+        color: var(--text-color);
+    }
+
+    .terms-text a {
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+    .terms-text a:hover {
+        text-decoration: underline;
+    }
+
     .upgrade-btn {
         width: 100%;
         padding: 1rem;
@@ -117,7 +235,7 @@
         gap: 0.75rem;
     }
 
-    .upgrade-btn:hover:not(:disabled) {
+    .upgrade-btn:hover {
         transform: translateY(-2px);
         box-shadow: 0 8px 25px rgba(255, 107, 53, 0.3);
     }
@@ -125,8 +243,10 @@
     .upgrade-btn:disabled {
         opacity: 0.6;
         cursor: not-allowed;
+        transform: none;
     }
 
+    /* Limit Reached Warning */
     .limit-warning {
         background: linear-gradient(135deg, rgba(255, 158, 31, 0.1) 0%, rgba(239, 71, 111, 0.1) 100%);
         padding: 1.5rem;
@@ -136,25 +256,54 @@
         border-left: 4px solid var(--warning);
     }
 
-    .features-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 1rem;
-        margin-top: var(--spacing-lg);
-    }
-
-    .feature-item {
+    .limit-warning-header {
         display: flex;
         align-items: center;
-        gap: 0.75rem;
-        padding: 0.75rem;
-        background: var(--bg-secondary);
-        border-radius: var(--radius-md);
+        gap: 1rem;
+        margin-bottom: 1rem;
     }
 
-    .feature-item i {
-        color: var(--accent);
-        font-size: 1.25rem;
+    .limit-warning-icon {
+        color: var(--warning);
+        font-size: 1.5rem;
+        flex-shrink: 0;
+    }
+
+    /* Alternative Options */
+    .alternative-options {
+        margin-top: var(--spacing-xl);
+        padding-top: var(--spacing-lg);
+        border-top: 1px solid var(--border-color);
+    }
+
+    .option-card {
+        padding: 1rem;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        transition: var(--transition);
+        text-decoration: none;
+        color: var(--text-primary);
+        display: block;
+    }
+
+    .option-card:hover {
+        background: var(--bg-primary);
+        border-color: var(--accent);
+        transform: translateY(-2px);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .upgrade-card {
+            padding: var(--spacing-md);
+        }
+        
+        .payment-method-header {
+            flex-direction: column;
+            text-align: center;
+            gap: 0.5rem;
+        }
     }
 </style>
 {% endblock %}
@@ -162,10 +311,11 @@
 {% block content %}
 <div class="upgrade-container">
     <div class="container-custom">
+        <!-- Header -->
         <div class="upgrade-header animate-slide-up">
-            <div class="d-inline-flex align-items-center gap-2 bg-primary bg-opacity-10 px-3 py-1 rounded-pill mb-3">
-                <i class="bi bi-award-fill text-primary"></i>
-                <span class="fw-semibold text-primary">Premium Storefront</span>
+            <div class="upgrade-badge">
+                <i class="bi bi-award-fill"></i>
+                <span>Premium Storefront</span>
             </div>
             
             {% if limit_reached %}
@@ -175,17 +325,19 @@
             </p>
             {% else %}
             <h1 class="display-6 fw-bold mb-3">Upgrade to Premium</h1>
-            <p class="text-muted mb-0">
+            <p class="lead text-muted mb-0">
                 Unlock premium features and grow your store with our flexible subscription plans.
             </p>
             {% endif %}
         </div>
 
+        <!-- Upgrade Card -->
         <div class="upgrade-card animate-scale-in">
+            <!-- Limit Reached Warning -->
             {% if limit_reached %}
             <div class="limit-warning mb-4">
-                <div class="d-flex align-items-start gap-3">
-                    <i class="bi bi-exclamation-triangle-fill fs-4 text-warning mt-1"></i>
+                <div class="limit-warning-header">
+                    <i class="bi bi-exclamation-triangle-fill limit-warning-icon"></i>
                     <div>
                         <h5 class="fw-bold mb-1">Free Limit Reached</h5>
                         <p class="mb-0">
@@ -197,31 +349,32 @@
             </div>
             {% endif %}
 
+            <!-- Selected Plan Display -->
             {% if selected_plan %}
-            <div class="plan-summary mb-4">
-                <h5 class="fw-bold mb-3">Plan Summary</h5>
-                <div class="plan-detail">
-                    <span>Selected Plan:</span>
-                    <strong>{{ selected_plan|title }} Plan</strong>
+            <div class="selected-plan-display">
+                <div class="plan-display-row">
+                    <span class="plan-label">Selected Plan:</span>
+                    <span class="plan-value">{{ selected_plan|title }} Plan</span>
                 </div>
-                <div class="plan-detail">
-                    <span>Monthly Price:</span>
-                    <strong>KSh {{ amount|floatformat:0|intcomma }}</strong>
+                <div class="plan-display-row">
+                    <span class="plan-label">Monthly Price:</span>
+                    <span class="plan-value">KSh {{ amount|floatformat:0|intcomma }}</span>
                 </div>
-                <div class="plan-detail">
-                    <span>Trial Period:</span>
-                    <strong>7 days free</strong>
+                <div class="plan-display-row">
+                    <span class="plan-label">Trial Period:</span>
+                    <span class="plan-value">7 days free</span>
                 </div>
-                <div class="plan-detail">
-                    <span>Total Due Today:</span>
-                    <strong class="text-success">KSh 0</strong>
+                <div class="plan-display-row">
+                    <span class="plan-label">Total Due Today:</span>
+                    <span class="plan-value">KSh 0</span>
                 </div>
             </div>
             {% endif %}
 
-            <div class="payment-method mb-4">
-                <div class="d-flex align-items-center gap-3 mb-3">
-                    <div class="mpesa-icon">
+            <!-- Payment Method -->
+            <div class="payment-method">
+                <div class="payment-method-header">
+                    <div class="payment-method-icon">
                         <i class="bi bi-phone-fill"></i>
                     </div>
                     <div>
@@ -230,131 +383,150 @@
                     </div>
                 </div>
                 
-                <form method="post" id="upgradeForm">
-                    {% csrf_token %}
-                    
-                    <div class="mb-4">
-                        <label class="form-label fw-semibold" for="id_phone_number">
-                            M-Pesa Phone Number <span class="text-danger">*</span>
-                        </label>
-                        <div class="input-group">
-                            <span class="input-group-text bg-light">+254</span>
-                            <input type="tel" 
-                                   name="phone_number" 
-                                   class="form-control {% if form.phone_number.errors %}is-invalid{% endif %}" 
-                                   id="id_phone_number" 
-                                   placeholder="712345678"
-                                   pattern="[0-9]{9}"
-                                   value="{{ form.phone_number.value|default:'' }}"
-                                   required>
-                        </div>
-                        <small class="form-text text-muted">
-                            Enter your M-Pesa registered phone number (without +254)
-                        </small>
-                        {% if form.phone_number.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.phone_number.errors.0 }}
+                <!-- Payment Form -->
+                <div class="payment-form">
+                    <form method="post" id="upgradeForm">
+                        {% csrf_token %}
+                        
+                        <!-- Phone Number Input -->
+                        <div class="form-group-modern mb-4">
+                            <label class="form-label-modern" for="id_phone_number">
+                                M-Pesa Phone Number <span class="text-danger">*</span>
+                            </label>
+                            <div class="phone-input-group">
+                                <span class="phone-prefix">+254</span>
+                                <input type="tel" 
+                                       name="phone_number" 
+                                       class="input-modern phone-input {% if form.phone_number.errors %}error{% endif %}" 
+                                       id="id_phone_number" 
+                                       placeholder="712345678"
+                                       pattern="[0-9]{9}"
+                                       value="{{ form.phone_number.value|default:'' }}"
+                                       required>
                             </div>
-                        {% endif %}
-                    </div>
-
-                    {% if selected_plan %}
-                    <input type="hidden" name="plan" value="{{ selected_plan }}">
-                    {% endif %}
-
-                    <div class="terms-container mb-4" id="termsContainer">
-                        <div class="checkbox-modern" id="termsCheckbox">
-                            <i class="bi bi-check"></i>
+                            <small class="form-text text-muted">
+                                Enter your M-Pesa registered phone number (without +254)
+                            </small>
+                            {% if form.phone_number.errors %}
+                                <div class="error-message mt-2">
+                                    <i class="bi bi-exclamation-circle me-2"></i>
+                                    {{ form.phone_number.errors.0 }}
+                                </div>
+                            {% endif %}
                         </div>
-                        <div class="flex-grow-1">
-                            <small class="text-muted">
+
+                        <!-- Hidden Plan Selection -->
+                        {% if selected_plan %}
+                        <input type="hidden" name="plan" value="{{ selected_plan }}">
+                        {% endif %}
+
+                        <!-- Terms Agreement -->
+                        <div class="terms-container mb-4" id="termsContainer">
+                            <div class="checkbox-modern" id="termsCheckbox">
+                                <i class="bi bi-check"></i>
+                            </div>
+                            <div class="terms-text">
                                 I agree to start my 7-day free trial. After the trial, I'll be automatically charged 
                                 KSh {% if amount %}{{ amount|floatformat:0|intcomma }}{% else %}999{% endif %} monthly. 
                                 I can cancel anytime before the trial ends.
                                 <span class="text-danger">*</span>
-                            </small>
+                            </div>
+                            <input type="checkbox" name="terms" id="termsInput" style="display: none;" required>
                         </div>
-                        <input type="checkbox" name="terms" id="termsInput" style="display: none;" required>
-                    </div>
-
-                    <button type="submit" class="upgrade-btn" id="upgradeSubmitBtn" disabled>
-                        <i class="bi bi-lock-fill"></i>
-                        {% if selected_plan %}
-                        Start {{ selected_plan|title }} Plan Trial
-                        {% else %}
-                        Start Premium Trial
+                        {% if form.terms.errors %}
+                            <div class="error-message mb-3">
+                                <i class="bi bi-exclamation-circle me-2"></i>
+                                You must agree to the subscription terms
+                            </div>
                         {% endif %}
-                    </button>
-                </form>
-            </div>
 
-            <div class="features-grid">
-                <div class="feature-item">
-                    <i class="bi bi-shop-window"></i>
-                    <div>
-                        <h6 class="fw-semibold mb-1">Multiple Stores</h6>
-                        <p class="small text-muted mb-0">Create and manage multiple storefronts</p>
-                    </div>
-                </div>
-                <div class="feature-item">
-                    <i class="bi bi-graph-up"></i>
-                    <div>
-                        <h6 class="fw-semibold mb-1">Advanced Analytics</h6>
-                        <p class="small text-muted mb-0">Detailed insights and reports</p>
-                    </div>
-                </div>
-                <div class="feature-item">
-                    <i class="bi bi-megaphone"></i>
-                    <div>
-                        <h6 class="fw-semibold mb-1">Featured Placement</h6>
-                        <p class="small text-muted mb-0">Get featured in search results</p>
-                    </div>
-                </div>
-                <div class="feature-item">
-                    <i class="bi bi-infinity"></i>
-                    <div>
-                        <h6 class="fw-semibold mb-1">Unlimited Listings</h6>
-                        <p class="small text-muted mb-0">No limits on products</p>
-                    </div>
+                        <!-- Submit Button -->
+                        <button type="submit" class="upgrade-btn" id="upgradeSubmitBtn" disabled>
+                            <i class="bi bi-lock-fill"></i>
+                            {% if selected_plan %}
+                            Start {{ selected_plan|title }} Plan Trial
+                            {% else %}
+                            Start Premium Trial
+                            {% endif %}
+                        </button>
+                    </form>
                 </div>
             </div>
 
-            <div class="text-center mt-4 pt-3 border-top">
-                <small class="text-muted">
-                    <i class="bi bi-shield-check text-success me-1"></i>
-                    Your payment is secure and encrypted. We never store your M-Pesa PIN.
-                </small>
+            <!-- Security Assurance -->
+            <div class="d-flex align-items-center justify-content-center gap-2 mt-4 pt-3 border-top">
+                <i class="bi bi-shield-check text-success"></i>
+                <small class="text-muted">Your payment is secure and encrypted. We never store your M-Pesa PIN.</small>
             </div>
+
+            <!-- Alternative Options -->
+            {% if not limit_reached %}
+            <div class="alternative-options">
+                <h6 class="fw-bold mb-3 text-center">Not ready to upgrade?</h6>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <a href="{% url 'storefront:seller_dashboard' %}" class="option-card">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-speedometer2 fs-4 me-3 text-primary"></i>
+                                <div>
+                                    <h6 class="fw-bold mb-1">Continue with Free Plan</h6>
+                                    <p class="small text-muted mb-0">Use basic features for now</p>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="col-md-6">
+                        <a href="{% url 'storefront:subscription_plan_select' store.slug %}" class="option-card">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-arrow-left-right fs-4 me-3 text-primary"></i>
+                                <div>
+                                    <h6 class="fw-bold mb-1">View All Plans</h6>
+                                    <p class="small text-muted mb-0">Compare different plans</p>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
-        {% if not limit_reached %}
-        <div class="card-custom mt-4">
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <a href="{% url 'storefront:subscription_plan_select' store.slug %}" class="card-custom h-100 text-decoration-none">
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-arrow-left-right fs-4 text-primary me-3"></i>
-                            <div>
-                                <h6 class="fw-bold mb-1">Compare Plans</h6>
-                                <p class="small text-muted mb-0">View all available subscription plans</p>
-                            </div>
+        <!-- Premium Features Summary -->
+        <div class="row g-4 mt-4">
+            <div class="col-md-4">
+                <div class="card-custom h-100">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="me-3 bg-primary bg-opacity-10 p-2 rounded">
+                            <i class="bi bi-shop-window fs-4 text-primary"></i>
                         </div>
-                    </a>
+                        <h5 class="fw-bold mb-0">Multiple Stores</h5>
+                    </div>
+                    <p class="text-muted mb-0">Create and manage multiple storefronts under one account.</p>
                 </div>
-                <div class="col-md-6">
-                    <a href="{% url 'storefront:seller_dashboard' %}" class="card-custom h-100 text-decoration-none">
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-speedometer2 fs-4 text-primary me-3"></i>
-                            <div>
-                                <h6 class="fw-bold mb-1">Continue with Free Plan</h6>
-                                <p class="small text-muted mb-0">Use basic features for now</p>
-                            </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card-custom h-100">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="me-3 bg-success bg-opacity-10 p-2 rounded">
+                            <i class="bi bi-graph-up fs-4 text-success"></i>
                         </div>
-                    </a>
+                        <h5 class="fw-bold mb-0">Advanced Analytics</h5>
+                    </div>
+                    <p class="text-muted mb-0">Detailed insights and reports to grow your business.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card-custom h-100">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="me-3 bg-warning bg-opacity-10 p-2 rounded">
+                            <i class="bi bi-megaphone fs-4 text-warning"></i>
+                        </div>
+                        <h5 class="fw-bold mb-0">Featured Placement</h5>
+                    </div>
+                    <p class="text-muted mb-0">Get featured in search results and homepage promotions.</p>
                 </div>
             </div>
         </div>
-        {% endif %}
     </div>
 </div>
 {% endblock %}
@@ -362,14 +534,18 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Phone number validation
+        // Phone number input validation
         const phoneInput = document.getElementById('id_phone_number');
         if (phoneInput) {
             phoneInput.addEventListener('input', function() {
+                // Remove non-digits
                 this.value = this.value.replace(/\D/g, '');
+                
+                // Limit to 9 digits
                 if (this.value.length > 9) {
                     this.value = this.value.slice(0, 9);
                 }
+                
                 validateForm();
             });
         }
@@ -404,22 +580,25 @@
             
             let isValid = true;
             
+            // Check phone number
             if (!phoneInput || !phoneInput.value.trim() || !/^\d{9}$/.test(phoneInput.value.trim())) {
                 isValid = false;
-                if (phoneInput) phoneInput.classList.add('is-invalid');
+                if (phoneInput) phoneInput.classList.add('error');
             } else if (phoneInput) {
-                phoneInput.classList.remove('is-invalid');
+                phoneInput.classList.remove('error');
             }
             
+            // Check terms
             if (!termsCheckbox || !termsCheckbox.checked) {
                 isValid = false;
-                if (termsContainer) {
-                    termsContainer.style.borderColor = 'var(--danger)';
+                if (document.getElementById('termsContainer')) {
+                    document.getElementById('termsContainer').style.borderColor = 'var(--danger)';
                 }
-            } else if (termsContainer) {
-                termsContainer.style.borderColor = 'var(--accent)';
+            } else if (document.getElementById('termsContainer')) {
+                document.getElementById('termsContainer').style.borderColor = 'var(--accent)';
             }
             
+            // Update submit button
             if (submitBtn) {
                 submitBtn.disabled = !isValid;
             }
@@ -437,6 +616,7 @@
                 if (!validateForm()) {
                     e.preventDefault();
                     
+                    // Show error message
                     if (!phoneInput.value.trim() || !/^\d{9}$/.test(phoneInput.value.trim())) {
                         showToast('Please enter a valid 9-digit M-Pesa phone number (without +254)', 'error');
                         phoneInput.focus();
@@ -447,12 +627,14 @@
                     return false;
                 }
                 
+                // Show loading state
                 const submitBtn = document.getElementById('upgradeSubmitBtn');
                 if (submitBtn) {
                     const originalHTML = submitBtn.innerHTML;
                     submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
                     submitBtn.disabled = true;
                     
+                    // Re-enable after 10 seconds if still on page
                     setTimeout(() => {
                         submitBtn.innerHTML = originalHTML;
                         submitBtn.disabled = false;
@@ -461,19 +643,23 @@
             });
         }
         
-        // Auto-focus phone input if error
+        // Auto-focus phone input if there's an error
         {% if form.phone_number.errors %}
         setTimeout(() => {
-            if (phoneInput) phoneInput.focus();
+            const phoneInput = document.getElementById('id_phone_number');
+            if (phoneInput) {
+                phoneInput.focus();
+            }
         }, 300);
         {% endif %}
     });
-    
+
+    // Toast notification function
     function showToast(message, type = 'info') {
-        if (typeof Toast !== 'undefined') {
-            const toast = new Toast(document.getElementById('toast'));
-            toast.show(message, type);
+        if (window.showToast) {
+            window.showToast(message, type);
         } else {
+            // Fallback alert
             alert(message);
         }
     }
