@@ -215,6 +215,22 @@ class Store(models.Model):
             reviews_page = paginator.page(paginator.num_pages)
         
         return reviews_page
+    
+    def get_average_store_rating(self):
+        """Get average rating from direct store reviews only."""
+        try:
+            from .models import StoreReview
+            store_reviews = StoreReview.objects.filter(store=self)
+            if store_reviews.exists():
+                return store_reviews.aggregate(avg_rating=Avg('rating'))['avg_rating'] or 0
+        except (ImportError, AttributeError):
+            pass
+        return 0
+    
+    def get_product_reviews(self):
+        """Get product reviews for this store's listings."""
+        from listings.models import Review
+        return Review.objects.filter(listing__store=self).select_related('user', 'listing').order_by('-created_at')
         
     def clean(self):
         """

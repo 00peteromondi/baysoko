@@ -37,7 +37,7 @@
               </div>
               <div class="stat-item text-protected">
                 <div class="stat-value-bg">
-                  <h3 class="fw-bold mb-0">{{ store.get_rating|default:"4.5" }}</h3>
+                  <h3 class="fw-bold mb-0">{{ store.get_rating|default:"0.0" }}</h3>
                 </div>
                 <small class="stat-label text-protected-label">Rating</small>
               </div>
@@ -58,7 +58,7 @@
                    class="store-logo position-relative z-1"
                    onerror="this.src='https://placehold.co/200x200/c2c2c2/1f1f1f?text=Store'">
               {% if store.is_premium %}
-              <span class="premium-badge position-absolute badge-protected">
+              <span class="premium-badge position-absolute bg-warning text-dark badge-protected">
                 <i class="bi bi-star-fill"></i> Premium
               </span>
               {% endif %}
@@ -137,7 +137,7 @@
             <span class="product-price fw-bold text-primary">KSh {{ product.price }}</span>
             <span class="product-rating text-protected">
               <i class="bi bi-star-fill text-warning"></i>
-              {{ product.rating_average|default:"4.5" }} ({{ product.rating_count|default:"0" }} Reviews)
+              {{ product.rating_average|default:"0.0" }} ({{ product.rating_count|default:"0" }} Reviews)
               
             </span>
           </div>
@@ -209,7 +209,7 @@
               <i class="bi bi-award text-primary"></i>
               <div>
                 <strong>Ratings</strong>
-                <p class="mb-0">{{ store.get_rating|default:"0.0" }} / 5.0</p>
+                <p class="mb-0">{{ store.get_average_store_rating|default:"0.0" }} / 5.0</p>
               </div>
             </div>  
           </div>
@@ -261,7 +261,109 @@
     </div>
   </section>
 </div>
+{% load store_tags %}
 
+<!-- Store Reviews Preview -->
+<div class="store-reviews-preview card-custom mt-var(--spacing-xl)" id="reviews">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="mb-0">
+            <i class="bi bi-chat-square-text text-primary me-2"></i>
+            Store Reviews
+        </h3>
+        <a href="{% url 'storefront:store_reviews' slug=store.slug %}" class="btn-custom btn-ghost">
+            View All Reviews
+        </a>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-4 mb-4 mb-md-0">
+            <div class="rating-summary text-center p-4 bg-light rounded">
+                <h2 class="display-3 fw-bold text-primary mb-2">{{ store.get_average_store_rating|default:"0.0" }}</h2>
+                <div class="rating-stars mb-3">
+                    {% with rating=store.get_average_store_rating|default:0 %}
+                    {% for i in "12345" %}
+                        {% if forloop.counter <= rating|floatformat:0|add:"0" %}
+                            <i class="bi bi-star-fill text-warning fs-4"></i>
+                        {% else %}
+                            <i class="bi bi-star text-warning fs-4"></i>
+                        {% endif %}
+                    {% endfor %}
+                    {% endwith %}
+                </div>
+                <p class="text-muted mb-0">{{ store.reviews.count }} reviews</p>
+            </div>
+            
+            <!-- Review CTA -->
+
+            <div class="mt-4">
+                {% if user.is_authenticated and user != store.owner %}
+                    {% load store_filters %}
+                    {% if store|user_can_review_store:user %}
+                    <a href="{% url 'storefront:store_review_create' slug=store.slug %}?next={{ request.path }}" 
+                      class="btn-custom btn-primary w-100">
+                        <i class="bi bi-pencil me-2"></i>Write a Store Review
+                    </a>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        You've already reviewed this store.
+                    </div>
+                    {% endif %}
+                {% elif not user.is_authenticated %}
+                <a href="{% url 'login' %}?next={{ request.path }}" 
+                  class="btn-custom btn-primary w-100">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>Login to Review Store
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="col-md-8">
+            {% get_store_reviews store 3 as recent_reviews %}
+            {% if recent_reviews %}
+                {% for review in recent_reviews %}
+                <div class="review-item mb-4 pb-4 {% if not forloop.last %}border-bottom{% endif %}">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div class="d-flex align-items-center">
+                            <div class="reviewer-avatar me-3">
+                                <img src="{{ review.reviewer.profile.get_avatar_url|default:'https://placehold.co/40x40/c2c2c2/1f1f1f?text=User' }}"
+                                     alt="{{ review.reviewer.username }}"
+                                     class="rounded-circle" width="40" height="40">
+                            </div>
+                            <div>
+                                <h6 class="mb-0">{{ review.reviewer.get_full_name|default:review.reviewer.username }}</h6>
+                                <div class="rating-stars">
+                                    {% for i in "12345" %}
+                                        {% if forloop.counter <= review.rating %}
+                                            <i class="bi bi-star-fill text-warning"></i>
+                                        {% else %}
+                                            <i class="bi bi-star text-warning"></i>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        <small class="text-muted">{{ review.created_at|date:"M d, Y" }}</small>
+                    </div>
+                    <p class="mb-2">{{ review.comment|truncatewords:30 }}</p>
+                    {% if review.helpful_count > 0 %}
+                    <small class="text-muted">
+                        <i class="bi bi-hand-thumbs-up"></i>
+                        {{ review.helpful_count }} helpful
+                    </small>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-chat-square-text display-4 text-muted mb-3"></i>
+                    <h5>No Reviews Yet</h5>
+                    <p class="text-muted">Be the first to review this store!</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
 <style>
 /* Enhanced Store Detail Styles with Text Protection */
 .store-header-wrapper {
@@ -309,6 +411,7 @@
   border-radius: var(--radius-md);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.1);
+  max-width: fit-content;
 }
 
 .store-description {
@@ -382,7 +485,7 @@
   background: linear-gradient(135deg, #FFD700, #FFA500);
   color: #333;
   padding: 0.5rem 1rem;
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-md);
   font-weight: 700;
   font-size: 0.875rem;
   z-index: 3;
