@@ -262,6 +262,7 @@ TEMPLATES = [
                 'notifications.context_processors.notifications_context',
                 'delivery.context_processors.delivery_user_context',
                 'storefront.context_processors.store_context',
+                'storefront.context_processors.subscription_context',
             ],
         },
     },

@@ -12,6 +12,27 @@ from .forms import StoreForm
 from listings.models import ListingImage
 from django.db.models import F, Sum, Count, Avg
 
+from django.utils import timezone
+from datetime import timedelta
+from .mpesa import MpesaGateway
+from .forms import UpgradeForm
+from django.db.models import Q, Sum, Count, Avg
+from django.contrib.admin.views.decorators import staff_member_required
+from .monitoring import PaymentMonitor
+from reviews.models import Review
+from listings.models import OrderItem
+from .utils import dumps_with_decimals
+
+
+
+from django.core.mail import send_mail
+from django.core.paginator import Paginator
+from django.db import transaction
+import logging
+
+
+logger = logging.getLogger(__name__)
+
 
 def store_list(request):
     stores = Store.objects.filter()
@@ -439,38 +460,10 @@ def delete_cover(request, slug):
     return redirect('storefront:store_edit', slug=store.slug)
 
 
-from django.utils import timezone
-from datetime import timedelta
-from .mpesa import MpesaGateway
-from .forms import UpgradeForm
-from django.db.models import Q, Sum, Count, Avg
-from django.contrib.admin.views.decorators import staff_member_required
-from .monitoring import PaymentMonitor
-from reviews.models import Review
-from listings.models import OrderItem
-from .utils import dumps_with_decimals
+
 
 @login_required
 @store_owner_required
-def subscription_manage(request, slug):
-    """Subscription management view"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
-    subscription = store.subscriptions.order_by('-started_at').first()
-    
-    if not subscription:
-        messages.warning(request, 'No subscription found for this store.')
-        return redirect('storefront:store_upgrade', slug=store.slug)
-    
-    # Get recent payments
-    recent_payments = subscription.payments.order_by('-transaction_date')[:5]
-    
-    return render(request, 'storefront/subscription_manage.html', {
-        'store': store,
-        'subscription': subscription,
-        'recent_payments': recent_payments,
-    })
-
-@login_required
 def retry_payment(request, slug):
     """Retry failed payment"""
     if request.method != 'POST':
@@ -483,7 +476,7 @@ def retry_payment(request, slug):
         messages.error(request, 'Invalid subscription status for payment retry.')
         return redirect('storefront:subscription_manage', slug=slug)
     
-    # Get last known phone number from successful payment
+    # Get last known phone number
     last_payment = subscription.payments.filter(
         Q(status='completed') | Q(phone_number__isnull=False)
     ).order_by('-transaction_date').first()
@@ -493,29 +486,29 @@ def retry_payment(request, slug):
         return redirect('storefront:store_upgrade', slug=slug)
     
     try:
-        # Initialize M-Pesa payment
         mpesa = MpesaGateway()
-        # Normalize stored phone number (in case older records used a different format)
         phone_norm = mpesa._normalize_phone(last_payment.phone_number)
+        
+        # Use subscription amount, not hardcoded 999
         response = mpesa.initiate_stk_push(
             phone=phone_norm,
-            amount=999,
+            amount=float(subscription.amount),
             account_reference=f"Store-{store.id}-Retry"
         )
         
-        # Create payment record
         MpesaPayment.objects.create(
             subscription=subscription,
             checkout_request_id=response['CheckoutRequestID'],
             merchant_request_id=response['MerchantRequestID'],
             phone_number=phone_norm,
-            amount=999,
+            amount=subscription.amount,
             status='pending'
         )
         
         messages.success(request, 'Payment initiated. Please complete the M-Pesa payment on your phone.')
         
     except Exception as e:
+        logger.error(f"Payment retry failed: {str(e)}")
         messages.error(request, f'Failed to initiate payment: {str(e)}')
     
     return redirect('storefront:subscription_manage', slug=slug)

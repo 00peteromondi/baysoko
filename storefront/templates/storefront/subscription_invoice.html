@@ -1,0 +1,393 @@
+{% extends 'base.html' %}
+{% load static humanize %}
+
+{% block title %}Invoice #{{ payment.id }} - {{ store.name }} - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    .invoice-container {
+        min-height: 80vh;
+        padding: var(--spacing-xl) 0;
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(66, 133, 244, 0.05) 50%, 
+            rgba(118, 92, 255, 0.05) 100%);
+    }
+
+    .invoice-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        box-shadow: var(--shadow-lg);
+        border: 2px solid var(--border-color);
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    .invoice-header {
+        border-bottom: 2px solid var(--border-color);
+        padding-bottom: var(--spacing-lg);
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .invoice-title {
+        color: var(--primary);
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+    }
+
+    .company-logo {
+        width: 120px;
+        height: auto;
+    }
+
+    .invoice-details {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: var(--spacing-lg);
+        padding: 1.5rem;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+    }
+
+    .detail-group h6 {
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.5rem;
+    }
+
+    .detail-value {
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .invoice-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .invoice-table th {
+        text-align: left;
+        padding: 1rem;
+        border-bottom: 2px solid var(--border-color);
+        color: var(--text-secondary);
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+
+    .invoice-table td {
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        color: var(--text-primary);
+    }
+
+    .invoice-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .total-row {
+        background: var(--bg-secondary);
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+
+    .status-badge {
+        display: inline-flex;
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.85rem;
+        font-weight: 700;
+    }
+
+    .status-completed {
+        background: rgba(6, 214, 160, 0.1);
+        color: var(--success);
+        border: 1px solid rgba(6, 214, 160, 0.2);
+    }
+
+    .status-pending {
+        background: rgba(255, 158, 31, 0.1);
+        color: var(--warning);
+        border: 1px solid rgba(255, 158, 31, 0.2);
+    }
+
+    .status-failed {
+        background: rgba(239, 71, 111, 0.1);
+        color: var(--danger);
+        border: 1px solid rgba(239, 71, 111, 0.2);
+    }
+
+    .invoice-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: var(--spacing-xl);
+        padding-top: var(--spacing-lg);
+        border-top: 1px solid var(--border-color);
+    }
+
+    .print-btn {
+        flex: 1;
+        padding: 1rem;
+        background: var(--primary);
+        color: white;
+        border: none;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .print-btn:hover {
+        background: var(--primary-dark);
+        transform: translateY(-2px);
+    }
+
+    .download-btn {
+        flex: 1;
+        padding: 1rem;
+        background: var(--accent);
+        color: white;
+        border: none;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .download-btn:hover {
+        background: var(--accent-dark);
+        transform: translateY(-2px);
+    }
+
+    .back-btn {
+        flex: 1;
+        padding: 1rem;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        text-decoration: none;
+    }
+
+    .back-btn:hover {
+        background: var(--bg-primary);
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    @media print {
+        .invoice-actions,
+        .no-print {
+            display: none !important;
+        }
+        
+        .invoice-card {
+            box-shadow: none;
+            border: 1px solid #ddd;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="invoice-container">
+    <div class="container-custom">
+        <div class="invoice-card">
+            <!-- Invoice Header -->
+            <div class="invoice-header">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h1 class="invoice-title">INVOICE</h1>
+                        <p class="text-muted mb-0">Invoice #{{ payment.id }}</p>
+                        <p class="text-muted mb-0">{{ payment.created_at|date:"F d, Y" }}</p>
+                    </div>
+                    <div class="text-end">
+                        <h3 class="fw-bold mb-1">Baysoko</h3>
+                        <p class="text-muted mb-0">Store Subscription</p>
+                        <p class="text-muted mb-0">Nairobi, Kenya</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Invoice Details -->
+            <div class="invoice-details">
+                <div class="detail-group">
+                    <h6>Bill To</h6>
+                    <p class="detail-value mb-1">{{ store.name }}</p>
+                    <p class="text-muted mb-1">{{ store.owner.get_full_name|default:store.owner.username }}</p>
+                    <p class="text-muted mb-0">{{ store.owner.email }}</p>
+                </div>
+                
+                <div class="detail-group">
+                    <h6>Payment Method</h6>
+                    <p class="detail-value mb-1">M-Pesa</p>
+                    <p class="text-muted mb-1">{{ payment.phone_number }}</p>
+                    {% if payment.mpesa_receipt_number %}
+                    <p class="text-muted mb-0">Receipt: {{ payment.mpesa_receipt_number }}</p>
+                    {% endif %}
+                </div>
+                
+                <div class="detail-group">
+                    <h6>Invoice Status</h6>
+                    <p class="mb-2">
+                        {% if payment.status == 'completed' %}
+                            <span class="status-badge status-completed">Paid</span>
+                        {% elif payment.status == 'pending' %}
+                            <span class="status-badge status-pending">Pending</span>
+                        {% else %}
+                            <span class="status-badge status-failed">Failed</span>
+                        {% endif %}
+                    </p>
+                    {% if payment.transaction_date %}
+                    <p class="text-muted mb-0">Paid: {{ payment.transaction_date|date:"M d, Y H:i" }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Invoice Items -->
+            <table class="invoice-table">
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th>Quantity</th>
+                        <th>Unit Price</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <strong>{{ subscription.get_plan_display }} Subscription</strong>
+                            <p class="text-muted mb-0 small">
+                                Monthly subscription for {{ store.name }}
+                                {% if subscription.trial_ends_at %}
+                                <br>Trial ends: {{ subscription.trial_ends_at|date:"M d, Y" }}
+                                {% endif %}
+                            </p>
+                        </td>
+                        <td>1 month</td>
+                        <td>KSh {{ payment.amount|floatformat:0|intcomma }}</td>
+                        <td>KSh {{ payment.amount|floatformat:0|intcomma }}</td>
+                    </tr>
+                    
+                    <tr class="total-row">
+                        <td colspan="3" class="text-end"><strong>Total</strong></td>
+                        <td><strong>KSh {{ payment.amount|floatformat:0|intcomma }}</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Payment Details -->
+            <div class="card-custom mb-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <h6 class="fw-bold mb-2">Payment Details</h6>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted">Checkout Request ID:</span>
+                            <span class="fw-semibold">{{ payment.checkout_request_id|slice:":20" }}...</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted">Merchant Request ID:</span>
+                            <span class="fw-semibold">{{ payment.merchant_request_id|slice:":20" }}...</span>
+                        </div>
+                        {% if payment.result_code %}
+                        <div class="d-flex justify-content-between mb-0">
+                            <span class="text-muted">Result Code:</span>
+                            <span class="fw-semibold">{{ payment.result_code }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="fw-bold mb-2">Subscription Details</h6>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted">Plan:</span>
+                            <span class="fw-semibold">{{ subscription.get_plan_display }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted">Status:</span>
+                            <span class="fw-semibold">{{ subscription.get_status_display }}</span>
+                        </div>
+                        {% if subscription.current_period_end %}
+                        <div class="d-flex justify-content-between mb-0">
+                            <span class="text-muted">Next Billing:</span>
+                            <span class="fw-semibold">{{ subscription.current_period_end|date:"M d, Y" }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Terms and Conditions -->
+            <div class="card-custom bg-light">
+                <h6 class="fw-bold mb-2">Terms & Conditions</h6>
+                <p class="small text-muted mb-0">
+                    1. This is a monthly subscription that renews automatically.<br>
+                    2. You can cancel anytime before the next billing cycle.<br>
+                    3. Refunds are processed within 7-10 business days.<br>
+                    4. For support, contact support@baysoko.com
+                </p>
+            </div>
+
+            <!-- Invoice Actions -->
+            <div class="invoice-actions no-print">
+                <button onclick="window.print()" class="print-btn">
+                    <i class="bi bi-printer"></i>
+                    Print Invoice
+                </button>
+                <button onclick="downloadInvoice()" class="download-btn">
+                    <i class="bi bi-download"></i>
+                    Download PDF
+                </button>
+                <a href="{% url 'storefront:subscription_manage' slug=store.slug %}" class="back-btn">
+                    <i class="bi bi-arrow-left"></i>
+                    Back to Subscription
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function downloadInvoice() {
+        showToast('PDF download feature coming soon!', 'info');
+        // In production, implement PDF generation here
+        // window.location.href = "{% url 'storefront:subscription_invoice' store.slug payment.id %}?format=pdf";
+    }
+    
+    function showToast(message, type = 'info') {
+        if (typeof Toast !== 'undefined') {
+            const toast = new Toast(document.getElementById('toast'));
+            toast.show(message, type);
+        } else {
+            alert(message);
+        }
+    }
+    
+    // Auto-print if ?print=1 in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('print') === '1') {
+        window.print();
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,225 @@
+{% extends 'admin/base_site.html' %}
+{% load static humanize %}
+
+{% block title %}Subscriptions - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">Subscription Management</h1>
+        <div class="btn-group">
+            <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+                <i class="bi bi-download"></i> Export
+            </button>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="?format=csv">CSV</a></li>
+                <li><a class="dropdown-item" href="?format=excel">Excel</a></li>
+                <li><a class="dropdown-item" href="?format=pdf">PDF</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">All Status</option>
+                        <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+                        <option value="trialing" {% if status_filter == 'trialing' %}selected{% endif %}>Trialing</option>
+                        <option value="past_due" {% if status_filter == 'past_due' %}selected{% endif %}>Past Due</option>
+                        <option value="canceled" {% if status_filter == 'canceled' %}selected{% endif %}>Canceled</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Plan</label>
+                    <select name="plan" class="form-select">
+                        <option value="">All Plans</option>
+                        <option value="basic" {% if request.GET.plan == 'basic' %}selected{% endif %}>Basic</option>
+                        <option value="premium" {% if request.GET.plan == 'premium' %}selected{% endif %}>Premium</option>
+                        <option value="enterprise" {% if request.GET.plan == 'enterprise' %}selected{% endif %}>Enterprise</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Search</label>
+                    <input type="text" name="q" class="form-control" placeholder="Store, Owner, Phone..." value="{{ search_query|default:'' }}">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-filter"></i> Filter
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Subscriptions</h6>
+                    <h2 class="card-text">{{ subscriptions.count }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Active</h6>
+                    <h2 class="card-text">{{ subscriptions.filter|active_count }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Past Due</h6>
+                    <h2 class="card-text">{{ subscriptions.filter|past_due_count }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6 class="card-title">MRR</h6>
+                    <h2 class="card-text">KSh {{ total_mrr|default:0|intcomma }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subscriptions Table -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Store</th>
+                            <th>Owner</th>
+                            <th>Plan</th>
+                            <th>Status</th>
+                            <th>Amount</th>
+                            <th>Started</th>
+                            <th>Expires</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for subscription in subscriptions %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'storefront:store_detail' subscription.store.slug %}" target="_blank">
+                                    {{ subscription.store.name }}
+                                </a>
+                            </td>
+                            <td>{{ subscription.store.owner.get_full_name|default:subscription.store.owner.username }}</td>
+                            <td>
+                                <span class="badge bg-primary">{{ subscription.get_plan_display }}</span>
+                            </td>
+                            <td>
+                                {% if subscription.status == 'active' %}
+                                    <span class="badge bg-success">Active</span>
+                                {% elif subscription.status == 'trialing' %}
+                                    <span class="badge bg-info">Trialing</span>
+                                {% elif subscription.status == 'past_due' %}
+                                    <span class="badge bg-warning">Past Due</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ subscription.get_status_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>KSh {{ subscription.amount|intcomma }}</td>
+                            <td>{{ subscription.started_at|date:"M d, Y" }}</td>
+                            <td>
+                                {% if subscription.expires_at %}
+                                    {{ subscription.expires_at|date:"M d, Y" }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'storefront:admin_subscription_detail' subscription.id %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-4">
+                                <i class="bi bi-inbox fs-1 text-muted mb-3"></i>
+                                <p class="text-muted">No subscriptions found</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            {% if subscriptions.has_other_pages %}
+            <nav aria-label="Page navigation" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if subscriptions.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ subscriptions.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}">
+                            Previous
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for num in subscriptions.paginator.page_range %}
+                    {% if subscriptions.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% else %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}">
+                            {{ num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+                    
+                    {% if subscriptions.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ subscriptions.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}">
+                            Next
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Auto-refresh every 30 seconds for real-time updates
+        setInterval(function() {
+            fetch(window.location.href)
+                .then(response => response.text())
+                .then(html => {
+                    const parser = new DOMParser();
+                    const newDoc = parser.parseFromString(html, 'text/html');
+                    const newTable = newDoc.querySelector('.table tbody');
+                    document.querySelector('.table tbody').innerHTML = newTable.innerHTML;
+                });
+        }, 30000);
+        
+        // Export functionality
+        document.querySelectorAll('.dropdown-item').forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                const format = this.getAttribute('href').split('=')[1];
+                window.location.href = window.location.pathname + '?format=' + format;
+            });
+        });
+    });
+</script>
+{% endblock %}
