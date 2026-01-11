@@ -1,5 +1,7 @@
 # storefront/context_processors.py
 from .models import Store, Subscription
+from listings.models import Listing
+from django.conf import settings
 
 def store_context(request):
     """Add store-related context to all templates"""
@@ -26,3 +28,18 @@ def store_context(request):
         })
     
     return context
+
+
+def subscription_context(request):
+    if request.user.is_authenticated:
+        free_limit = getattr(settings, 'STORE_FREE_LISTING_LIMIT', 5)
+        user_listing_count = Listing.objects.filter(seller=request.user).count()
+        remaining_free = max(free_limit - user_listing_count, 0)
+        
+        return {
+            'free_listing_limit': free_limit,
+            'user_listing_count': user_listing_count,
+            'remaining_free_listings': remaining_free,
+            'has_reached_limit': user_listing_count >= free_limit,
+        }
+    return {}
