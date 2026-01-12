@@ -125,8 +125,11 @@ class PaymentMonitor:
             start_time = base_queryset.order_by('started_at').first().started_at if base_queryset.exists() else timezone.now()
 
         total = base_queryset.count()
-        active = base_queryset.filter(status='active').count()
-        trialing = base_queryset.filter(status='trialing').count()
+        # Treat 'trialing' as active only if trial_ends_at is in the future
+        from django.db.models import Q
+        now = timezone.now()
+        active = base_queryset.filter(Q(status='active') | Q(status='trialing', trial_ends_at__gt=now)).count()
+        trialing = base_queryset.filter(status='trialing', trial_ends_at__gt=now).count()
         past_due = base_queryset.filter(status='past_due').count()
         cancelled = base_queryset.filter(status='cancelled').count()
 
@@ -178,10 +181,9 @@ class PaymentMonitor:
 
         retention_rate = (still_active / subs_30_days_ago * 100) if subs_30_days_ago > 0 else 0
 
-        # Calculate monthly recurring revenue (MRR)
+        # Calculate monthly recurring revenue (MRR) — include truly active subscriptions
         active_paid_subs = base_queryset.filter(
-            status='active',
-            trial_ends_at__lte=timezone.now()
+            Q(status='active') | Q(status='trialing', trial_ends_at__gt=now)
         ).count()
         mrr = active_paid_subs * 999  # KSh 999 per subscription
 

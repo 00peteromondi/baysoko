@@ -374,10 +374,11 @@ class Subscription(models.Model):
         
         # Update store premium status
         if self.store.is_premium:
-            # Check if store has any other active subscriptions
-            active_subs = Subscription.objects.filter(
-                store=self.store,
-                status__in=['active', 'trialing']
+            # Check if store has any other active subscriptions (treat 'trialing' as active only if trial hasn't ended)
+            from django.db.models import Q
+            now = timezone.now()
+            active_subs = Subscription.objects.filter(store=self.store).filter(
+                Q(status='active') | Q(status='trialing', trial_ends_at__gt=now)
             ).exclude(id=self.id)
             
             if not active_subs.exists():

@@ -1278,12 +1278,11 @@ def subscription_plan_select(request, slug):
     """
     store = get_object_or_404(Store, slug=slug, owner=request.user)
     
-    # Check if already has active subscription
-    active_subscription = Subscription.objects.filter(
-        store=store,
-        status__in=['active', 'trialing']
+    # Check if already has active subscription (treat 'trialing' as active only if trial hasn't ended)
+    active_subscription = Subscription.objects.filter(store=store).filter(
+        Q(status='active') | Q(status='trialing', trial_ends_at__gt=timezone.now())
     ).first()
-    
+
     if active_subscription and active_subscription.is_active():
         messages.info(request, "You already have an active subscription.")
         return redirect('storefront:subscription_manage', slug=slug)
@@ -1431,9 +1430,8 @@ def store_upgrade(request, slug):
 
                 # Otherwise initiate payment flow (user is subscribing now)
                 # Check for existing active subscription to avoid duplicate payments
-                subscription = Subscription.objects.filter(
-                    store=store,
-                    status__in=['trialing', 'active']
+                subscription = Subscription.objects.filter(store=store).filter(
+                    Q(status='active') | Q(status='trialing', trial_ends_at__gt=timezone.now())
                 ).first()
 
                 if not subscription:
@@ -1508,9 +1506,10 @@ def store_upgrade(request, slug):
             })
     else:
         # GET request - show form
-        # Check for existing subscription
+        # Check for existing subscription (treat trialing as active only if trial hasn't ended)
         existing_sub = store.subscriptions.filter(
-            status__in=['active', 'trialing']
+        ).filter(
+            Q(status='active') | Q(status='trialing', trial_ends_at__gt=timezone.now())
         ).first()
         
         if existing_sub:
@@ -1596,9 +1595,8 @@ def subscription_cancel(request, slug):
     Cancel subscription with feedback
     """
     store = get_object_or_404(Store, slug=slug, owner=request.user)
-    subscription = Subscription.objects.filter(
-        store=store,
-        status__in=['active', 'trialing']
+    subscription = Subscription.objects.filter(store=store).filter(
+        Q(status='active') | Q(status='trialing', trial_ends_at__gt=timezone.now())
     ).first()
     
     if not subscription:

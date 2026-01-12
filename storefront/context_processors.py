@@ -16,10 +16,13 @@ def store_context(request):
         # Get user's stores
         user_stores = Store.objects.filter(owner=request.user)
         
-        # Get active subscriptions
+        # Get active subscriptions (treat 'trialing' as active only if trial hasn't ended)
+        from django.db.models import Q
+        now = timezone.now()
         active_subscriptions = Subscription.objects.filter(
-            store__owner=request.user,
-            status__in=['active', 'trialing']
+            store__owner=request.user
+        ).filter(
+            Q(status='active') | Q(status='trialing', trial_ends_at__gt=now)
         )
         
         # Check if user has premium store
