@@ -449,18 +449,31 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
         # Fallback to default CreateView POST handling
         return super().post(request, *args, **kwargs)
 
+# Update the ListingUpdateView class
 class ListingUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = Listing
-    form_class = ListingForm
+    form_class = ListingForm  # Now uses the updated ListingForm
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['categories'] = Category.objects.filter(is_active=True)
+        # Add existing images for display
+        context['existing_images'] = self.object.images.all()
+        # Get user's stores
+        if self.request.user.is_authenticated:
+            context['stores'] = Store.objects.filter(owner=self.request.user)
+        else:
+            context['stores'] = Store.objects.none()
         return context
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
+        # Set initial store value
+        if 'initial' not in kwargs:
+            kwargs['initial'] = {}
+        if self.object.store:
+            kwargs['initial']['store'] = self.object.store
         return kwargs
 
     def test_func(self):
@@ -469,7 +482,8 @@ class ListingUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
 
     def form_valid(self, form):
         form.instance.seller = self.request.user
-        # If the user selected a store, ensure ownership
+        
+        # Handle store assignment
         try:
             selected_store = form.cleaned_data.get('store')
         except Exception:
@@ -478,15 +492,21 @@ class ListingUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
         if selected_store:
             if selected_store.owner != self.request.user:
                 messages.error(self.request, "Invalid store selection.")
-                return render(self.request, 'listings/listing_form.html', {'form': form, 'categories': Category.objects.filter(is_active=True), 'stores': Store.objects.filter(owner=self.request.user)})
+                return render(self.request, 'listings/listing_form.html', {
+                    'form': form, 
+                    'categories': Category.objects.filter(is_active=True), 
+                    'stores': Store.objects.filter(owner=self.request.user)
+                })
             form.instance.store = selected_store
         
-        # Handle main image update
+        # Handle main image update - only if new image is provided
         if 'image' in self.request.FILES:
             form.instance.image = self.request.FILES['image']
-        # Enforce is_featured rules gracefully: if user attempted to set it but
-        # their store does not have an active subscription or valid trial,
-        # silently unset it and notify the user; do not block the update.
+        elif 'image-clear' in self.request.POST:
+            # Handle image removal
+            form.instance.image = None
+        
+        # Enforce is_featured rules
         try:
             if 'is_featured' in form.cleaned_data and form.cleaned_data.get('is_featured'):
                 store = form.instance.store or Store.objects.filter(owner=self.request.user).first()
@@ -494,13 +514,15 @@ class ListingUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
                 from django.utils import timezone as _tz
                 now = _tz.now()
                 has_active = Subscription.objects.filter(store=store, status='active').exists() if store else False
-                has_valid_trial = Subscription.objects.filter(store=store, status='trialing', trial_ends_at__gt=now).exists() if store else False
+                has_valid_trial = Subscription.objects.filter(
+                    store=store, 
+                    status='trialing', 
+                    trial_ends_at__gt=now
+                ).exists() if store else False
                 if not (has_active or has_valid_trial):
                     form.instance.is_featured = False
                     messages.info(self.request, "Featured listings require an active subscription or valid trial. The featured flag was not applied.")
-
         except Exception:
-            # If Subscription model/table missing, don't block updating.
             pass
 
         response = super().form_valid(form)
@@ -514,6 +536,15 @@ class ListingUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
                     image=image
                 )
         
+        # Handle image deletion
+        if 'delete_images' in self.request.POST:
+            delete_ids = self.request.POST.getlist('delete_images')
+            if delete_ids:
+                ListingImage.objects.filter(
+                    id__in=delete_ids, 
+                    listing=form.instance
+                ).delete()
+        
         # Create activity log
         Activity.objects.create(
             user=self.request.user,
@@ -522,7 +553,10 @@ class ListingUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
         
         messages.success(self.request, "Listing updated successfully!")
         return response
-        
+    
+    def get_success_url(self):
+        return reverse('listing-detail', kwargs={'pk': self.object.pk})
+            
 class ListingDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
     model = Listing
     success_url = '/'

@@ -170,6 +170,13 @@ def store_edit(request, slug):
     Edit an existing store with proper error handling and file uploads.
     """
     store = get_object_or_404(Store, slug=slug, owner=request.user)
+    # Determine whether this user can start a trial: if they've already had a trial that ended, disallow
+    past_trial_exists = Subscription.objects.filter(
+        store__owner=request.user,
+        trial_ends_at__isnull=False,
+        trial_ends_at__lt=timezone.now()
+    ).exists()
+    can_start_trial = not past_trial_exists
     if request.method == 'POST':
         form = StoreForm(request.POST, request.FILES, instance=store)
         if form.is_valid():
@@ -1362,6 +1369,14 @@ def store_upgrade(request, slug):
     """
     store = get_object_or_404(Store, slug=slug, owner=request.user)
     
+    # Determine whether this user can start a trial: if they've already had a trial that ended, disallow
+    past_trial_exists = Subscription.objects.filter(
+        store__owner=request.user,
+        trial_ends_at__isnull=False,
+        trial_ends_at__lt=timezone.now()
+    ).exists()
+    can_start_trial = not past_trial_exists
+    
     # Get plan from session or default to basic
     selected_plan = request.session.get('selected_plan', 'basic')
     
@@ -1388,16 +1403,10 @@ def store_upgrade(request, slug):
             try:
                 mpesa = MpesaGateway()
 
-                # Prevent users from taking a second trial after a previous trial ended
-                past_trial_exists = Subscription.objects.filter(
-                    store__owner=request.user,
-                    trial_ends_at__isnull=False,
-                    trial_ends_at__lt=timezone.now()
-                ).exists()
-
+                # Handle start-trial request: enforce global per-user single trial rule
                 if 'start_trial' in request.POST and request.POST.get('start_trial') == '1':
                     # Start trial without initiating payment
-                    if past_trial_exists:
+                    if not can_start_trial:
                         messages.error(request, "You have already used a trial period and cannot start another one.")
                         return redirect('storefront:subscription_manage', slug=slug)
 
@@ -1495,6 +1504,7 @@ def store_upgrade(request, slug):
                     'form': form,
                     'selected_plan': selected_plan,
                     'amount': amount
+                , 'can_start_trial': can_start_trial
                 })
         else:
             # Form is invalid - show errors
@@ -1502,7 +1512,8 @@ def store_upgrade(request, slug):
                 'store': store,
                 'form': form,
                 'selected_plan': selected_plan,
-                'amount': amount
+                'amount': amount,
+                'can_start_trial': can_start_trial,
             })
     else:
         # GET request - show form
@@ -1542,7 +1553,8 @@ def store_upgrade(request, slug):
         'form': form,
         'selected_plan': selected_plan,
         'amount': amount,
-        'plan_pricing': plan_pricing
+        'plan_pricing': plan_pricing,
+        'can_start_trial': can_start_trial,
     })
 
 @login_required

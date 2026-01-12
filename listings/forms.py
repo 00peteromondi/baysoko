@@ -30,12 +30,18 @@ class ListingForm(forms.ModelForm):
             'meta_description': forms.Textarea(attrs={'rows': 2, 'placeholder': 'SEO description (auto-generated if empty)', 'maxlength': '160', 'class': 'form-control'}),
         }
 
+    
     def clean_image(self):
         image = self.cleaned_data.get('image')
         if image:
             # Cloudinary handles file validation, but you can add custom validation
             if hasattr(image, 'size') and image.size > 10 * 1024 * 1024:  # 10MB limit
                 raise forms.ValidationError("Image file too large ( > 10MB )")
+        
+        # For updates, allow empty image (keep existing one)
+        if not image and not self.instance.pk:
+            raise forms.ValidationError("Main image is required for new listings.")
+        
         return image
 
     def __init__(self, *args, **kwargs):

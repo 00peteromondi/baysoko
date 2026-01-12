@@ -361,13 +361,15 @@
                     <span class="plan-label">Monthly Price:</span>
                     <span class="plan-value">KSh {{ amount|floatformat:0|intcomma }}</span>
                 </div>
+                {% if can_start_trial %}
                 <div class="plan-display-row">
                     <span class="plan-label">Trial Period:</span>
                     <span class="plan-value">7 days free</span>
                 </div>
+                {% endif %}
                 <div class="plan-display-row">
                     <span class="plan-label">Total Due Today:</span>
-                    <span class="plan-value">KSh 0</span>
+                    <span class="plan-value" id="totalDueAmount">KSh {% if can_start_trial %}0{% else %}{{ amount|floatformat:0|intcomma }}{% endif %}</span>
                 </div>
             </div>
             {% endif %}
@@ -422,12 +424,14 @@
                         {% endif %}
 
                         <!-- Start Trial Only Option -->
+                        {% if can_start_trial %}
                         <div class="form-group-modern mb-3">
                             <label class="form-label-modern" for="id_start_trial">
-                                <input type="checkbox" name="start_trial" id="id_start_trial" value="1"> Start 7-day free trial (no payment now)
+                                <input type="checkbox" name="start_trial" id="id_start_trial" value="1" checked> Start 7-day free trial (no payment now)
                             </label>
                             <small class="text-muted d-block">If checked, you will get a 7-day trial and won't be charged now. One trial per account.</small>
                         </div>
+                        {% endif %}
 
                         <!-- Terms Agreement -->
                         <div class="terms-container mb-4" id="termsContainer">
@@ -435,9 +439,15 @@
                                 <i class="bi bi-check"></i>
                             </div>
                             <div class="terms-text">
+                                {% if can_start_trial %}
                                 I agree to start my 7-day free trial. After the trial, I'll be automatically charged 
-                                KSh {% if amount %}{{ amount|floatformat:0|intcomma }}{% else %}999{% endif %} monthly. 
+                                KSh {{ amount|floatformat:0|intcomma }} monthly. 
                                 I can cancel anytime before the trial ends.
+                                {% else %}
+                                I agree to subscribe to the {{ selected_plan|title }} plan for 
+                                KSh {{ amount|floatformat:0|intcomma }} monthly. 
+                                I can cancel anytime.
+                                {% endif %}
                                 <span class="text-danger">*</span>
                             </div>
                             <input type="checkbox" name="terms" id="termsInput" style="display: none;" required>
@@ -452,10 +462,10 @@
                         <!-- Submit Button -->
                         <button type="submit" class="upgrade-btn" id="upgradeSubmitBtn" disabled>
                             <i class="bi bi-lock-fill"></i>
-                            {% if selected_plan %}
+                            {% if can_start_trial %}
                             Start {{ selected_plan|title }} Plan Trial
                             {% else %}
-                            Start Premium Trial
+                            Subscribe to {{ selected_plan|title }} Plan
                             {% endif %}
                         </button>
                     </form>
@@ -580,6 +590,21 @@
                 validateForm();
             });
         }
+
+        // Trial checkbox handling
+        const trialCheckbox = document.getElementById('id_start_trial');
+        const totalDueAmount = document.getElementById('totalDueAmount');
+        {% if can_start_trial %}
+        if (trialCheckbox && totalDueAmount) {
+            trialCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    totalDueAmount.textContent = 'KSh 0';
+                } else {
+                    totalDueAmount.textContent = 'KSh {{ amount|floatformat:0|intcomma }}';
+                }
+            });
+        }
+        {% endif %}
         
         // Form validation
         function validateForm() {
