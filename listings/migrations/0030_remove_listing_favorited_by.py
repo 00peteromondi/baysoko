@@ -10,8 +10,15 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveField(
-            model_name='listing',
-            name='favorited_by',
+        migrations.SeparateDatabaseAndState(
+            # Skip database operations entirely - field was never actually created
+            database_operations=[],
+            # Update Django's state to remove the field
+            state_operations=[
+                migrations.RemoveField(
+                    model_name='listing',
+                    name='favorited_by',
+                ),
+            ]
         ),
     ]
