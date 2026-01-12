@@ -1,0 +1,370 @@
+<!-- storefront/templates/storefront/bulk/dashboard.html -->
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Bulk Operations Dashboard - {{ store.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 mb-1">Bulk Operations Dashboard</h1>
+            <p class="text-muted mb-0">Manage bulk product operations and data imports/exports</p>
+        </div>
+        <div class="btn-group">
+            <a href="{% url 'storefront:bulk_update_products' slug=store.slug %}" class="btn btn-primary">
+                <i class="bi bi-pencil-square me-2"></i>Bulk Update
+            </a>
+            <a href="{% url 'storefront:bulk_import_data' slug=store.slug %}" class="btn btn-outline-primary">
+                <i class="bi bi-upload me-2"></i>Import Products
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Jobs
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ job_stats.total }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-briefcase fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Completed
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ job_stats.completed }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Processing
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ job_stats.processing }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-clock fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                Failed
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ job_stats.failed }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-x-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mb-4">
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <a href="{% url 'storefront:bulk_update_products' slug=store.slug %}" class="btn btn-light btn-block text-left">
+                                <i class="bi bi-pencil-square text-primary mr-2"></i>
+                                Bulk Update Products
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <a href="{% url 'storefront:bulk_import_data' slug=store.slug %}" class="btn btn-light btn-block text-left">
+                                <i class="bi bi-upload text-success mr-2"></i>
+                                Import from CSV
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <a href="{% url 'storefront:export_data' slug=store.slug %}" class="btn btn-light btn-block text-left">
+                                <i class="bi bi-download text-info mr-2"></i>
+                                Export to CSV
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <a href="{% url 'storefront:bulk_image_upload' slug=store.slug %}" class="btn btn-light btn-block text-left">
+                                <i class="bi bi-images text-warning mr-2"></i>
+                                Bulk Image Upload
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Bulk Operations Health</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <span class="font-weight-bold">Success Rate:</span>
+                        {% if job_stats.total > 0 %}
+                            {% with success_rate=job_stats.completed|div:job_stats.total|mul:100 %}
+                            <span class="float-right {% if success_rate > 80 %}text-success{% elif success_rate > 50 %}text-warning{% else %}text-danger{% endif %}">
+                                {{ success_rate|floatformat:1 }}%
+                            </span>
+                            <div class="progress mt-2">
+                                <div class="progress-bar {% if success_rate > 80 %}bg-success{% elif success_rate > 50 %}bg-warning{% else %}bg-danger{% endif %}"
+                                     role="progressbar" style="width: {{ success_rate }}%">
+                                </div>
+                            </div>
+                            {% endwith %}
+                        {% else %}
+                            <span class="float-right text-muted">No jobs yet</span>
+                            <div class="progress mt-2">
+                                <div class="progress-bar bg-secondary" role="progressbar" style="width: 0%">
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="mb-0">
+                        <span class="font-weight-bold">Active Templates:</span>
+                        <span class="float-right text-primary">{{ templates|length }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Batch Jobs -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Recent Batch Jobs</h6>
+            <a href="{% url 'storefront:bulk_job_list' slug=store.slug %}" class="btn btn-sm btn-primary">
+                View All Jobs
+            </a>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Job ID</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Progress</th>
+                            <th>Created</th>
+                            <th>Started By</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for job in recent_jobs %}
+                        <tr>
+                            <td>#{{ job.id }}</td>
+                            <td>
+                                <span class="badge badge-primary">
+                                    {{ job.get_job_type_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge badge-{% if job.status == 'completed' %}success{% elif job.status == 'processing' %}warning{% elif job.status == 'failed' %}danger{% else %}secondary{% endif %}">
+                                    {{ job.get_status_display }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if job.total_items > 0 %}
+                                    <div class="d-flex align-items-center">
+                                        <div class="progress flex-grow-1 mr-2" style="height: 8px;">
+                                            <div class="progress-bar {% if job.status == 'completed' %}bg-success{% elif job.status == 'processing' %}bg-warning{% elif job.status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}"
+                                                 role="progressbar"
+                                                 style="width: {{ job.processed_items|div:job.total_items|mul:100 }}%">
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">{{ job.processed_items }}/{{ job.total_items }}</small>
+                                    </div>
+                                {% else %}
+                                    <small class="text-muted">-</small>
+                                {% endif %}
+                            </td>
+                            <td>{{ job.created_at|date:"M d, H:i" }}</td>
+                            <td>{{ job.created_by.username }}</td>
+                            <td>
+                                <a href="{% url 'storefront:bulk_job_detail' slug=store.slug job_id=job.id %}" class="btn btn-sm btn-outline-primary">
+                                    View Details
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4">No batch jobs yet</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Exports and Templates -->
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Recent Exports</h6>
+                </div>
+                <div class="card-body">
+                    {% for export in recent_exports %}
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="mr-3">
+                            <i class="bi bi-file-earmark-spreadsheet text-success fa-lg"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="font-weight-bold">{{ export.filename }}</div>
+                            <div class="text-muted small">{{ export.created_at|date:"M d, Y H:i" }} • {{ export.record_count }} records</div>
+                        </div>
+                        <a href="{{ export.file.url }}" class="btn btn-sm btn-outline-success" download>
+                            <i class="bi bi-download"></i>
+                        </a>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-4">
+                        <p class="text-muted mb-0">No recent exports</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Popular Import Templates</h6>
+                </div>
+                <div class="card-body">
+                    {% for template in templates %}
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="mr-3">
+                            <i class="bi bi-file-earmark-text text-info fa-lg"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="font-weight-bold">{{ template.name }}</div>
+                            <div class="text-muted small">Downloaded {{ template.download_count }} times</div>
+                        </div>
+                        <a href="{% url 'storefront:download_template' slug=store.slug template_id=template.id %}" class="btn btn-sm btn-outline-info">
+                            <i class="bi bi-download"></i>
+                        </a>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-4">
+                        <p class="text-muted mb-0">No templates available</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    border-radius: 0.35rem;
+    border: 1px solid #e3e6f0;
+}
+
+.border-left-primary {
+    border-left: 0.25rem solid #4e73df !important;
+}
+
+.border-left-warning {
+    border-left: 0.25rem solid #f6c23e !important;
+}
+
+.border-left-danger {
+    border-left: 0.25rem solid #e74a3b !important;
+}
+
+.border-left-success {
+    border-left: 0.25rem solid #1cc88a !important;
+}
+
+.border-left-info {
+    border-left: 0.25rem solid #36b9cc !important;
+}
+
+.progress {
+    border-radius: 0.35rem;
+}
+
+.progress-sm {
+    height: 0.5rem;
+}
+
+.btn-block {
+    display: block;
+    width: 100%;
+}
+</style>
+
+<script>
+// Auto-refresh every 30 seconds for processing jobs
+{% if job_stats.processing > 0 %}
+setTimeout(function() {
+    window.location.reload();
+}, 30000);
+{% endif %}
+
+// Job status polling for real-time updates
+function pollJobStatus(jobId) {
+    fetch(`/storefront/${store.slug}/bulk/job/${jobId}/status/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'completed' || data.status === 'failed') {
+                location.reload();
+            }
+        })
+        .catch(error => console.log('Polling error:', error));
+}
+
+// Poll active jobs every 10 seconds
+{% for job in recent_jobs %}
+{% if job.status == 'processing' %}
+setInterval(() => pollJobStatus({{ job.id }}), 10000);
+{% endif %}
+{% endfor %}
+</script>
+{% endblock %}

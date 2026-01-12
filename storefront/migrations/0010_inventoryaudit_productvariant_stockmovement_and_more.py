@@ -9,7 +9,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('listings', '0030_remove_listing_favorited_by'),
+        ('listings', '0029_reviewphoto_reviewtype_alter_review_unique_together_and_more'),
         ('storefront', '0009_alter_mpesapayment_options_and_more'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
