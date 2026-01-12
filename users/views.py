@@ -7,6 +7,7 @@ from django.contrib.auth.views import PasswordChangeView
 from django.views.generic import DetailView, UpdateView
 from django.urls import reverse_lazy
 from django.contrib import messages
+from django.contrib.auth.views import LoginView, LogoutView
 from django import forms
 from .models import User
 from .forms import CustomUserCreationForm, CustomUserChangeForm
@@ -476,3 +477,29 @@ def ajax_password_change(request):
         'success': False,
         'errors': {'__all__': ['Invalid request']}
     })
+
+
+class CustomLoginView(LoginView):
+    template_name = 'users/login.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            messages.info(request, 'You are already logged in!')
+            return redirect('home')
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        try:
+            messages.success(self.request, f'Welcome back, {self.request.user.first_name}!')
+        except Exception:
+            messages.success(self.request, 'Login successful!')
+        return response
+
+
+class CustomLogoutView(LogoutView):
+    template_name = 'users/logout.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        messages.success(request, 'You have been logged out.')
+        return super().dispatch(request, *args, **kwargs)

@@ -305,7 +305,13 @@ def product_create(request, store_slug):
 @login_required
 @store_owner_required
 def product_edit(request, pk):
-    product = get_object_or_404(Listing, pk=pk, seller=request.user)
+    product = get_object_or_404(Listing, pk=pk)
+    # Allow the listing seller, the store owner, or staff to edit
+    user = request.user
+    store_owner_id = product.store.owner_id if product.store else None
+    if not (product.seller == user or store_owner_id == getattr(user, 'id', None) or getattr(user, 'is_staff', False)):
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied("You don't have permission to edit this listing.")
     if request.method == 'POST':
         # Handle removal of the main listing image via a small separate POST
         if request.POST.get('remove_main_image'):
@@ -396,8 +402,13 @@ def product_edit(request, pk):
 @login_required
 @store_owner_required
 def product_delete(request, pk):
-    product = get_object_or_404(Listing, pk=pk, seller=request.user)
-    store_slug = request.POST.get('store_slug') or (product.seller.stores.first().slug if product.seller.stores.exists() else '')
+    product = get_object_or_404(Listing, pk=pk)
+    # Allow seller, store owner, or staff to delete
+    user = request.user
+    store_slug = request.POST.get('store_slug') or (product.store.slug if product.store else (product.seller.stores.first().slug if product.seller.stores.exists() else ''))
+    if not (product.seller == user or (product.store and product.store.owner == user) or getattr(user, 'is_staff', False)):
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied("You don't have permission to delete this listing.")
     if request.method == 'POST':
         product.delete()
         if store_slug:
@@ -411,9 +422,12 @@ def product_delete(request, pk):
 def image_delete(request, pk):
     # Delete a ListingImage
     img = get_object_or_404(ListingImage, pk=pk)
-    # Ensure the requesting user owns the listing
-    if img.listing.seller != request.user:
-        return redirect('storefront:seller_dashboard')
+    # Ensure the requesting user owns the listing or is store owner/staff
+    user = request.user
+    listing = img.listing
+    if not (listing.seller == user or (listing.store and listing.store.owner == user) or getattr(user, 'is_staff', False)):
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied("You don't have permission to delete this image.")
     if request.method == 'POST':
         # Allow a "next" parameter to return to a specific URL (e.g., edit page)
         next_url = request.POST.get('next') or request.GET.get('next')
@@ -1374,13 +1388,54 @@ def store_upgrade(request, slug):
             
             try:
                 mpesa = MpesaGateway()
-                
-                # Check for existing trialing subscription
+
+                # Prevent users from taking a second trial after a previous trial ended
+                past_trial_exists = Subscription.objects.filter(
+                    store__owner=request.user,
+                    trial_ends_at__isnull=False,
+                    trial_ends_at__lt=timezone.now()
+                ).exists()
+
+                if 'start_trial' in request.POST and request.POST.get('start_trial') == '1':
+                    # Start trial without initiating payment
+                    if past_trial_exists:
+                        messages.error(request, "You have already used a trial period and cannot start another one.")
+                        return redirect('storefront:subscription_manage', slug=slug)
+
+                    subscription = Subscription.objects.filter(store=store).first()
+                    if not subscription:
+                        subscription = Subscription.objects.create(
+                            store=store,
+                            plan=selected_plan,
+                            status='trialing',
+                            amount=amount,
+                            trial_ends_at=timezone.now() + timedelta(days=7),
+                            mpesa_phone=phone_number,
+                            metadata={'plan_selected': selected_plan}
+                        )
+                    else:
+                        subscription.plan = selected_plan
+                        subscription.amount = amount
+                        subscription.mpesa_phone = phone_number
+                        subscription.metadata['plan_selected'] = selected_plan
+                        subscription.status = 'trialing'
+                        subscription.trial_ends_at = timezone.now() + timedelta(days=7)
+                        subscription.save()
+
+                    # Activate premium features for trial period
+                    store.is_premium = True
+                    store.save()
+
+                    messages.success(request, "Trial started — premium features are active for the trial period.")
+                    return redirect('storefront:seller_dashboard')
+
+                # Otherwise initiate payment flow (user is subscribing now)
+                # Check for existing active subscription to avoid duplicate payments
                 subscription = Subscription.objects.filter(
                     store=store,
                     status__in=['trialing', 'active']
                 ).first()
-                
+
                 if not subscription:
                     subscription = Subscription.objects.create(
                         store=store,
@@ -1398,14 +1453,14 @@ def store_upgrade(request, slug):
                     subscription.mpesa_phone = phone_number
                     subscription.metadata['plan_selected'] = selected_plan
                     subscription.save()
-                
+
                 # Initiate M-Pesa payment
                 response = mpesa.initiate_stk_push(
                     phone=phone_number,
                     amount=amount,
                     account_reference=f"Store-{store.id}-{selected_plan}"
                 )
-                
+
                 # Create payment record
                 MpesaPayment.objects.create(
                     subscription=subscription,
@@ -1415,7 +1470,7 @@ def store_upgrade(request, slug):
                     amount=amount,
                     status='pending'
                 )
-                
+
                 # Activate store premium features for trial period
                 store.is_premium = True
                 store.save()

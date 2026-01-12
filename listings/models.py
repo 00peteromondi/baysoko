@@ -120,7 +120,7 @@ class Listing(models.Model):
     is_sold = models.BooleanField(default=False)
     is_featured = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
-    favorited_by = models.ManyToManyField(User, related_name='favorited_listings', blank=True)
+    
     
     # Product specifications
     brand = models.CharField(max_length=100, blank=True)
@@ -218,6 +218,29 @@ class Listing(models.Model):
         if self.image:
             import os
             os.makedirs(os.path.join(settings.MEDIA_ROOT, 'listing_images'), exist_ok=True)
+        # Enforce that only stores with active subscriptions (or valid trial)
+        # can set `is_featured` to True. If the store does not have an
+        # eligible subscription, force `is_featured` to False.
+        try:
+            from storefront.models import Subscription
+            from django.utils import timezone as _tz
+
+            if self.is_featured and self.store:
+                now = _tz.now()
+                has_active = Subscription.objects.filter(store=self.store, status='active').exists()
+                has_valid_trial = Subscription.objects.filter(
+                    store=self.store,
+                    status='trialing',
+                    trial_ends_at__gt=now
+                ).exists()
+
+                if not (has_active or has_valid_trial):
+                    # Not allowed to be featured without an active subscription
+                    self.is_featured = False
+        except Exception:
+            # If subscription model/table is not available yet, silently
+            # allow save (pre-migration states) and avoid breaking requests.
+            pass
         
         # Generate slug if not provided
         if not self.slug:

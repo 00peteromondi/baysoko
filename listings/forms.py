@@ -8,7 +8,10 @@ class ListingForm(forms.ModelForm):
     # We'll handle multiple images in the view
     class Meta:
         model = Listing
-        fields = ['title', 'description', 'price', 'category', 'store', 'location', 'image', 'condition', 'delivery_option', 'stock', 'brand', 'model', 'dimensions', 'weight', 'color', 'material', 'meta_description']
+        fields = ['title', 'description', 'price', 'category', 'store', 'location', 'image', 'condition', 'delivery_option', 'stock', 'brand', 'model', 'dimensions', 'weight', 'color', 'material', 'meta_description', 'is_featured']
+        widgets = {
+            'is_featured': forms.CheckboxInput(attrs={'class': 'form-check-input', 'style': 'margin-left:0'}),
+        }
         widgets = {
             'title': forms.TextInput(attrs={'placeholder': 'Enter a catchy title for your item', 'class': 'form-control'}),
             'price': forms.NumberInput(attrs={'min': '0', 'step': '0.01', 'placeholder': '0.00', 'class': 'form-control'}),
@@ -184,7 +187,7 @@ class AIListingForm(ListingForm):
         model = Listing
         fields = ['title', 'description', 'price', 'category', 'store', 'location', 
                  'image', 'condition', 'delivery_option', 'stock', 'brand', 
-                 'model', 'dimensions', 'weight', 'color', 'material', 'meta_description']
+                 'model', 'dimensions', 'weight', 'color', 'material', 'meta_description', 'is_featured']
         widgets = {
             'title': forms.TextInput(attrs={
                 'placeholder': 'Enter a catchy title for your item',

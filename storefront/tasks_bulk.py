@@ -1,0 +1,759 @@
+# storefront/tasks_bulk.py
+from celery import shared_task
+from django.db import transaction
+from django.utils import timezone
+from django.core.files.base import ContentFile
+import json
+import csv
+from io import StringIO, BytesIO
+# Lazy-import heavy libraries (pandas/openpyxl) inside tasks that need them
+from datetime import datetime
+import logging
+from datetime import timedelta
+from django.db.models import Q
+
+
+logger = logging.getLogger('storefront.bulk')
+
+from .models import Store
+from listings.models import Listing, Category
+from .models_bulk import BatchJob, ExportJob, ImportTemplate, BulkOperationLog
+
+@shared_task(bind=True)
+def process_bulk_update_task(self, job_id):
+    """Process bulk update job"""
+    try:
+        job = BatchJob.objects.get(id=job_id)
+        job.status = 'processing'
+        job.started_at = timezone.now()
+        job.save()
+        
+        params = job.parameters
+        action = params.get('action')
+        
+        # Get products to update
+        product_ids = params.get('products', [])
+        apply_to_all = params.get('apply_to_all', False)
+        
+        if apply_to_all:
+            products = job.store.listings.all()
+        elif product_ids:
+            products = job.store.listings.filter(id__in=product_ids)
+        else:
+            # Apply filters
+            products = job.store.listings.all()
+            
+            category_id = params.get('filter_category')
+            if category_id:
+                products = products.filter(category_id=category_id)
+            
+            stock_status = params.get('filter_stock_status')
+            if stock_status == 'in_stock':
+                products = products.filter(stock__gt=0)
+            elif stock_status == 'low_stock':
+                products = products.filter(stock__lte=5, stock__gt=0)
+            elif stock_status == 'out_of_stock':
+                products = products.filter(stock=0)
+            
+            price_min = params.get('filter_price_min')
+            price_max = params.get('filter_price_max')
+            if price_min:
+                products = products.filter(price__gte=price_min)
+            if price_max:
+                products = products.filter(price__lte=price_max)
+        
+        job.total_items = products.count()
+        job.save()
+        
+        success_count = 0
+        error_count = 0
+        errors = []
+        
+        with transaction.atomic():
+            for i, product in enumerate(products):
+                try:
+                    if action == 'update_price':
+                        update_method = params.get('price_update_method')
+                        value = float(params.get('price_value', 0))
+                        
+                        if update_method == 'percentage':
+                            product.price *= (1 + value / 100)
+                        elif update_method == 'fixed':
+                            product.price += value
+                        else:  # set
+                            product.price = value
+                        
+                        # Ensure price is not negative
+                        if product.price < 0:
+                            product.price = 0
+                    
+                    elif action == 'update_stock':
+                        update_method = params.get('stock_update_method')
+                        value = int(params.get('stock_value', 0))
+                        
+                        if update_method == 'percentage':
+                            product.stock = int(product.stock * (1 + value / 100))
+                        elif update_method == 'fixed':
+                            product.stock += value
+                        else:  # set
+                            product.stock = value
+                        
+                        # Ensure stock is not negative
+                        if product.stock < 0:
+                            product.stock = 0
+                    
+                    elif action == 'update_status':
+                        new_status = params.get('new_status')
+                        product.is_active = (new_status == 'active')
+                    
+                    elif action == 'update_category':
+                        category_id = params.get('new_category')
+                        if category_id:
+                            category = Category.objects.get(id=category_id)
+                            product.category = category
+                    
+                    elif action == 'add_tags':
+                        tags_to_add = params.get('tags_to_add', '')
+                        if tags_to_add:
+                            current_tags = set(product.tags or [])
+                            new_tags = [tag.strip() for tag in tags_to_add.split(',') if tag.strip()]
+                            product.tags = list(current_tags.union(new_tags))
+                    
+                    elif action == 'remove_tags':
+                        tags_to_remove = params.get('tags_to_remove', '')
+                        if tags_to_remove:
+                            current_tags = set(product.tags or [])
+                            tags_to_remove_set = set(tag.strip() for tag in tags_to_remove.split(',') if tag.strip())
+                            product.tags = list(current_tags - tags_to_remove_set)
+                    
+                    product.save()
+                    
+                    # Log success
+                    BulkOperationLog.objects.create(
+                        batch_job=job,
+                        item_identifier=f"Product: {product.title} (ID: {product.id})",
+                        action=action,
+                        status='success',
+                        details={'product_id': product.id, 'changes': params}
+                    )
+                    
+                    success_count += 1
+                    
+                except Exception as e:
+                    error_count += 1
+                    error_msg = str(e)
+                    errors.append({
+                        'product_id': product.id if product else None,
+                        'error': error_msg
+                    })
+                    
+                    # Log error
+                    BulkOperationLog.objects.create(
+                        batch_job=job,
+                        item_identifier=f"Product ID: {product.id if product else 'Unknown'}",
+                        action=action,
+                        status='error',
+                        error_message=error_msg,
+                        details={'product_id': product.id if product else None}
+                    )
+                
+                # Update progress
+                job.processed_items = i + 1
+                job.success_count = success_count
+                job.error_count = error_count
+                job.save(update_fields=['processed_items', 'success_count', 'error_count'])
+        
+        # Update job completion
+        job.status = 'completed' if error_count == 0 else 'completed_with_errors'
+        job.completed_at = timezone.now()
+        job.errors = errors
+        job.save()
+        
+        logger.info(f"Bulk update job {job_id} completed: {success_count} success, {error_count} errors")
+        
+        return {
+            'job_id': job_id,
+            'success_count': success_count,
+            'error_count': error_count,
+            'status': job.status
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing bulk update job {job_id}: {str(e)}")
+        
+        try:
+            job = BatchJob.objects.get(id=job_id)
+            job.status = 'failed'
+            job.completed_at = timezone.now()
+            job.errors = [{'error': str(e)}]
+            job.save()
+        except:
+            pass
+        
+        raise
+
+@shared_task(bind=True)
+def process_import_task(self, job_id):
+    """Process import job"""
+    try:
+        job = BatchJob.objects.get(id=job_id)
+        job.status = 'processing'
+        job.started_at = timezone.now()
+        job.save()
+        
+        params = job.parameters
+        template_id = params.get('template_id')
+        
+        # Get template if specified
+        template = None
+        if template_id:
+            try:
+                template = ImportTemplate.objects.get(id=template_id)
+            except ImportTemplate.DoesNotExist:
+                pass
+        
+        # Read file
+        file_content = job.file.read()
+        file_ext = job.file.name.split('.')[-1].lower()
+
+        # Import pandas lazily to avoid hard dependency during startup
+        try:
+            import pandas as pd
+        except Exception:
+            pd = None
+
+        if file_ext == 'csv':
+            if pd is None:
+                raise ImportError('pandas is required to process CSV imports')
+            df = pd.read_csv(BytesIO(file_content))
+        elif file_ext in ['xlsx', 'xls']:
+            if pd is None:
+                raise ImportError('pandas is required to process Excel imports')
+            df = pd.read_excel(BytesIO(file_content))
+        else:
+            raise ValueError(f"Unsupported file format: {file_ext}")
+        
+        # Get field mapping from template or use defaults
+        field_mapping = template.field_mapping if template else {}
+        
+        # Process rows
+        total_rows = len(df)
+        job.total_items = total_rows
+        job.save()
+        
+        success_count = 0
+        error_count = 0
+        errors = []
+        
+        for index, row in df.iterrows():
+            try:
+                # Convert row to dict
+                row_data = row.to_dict()
+                
+                # Apply field mapping
+                mapped_data = {}
+                for csv_col, model_field in field_mapping.items():
+                    if csv_col in row_data:
+                        mapped_data[model_field] = row_data[csv_col]
+                
+                # Process based on template type
+                template_type = params.get('template_type', 'products')
+                
+                if template_type == 'products':
+                    process_product_import_row(job.store, mapped_data, params)
+                
+                # Log success
+                BulkOperationLog.objects.create(
+                    batch_job=job,
+                    item_identifier=f"Row {index + 2}",  # +2 for header row and 1-index
+                    action='import',
+                    status='success',
+                    details=mapped_data
+                )
+                
+                success_count += 1
+                
+            except Exception as e:
+                error_count += 1
+                error_msg = str(e)
+                errors.append({
+                    'row': index + 2,
+                    'error': error_msg,
+                    'data': row_data
+                })
+                
+                # Log error
+                BulkOperationLog.objects.create(
+                    batch_job=job,
+                    item_identifier=f"Row {index + 2}",
+                    action='import',
+                    status='error',
+                    error_message=error_msg,
+                    details=row_data
+                )
+            
+            # Update progress
+            job.processed_items = index + 1
+            job.success_count = success_count
+            job.error_count = error_count
+            job.save(update_fields=['processed_items', 'success_count', 'error_count'])
+        
+        # Update job completion
+        job.status = 'completed' if error_count == 0 else 'completed_with_errors'
+        job.completed_at = timezone.now()
+        job.errors = errors
+        job.save()
+        
+        logger.info(f"Import job {job_id} completed: {success_count} success, {error_count} errors")
+        
+        return {
+            'job_id': job_id,
+            'success_count': success_count,
+            'error_count': error_count,
+            'status': job.status
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing import job {job_id}: {str(e)}")
+        
+        try:
+            job = BatchJob.objects.get(id=job_id)
+            job.status = 'failed'
+            job.completed_at = timezone.now()
+            job.errors = [{'error': str(e)}]
+            job.save()
+        except:
+            pass
+        
+        raise
+
+def process_product_import_row(store, data, params):
+    """Process a single product import row"""
+    sku = data.get('sku')
+    title = data.get('title')
+    
+    if not title:
+        raise ValueError("Product title is required")
+    
+    # Look for existing product
+    product = None
+    if sku:
+        product = Listing.objects.filter(store=store, sku=sku).first()
+    if not product and title:
+        product = Listing.objects.filter(store=store, title__iexact=title).first()
+    
+    update_existing = params.get('update_existing', True)
+    create_new = params.get('create_new', True)
+    
+    if product and not update_existing:
+        return  # Skip existing products
+    
+    if not product and not create_new:
+        return  # Don't create new products
+    
+    with transaction.atomic():
+        if not product:
+            # Create new product
+            product = Listing(store=store, seller=store.owner)
+        
+        # Update fields
+        for field, value in data.items():
+            if hasattr(product, field) and value is not None:
+                # Handle special field types
+                if field == 'price' or field == 'stock':
+                    try:
+                        setattr(product, field, float(value))
+                    except (ValueError, TypeError):
+                        pass
+                elif field == 'is_active':
+                    setattr(product, field, str(value).lower() in ['true', 'yes', '1', 'active'])
+                elif field == 'category' and value:
+                    # Try to find category
+                    category = Category.objects.filter(
+                        name__iexact=str(value).strip()
+                    ).first()
+                    if category:
+                        product.category = category
+                else:
+                    setattr(product, field, value)
+        
+        # Set defaults for required fields
+        if not product.price:
+            product.price = 0
+        if product.stock is None:
+            product.stock = 0
+        if not product.seller:
+            product.seller = store.owner
+        
+        product.save()
+
+@shared_task(bind=True)
+def generate_export_task(self, job_id):
+    """Generate export file"""
+    try:
+        job = ExportJob.objects.get(id=job_id)
+        job.status = 'processing'
+        job.save()
+        
+        store = job.store
+        export_type = job.export_type
+        filters = job.filters
+        columns = job.columns
+        
+        # Generate data based on export type
+        if export_type == 'products':
+            data = export_products(store, filters, columns)
+        elif export_type == 'inventory':
+            data = export_inventory(store, filters, columns)
+        elif export_type == 'customers':
+            data = export_customers(store, filters, columns)
+        elif export_type == 'orders':
+            data = export_orders(store, filters, columns)
+        else:
+            data = export_analytics(store, filters, columns)
+        
+        # Create file based on format
+        format = job.format
+        
+        if format == 'csv':
+            file_content = generate_csv(data, columns)
+            filename = f"{export_type}_export_{timezone.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            content_type = 'text/csv'
+        
+        elif format == 'excel':
+            file_content = generate_excel(data, columns)
+            filename = f"{export_type}_export_{timezone.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            content_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        
+        elif format == 'json':
+            file_content = generate_json(data)
+            filename = f"{export_type}_export_{timezone.now().strftime('%Y%m%d_%H%M%S')}.json"
+            content_type = 'application/json'
+        
+        else:  # pdf
+            file_content = generate_pdf(data, columns, store, export_type)
+            filename = f"{export_type}_report_{timezone.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            content_type = 'application/pdf'
+        
+        # Save file to job
+        job.file.save(filename, ContentFile(file_content))
+        job.file_size = len(file_content)
+        job.status = 'completed'
+        job.completed_at = timezone.now()
+        job.save()
+        
+        logger.info(f"Export job {job_id} completed: {filename}")
+        
+        return {
+            'job_id': job_id,
+            'filename': filename,
+            'file_size': job.file_size,
+            'status': job.status
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating export job {job_id}: {str(e)}")
+        
+        try:
+            job = ExportJob.objects.get(id=job_id)
+            job.status = 'failed'
+            job.error_message = str(e)
+            job.completed_at = timezone.now()
+            job.save()
+        except:
+            pass
+        
+        raise
+
+def export_products(store, filters, columns):
+    """Export products data"""
+    products = store.listings.select_related('category')
+    
+    # Apply filters
+    date_range = filters.get('date_range')
+    if date_range:
+        end_date = timezone.now().date()
+        
+        if date_range == 'today':
+            start_date = end_date
+        elif date_range == 'yesterday':
+            start_date = end_date - timedelta(days=1)
+        elif date_range == 'this_week':
+            start_date = end_date - timedelta(days=end_date.weekday())
+        elif date_range == 'last_week':
+            start_date = end_date - timedelta(days=end_date.weekday() + 7)
+            end_date = start_date + timedelta(days=6)
+        elif date_range == 'this_month':
+            start_date = end_date.replace(day=1)
+        elif date_range == 'last_month':
+            first_day_current = end_date.replace(day=1)
+            end_date = first_day_current - timedelta(days=1)
+            start_date = end_date.replace(day=1)
+        elif date_range == 'custom':
+            start_date = datetime.strptime(filters.get('start_date'), '%Y-%m-%d').date()
+            end_date = datetime.strptime(filters.get('end_date'), '%Y-%m-%d').date()
+        
+        products = products.filter(
+            created_at__date__gte=start_date,
+            created_at__date__lte=end_date
+        )
+    
+    if not filters.get('include_inactive', False):
+        products = products.filter(is_active=True)
+    
+    if not filters.get('include_out_of_stock', True):
+        products = products.filter(stock__gt=0)
+    
+    # Prepare data
+    data = []
+    for product in products:
+        row = {}
+        
+        for column in columns:
+            if column == 'id':
+                row['id'] = product.id
+            elif column == 'title':
+                row['title'] = product.title
+            elif column == 'sku':
+                row['sku'] = product.sku or ''
+            elif column == 'description':
+                row['description'] = product.description or ''
+            elif column == 'price':
+                row['price'] = float(product.price)
+            elif column == 'stock':
+                row['stock'] = product.stock
+            elif column == 'category':
+                row['category'] = product.category.name if product.category else ''
+            elif column == 'condition':
+                row['condition'] = product.get_condition_display() if product.condition else ''
+            elif column == 'location':
+                row['location'] = product.get_location_display() if product.location else ''
+            elif column == 'created_at':
+                row['created_at'] = product.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            elif column == 'is_active':
+                row['is_active'] = 'Active' if product.is_active else 'Inactive'
+        
+        data.append(row)
+    
+    return data
+
+
+def export_inventory(store, filters, columns):
+    """Export inventory (stock) data for store listings"""
+    products = store.listings.select_related('category')
+
+    data = []
+    for product in products:
+        row = {}
+        for column in columns:
+            if column == 'id':
+                row['id'] = product.id
+            elif column == 'title':
+                row['title'] = product.title
+            elif column == 'sku':
+                row['sku'] = product.sku or ''
+            elif column == 'stock':
+                row['stock'] = product.stock
+            elif column == 'price':
+                row['price'] = float(product.price)
+            elif column == 'category':
+                row['category'] = product.category.name if product.category else ''
+            else:
+                row[column] = getattr(product, column, '')
+        data.append(row)
+    return data
+
+
+def export_customers(store, filters, columns):
+    """Return a basic customers export. If no orders/customers model available, return empty list."""
+    try:
+        from listings.models import Order
+        customers = Order.objects.filter(listing__store=store).values('buyer__id', 'buyer__username').distinct()
+        data = []
+        for c in customers:
+            row = {}
+            for column in columns:
+                if column in c:
+                    row[column] = c.get(column)
+                else:
+                    # map common names
+                    if column == 'id':
+                        row['id'] = c.get('buyer__id')
+                    elif column == 'username':
+                        row['username'] = c.get('buyer__username')
+                    else:
+                        row[column] = ''
+            data.append(row)
+        return data
+    except Exception:
+        return []
+
+
+def export_orders(store, filters, columns):
+    """Export orders related to the store. Returns empty list if Order model not found."""
+    try:
+        from listings.models import Order
+        orders = Order.objects.filter(items__listing__store=store).distinct()
+        data = []
+        for order in orders:
+            row = {}
+            for column in columns:
+                if column == 'id':
+                    row['id'] = order.id
+                elif column == 'status':
+                    row['status'] = getattr(order, 'status', '')
+                elif column == 'total':
+                    row['total'] = float(getattr(order, 'total', 0))
+                elif column == 'buyer':
+                    row['buyer'] = getattr(order.buyer, 'username', '') if getattr(order, 'buyer', None) else ''
+                else:
+                    row[column] = getattr(order, column, '')
+            data.append(row)
+        return data
+    except Exception:
+        return []
+
+
+def export_analytics(store, filters, columns):
+    """Basic analytics export: total products, total stock, avg price"""
+    products = store.listings.all()
+    total_products = products.count()
+    total_stock = sum([p.stock or 0 for p in products])
+    avg_price = 0
+    try:
+        avg_price = float(sum([float(p.price or 0) for p in products]) / total_products) if total_products else 0
+    except Exception:
+        avg_price = 0
+
+    metrics = {
+        'total_products': total_products,
+        'total_stock': total_stock,
+        'average_price': round(avg_price, 2),
+    }
+
+    # If columns requested, return as list of one row with requested metrics
+    if columns:
+        row = {col: metrics.get(col, '') for col in columns}
+        return [row]
+    return [metrics]
+
+def generate_csv(data, columns):
+    """Generate CSV from data"""
+    output = StringIO()
+    
+    if not data:
+        writer = csv.writer(output)
+        writer.writerow(['No data available'])
+        return output.getvalue()
+    
+    # Get headers from first row
+    headers = list(data[0].keys()) if data else []
+    
+    writer = csv.DictWriter(output, fieldnames=headers)
+    writer.writeheader()
+    
+    for row in data:
+        writer.writerow(row)
+    
+    return output.getvalue()
+
+def generate_excel(data, columns):
+    """Generate Excel file from data"""
+    from openpyxl import Workbook
+    
+    wb = Workbook()
+    ws = wb.active
+    
+    if not data:
+        ws.append(['No data available'])
+    else:
+        # Write headers
+        headers = list(data[0].keys()) if data else []
+        ws.append(headers)
+        
+        # Write data
+        for row in data:
+            ws.append([row.get(header, '') for header in headers])
+    
+    # Save to bytes
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return output.read()
+
+def generate_json(data):
+    """Generate JSON from data"""
+    return json.dumps(data, indent=2, default=str)
+
+def generate_pdf(data, columns, store, export_type):
+    """Generate PDF report from data"""
+    from reportlab.lib.pagesizes import letter, landscape
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+    from reportlab.lib.units import inch
+    from reportlab.pdfgen import canvas
+    
+    buffer = BytesIO()
+    
+    # Create PDF document
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(letter),
+        rightMargin=72,
+        leftMargin=72,
+        topMargin=72,
+        bottomMargin=72
+    )
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=16,
+        spaceAfter=30,
+        alignment=1  # Center
+    )
+    
+    # Build story
+    story = []
+    
+    # Title
+    story.append(Paragraph(f"{store.name} - {export_type.title()} Report", title_style))
+    story.append(Paragraph(f"Generated: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
+    story.append(Spacer(1, 20))
+    
+    if not data:
+        story.append(Paragraph("No data available", styles['Normal']))
+    else:
+        # Prepare table data
+        headers = list(data[0].keys()) if data else []
+        table_data = [headers]
+        
+        for row in data:
+            table_data.append([str(row.get(header, '')) for header in headers])
+        
+        # Create table
+        table = Table(table_data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ]))
+        
+        story.append(table)
+    
+    # Build PDF
+    doc.build(story)
+    
+    buffer.seek(0)
+    return buffer.read()

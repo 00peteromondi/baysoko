@@ -7,6 +7,8 @@ import cloudinary.uploader
 import cloudinary.api
 import dj_database_url
 from decimal import Decimal
+import redis
+
 
 # Check if we're running migrations - if so, delay some settings
 RUNNING_MIGRATE = 'migrate' in sys.argv
@@ -182,6 +184,8 @@ INSTALLED_APPS = [
     'cloudinary_storage',
     'django_extensions',
     'rest_framework',
+    'django_celery_beat',
+    'django_celery_results',
     
     # Allauth apps
     'allauth',
@@ -225,6 +229,7 @@ CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'homabay_souq.middleware_async_stream.StreamingContentFixMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'homabay_souq.middleware.ClearCorruptedSessionMiddleware',
@@ -263,6 +268,7 @@ TEMPLATES = [
                 'delivery.context_processors.delivery_user_context',
                 'storefront.context_processors.store_context',
                 'storefront.context_processors.subscription_context',
+                'storefront.context_processors.bulk_operations_context',
             ],
         },
     },
@@ -714,3 +720,48 @@ print(f"NAME: {DATABASES.get('default', {}).get('NAME', 'UNKNOWN')}")
 print(f"HOST: {DATABASES.get('default', {}).get('HOST', 'UNKNOWN')}")
 print("=" * 50)
 
+# settings.py additions
+
+
+# Celery Configuration
+CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_CACHE_BACKEND = 'django-cache'
+CELERY_TIMEZONE = 'Africa/Nairobi'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
+
+# Redis for caching and channels
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/1')
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_URL,
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
+    }
+}
+
+# Channels Configuration
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [(REDIS_URL.split('://')[1])],
+        },
+    },
+}
+
+# API Configuration
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+}

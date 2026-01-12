@@ -1,0 +1,606 @@
+{% extends 'base.html' %}
+{% load humanize math_extras %}
+
+{% block title %}Product Variants - {{ product.title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 mb-1">Product Variants</h1>
+            <p class="text-muted mb-0">{{ product.title }}</p>
+        </div>
+        <div class="btn-group">
+            <a href="{% url 'storefront:inventory_list' slug=store.slug %}" 
+               class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Back to Inventory
+            </a>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createVariantModal">
+                <i class="bi bi-plus-circle me-2"></i>Add Variant
+            </button>
+        </div>
+    </div>
+
+    <!-- Product Info Card -->
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-2">
+                    <img src="{{ product.get_image_url }}" 
+                         class="img-fluid rounded" 
+                         style="max-height: 150px; object-fit: cover;"
+                         onerror="this.src='https://placehold.co/300x300/c2c2c2/1f1f1f?text=Product'">
+                </div>
+                <div class="col-md-10">
+                    <h4>{{ product.title }}</h4>
+                    <p class="text-muted mb-2">{{ product.description|truncatechars:200 }}</p>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <small class="text-muted">Base Price</small>
+                            <p class="mb-0 fw-bold">KSh {{ product.price|intcomma }}</p>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Total Stock</small>
+                            <p class="mb-0 fw-bold">
+                                {{ product.stock|intcomma }} units
+                                {% if variants.exists %}
+                                ({{ variants_total_stock|default:0 }} in variants)
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">SKU</small>
+                            <p class="mb-0 fw-bold">{{ product.sku|default:"-" }}</p>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Status</small>
+                            <p class="mb-0">
+                                {% if product.is_active %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Variants Table -->
+    <div class="card shadow">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">Product Variants</h6>
+            <span class="badge bg-primary">{{ variants.count }} variants</span>
+        </div>
+        
+        <div class="card-body">
+            {% if variants %}
+            <div class="table-responsive">
+                <table class="table table-hover" id="variantsTable">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Value</th>
+                            <th>SKU</th>
+                            <th>Price Adjustment</th>
+                            <th>Final Price</th>
+                            <th>Stock</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for variant in variants %}
+                        <tr data-variant-id="{{ variant.id }}">
+                            <td>
+                                <span class="fw-bold">{{ variant.name }}</span>
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ variant.value }}</span>
+                            </td>
+                            <td>
+                                <span class="font-monospace">{{ variant.sku|default:"-" }}</span>
+                            </td>
+                            <td>
+                                {% if variant.price_adjustment > 0 %}
+                                <span class="text-success">+KSh {{ variant.price_adjustment|intcomma }}</span>
+                                {% elif variant.price_adjustment < 0 %}
+                                <span class="text-danger">-KSh {{ variant.price_adjustment|abs|intcomma }}</span>
+                                {% else %}
+                                <span class="text-muted">No adjustment</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="fw-bold text-primary">KSh {{ variant.final_price|intcomma }}</span>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <span class="variant-stock me-2">{{ variant.stock }}</span>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary btn-sm quick-stock-btn"
+                                                data-variant-id="{{ variant.id }}"
+                                                data-variant-name="{{ variant.name }}: {{ variant.value }}"
+                                                data-current-stock="{{ variant.stock }}">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                {% if variant.is_active %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button" class="btn btn-outline-primary edit-variant-btn"
+                                            data-variant-id="{{ variant.id }}"
+                                            data-variant-name="{{ variant.name }}"
+                                            data-variant-value="{{ variant.value }}"
+                                            data-variant-sku="{{ variant.sku }}"
+                                            data-variant-price-adjustment="{{ variant.price_adjustment }}"
+                                            data-variant-stock="{{ variant.stock }}"
+                                            data-variant-is-active="{{ variant.is_active }}"
+                                            data-variant-weight="{{ variant.weight|default:'' }}"
+                                            data-variant-dimensions="{{ variant.dimensions|default:'' }}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <form method="post" action="{% url 'storefront:delete_variant' slug=store.slug variant_id=variant.id %}" 
+                                          class="d-inline"
+                                          onsubmit="return confirm('Are you sure you want to delete this variant?')">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-outline-danger">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Variants Summary -->
+            <div class="row mt-4">
+                <div class="col-md-3">
+                    <div class="card border-left-primary shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                        Total Variants
+                                    </div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ variants.count }}</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="bi bi-list-ul fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    <div class="card border-left-success shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                        Active Variants
+                                    </div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                        {{ variants_active_count }}
+                                    </div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="bi bi-check-circle fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    <div class="card border-left-info shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                        Total Stock in Variants
+                                    </div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ variants_total_stock }}</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="bi bi-box-seam fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3">
+                    <div class="card border-left-warning shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                        Out of Stock
+                                    </div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ out_of_stock_variants }}</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="bi bi-exclamation-triangle fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-box-seam display-4 text-muted mb-3"></i>
+                <h5>No variants yet</h5>
+                <p class="text-muted mb-4">
+                    Variants allow you to offer different options for this product (like size, color, etc.)
+                </p>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createVariantModal">
+                    <i class="bi bi-plus-circle me-2"></i>Add Your First Variant
+                </button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Create Variant Modal -->
+<div class="modal fade" id="createVariantModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add Variant</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'storefront:manage_variants' slug=store.slug product_id=product.id %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Name *</label>
+                            <input type="text" class="form-control" name="name" required 
+                                   placeholder="e.g., Color, Size, Material">
+                            <small class="text-muted">The attribute name (e.g., Color, Size)</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Value *</label>
+                            <input type="text" class="form-control" name="value" required 
+                                   placeholder="e.g., Red, Large, Cotton">
+                            <small class="text-muted">The specific value (e.g., Red, Large)</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">SKU</label>
+                            <input type="text" class="form-control" name="sku" 
+                                   placeholder="Leave empty to auto-generate">
+                            <small class="text-muted">Unique identifier for this variant</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Price Adjustment</label>
+                            <div class="input-group">
+                                <span class="input-group-text">KSh</span>
+                                <input type="number" class="form-control" name="price_adjustment" 
+                                       value="0" step="0.01" placeholder="0.00">
+                            </div>
+                            <small class="text-muted">Positive to increase, negative to decrease from base price</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Stock *</label>
+                            <input type="number" class="form-control" name="stock" required 
+                                   value="0" min="0">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Weight (grams)</label>
+                            <input type="number" class="form-control" name="weight" 
+                                   placeholder="e.g., 500">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Dimensions (LxWxH cm)</label>
+                            <input type="text" class="form-control" name="dimensions" 
+                                   placeholder="e.g., 10x5x3">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" name="is_active" id="is_active" checked>
+                            <label class="form-check-label" for="is_active">
+                                Active (available for purchase)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Variant</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Variant Modal -->
+<div class="modal fade" id="editVariantModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Variant</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" id="editVariantForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <input type="hidden" id="edit_variant_id" name="variant_id">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Name *</label>
+                            <input type="text" class="form-control" id="edit_name" name="name" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Value *</label>
+                            <input type="text" class="form-control" id="edit_value" name="value" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">SKU</label>
+                            <input type="text" class="form-control" id="edit_sku" name="sku">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Price Adjustment</label>
+                            <div class="input-group">
+                                <span class="input-group-text">KSh</span>
+                                <input type="number" class="form-control" id="edit_price_adjustment" 
+                                       name="price_adjustment" step="0.01">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Stock *</label>
+                            <input type="number" class="form-control" id="edit_stock" name="stock" required min="0">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Weight (grams)</label>
+                            <input type="number" class="form-control" id="edit_weight" name="weight">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Dimensions (LxWxH cm)</label>
+                            <input type="text" class="form-control" id="edit_dimensions" name="dimensions">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="edit_is_active" name="is_active">
+                            <label class="form-check-label" for="edit_is_active">
+                                Active (available for purchase)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Stock Modal -->
+<div class="modal fade" id="quickStockModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Quick Stock Update</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Update stock for: <strong id="modalVariantName"></strong></p>
+                <div class="mb-3">
+                    <label class="form-label">Current Stock</label>
+                    <input type="text" class="form-control" id="currentVariantStock" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">New Stock Level</label>
+                    <input type="number" class="form-control" id="newVariantStock" min="0" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveVariantStockBtn">Update Stock</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+#variantsTable tbody tr:hover {
+    background-color: rgba(0,0,0,.02);
+}
+
+.badge {
+    font-size: 0.85em;
+}
+
+.variant-stock {
+    min-width: 30px;
+    text-align: center;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Edit variant buttons
+    const editVariantBtns = document.querySelectorAll('.edit-variant-btn');
+    const editVariantModal = new bootstrap.Modal(document.getElementById('editVariantModal'));
+    const editVariantForm = document.getElementById('editVariantForm');
+    
+    editVariantBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const variantId = this.dataset.variantId;
+            const variantName = this.dataset.variantName;
+            const variantValue = this.dataset.variantValue;
+            const variantSku = this.dataset.variantSku;
+            const variantPriceAdjustment = this.dataset.variantPriceAdjustment;
+            const variantStock = this.dataset.variantStock;
+            const variantIsActive = this.dataset.variantIsActive === 'True';
+            const variantWeight = this.dataset.variantWeight;
+            const variantDimensions = this.dataset.variantDimensions;
+            
+            document.getElementById('edit_variant_id').value = variantId;
+            document.getElementById('edit_name').value = variantName;
+            document.getElementById('edit_value').value = variantValue;
+            document.getElementById('edit_sku').value = variantSku;
+            document.getElementById('edit_price_adjustment').value = variantPriceAdjustment;
+            document.getElementById('edit_stock').value = variantStock;
+            document.getElementById('edit_is_active').checked = variantIsActive;
+            document.getElementById('edit_weight').value = variantWeight;
+            document.getElementById('edit_dimensions').value = variantDimensions;
+            
+            editVariantModal.show();
+        });
+    });
+    
+    // Handle edit form submission
+    editVariantForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const variantId = document.getElementById('edit_variant_id').value;
+        const formData = new FormData(this);
+        
+        // Add CSRF token
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+        
+        fetch(`/dashboard/store/${'{{ store.slug }}'}/variant/${variantId}/edit/`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Error updating variant');
+            }
+        })
+        .catch(error => {
+            alert('Error updating variant');
+        });
+    });
+    
+    // Quick stock update for variants
+    const quickStockBtns = document.querySelectorAll('.quick-stock-btn');
+    const quickStockModal = new bootstrap.Modal(document.getElementById('quickStockModal'));
+    let currentVariantId = null;
+    
+    quickStockBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            currentVariantId = this.dataset.variantId;
+            document.getElementById('modalVariantName').textContent = this.dataset.variantName;
+            document.getElementById('currentVariantStock').value = this.dataset.currentStock;
+            document.getElementById('newVariantStock').value = this.dataset.currentStock;
+            quickStockModal.show();
+        });
+    });
+    
+    document.getElementById('saveVariantStockBtn').addEventListener('click', function() {
+        const newStock = document.getElementById('newVariantStock').value;
+        
+        if (!newStock || newStock < 0) {
+            alert('Please enter a valid stock level');
+            return;
+        }
+        
+        fetch(`/dashboard/store/${'{{ store.slug }}'}/product/${'{{ product.id }}'}/quick-stock/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                stock: parseInt(newStock),
+                variant_id: currentVariantId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update the table cell without reloading
+                const stockCell = document.querySelector(`tr[data-variant-id="${currentVariantId}"] .variant-stock`);
+                if (stockCell) {
+                    stockCell.textContent = newStock;
+                }
+                quickStockModal.hide();
+                showToast('Stock updated successfully', 'success');
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('Error updating stock');
+        });
+    });
+    
+    function showToast(message, type = 'info') {
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '9999';
+            document.body.appendChild(toastContainer);
+        }
+        
+        const toastId = 'toast-' + Date.now();
+        const toast = document.createElement('div');
+        toast.id = toastId;
+        toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body d-flex align-items-center">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        `;
+        
+        toastContainer.appendChild(toast);
+        const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+        bsToast.show();
+        
+        toast.addEventListener('hidden.bs.toast', function() {
+            toast.remove();
+        });
+    }
+});
+</script>
+{% endblock %}

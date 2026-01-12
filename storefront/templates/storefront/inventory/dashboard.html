@@ -1,0 +1,370 @@
+<!-- storefront/templates/storefront/inventory/dashboard.html -->
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Inventory Dashboard - {{ store.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 mb-1">Inventory Dashboard</h1>
+            <p class="text-muted mb-0">Manage your store inventory</p>
+        </div>
+        <div class="btn-group">
+            <a href="{% url 'storefront:adjust_stock' slug=store.slug %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle me-2"></i>Adjust Stock
+            </a>
+            <a href="{% url 'storefront:bulk_stock_update' slug=store.slug %}" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-up-down me-2"></i>Bulk Update
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Products
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_products }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-box-seam fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Low Stock
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ low_stock_items }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-exclamation-triangle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                Out of Stock
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ out_of_stock_items }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-x-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Stock Value
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">KSh {{ stock_value|intcomma }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-currency-dollar fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mb-4">
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <a href="{% url 'storefront:inventory_list' slug=store.slug %}" class="btn btn-light btn-block text-left">
+                                <i class="bi bi-list-ul text-primary mr-2"></i>
+                                View All Products
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <a href="{% url 'storefront:inventory_alerts' slug=store.slug %}" class="btn btn-light btn-block text-left">
+                                <i class="bi bi-bell text-warning mr-2"></i>
+                                Manage Alerts
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <a href="{% url 'storefront:export_inventory' slug=store.slug %}" class="btn btn-light btn-block text-left">
+                                <i class="bi bi-download text-success mr-2"></i>
+                                Export to CSV
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <a href="{% url 'storefront:import_inventory' slug=store.slug %}" class="btn btn-light btn-block text-left">
+                                <i class="bi bi-upload text-info mr-2"></i>
+                                Import from CSV
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Inventory Health</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <span class="font-weight-bold">Turnover Rate:</span>
+                        <span class="float-right {% if turnover_rate > 50 %}text-success{% else %}text-warning{% endif %}">
+                            {{ turnover_rate }}%
+                        </span>
+                        <div class="progress mt-2">
+                            <div class="progress-bar {% if turnover_rate > 50 %}bg-success{% else %}bg-warning{% endif %}" 
+                                 role="progressbar" style="width: {{ turnover_rate|default:0 }}%">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-0">
+                        <span class="font-weight-bold">Active Alerts:</span>
+                        <span class="float-right text-primary">{{ active_alerts }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Stock Movements -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Recent Stock Movements</h6>
+            <a href="{% url 'storefront:stock_movements' slug=store.slug %}" class="btn btn-sm btn-primary">
+                View All
+            </a>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Product</th>
+                            <th>Type</th>
+                            <th>Quantity</th>
+                            <th>Previous</th>
+                            <th>New</th>
+                            <th>Changed By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for movement in recent_movements %}
+                        <tr>
+                            <td>{{ movement.created_at|date:"M d, H:i" }}</td>
+                            <td>
+                                <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=movement.product.slug %}">
+                                    {{ movement.product.title }}
+                                </a>
+                            </td>
+                            <td>
+                                <span class="badge badge-{% if movement.movement_type == 'sale' %}success{% elif movement.movement_type == 'purchase' %}primary{% else %}warning{% endif %}">
+                                    {{ movement.get_movement_type_display }}
+                                </span>
+                            </td>
+                            <td class="{% if movement.quantity > 0 %}text-success{% else %}text-danger{% endif %}">
+                                {% if movement.quantity > 0 %}+{% endif %}{{ movement.quantity }}
+                            </td>
+                            <td>{{ movement.previous_stock }}</td>
+                            <td>{{ movement.new_stock }}</td>
+                            <td>{{ movement.created_by.username|default:"System" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4">No stock movements yet</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Distribution -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Stock by Category</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                {% for category in category_distribution %}
+                <div class="col-md-4 mb-3">
+                    <div class="card border-left-info shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                        {{ category.category__name|default:"Uncategorized" }}
+                                    </div>
+                                    <div class="row no-gutters align-items-center">
+                                        <div class="col-auto">
+                                            <div class="h5 mb-0 mr-3 font-weight-bold text-gray-800">
+                                                {{ category.count }} products
+                                            </div>
+                                        </div>
+                                        <div class="col">
+                                            <div class="progress progress-sm mr-2">
+                                                <div class="progress-bar bg-info" role="progressbar"
+                                                    style="width: {{ category.total_stock|default:0 }}%">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2">
+                                        <small class="text-muted">{{ category.total_stock|default:0 }} units in stock</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-12 text-center py-4">
+                    <p class="text-muted">No category distribution data available</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card {
+    border-radius: 0.35rem;
+    border: 1px solid #e3e6f0;
+}
+
+.border-left-primary {
+    border-left: 0.25rem solid #4e73df !important;
+}
+
+.border-left-warning {
+    border-left: 0.25rem solid #f6c23e !important;
+}
+
+.border-left-danger {
+    border-left: 0.25rem solid #e74a3b !important;
+}
+
+.border-left-success {
+    border-left: 0.25rem solid #1cc88a !important;
+}
+
+.border-left-info {
+    border-left: 0.25rem solid #36b9cc !important;
+}
+
+.progress {
+    border-radius: 0.35rem;
+}
+
+.progress-sm {
+    height: 0.5rem;
+}
+</style>
+
+<script>
+// Auto-refresh every 30 seconds
+setTimeout(function() {
+    window.location.reload();
+}, 30000);
+
+// Quick stock update via modal
+function openQuickStockModal(productId, currentStock, productName) {
+    $('#quickStockProductName').text(productName);
+    $('#quickStockCurrent').text(currentStock);
+    $('#quickStockProductId').val(productId);
+    $('#quickStockInput').val(currentStock);
+    $('#quickStockModal').modal('show');
+}
+
+$('#quickStockForm').on('submit', function(e) {
+    e.preventDefault();
+    
+    const productId = $('#quickStockProductId').val();
+    const newStock = $('#quickStockInput').val();
+    
+    $.ajax({
+        url: '{% url "storefront:quick_stock_update" slug=store.slug product_id=0 %}'.replace('0', productId),
+        method: 'POST',
+        data: JSON.stringify({ stock: newStock }),
+        contentType: 'application/json',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        success: function(response) {
+            if (response.success) {
+                location.reload();
+            } else {
+                alert('Error: ' + response.error);
+            }
+        },
+        error: function() {
+            alert('Error updating stock');
+        }
+    });
+});
+</script>
+
+<!-- Quick Stock Modal -->
+<div class="modal fade" id="quickStockModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Quick Stock Update</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Update stock for: <strong id="quickStockProductName"></strong></p>
+                <p>Current stock: <span id="quickStockCurrent" class="font-weight-bold"></span></p>
+                
+                <form id="quickStockForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="quickStockProductId">
+                    <div class="form-group">
+                        <label for="quickStockInput">New Stock Level</label>
+                        <input type="number" min="0" class="form-control" id="quickStockInput" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Update Stock</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

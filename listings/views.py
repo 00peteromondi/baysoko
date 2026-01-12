@@ -115,7 +115,7 @@ class ListingListView(ListView):
             is_active=True,
             is_sold=False
         ).annotate(
-            favorite_count=Count('favorited_by')
+            favorite_count=Count('favorites')
         ).order_by('-favorite_count', '-date_created')[:8]
         
         # New arrivals (similar to existing but properly limited)
@@ -140,20 +140,16 @@ class ListingListView(ListView):
             original_price__gt=F('price')
         ).order_by('-date_created')[:4]
         
+       # Replace this section in the ListingListView.get_context_data method:
         user_favorites = set()
         try:
             if self.request.user.is_authenticated:
-                # Prefer the reverse related_name 'favorites' if present on User
-                if hasattr(self.request.user, 'favorites'):
-                    qs = self.request.user.favorites.values_list('pk', flat=True)
-                else:
-                    # Fallback to explicit Listing lookup (works if Listing has favorited_by M2M)
-                    qs = Listing.objects.filter(favorited_by=self.request.user).values_list('pk', flat=True)
-                # Force evaluation inside try so DB errors are caught here
-                user_favorites = set(int(pk) for pk in qs)
+                # Use the Favorite model directly
+                qs = Favorite.objects.filter(user=self.request.user).values_list('listing__pk', flat=True)
+                user_favorites = set(int(pk) for pk in qs if pk is not None)
         except (db_utils.OperationalError, db_utils.ProgrammingError, Exception) as exc:
             # Don't raise — log and continue with empty favorites.
-            logger.warning("Could not load user favorites (possibly missing migrations / table): %s", exc)
+            logger.warning("Could not load user favorites: %s", exc)
             user_favorites = set()
 
         context['user_favorites'] = user_favorites
@@ -488,7 +484,25 @@ class ListingUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
         # Handle main image update
         if 'image' in self.request.FILES:
             form.instance.image = self.request.FILES['image']
-        
+        # Enforce is_featured rules gracefully: if user attempted to set it but
+        # their store does not have an active subscription or valid trial,
+        # silently unset it and notify the user; do not block the update.
+        try:
+            if 'is_featured' in form.cleaned_data and form.cleaned_data.get('is_featured'):
+                store = form.instance.store or Store.objects.filter(owner=self.request.user).first()
+                from storefront.models import Subscription
+                from django.utils import timezone as _tz
+                now = _tz.now()
+                has_active = Subscription.objects.filter(store=store, status='active').exists() if store else False
+                has_valid_trial = Subscription.objects.filter(store=store, status='trialing', trial_ends_at__gt=now).exists() if store else False
+                if not (has_active or has_valid_trial):
+                    form.instance.is_featured = False
+                    messages.info(self.request, "Featured listings require an active subscription or valid trial. The featured flag was not applied.")
+
+        except Exception:
+            # If Subscription model/table missing, don't block updating.
+            pass
+
         response = super().form_valid(form)
         
         # Handle multiple image uploads
@@ -676,10 +690,13 @@ def toggle_favorite(request, listing_id):
         if listing.seller != request.user:
             notify_listing_favorited(listing.seller, request.user, listing)
     
+    # Count favorites using the Favorite model instead of ManyToMany
+    favorite_count = Favorite.objects.filter(listing=listing).count()
+    
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return JsonResponse({
             'is_favorited': is_favorited,
-            'favorite_count': listing.favorited_by.count()
+            'favorite_count': favorite_count
         })
     
     return redirect('listing-detail', pk=listing_id)

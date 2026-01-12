@@ -1,0 +1,674 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Inventory List - {{ store.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 mb-1">Inventory List</h1>
+            <p class="text-muted mb-0">{{ store.name }}</p>
+        </div>
+        <div class="btn-group">
+            <a href="{% url 'storefront:inventory_dashboard' slug=store.slug %}" 
+               class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+            </a>
+            <a href="{% url 'storefront:adjust_stock' slug=store.slug %}" 
+               class="btn btn-primary">
+                <i class="bi bi-plus-circle me-2"></i>Adjust Stock
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters Card -->
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Search</label>
+                    <input type="text" name="q" class="form-control" 
+                           placeholder="Search products..." value="{{ search_query }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Category</label>
+                    <select name="category" class="form-select">
+                        <option value="">All Categories</option>
+                        {% for category in categories %}
+                        <option value="{{ category.id }}" 
+                                {% if selected_category == category.id|stringformat:"i" %}selected{% endif %}>
+                            {{ category.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Stock Status</label>
+                    <select name="stock_status" class="form-select">
+                        <option value="">All</option>
+                        <option value="low" {% if selected_status == 'low' %}selected{% endif %}>Low Stock</option>
+                        <option value="out" {% if selected_status == 'out' %}selected{% endif %}>Out of Stock</option>
+                        <option value="good" {% if selected_status == 'good' %}selected{% endif %}>Good Stock</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-filter me-2"></i>Filter
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Products Table -->
+    <div class="card shadow">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                Products ({{ page_obj.paginator.count }})
+            </h6>
+            <div class="d-flex gap-2">
+                <select class="form-select form-select-sm w-auto" id="sortSelect">
+                    <option value="name_asc" {% if sort_by == 'name' and sort_order == 'asc' %}selected{% endif %}>
+                        Name A-Z
+                    </option>
+                    <option value="name_desc" {% if sort_by == 'name' and sort_order == 'desc' %}selected{% endif %}>
+                        Name Z-A
+                    </option>
+                    <option value="stock_asc" {% if sort_by == 'stock' and sort_order == 'asc' %}selected{% endif %}>
+                        Stock Low-High
+                    </option>
+                    <option value="stock_desc" {% if sort_by == 'stock' and sort_order == 'desc' %}selected{% endif %}>
+                        Stock High-Low
+                    </option>
+                    <option value="price_asc" {% if sort_by == 'price' and sort_order == 'asc' %}selected{% endif %}>
+                        Price Low-High
+                    </option>
+                    <option value="price_desc" {% if sort_by == 'price' and sort_order == 'desc' %}selected{% endif %}>
+                        Price High-Low
+                    </option>
+                </select>
+                <div class="btn-group">
+                    <a href="{% url 'storefront:export_inventory' slug=store.slug %}" 
+                       class="btn btn-sm btn-outline-success">
+                        <i class="bi bi-download me-1"></i>Export
+                    </a>
+                    <a href="{% url 'storefront:import_inventory' slug=store.slug %}" 
+                       class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-upload me-1"></i>Import
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="inventoryTable">
+                    <thead>
+                        <tr>
+                            <th width="5%">
+                                <input type="checkbox" id="selectAll" class="form-check-input">
+                            </th>
+                            <th>Product</th>
+                            <th width="15%">SKU</th>
+                            <th width="10%">Price</th>
+                            <th width="15%">Stock</th>
+                            <th width="15%">Category</th>
+                            <th width="10%">Status</th>
+                            <th width="15%">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in page_obj %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" class="form-check-input product-checkbox" 
+                                       value="{{ product.id }}">
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <img src="{{ product.get_image_url }}" 
+                                         class="rounded me-3" 
+                                         style="width: 50px; height: 50px; object-fit: cover;"
+                                         onerror="this.src='https://placehold.co/50x50/c2c2c2/1f1f1f?text=Product'">
+                                    <div>
+                                        <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=product.slug %}" 
+                                           class="font-weight-bold text-dark mb-0">
+                                            {{ product.title }}
+                                        </a>
+                                        {% if product.description %}
+                                        <p class="text-muted small mb-0">
+                                            {{ product.description|truncatechars:50 }}
+                                        </p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="font-monospace">{{ product.sku|default:"-" }}</span>
+                            </td>
+                            <td>
+                                <span class="fw-bold">KSh {{ product.price|intcomma }}</span>
+                            </td>
+                            <td>
+                                {% include 'storefront/inventory/partials/stock_badge.html' with product=product %}
+                                {% if product.variants.exists %}
+                                <small class="text-muted d-block">
+                                    {{ product.variants.count }} variants
+                                </small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if product.category %}
+                                <span class="badge bg-info">{{ product.category.name }}</span>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if product.is_active %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary quick-stock-btn"
+                                            data-product-id="{{ product.id }}"
+                                            data-product-name="{{ product.title }}"
+                                            data-current-stock="{{ product.stock }}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <a href="{% url 'storefront:product_edit' pk=product.id %}" 
+                                       class="btn btn-outline-secondary">
+                                        <i class="bi bi-gear"></i>
+                                    </a>
+                                    <a href="{% url 'storefront:manage_variants' slug=store.slug product_id=product.id %}" 
+                                       class="btn btn-outline-info">
+                                        <i class="bi bi-list-ul"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-5">
+                                <i class="bi bi-inbox display-4 text-muted mb-3"></i>
+                                <h5>No products found</h5>
+                                <p class="text-muted">Try adjusting your filters or add new products.</p>
+                                <a href="{% url 'storefront:product_create' store_slug=store.slug %}" 
+                                   class="btn btn-primary">
+                                    <i class="bi bi-plus-circle me-2"></i>Add Products
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Bulk Actions Bar -->
+            <div id="bulkActions" class="mt-3 p-3 bg-light rounded d-none">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span id="selectedCount">0</span> products selected
+                    </div>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                data-bs-toggle="dropdown">
+                            <i class="bi bi-gear me-2"></i>Bulk Actions
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <a class="dropdown-item bulk-action-btn" 
+                                   data-action="activate">
+                                    <i class="bi bi-check-circle text-success me-2"></i>Activate
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item bulk-action-btn" 
+                                   data-action="deactivate">
+                                    <i class="bi bi-x-circle text-danger me-2"></i>Deactivate
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item bulk-action-btn" 
+                                   data-action="set_stock"
+                                   data-bs-toggle="modal" 
+                                   data-bs-target="#setStockModal">
+                                    <i class="bi bi-box text-primary me-2"></i>Set Stock Level
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item bulk-action-btn" 
+                                   data-action="add_to_category"
+                                   data-bs-toggle="modal" 
+                                   data-bs-target="#categoryModal">
+                                    <i class="bi bi-tag text-info me-2"></i>Assign Category
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item text-danger bulk-action-btn" 
+                                   data-action="delete"
+                                   data-bs-toggle="modal" 
+                                   data-bs-target="#deleteModal">
+                                    <i class="bi bi-trash me-2"></i>Delete Products
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            {% if page_obj.paginator.num_pages > 1 %}
+            <nav class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                {{ num }}
+                            </a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Quick Stock Modal -->
+<div class="modal fade" id="quickStockModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Quick Stock Update</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Update stock for: <strong id="modalProductName"></strong></p>
+                <div class="mb-3">
+                    <label class="form-label">Current Stock</label>
+                    <input type="text" class="form-control" id="currentStock" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">New Stock Level</label>
+                    <input type="number" class="form-control" id="newStock" min="0" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Notes (Optional)</label>
+                    <textarea class="form-control" id="stockNotes" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveStockBtn">Update Stock</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Set Stock Modal -->
+<div class="modal fade" id="setStockModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Set Stock Level</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Set stock level for <span id="setStockCount">0</span> selected products.</p>
+                <div class="mb-3">
+                    <label class="form-label">Stock Level</label>
+                    <input type="number" class="form-control" id="bulkStockValue" min="0" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="applyBulkStock">Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Category Modal -->
+<div class="modal fade" id="categoryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Assign Category</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Assign category to <span id="categoryCount">0</span> selected products.</p>
+                <div class="mb-3">
+                    <label class="form-label">Category</label>
+                    <select class="form-select" id="bulkCategory">
+                        <option value="">Select Category</option>
+                        {% for category in categories %}
+                        <option value="{{ category.id }}">{{ category.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="applyBulkCategory">Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-danger">Delete Products</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Are you sure you want to delete <span id="deleteCount">0</span> selected products?
+                </p>
+                <p class="text-muted">
+                    This action cannot be undone. All product data including images and variants will be permanently deleted.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDelete">Delete Products</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+#inventoryTable tbody tr:hover {
+    background-color: rgba(0,0,0,.02);
+}
+
+.product-checkbox:checked {
+    background-color: var(--primary);
+    border-color: var(--primary);
+}
+
+.stock-low {
+    color: #f39c12;
+    font-weight: 600;
+}
+
+.stock-out {
+    color: #e74c3c;
+    font-weight: 600;
+}
+
+.stock-good {
+    color: #27ae60;
+    font-weight: 600;
+}
+
+#bulkActions {
+    transition: all 0.3s ease;
+    position: sticky;
+    bottom: 20px;
+    z-index: 1000;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Checkbox functionality
+    const selectAll = document.getElementById('selectAll');
+    const productCheckboxes = document.querySelectorAll('.product-checkbox');
+    const bulkActions = document.getElementById('bulkActions');
+    const selectedCount = document.getElementById('selectedCount');
+    
+    function updateBulkActions() {
+        const checkedCount = document.querySelectorAll('.product-checkbox:checked').length;
+        selectedCount.textContent = checkedCount;
+        
+        // Update modal counts
+        document.getElementById('setStockCount').textContent = checkedCount;
+        document.getElementById('categoryCount').textContent = checkedCount;
+        document.getElementById('deleteCount').textContent = checkedCount;
+        
+        if (checkedCount > 0) {
+            bulkActions.classList.remove('d-none');
+        } else {
+            bulkActions.classList.add('d-none');
+        }
+    }
+    
+    selectAll.addEventListener('change', function() {
+        const isChecked = this.checked;
+        productCheckboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+        });
+        updateBulkActions();
+    });
+    
+    productCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateBulkActions);
+    });
+    
+    // Quick stock update
+    const quickStockBtns = document.querySelectorAll('.quick-stock-btn');
+    const quickStockModal = new bootstrap.Modal(document.getElementById('quickStockModal'));
+    let currentProductId = null;
+    
+    quickStockBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            currentProductId = this.dataset.productId;
+            document.getElementById('modalProductName').textContent = this.dataset.productName;
+            document.getElementById('currentStock').value = this.dataset.currentStock;
+            document.getElementById('newStock').value = this.dataset.currentStock;
+            document.getElementById('stockNotes').value = '';
+            quickStockModal.show();
+        });
+    });
+    
+    document.getElementById('saveStockBtn').addEventListener('click', function() {
+        const newStock = document.getElementById('newStock').value;
+        const notes = document.getElementById('stockNotes').value;
+        
+        if (!newStock || newStock < 0) {
+            alert('Please enter a valid stock level');
+            return;
+        }
+        
+        fetch(`{% url 'storefront:quick_stock_update' slug=store.slug product_id=0 %}`.replace('0', currentProductId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                stock: parseInt(newStock),
+                notes: notes
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('Error updating stock');
+        });
+    });
+    
+    // Sort select
+    document.getElementById('sortSelect').addEventListener('change', function() {
+        const value = this.value;
+        const [sortBy, sortOrder] = value.split('_');
+        
+        const url = new URL(window.location);
+        url.searchParams.set('sort', sortBy);
+        url.searchParams.set('order', sortOrder);
+        window.location.href = url.toString();
+    });
+    
+    // Bulk actions
+    document.querySelectorAll('.bulk-action-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const action = this.dataset.action;
+            const selectedIds = Array.from(document.querySelectorAll('.product-checkbox:checked'))
+                .map(cb => cb.value);
+            
+            if (selectedIds.length === 0) {
+                alert('Please select at least one product');
+                return;
+            }
+            
+            // Handle modal-based actions
+            if (action === 'set_stock' || action === 'add_to_category' || action === 'delete') {
+                return; // Let modal handle it
+            }
+            
+            // Handle immediate actions
+            performBulkAction(action, selectedIds);
+        });
+    });
+    
+    // Apply bulk stock
+    document.getElementById('applyBulkStock').addEventListener('click', function() {
+        const selectedIds = getSelectedProductIds();
+        const stockValue = document.getElementById('bulkStockValue').value;
+        
+        if (!stockValue || stockValue < 0) {
+            alert('Please enter a valid stock level');
+            return;
+        }
+        
+        performBulkAction('set_stock', selectedIds, { value: parseInt(stockValue) });
+        bootstrap.Modal.getInstance(document.getElementById('setStockModal')).hide();
+    });
+    
+    // Apply bulk category
+    document.getElementById('applyBulkCategory').addEventListener('click', function() {
+        const selectedIds = getSelectedProductIds();
+        const categoryId = document.getElementById('bulkCategory').value;
+        
+        if (!categoryId) {
+            alert('Please select a category');
+            return;
+        }
+        
+        performBulkAction('add_to_category', selectedIds, { value: categoryId });
+        bootstrap.Modal.getInstance(document.getElementById('categoryModal')).hide();
+    });
+    
+    // Confirm delete
+    document.getElementById('confirmDelete').addEventListener('click', function() {
+        const selectedIds = getSelectedProductIds();
+        performBulkAction('delete', selectedIds);
+        bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+    });
+    
+    function getSelectedProductIds() {
+        return Array.from(document.querySelectorAll('.product-checkbox:checked'))
+            .map(cb => cb.value);
+    }
+    
+    function performBulkAction(action, productIds, extraData = {}) {
+        const data = {
+            product_ids: productIds,
+            action: action,
+            ...extraData
+        };
+        
+        fetch('{% url "storefront:quick_bulk_action" slug=store.slug %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message, 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast('Error: ' + data.error, 'error');
+            }
+        })
+        .catch(error => {
+            showToast('Error performing bulk action', 'error');
+        });
+    }
+    
+    function showToast(message, type = 'info') {
+        // Create toast container if it doesn't exist
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '9999';
+            document.body.appendChild(toastContainer);
+        }
+        
+        const toastId = 'toast-' + Date.now();
+        const toast = document.createElement('div');
+        toast.id = toastId;
+        toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body d-flex align-items-center">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        `;
+        
+        toastContainer.appendChild(toast);
+        const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+        bsToast.show();
+        
+        toast.addEventListener('hidden.bs.toast', function() {
+            toast.remove();
+        });
+    }
+});
+</script>
+{% endblock %}

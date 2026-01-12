@@ -1,5 +1,7 @@
 from django.urls import path
 from . import views, mpesa_webhook
+from .urls_inventory import inventory_patterns
+from .urls_bulk import bulk_patterns, bundle_patterns
 
 app_name = 'storefront'
 
@@ -55,3 +57,5 @@ urlpatterns = [
     # M-Pesa webhook
     path('mpesa/callback/', mpesa_webhook.mpesa_callback, name='mpesa_callback'),
 ]
+
+urlpatterns += inventory_patterns + bulk_patterns + bundle_patterns

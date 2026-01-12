@@ -441,3 +441,123 @@ class MpesaPayment(models.Model):
         return self.status == 'completed'
 
 
+# Add to existing models.py
+import json
+from django.db import models
+from django.utils import timezone
+from django.core.validators import MinValueValidator, MaxValueValidator
+
+class InventoryAlert(models.Model):
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='inventory_alerts')
+    product = models.ForeignKey('listings.Listing', on_delete=models.CASCADE)
+    threshold = models.IntegerField(default=5, validators=[MinValueValidator(1)])
+    alert_type = models.CharField(max_length=20, choices=[
+        ('low_stock', 'Low Stock'),
+        ('out_of_stock', 'Out of Stock'),
+        ('expiring', 'Expiring Soon')
+    ], default='low_stock')
+    is_active = models.BooleanField(default=True)
+    last_triggered = models.DateTimeField(null=True, blank=True)
+    notification_method = models.JSONField(default=list)  # ['email', 'sms', 'dashboard']
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['store', 'product', 'alert_type']
+    
+    def __str__(self):
+        return f"{self.product.title} - {self.get_alert_type_display()}"
+    
+    def check_condition(self):
+        """Check if alert condition is met"""
+        current_stock = self.product.stock
+        if self.alert_type == 'low_stock':
+            return current_stock <= self.threshold and current_stock > 0
+        elif self.alert_type == 'out_of_stock':
+            return current_stock == 0
+        return False
+
+class ProductVariant(models.Model):
+    listing = models.ForeignKey('listings.Listing', on_delete=models.CASCADE, related_name='variants')
+    name = models.CharField(max_length=100)  # e.g., "Color", "Size"
+    value = models.CharField(max_length=100)  # e.g., "Red", "Large"
+    sku = models.CharField(max_length=100, unique=True, blank=True)
+    price_adjustment = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0,
+        help_text="Positive for increase, negative for decrease"
+    )
+    stock = models.IntegerField(default=0, validators=[MinValueValidator(0)])
+    weight = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)  # in grams
+    dimensions = models.CharField(max_length=100, blank=True)  # "LxWxH in cm"
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['listing', 'name', 'value']
+        ordering = ['name', 'value']
+    
+    def __str__(self):
+        return f"{self.listing.title} - {self.name}: {self.value}"
+    
+    @property
+    def final_price(self):
+        """Calculate final price with adjustment"""
+        base_price = self.listing.price
+        return max(0, base_price + self.price_adjustment)
+    
+    @property
+    def is_in_stock(self):
+        """Check if variant is in stock"""
+        return self.stock > 0
+
+class StockMovement(models.Model):
+    MOVEMENT_TYPES = [
+        ('purchase', 'Purchase'),
+        ('sale', 'Sale'),
+        ('return', 'Return'),
+        ('adjustment', 'Adjustment'),
+        ('transfer', 'Transfer'),
+        ('damage', 'Damage'),
+        ('expired', 'Expired'),
+    ]
+    
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='stock_movements')
+    product = models.ForeignKey('listings.Listing', on_delete=models.CASCADE)
+    variant = models.ForeignKey(ProductVariant, on_delete=models.SET_NULL, null=True, blank=True)
+    movement_type = models.CharField(max_length=20, choices=MOVEMENT_TYPES)
+    quantity = models.IntegerField()
+    previous_stock = models.IntegerField()
+    new_stock = models.IntegerField()
+    reference = models.CharField(max_length=100, blank=True)  # Order ID, Transfer ID, etc.
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.get_movement_type_display()} - {self.product.title} ({self.quantity})"
+
+class InventoryAudit(models.Model):
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='inventory_audits')
+    audit_date = models.DateTimeField()
+    auditor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    total_items = models.IntegerField(default=0)
+    items_counted = models.IntegerField(default=0)
+    discrepancies = models.IntegerField(default=0)
+    status = models.CharField(max_length=20, choices=[
+        ('pending', 'Pending'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('adjusted', 'Adjusted')
+    ], default='pending')
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-audit_date']
+    
+    def __str__(self):
+        return f"Audit {self.audit_date.strftime('%Y-%m-%d')} - {self.store.name}"

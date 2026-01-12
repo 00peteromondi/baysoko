@@ -830,6 +830,31 @@
             height: 160px;
         }
     }
+    /* Animation styles for favorites */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: scale(0.8); }
+        to { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes bounce {
+        0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
+        40% {transform: translateY(-10px);}
+        60% {transform: translateY(-5px);}
+    }
+
+    .favorite-count-badge {
+        animation: fadeIn 0.3s ease;
+        background: var(--primary);
+        color: white;
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-weight: 600;
+    }
+
+    .listing-favorite.favorited {
+        animation: bounce 0.6s ease;
+    }
 </style>
 {% endblock %}
 
@@ -1228,15 +1253,13 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('apply-filters').click();
     });
 
-    // Favorite button animations
+   // Simple favorite button with count update
     document.querySelectorAll('.listing-favorite').forEach(button => {
         button.addEventListener('click', function(e) {
             e.preventDefault();
             const form = this.closest('form');
             const icon = this.querySelector('i');
-            
-            // Add click animation
-            this.style.transform = 'scale(0.9)';
+            const listingId = this.closest('form').action.split('/').filter(Boolean).pop();
             
             fetch(form.action, {
                 method: 'POST',
@@ -1247,11 +1270,7 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(response => response.json())
             .then(data => {
-                // Reset animation
-                setTimeout(() => {
-                    this.style.transform = '';
-                }, 150);
-                
+                // Update button state
                 if (data.is_favorited) {
                     this.classList.add('favorited');
                     icon.classList.remove('bi-heart');
@@ -1260,6 +1279,40 @@ document.addEventListener('DOMContentLoaded', function() {
                     this.classList.remove('favorited');
                     icon.classList.remove('bi-heart-fill');
                     icon.classList.add('bi-heart');
+                }
+                
+                // Simple count update - find and update any existing count display
+                const countSpans = document.querySelectorAll(`[data-favorite-count-for="${listingId}"]`);
+                countSpans.forEach(span => {
+                    span.textContent = data.favorite_count;
+                });
+                
+                // If no count span exists, create a small badge on the button
+                if (!this.querySelector('.favorite-count')) {
+                    const countSpan = document.createElement('span');
+                    countSpan.className = 'favorite-count';
+                    countSpan.style.cssText = `
+                        position: absolute;
+                        top: -5px;
+                        right: -5px;
+                        background: var(--danger);
+                        color: white;
+                        font-size: 0.6rem;
+                        padding: 1px 4px;
+                        border-radius: 50%;
+                        min-width: 16px;
+                        text-align: center;
+                    `;
+                    countSpan.textContent = data.favorite_count;
+                    this.style.position = 'relative';
+                    this.appendChild(countSpan);
+                    
+                    // Remove badge after 2 seconds
+                    setTimeout(() => {
+                        if (countSpan.parentNode === this) {
+                            this.removeChild(countSpan);
+                        }
+                    }, 2000);
                 }
             })
             .catch(error => console.error('Error:', error));
