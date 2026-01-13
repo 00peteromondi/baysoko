@@ -1,1440 +1,1273 @@
-<!-- profile.html -->
 {% extends 'base.html' %}
-{% load static humanize %}
+{% load static %}
+{% load humanize %}
 
-{% block title %}{{ profile_user.username }} - Baysoko{% endblock %}
+{% block title %}{{ profile_user.username }} - Profile - Baysoko{% endblock %}
 
 {% block extra_css %}
 <style>
-    .profile-container {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: var(--spacing-md);
+    /* ===== PROFILE STYLES ===== */
+    .container-custom {
+        padding-left: 8px;
+        padding-right: 8px;
     }
 
-    /* Profile Header Card - Revamped */
-    .profile-header-card {
-        background: linear-gradient(145deg, var(--card-bg) 0%, var(--bg-secondary) 100%);
-        border-radius: var(--radius-xl);
-        padding: var(--spacing-xl);
-        margin-bottom: var(--spacing-lg);
+    /* ===== PROFILE HERO ===== */
+    .profile-hero {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
         border: 1px solid var(--border-color);
-        box-shadow: var(--shadow-lg);
         position: relative;
+    }
+
+    .profile-cover-container {
+        position: relative;
+        height: 180px;
         overflow: hidden;
     }
 
-    .profile-header-card::before {
-        content: '';
+    .profile-cover {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .profile-cover-overlay {
         position: absolute;
         top: 0;
         left: 0;
-        right: 0;
-        height: 6px;
-        background: linear-gradient(90deg, var(--primary), var(--accent), var(--success));
-        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.7) 100%);
     }
 
-    .profile-header-content {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: var(--spacing-xl);
-        align-items: start;
+    .profile-info-header {
+        padding: 16px;
+        position: relative;
+        margin-top: -40px;
+        z-index: 2;
     }
 
-    .profile-avatar-section {
+    .profile-avatar-container {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 4px solid var(--card-bg);
+        background: white;
+        margin-bottom: 12px;
         position: relative;
     }
 
     .profile-avatar {
-        width: 140px;
-        height: 140px;
-        border-radius: var(--radius-full);
+        width: 100%;
+        height: 100%;
         object-fit: cover;
-        border: 5px solid var(--card-bg);
-        box-shadow: var(--shadow-xl);
-        background: linear-gradient(135deg, var(--primary-light) 0%, var(--accent) 100%);
-        position: relative;
-        z-index: 2;
     }
 
-    .profile-avatar-ring {
+    .profile-verified-badge {
         position: absolute;
-        top: -8px;
-        left: -8px;
-        right: -8px;
-        bottom: -8px;
-        border-radius: var(--radius-full);
-        border: 3px solid rgba(255, 107, 53, 0.3);
-        z-index: 1;
-        animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-        0% { transform: scale(1); opacity: 0.3; }
-        50% { transform: scale(1.05); opacity: 0.5; }
-        100% { transform: scale(1); opacity: 0.3; }
-    }
-
-    .profile-info-section {
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-md);
-    }
-
-    .profile-name-row {
+        bottom: 5px;
+        right: 5px;
+        width: 24px;
+        height: 24px;
+        background: var(--primary);
+        border-radius: 50%;
+        border: 2px solid var(--card-bg);
         display: flex;
         align-items: center;
-        gap: var(--spacing-md);
-        flex-wrap: wrap;
+        justify-content: center;
+        color: white;
+        font-size: 12px;
     }
 
-    .profile-name {
-        font-family: var(--font-heading);
-        font-size: 2rem;
+    .profile-title {
+        font-size: 20px;
         font-weight: 800;
+        margin-bottom: 4px;
         color: var(--text-primary);
-        line-height: 1.2;
-        margin: 0;
     }
 
     .profile-username {
-        font-size: 1.125rem;
         color: var(--text-secondary);
-        font-weight: 500;
-        background: var(--bg-secondary);
-        padding: 0.25rem 0.75rem;
-        border-radius: var(--radius-md);
-        border: 1px solid var(--border-color);
+        font-size: 14px;
+        margin-bottom: 12px;
     }
 
     .profile-bio {
-        font-size: 1rem;
         color: var(--text-secondary);
-        line-height: 1.6;
-        max-width: 800px;
-        padding: var(--spacing-sm) 0;
+        font-size: 14px;
+        margin-bottom: 16px;
+        line-height: 1.5;
     }
 
-    /* Stats Card - Unified Design */
-    .stats-card {
-        background: var(--card-bg);
-        border-radius: var(--radius-lg);
-        padding: var(--spacing-lg);
-        border: 1px solid var(--border-color);
-        box-shadow: var(--shadow-md);
-        margin-top: var(--spacing-md);
-    }
-
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: var(--spacing-md);
-    }
-
-    .stat-item {
-        text-align: center;
-        padding: var(--spacing-md);
-        border-radius: var(--radius-md);
-        background: var(--bg-secondary);
-        border: 1px solid var(--border-color);
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
-        min-height: 100px;
+    .profile-stats {
         display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-    }
-
-    .stat-item:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--shadow-md);
-        border-color: var(--primary);
-    }
-
-    .stat-item::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 4px;
-        border-radius: var(--radius-md) var(--radius-md) 0 0;
-    }
-
-    .stat-item:nth-child(1)::before { background: linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%); }
-    .stat-item:nth-child(2)::before { background: linear-gradient(90deg, var(--accent) 0%, var(--accent-light) 100%); }
-    .stat-item:nth-child(3)::before { background: linear-gradient(90deg, var(--success) 0%, var(--success-light) 100%); }
-    .stat-item:nth-child(4)::before { background: linear-gradient(90deg, var(--warning) 0%, var(--warning-light) 100%); }
-
-    .stat-value {
-        font-size: 2rem;
-        font-weight: 800;
-        margin-bottom: var(--spacing-xs);
-        font-family: var(--font-heading);
-        line-height: 1;
-    }
-
-    .stat-item:nth-child(1) .stat-value { color: var(--primary); }
-    .stat-item:nth-child(2) .stat-value { color: var(--accent); }
-    .stat-item:nth-child(3) .stat-value { color: var(--success); }
-    .stat-item:nth-child(4) .stat-value { color: var(--warning); }
-
-    .stat-label {
-        color: var(--text-secondary);
-        font-size: 0.875rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        display: flex;
-        align-items: center;
-        gap: 0.25rem;
-    }
-
-    .stat-icon {
-        font-size: 1rem;
-    }
-
-    .stat-item:nth-child(1) .stat-icon { color: var(--primary); }
-    .stat-item:nth-child(2) .stat-icon { color: var(--accent); }
-    .stat-item:nth-child(3) .stat-icon { color: var(--success); }
-    .stat-item:nth-child(4) .stat-icon { color: var(--warning); }
-
-    /* Profile Actions */
-    .profile-actions {
-        display: flex;
-        gap: var(--spacing-sm);
+        gap: 16px;
+        margin-bottom: 16px;
         flex-wrap: wrap;
-        margin-top: var(--spacing-lg);
-        padding-top: var(--spacing-md);
-        border-top: 1px solid var(--border-color);
     }
 
-    /* Profile Content */
-    .profile-content {
-        background: var(--card-bg);
-        border-radius: var(--radius-xl);
-        box-shadow: var(--shadow-md);
-        border: 1px solid var(--border-color);
-        overflow: hidden;
-        margin-top: var(--spacing-lg);
-    }
-
-    /* Tabs Container - Horizontal Scroll on Mobile */
-    .tabs-container {
-        position: relative;
-        overflow: hidden;
-    }
-
-    .profile-tabs-scroll {
-        display: flex;
-        border-bottom: 1px solid var(--border-color);
-        background: var(--card-bg);
-        padding: 0 var(--spacing-md);
-        overflow-x: auto;
-        scrollbar-width: none; /* Firefox */
-        -ms-overflow-style: none; /* IE and Edge */
-    }
-
-    .profile-tabs-scroll::-webkit-scrollbar {
-        display: none; /* Chrome, Safari, Opera */
-    }
-
-    .profile-tab {
-        padding: var(--spacing-md) var(--spacing-lg);
-        background: none;
-        border: none;
-        color: var(--text-secondary);
-        font-weight: 600;
-        cursor: pointer;
-        transition: var(--transition);
-        border-bottom: 3px solid transparent;
-        white-space: nowrap;
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-sm);
-        font-size: 0.95rem;
-        font-family: var(--font-heading);
-        position: relative;
-        flex-shrink: 0;
-    }
-
-    .profile-tab.active {
-        color: var(--primary);
-        border-bottom-color: var(--primary);
-        background: linear-gradient(to bottom, rgba(255, 107, 53, 0.05), transparent);
-    }
-
-    .profile-tab:hover {
-        color: var(--primary);
-        background: rgba(255, 107, 53, 0.05);
-    }
-
-    .tab-badge {
-        background: var(--primary);
-        color: white;
-        border-radius: 20px;
-        padding: 0.25rem 0.625rem;
-        font-size: 0.75rem;
-        font-weight: 700;
-        min-width: 24px;
+    .profile-stat-item {
         text-align: center;
     }
 
-    .tab-content {
-        padding: var(--spacing-xl);
-    }
-
-    .tab-pane {
-        display: none;
-        animation: fadeIn 0.3s ease;
-    }
-
-    .tab-pane.active {
+    .profile-stat-value {
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--primary);
         display: block;
     }
 
-    /* Scroll indicators */
-    .scroll-indicator {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        width: 40px;
+    .profile-stat-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* ===== PROFILE NAVIGATION ===== */
+    .profile-navigation {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 12px 16px;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
+        position: sticky;
+        top: 70px;
+        z-index: 100;
+    }
+
+    .profile-nav-items {
         display: flex;
-        align-items: center;
-        justify-content: center;
-        background: linear-gradient(to right, var(--card-bg), transparent);
-        z-index: 10;
-        pointer-events: none;
-        opacity: 0;
-        transition: opacity 0.3s;
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
     }
 
-    .scroll-indicator.left {
-        left: 0;
+    .profile-nav-items::-webkit-scrollbar {
+        height: 3px;
     }
 
-    .scroll-indicator.right {
-        right: 0;
-        background: linear-gradient(to left, var(--card-bg), transparent);
+    .profile-nav-items::-webkit-scrollbar-track {
+        background: var(--bg-secondary);
+        border-radius: 2px;
     }
 
-    .scroll-indicator.visible {
-        opacity: 1;
-        pointer-events: auto;
+    .profile-nav-items::-webkit-scrollbar-thumb {
+        background: var(--primary);
+        border-radius: 2px;
     }
 
-    .scroll-btn {
-        width: 32px;
-        height: 32px;
-        border-radius: var(--radius-full);
+    .profile-nav-link {
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 14px;
+        white-space: nowrap;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+        text-decoration: none;
+    }
+
+    .profile-nav-link.active {
         background: var(--primary);
         color: white;
-        border: none;
+        border-color: var(--primary);
+    }
+
+    .profile-nav-link:not(.active) {
+        background: var(--bg-secondary);
+        color: var(--text-secondary);
+        border-color: var(--border-color);
+    }
+
+    .profile-nav-link:not(.active):hover {
+        background: var(--primary-light);
+        color: var(--primary);
+        border-color: var(--primary);
+    }
+
+    .tab-badge {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 700;
+        margin-left: 6px;
+    }
+
+    .profile-nav-link:not(.active) .tab-badge {
+        background: var(--primary-light);
+        color: var(--primary);
+    }
+
+    /* ===== LISTINGS GRID ===== */
+    .listings-section {
+        margin-bottom: 30px;
+    }
+
+    .section-header {
         display: flex;
+        justify-content: space-between;
         align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        pointer-events: auto;
-        box-shadow: var(--shadow-md);
-        transition: var(--transition);
+        margin-bottom: 16px;
     }
 
-    .scroll-btn:hover {
-        background: var(--primary-dark);
-        transform: scale(1.1);
+    .section-title {
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 0;
     }
 
-    /* Listings Grid */
+    .section-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
     .listings-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: var(--spacing-md);
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 12px;
+    }
+
+    @media (min-width: 768px) {
+        .listings-grid {
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 16px;
+        }
     }
 
     .listing-card {
         background: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: var(--radius-md);
+        border-radius: var(--radius-lg);
         overflow: hidden;
-        transition: var(--transition);
         box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
         height: 100%;
         display: flex;
         flex-direction: column;
     }
 
     .listing-card:hover {
-        transform: translateY(-5px);
-        box-shadow: var(--shadow-lg);
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
         border-color: var(--primary);
+    }
+
+    .listing-image-container {
+        position: relative;
+        height: 140px;
+        overflow: hidden;
     }
 
     .listing-image {
         width: 100%;
-        height: 200px;
+        height: 100%;
         object-fit: cover;
-        background: var(--bg-secondary);
+        transition: transform 0.5s ease;
+    }
+
+    .listing-card:hover .listing-image {
+        transform: scale(1.05);
     }
 
     .listing-content {
-        padding: var(--spacing-md);
-        flex: 1;
+        padding: 12px;
+        flex-grow: 1;
         display: flex;
         flex-direction: column;
     }
 
     .listing-title {
-        font-weight: 600;
-        margin-bottom: var(--spacing-sm);
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 6px;
         color: var(--text-primary);
-        font-size: 1.125rem;
-        line-height: 1.4;
+        line-height: 1.3;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
-        flex: 1;
     }
 
     .listing-price {
-        font-size: 1.25rem;
+        font-size: 16px;
         font-weight: 800;
         color: var(--primary);
-        margin-bottom: var(--spacing-md);
-        font-family: var(--font-heading);
+        margin-bottom: 8px;
     }
 
     .listing-meta {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: var(--spacing-md);
-    }
-
-    .listing-location {
-        background: rgba(255, 107, 53, 0.1);
-        color: var(--primary);
-        padding: 0.375rem 0.75rem;
-        border-radius: var(--radius-sm);
-        font-size: 0.875rem;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 0.25rem;
-    }
-
-    .listing-stock {
-        font-size: 0.875rem;
-        font-weight: 700;
-        padding: 0.375rem 0.75rem;
-        border-radius: var(--radius-sm);
-    }
-
-    .in-stock {
-        background: rgba(6, 214, 160, 0.1);
-        color: var(--success);
-    }
-
-    .low-stock {
-        background: rgba(255, 158, 31, 0.1);
-        color: var(--warning);
-    }
-
-    .out-of-stock {
-        background: rgba(239, 71, 111, 0.1);
-        color: var(--danger);
+        margin-bottom: 12px;
+        font-size: 12px;
+        color: var(--text-secondary);
     }
 
     .listing-actions {
-        display: flex;
-        gap: var(--spacing-sm);
         margin-top: auto;
-    }
-
-    .action-btn {
-        flex: 1;
-        padding: 0.75rem;
-        border: none;
-        border-radius: var(--radius-sm);
-        font-weight: 600;
-        cursor: pointer;
-        transition: var(--transition);
-        font-size: 0.875rem;
         display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        text-decoration: none;
-        font-family: var(--font-heading);
+        gap: 8px;
     }
 
-    .view-btn {
-        background: var(--primary);
-        color: white;
-    }
-
-    .view-btn:hover {
-        background: var(--primary-dark);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
-        color: white;
-    }
-
-    .contact-info {
-        background: var(--bg-secondary);
+    /* ===== CONTACT INFO ===== */
+    .contact-section {
+        background: var(--card-bg);
         border-radius: var(--radius-lg);
-        padding: var(--spacing-xl);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
         border: 1px solid var(--border-color);
+    }
+
+    .contact-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 16px;
+        margin-top: 16px;
     }
 
     .contact-item {
         display: flex;
-        align-items: center;
-        gap: var(--spacing-md);
-        padding: var(--spacing-md) 0;
-        border-bottom: 1px solid var(--border-color);
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        transition: all 0.2s ease;
     }
 
-    .contact-item:last-child {
-        border-bottom: none;
+    .contact-item:hover {
+        border-color: var(--primary);
+        transform: translateY(-2px);
     }
 
     .contact-icon {
-        width: 48px;
-        height: 48px;
-        background: var(--primary);
-        border-radius: var(--radius-md);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 1.25rem;
-        flex-shrink: 0;
+        font-size: 20px;
+        color: var(--primary);
+        margin-top: 2px;
     }
 
-    .contact-details h4 {
-        margin: 0 0 var(--spacing-xs) 0;
-        font-weight: 600;
+    .contact-item-content h6 {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 4px;
         color: var(--text-primary);
-        font-size: 1rem;
     }
 
-    .contact-details p {
-        margin: 0;
+    .contact-item-content p {
+        font-size: 13px;
         color: var(--text-secondary);
-        font-size: 0.9375rem;
+        margin-bottom: 0;
     }
 
-    .contact-details a {
+    .contact-item-content a {
         color: var(--primary);
         text-decoration: none;
-        font-weight: 500;
-        transition: var(--transition);
     }
 
-    .contact-details a:hover {
-        color: var(--primary-dark);
+    .contact-item-content a:hover {
         text-decoration: underline;
     }
 
+    /* ===== SAVED ITEMS ===== */
+    .saved-section {
+        margin-bottom: 30px;
+    }
+
+    /* ===== EMPTY STATE ===== */
     .empty-state {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 40px 20px;
         text-align: center;
-        padding: var(--spacing-xxl) var(--spacing-lg);
-        color: var(--text-secondary);
+        border: 2px dashed var(--border-color);
+        margin-bottom: 20px;
     }
 
-    .empty-icon {
-        font-size: 4rem;
-        margin-bottom: var(--spacing-lg);
-        color: var(--border-color);
-        opacity: 0.5;
+    .empty-state-icon {
+        font-size: 48px;
+        color: var(--text-tertiary);
+        margin-bottom: 16px;
     }
 
-    .empty-title {
-        font-size: 1.5rem;
-        margin-bottom: var(--spacing-md);
+    .empty-state h3 {
+        font-size: 18px;
         font-weight: 700;
+        margin-bottom: 8px;
         color: var(--text-primary);
-        font-family: var(--font-heading);
     }
 
-    .empty-description {
-        font-size: 1rem;
-        margin-bottom: var(--spacing-xl);
-        max-width: 400px;
-        margin-left: auto;
-        margin-right: auto;
+    .empty-state p {
+        color: var(--text-secondary);
+        margin-bottom: 20px;
+        font-size: 14px;
     }
 
-    .verification-badge {
-        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-        color: white;
-        padding: 0.5rem 1rem;
-        border-radius: var(--radius-md);
-        font-size: 0.875rem;
-        font-weight: 700;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        box-shadow: var(--shadow-sm);
-        max-width: fit-content;
-    }
-
-    .member-since {
-        color: var(--warning);
-        font-weight: 700;
-    }
-
-    .store-section {
-        margin-bottom: var(--spacing-xl);
-        padding-bottom: var(--spacing-xl);
-        border-bottom: 1px solid var(--border-color);
-    }
-
-    .store-section:last-child {
-        border-bottom: none;
-        margin-bottom: 0;
-        padding-bottom: 0;
-    }
-
-    .store-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: var(--spacing-lg);
-    }
-
-    @keyframes fadeIn {
-        from {
-            opacity: 0;
-            transform: translateY(10px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    /* Responsive Styles */
-    @media (max-width: 1024px) {
-        .profile-header-content {
-            grid-template-columns: 1fr;
-            gap: var(--spacing-lg);
-            text-align: center;
-        }
-
-        .profile-avatar-section {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .profile-avatar {
-            width: 120px;
-            height: 120px;
-        }
-
-        .profile-name-row {
-            justify-content: center;
-        }
-
-        .stats-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
+    /* ===== MOBILE LOGOUT FAB ===== */
+    /* Creative mobile logout solution */
+    .mobile-logout-fab {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+        display: none;
     }
 
     @media (max-width: 768px) {
-        .profile-container {
-            padding: var(--spacing-sm);
+        .mobile-logout-fab {
+            display: block;
         }
-
-        .profile-header-card {
-            padding: var(--spacing-lg);
-            border-radius: var(--radius-lg);
-        }
-
-        .profile-name {
-            font-size: 1.75rem;
-        }
-
-        .profile-avatar {
-            width: 100px;
-            height: 100px;
-        }
-
-        .stats-card {
-            padding: var(--spacing-md);
-        }
-
-        .stats-grid {
-            grid-template-columns: repeat(2, 1fr);
-            gap: var(--spacing-sm);
-        }
-
-        .stat-item {
-            padding: var(--spacing-sm);
-            min-height: 80px;
-        }
-
-        .stat-value {
-            font-size: 1.5rem;
-        }
-
-        .profile-actions {
-            flex-direction: column;
-            align-items: stretch;
-            max-width: 300px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        .tabs-container {
-            margin: 0 calc(-1 * var(--spacing-sm));
-        }
-
-        .profile-tabs-scroll {
-            padding: 0 var(--spacing-sm);
-        }
-
-        .profile-tab {
-            padding: var(--spacing-sm) var(--spacing-md);
-            font-size: 0.9rem;
-        }
-
-        .tab-content {
-            padding: var(--spacing-lg);
-        }
-
-        .listings-grid {
-            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-            gap: var(--spacing-sm);
-        }
-
-        .listing-image {
-            height: 180px;
-        }
-
-        .store-header {
-            flex-direction: column;
-            gap: var(--spacing-md);
-            align-items: stretch;
-        }
-    }
-
-    @media (max-width: 576px) {
-        .stats-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .stat-item {
-            min-height: 70px;
-            flex-direction: row;
-            justify-content: space-between;
-            text-align: left;
-            padding: var(--spacing-md);
-        }
-
-        .stat-value {
-            margin-bottom: 0;
-            font-size: 1.25rem;
-        }
-
-        .stat-label {
-            text-align: right;
-        }
-
-        .listings-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .tab-content {
-            padding: var(--spacing-md);
-        }
-
-        .listing-actions {
-            flex-direction: column;
-        }
-
-        .scroll-indicator {
+        
+        /* Hide desktop logout button on mobile */
+        .desktop-logout {
             display: none;
         }
     }
 
-    @media (max-width: 480px) {
-        .profile-container {
-            padding: var(--spacing-xs);
-        }
+    .logout-fab-button {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: var(--danger);
+        color: white;
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        box-shadow: 0 4px 12px rgba(239, 71, 111, 0.4);
+        transition: all 0.3s ease;
+        position: relative;
+        z-index: 1001;
+    }
 
-        .profile-header-card {
-            padding: var(--spacing-md);
-        }
+    .logout-fab-button:hover {
+        transform: scale(1.1);
+        box-shadow: 0 6px 16px rgba(239, 71, 111, 0.6);
+    }
 
-        .profile-avatar {
+    .logout-fab-menu {
+        position: absolute;
+        bottom: 70px;
+        right: 0;
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 12px;
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border-color);
+        min-width: 200px;
+        opacity: 0;
+        transform: translateY(10px);
+        visibility: hidden;
+        transition: all 0.3s ease;
+        z-index: 1000;
+    }
+
+    .logout-fab-menu.active {
+        opacity: 1;
+        transform: translateY(0);
+        visibility: visible;
+    }
+
+    .logout-fab-menu::after {
+        content: '';
+        position: absolute;
+        bottom: -8px;
+        right: 20px;
+        width: 16px;
+        height: 16px;
+        background: var(--card-bg);
+        transform: rotate(45deg);
+        border-right: 1px solid var(--border-color);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .fab-menu-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: var(--radius-md);
+        text-decoration: none;
+        color: var(--text-primary);
+        transition: all 0.2s ease;
+        border: none;
+        background: none;
+        width: 100%;
+        text-align: left;
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .fab-menu-item:hover {
+        background: var(--bg-secondary);
+        color: var(--primary);
+    }
+
+    .fab-menu-item.logout-item {
+        color: var(--danger);
+    }
+
+    .fab-menu-item.logout-item:hover {
+        background: rgba(239, 71, 111, 0.1);
+    }
+
+    .fab-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+    }
+
+    .fab-overlay.active {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    /* Profile action buttons */
+    .profile-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 16px;
+        flex-wrap: wrap;
+    }
+
+    /* ===== RESPONSIVE DESIGN ===== */
+    @media (max-width: 374px) {
+        .container-custom {
+            padding-left: 6px;
+            padding-right: 6px;
+        }
+        
+        .listings-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .profile-cover-container {
+            height: 150px;
+        }
+        
+        .profile-avatar-container {
             width: 80px;
             height: 80px;
         }
-
-        .profile-name {
-            font-size: 1.5rem;
+        
+        .profile-title {
+            font-size: 18px;
         }
-
-        .tab-content {
-            padding: var(--spacing-sm);
+        
+        .profile-actions {
+            flex-direction: column;
         }
-
-        .listing-card {
-            margin-bottom: var(--spacing-sm);
-        }
-
+        
         .profile-actions .btn-custom {
             width: 100%;
-            justify-content: center;
+        }
+    }
+    
+    @media (min-width: 768px) {
+        .container-custom {
+            padding-left: 16px;
+            padding-right: 16px;
+        }
+        
+        .profile-cover-container {
+            height: 200px;
+        }
+        
+        .profile-title {
+            font-size: 24px;
+        }
+        
+        .profile-avatar-container {
+            width: 120px;
+            height: 120px;
         }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="profile-container animate-fade-in">
-    <!-- Profile Header Card - Revamped -->
-    <div class="profile-header-card">
-        <div class="profile-header-content">
-            <!-- Avatar Section -->
-            <div class="profile-avatar-section">
-                {% if user == profile_user %}
-                <a href="{% url 'profile-edit' profile_user.pk %}" title="Edit profile picture" class="d-inline-block position-relative">
-                    <div class="profile-avatar-ring"></div>
-                    <img src="{% if profile_user.get_profile_picture_url %}{{ profile_user.get_profile_picture_url }}{% else %}{% static 'images/default_profile_pic.svg' %}{% endif %}"
-                         data-default="{% static 'images/default_profile_pic.svg' %}"
-                         class="profile-avatar"
-                         alt="{{ profile_user.username }}"
-                         onerror="this.onerror=null;this.src=this.getAttribute('data-default');">
-                </a>
-                {% else %}
-                <div class="position-relative">
-                    <div class="profile-avatar-ring"></div>
-                    <img src="{% if profile_user.get_profile_picture_url %}{{ profile_user.get_profile_picture_url }}{% else %}{% static 'images/default_profile_pic.svg' %}{% endif %}"
-                         data-default="{% static 'images/default_profile_pic.svg' %}"
-                         class="profile-avatar"
-                         alt="{{ profile_user.username }}"
-                         onerror="this.onerror=null;this.src=this.getAttribute('data-default');">
+<div class="container-custom py-3">
+    <!-- Profile Hero Section -->
+    <div class="profile-hero">
+        <!-- Profile Cover -->
+        <div class="profile-cover-container">
+            {% if profile_user.profile.cover_photo %}
+            <img src="{{ profile_user.profile.cover_photo.url }}" alt="{{ profile_user.username }}" class="profile-cover">
+            {% else %}
+            <div class="profile-cover" style="background: linear-gradient(135deg, var(--primary) 0%, var(--info) 100%);"></div>
+            {% endif %}
+            <div class="profile-cover-overlay"></div>
+        </div>
+
+        <!-- Profile Info -->
+        <div class="profile-info-header">
+            <div class="profile-avatar-container">
+                <img src="{{ profile_user.get_profile_picture_url|default:'https://placehold.co/200x200/c2c2c2/1f1f1f?text=User' }}" 
+                     alt="{{ profile_user.username }}" class="profile-avatar">
+                {% if profile_user.is_verified %}
+                <div class="profile-verified-badge">
+                    <i class="bi bi-check"></i>
                 </div>
                 {% endif %}
             </div>
 
-            <!-- Info Section -->
-            <div class="profile-info-section">
-                <div class="profile-name-row">
-                    <h1 class="profile-name">
-                        {% if profile_user.first_name and profile_user.last_name %}
-                            {{ profile_user.first_name }} {{ profile_user.last_name }}
-                        {% elif profile_user.first_name %}
-                            {{ profile_user.first_name }}
+            <h1 class="profile-title">
+                {% if profile_user.get_full_name %}
+                    {{ profile_user.get_full_name }}
+                {% else %}
+                    {{ profile_user.username }}
+                {% endif %}
+            </h1>
+            <p class="profile-username">@{{ profile_user.username }}</p>
+            
+            {% if profile_user.profile.bio %}
+            <p class="profile-bio">{{ profile_user.profile.bio }}</p>
+            {% endif %}
+
+            <div class="profile-stats">
+                <div class="profile-stat-item">
+                    <span class="profile-stat-value">{{ listing_count }}</span>
+                    <span class="profile-stat-label">Listings</span>
+                </div>
+                <div class="profile-stat-item">
+                    <span class="profile-stat-value">{{ saved_count }}</span>
+                    <span class="profile-stat-label">Saved</span>
+                </div>
+                <div class="profile-stat-item">
+                    <span class="profile-stat-value">{{ rating_average|floatformat:1 }}</span>
+                    <span class="profile-stat-label">Rating</span>
+                </div>
+                <div class="profile-stat-item">
+                    <span class="profile-stat-value">{{ member_since }}</span>
+                    <span class="profile-stat-label">Joined</span>
+                </div>
+            </div>
+
+            <!-- Profile Actions (Desktop) -->
+            {% if user == profile_user %}
+            <div class="profile-actions">
+                <a href="{% url 'profile-edit' profile_user.pk %}" class="btn-custom btn-primary">
+                    <i class="bi bi-pencil me-1"></i> Edit Profile
+                </a>
+                <a href="{% url 'listing-create' %}" class="btn-custom btn-secondary">
+                    <i class="bi bi-plus-lg me-1"></i> Create Listing
+                </a>
+                {% if stores.exists %}
+                <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-ghost">
+                    <i class="bi bi-shop me-1"></i> Add Store
+                </a>
+                {% endif %}
+                <!-- Desktop logout button -->
+                <button class="btn-custom btn-danger desktop-logout" id="logoutBtn">
+                    <i class="bi bi-box-arrow-right me-1"></i> Logout
+                </button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Profile Navigation -->
+    <div class="profile-navigation">
+        <div class="profile-nav-items">
+            <a href="#listings" class="profile-nav-link active">
+                <i class="bi bi-grid me-1"></i>
+                Listings
+                <span class="tab-badge">{{ listing_count }}</span>
+            </a>
+            
+            {% if user == profile_user %}
+            <a href="#saved" class="profile-nav-link">
+                <i class="bi bi-heart me-1"></i>
+                Saved Items
+                <span class="tab-badge">{{ saved_count }}</span>
+            </a>
+            <a href="#stores" class="profile-nav-link">
+                <i class="bi bi-shop me-1"></i>
+                My Stores
+                <span class="tab-badge">{{ stores.count }}</span>
+            </a>
+            <a href="#contact" class="profile-nav-link">
+                <i class="bi bi-person-lines-fill me-1"></i>
+                Contact Info
+            </a>
+            {% else %}
+            <a href="#contact" class="profile-nav-link">
+                <i class="bi bi-chat-dots me-1"></i>
+                Contact Seller
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Listings Section -->
+    <section id="listings" class="listings-section">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title">Recent Listings</h2>
+                <p class="section-subtitle">Browse active listings</p>
+            </div>
+            {% if user == profile_user %}
+            <a href="{% url 'all-listings' %}?seller={{ profile_user.id }}" class="btn-custom btn-ghost btn-sm">
+                View All
+            </a>
+            {% endif %}
+        </div>
+        
+        {% if stores and stores.0.listings.exists %}
+        <div class="listings-grid">
+            {% for store in stores %}
+                {% for listing in store.listings.all|slice:":6" %}
+                <div class="listing-card">
+                    <div class="listing-image-container">
+                        <img src="{{ listing.get_image_url }}" 
+                             class="listing-image"
+                             alt="{{ listing.title }}"
+                             onerror="this.src='https://placehold.co/400x300/c2c2c2/1f1f1f?text=Product'">
+                    </div>
+                    <div class="listing-content">
+                        <h3 class="listing-title">{{ listing.title }}</h3>
+                        <div class="listing-price">KSh {{ listing.price|intcomma }}</div>
+                        <div class="listing-meta">
+                            <span>{{ listing.condition|default:"New" }}</span>
+                            <span>{{ store.name }}</span>
+                        </div>
+                        <div class="listing-actions">
+                            <a href="{% url 'listing-detail' listing.pk %}" class="btn-custom btn-primary flex-fill btn-sm">
+                                <i class="bi bi-eye me-1"></i>View
+                            </a>
+                            {% if user.is_authenticated and user != profile_user %}
+                            <form action="{% url 'toggle_favorite' listing.id %}" method="post" class="favorite-form">
+                                {% csrf_token %}
+                                <button type="submit" class="btn-custom btn-ghost btn-sm">
+                                    <i class="bi bi-heart{% if listing.id in user_favorites %}-fill text-danger{% endif %}"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% endfor %}
+        </div>
+        {% elif user_listings %}
+        <div class="listings-grid">
+            {% for listing in user_listings|slice:":6" %}
+            <div class="listing-card">
+                <div class="listing-image-container">
+                    <img src="{{ listing.get_image_url }}" 
+                         class="listing-image"
+                         alt="{{ listing.title }}"
+                         onerror="this.src='https://placehold.co/400x300/c2c2c2/1f1f1f?text=Product'">
+                </div>
+                <div class="listing-content">
+                    <h3 class="listing-title">{{ listing.title }}</h3>
+                    <div class="listing-price">KSh {{ listing.price|intcomma }}</div>
+                    <div class="listing-meta">
+                        <span>{{ listing.condition|default:"New" }}</span>
+                        {% if listing.store %}
+                        <span>{{ listing.store.name }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="listing-actions">
+                        <a href="{% url 'listing-detail' listing.pk %}" class="btn-custom btn-primary flex-fill btn-sm">
+                            <i class="bi bi-eye me-1"></i>View
+                        </a>
+                        {% if user.is_authenticated and user != profile_user %}
+                        <form action="{% url 'toggle_favorite' listing.id %}" method="post" class="favorite-form">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-custom btn-ghost btn-sm">
+                                <i class="bi bi-heart{% if listing.id in user_favorites %}-fill text-danger{% endif %}"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <!-- Empty State -->
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <i class="bi bi-inbox"></i>
+            </div>
+            <h3>No Listings Yet</h3>
+            <p class="text-muted mb-4">
+                {% if user == profile_user %}
+                You haven't created any listings yet. Start selling today!
+                {% else %}
+                This user hasn't created any listings yet.
+                {% endif %}
+            </p>
+            {% if user == profile_user %}
+            <a href="{% url 'listing-create' %}" class="btn-custom btn-primary">
+                <i class="bi bi-plus-lg me-2"></i>Create Your First Listing
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- Saved Items Section (only for profile owner) -->
+    {% if user == profile_user and saved_listings %}
+    <section id="saved" class="saved-section">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title">Saved Items</h2>
+                <p class="section-subtitle">{{ saved_count }} items saved</p>
+            </div>
+            <a href="{% url 'favorite_listings' %}" class="btn-custom btn-ghost btn-sm">
+                View All
+            </a>
+        </div>
+        
+        <div class="listings-grid">
+            {% for listing in saved_listings|slice:":6" %}
+            <div class="listing-card">
+                <div class="listing-image-container">
+                    <img src="{{ listing.get_image_url }}" 
+                         class="listing-image"
+                         alt="{{ listing.title }}"
+                         onerror="this.src='https://placehold.co/400x300/c2c2c2/1f1f1f?text=Product'">
+                </div>
+                <div class="listing-content">
+                    <h3 class="listing-title">{{ listing.title }}</h3>
+                    <div class="listing-price">KSh {{ listing.price|intcomma }}</div>
+                    <div class="listing-meta">
+                        <span>{{ listing.condition|default:"New" }}</span>
+                        {% if listing.store %}
+                        <span>{{ listing.store.name }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="listing-actions">
+                        <a href="{% url 'listing-detail' listing.pk %}" class="btn-custom btn-primary flex-fill btn-sm">
+                            <i class="bi bi-eye me-1"></i>View
+                        </a>
+                        <form action="{% url 'toggle_favorite' listing.id %}" method="post" class="favorite-form">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-custom btn-danger btn-sm">
+                                <i class="bi bi-heart-fill"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- My Stores Section (only for profile owner) -->
+    {% if user == profile_user and stores %}
+    <section id="stores" class="listings-section">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title">My Stores</h2>
+                <p class="section-subtitle">{{ stores.count }} stores created</p>
+            </div>
+            <a href="{% url 'storefront:store_list' %}" class="btn-custom btn-ghost btn-sm">
+                View All Stores
+            </a>
+        </div>
+        
+        <div class="listings-grid">
+            {% for store in stores|slice:":6" %}
+            <div class="listing-card">
+                <div class="listing-image-container">
+                    <img src="{{ store.get_logo_url|default:'https://placehold.co/400x300/c2c2c2/1f1f1f?text=Store' }}" 
+                         class="listing-image"
+                         alt="{{ store.name }}"
+                         style="object-fit: contain; background: white;">
+                </div>
+                <div class="listing-content">
+                    <h3 class="listing-title">{{ store.name }}</h3>
+                    <div class="listing-price">{{ store.listings.count }} products</div>
+                    <div class="listing-meta">
+                        <span>{{ store.get_average_store_rating|default:"New" }} ⭐</span>
+                        <span>{{ store.get_sales_count|default:"0" }}+ sales</span>
+                    </div>
+                    <div class="listing-actions">
+                        <a href="{% url 'storefront:store_detail' slug=store.slug %}" class="btn-custom btn-primary flex-fill btn-sm">
+                            <i class="bi bi-shop me-1"></i>View Store
+                        </a>
+                        <a href="{% url 'storefront:store_edit' slug=store.slug %}" class="btn-custom btn-ghost btn-sm">
+                            <i class="bi bi-gear"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Contact Info Section -->
+    <section id="contact" class="contact-section">
+        <h3 class="section-title mb-3">
+            <i class="bi bi-person-lines-fill text-primary me-2"></i>
+            Contact Information
+        </h3>
+        
+        <div class="contact-grid">
+            <div class="contact-item">
+                <i class="bi bi-person text-primary"></i>
+                <div class="contact-item-content">
+                    <h6>Name</h6>
+                    <p class="mb-0">
+                        {% if profile_user.get_full_name %}
+                            {{ profile_user.get_full_name }}
                         {% else %}
                             {{ profile_user.username }}
                         {% endif %}
-                    </h1>
-                    <div class="profile-username">@{{ profile_user.username }}</div>
-                </div>
-                
-                {% if profile_user.is_verified %}
-                <div class="verification-badge mb-2">
-                    <i class="bi bi-patch-check-fill"></i>
-                    Verified Seller
-                </div>
-                {% endif %}
-                
-                {% if profile_user.bio %}
-                <div class="profile-bio">{{ profile_user.bio }}</div>
-                {% endif %}
-                
-                <!-- Unified Stats Card -->
-                <div class="stats-card">
-                    <div class="stats-grid">
-                        <div class="stat-item">
-                            <div class="stat-value">{{ listing_count }}</div>
-                            <div class="stat-label">
-                                <i class="bi bi-grid stat-icon"></i>
-                                Listings
-                            </div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">{{ saved_count }}</div>
-                            <div class="stat-label">
-                                <i class="bi bi-heart stat-icon"></i>
-                                Saved
-                            </div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">{{ rating_average|floatformat:1 }}</div>
-                            <div class="stat-label">
-                                <i class="bi bi-star stat-icon"></i>
-                                Rating
-                            </div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value member-since">
-                                {% if profile_user.date_joined %}
-                                    {{ profile_user.date_joined|date:"M j, Y" }}
-                                {% else %}
-                                    {{ member_since }}
-                                {% endif %}
-                            </div>
-                            <div class="stat-label">
-                                <i class="bi bi-calendar stat-icon"></i>
-                                Joined
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Profile Actions -->
-                {% if user == profile_user %}
-                <div class="profile-actions">
-                    <a href="{% url 'profile-edit' profile_user.pk %}" class="btn-custom btn-primary">
-                        <i class="bi bi-pencil"></i>
-                        Edit Profile
-                    </a>
-                    <a href="{% url 'listing-create' %}" class="btn-custom btn-accent">
-                        <i class="bi bi-plus-circle"></i>
-                        Create Listing
-                    </a>
-                    <a href="{% url 'password_change' %}" class="btn-custom btn-ghost">
-                        <i class="bi bi-shield-lock"></i>
-                        Change Password
-                    </a>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    <!-- Profile Content -->
-    <div class="profile-content">
-        <!-- Tabs Container with Scroll -->
-        <div class="tabs-container">
-            <div class="scroll-indicator left">
-                <button class="scroll-btn scroll-left">
-                    <i class="bi bi-chevron-left"></i>
-                </button>
-            </div>
-            
-            <div class="profile-tabs-scroll" id="profileTabs">
-                <button class="profile-tab active" data-tab="listings">
-                    <i class="bi bi-grid"></i>
-                    <span>Listings</span>
-                    <span class="tab-badge">{{ listing_count }}</span>
-                </button>
-                
-                {% if user == profile_user %}
-                <button class="profile-tab" data-tab="saved">
-                    <i class="bi bi-heart"></i>
-                    <span>Saved Items</span>
-                    <span class="tab-badge">{{ saved_count }}</span>
-                </button>
-                <button class="profile-tab" data-tab="contact">
-                    <i class="bi bi-person-lines-fill"></i>
-                    <span>Contact Info</span>
-                </button>
-                {% else %}
-                <button class="profile-tab" data-tab="contact">
-                    <i class="bi bi-chat-dots"></i>
-                    <span>Contact Seller</span>
-                </button>
-                {% endif %}
-            </div>
-            
-            <div class="scroll-indicator right">
-                <button class="scroll-btn scroll-right">
-                    <i class="bi bi-chevron-right"></i>
-                </button>
-            </div>
-        </div>
-
-        <!-- Tab Content -->
-        <div class="tab-content">
-            <!-- Listings Tab -->
-            <div class="tab-pane active" id="listings-tab">
-                {% if stores %}
-                    {% for store in stores %}
-                    <div class="store-section">
-                        <div class="store-header">
-                            <div>
-                                <h3 class="h5 fw-bold mb-2">{{ store.name }}</h3>
-                                {% if store.description %}
-                                <p class="text-muted mb-0">{{ store.description|truncatechars:100 }}</p>
-                                {% endif %}
-                            </div>
-                            <a href="{% url 'storefront:store_detail' slug=store.slug %}" class="btn-custom btn-ghost">
-                                <i class="bi bi-shop"></i>
-                                View Store
-                            </a>
-                        </div>
-                        
-                        {% if store.listings.exists %}
-                        <div class="listings-grid">
-                            {% for listing in store.listings.all %}
-                            <div class="listing-card">
-                                <img src="{{ listing.get_image_url }}" class="listing-image" alt="{{ listing.title }}">
-                                <div class="listing-content">
-                                    <h3 class="listing-title">{{ listing.title }}</h3>
-                                    <div class="listing-price">KSh {{ listing.price|intcomma }}</div>
-                                    <div class="listing-meta">
-                                        <span class="listing-location">
-                                            <i class="bi bi-geo-alt"></i>
-                                            {{ listing.get_location_display }}
-                                        </span>
-                                        <span class="listing-stock {% if listing.stock > 10 %}in-stock{% elif listing.stock > 0 %}low-stock{% else %}out-of-stock{% endif %}">
-                                            {% if listing.stock > 10 %}
-                                                In Stock
-                                            {% elif listing.stock > 0 %}
-                                                Low Stock
-                                            {% else %}
-                                                Out of Stock
-                                            {% endif %}
-                                        </span>
-                                    </div>
-                                    <div class="listing-actions">
-                                        <a href="{% url 'listing-detail' listing.pk %}" class="action-btn view-btn">
-                                            <i class="bi bi-eye"></i>
-                                            View
-                                        </a>
-                                        {% if user.is_authenticated and user != profile_user %}
-                                        <button class="action-btn btn-custom btn-ghost like-btn" data-listing-id="{{ listing.id }}">
-                                            <i class="bi bi-heart{% if listing.id in user_favorites %}-fill text-danger{% endif %}"></i>
-                                            Save
-                                        </button>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% else %}
-                        <div class="empty-state">
-                            <i class="bi bi-inboxes empty-icon"></i>
-                            <h3 class="empty-title">No listings in this store</h3>
-                            <p class="empty-description">This store doesn't have any active listings yet.</p>
-                            {% if user == profile_user %}
-                            <a href="{% url 'storefront:product_create' store_slug=store.slug %}" class="btn-custom btn-primary mt-3">
-                                <i class="bi bi-plus-circle"></i>
-                                Add Your First Listing
-                            </a>
-                            {% endif %}
-                        </div>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                    
-                    <!-- Pagination -->
-                    {% if page_obj.has_other_pages %}
-                    <div class="d-flex justify-content-center mt-4 pt-4 border-top">
-                        <nav aria-label="Page navigation">
-                            <ul class="pagination mb-0">
-                                {% if page_obj.has_previous %}
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="Previous">
-                                        <i class="bi bi-chevron-left"></i>
-                                    </a>
-                                </li>
-                                {% endif %}
-                                
-                                {% for num in page_obj.paginator.page_range %}
-                                    {% if page_obj.number == num %}
-                                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                                    <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
-                                    {% endif %}
-                                {% endfor %}
-                                
-                                {% if page_obj.has_next %}
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="Next">
-                                        <i class="bi bi-chevron-right"></i>
-                                    </a>
-                                </li>
-                                {% endif %}
-                            </ul>
-                        </nav>
-                    </div>
-                    {% endif %}
-                {% else %}
-                <div class="empty-state">
-                    <i class="bi bi-shop empty-icon"></i>
-                    <h3 class="empty-title">No stores yet</h3>
-                    <p class="empty-description">
-                        {% if user == profile_user %}
-                        You haven't created any stores yet. Start by creating your first store to list your products.
-                        {% else %}
-                        This user hasn't created any stores yet.
-                        {% endif %}
                     </p>
-                    {% if user == profile_user %}
-                    <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-primary mt-3">
-                        <i class="bi bi-plus-circle"></i>
-                        Create Your First Store
-                    </a>
-                    {% endif %}
                 </div>
-                {% endif %}
             </div>
-
-            <!-- Saved Items Tab (only for profile owner) -->
-            {% if user == profile_user %}
-            <div class="tab-pane" id="saved-tab">
-                {% if saved_listings %}
-                <div class="listings-grid">
-                    {% for listing in saved_listings %}
-                    <div class="listing-card">
-                        <img src="{{ listing.get_image_url }}" class="listing-image" alt="{{ listing.title }}">
-                        <div class="listing-content">
-                            <h3 class="listing-title">{{ listing.title }}</h3>
-                            <div class="listing-price">KSh {{ listing.price|intcomma }}</div>
-                            <div class="listing-meta">
-                                <span class="listing-location">
-                                    <i class="bi bi-geo-alt"></i>
-                                    {{ listing.get_location_display }}
-                                </span>
-                                <span class="listing-stock {% if listing.stock > 10 %}in-stock{% elif listing.stock > 0 %}low-stock{% else %}out-of-stock{% endif %}">
-                                    {% if listing.stock > 10 %}
-                                        In Stock
-                                    {% elif listing.stock > 0 %}
-                                        Low Stock
-                                    {% else %}
-                                        Out of Stock
-                                    {% endif %}
-                                </span>
-                            </div>
-                            <div class="listing-actions">
-                                <a href="{% url 'listing-detail' listing.pk %}" class="action-btn view-btn">
-                                    <i class="bi bi-eye"></i>
-                                    View
-                                </a>
-                                <button class="action-btn btn-custom btn-ghost like-btn" data-listing-id="{{ listing.id }}">
-                                    <i class="bi bi-heart-fill text-danger"></i>
-                                    Remove
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
+            
+            {% if profile_user.email and profile_user.show_contact_info %}
+            <div class="contact-item">
+                <i class="bi bi-envelope text-primary"></i>
+                <div class="contact-item-content">
+                    <h6>Email</h6>
+                    <p class="mb-0">
+                        <a href="mailto:{{ profile_user.email }}">{{ profile_user.email }}</a>
+                    </p>
                 </div>
-                {% else %}
-                <div class="empty-state">
-                    <i class="bi bi-bookmark-heart empty-icon"></i>
-                    <h3 class="empty-title">No saved items</h3>
-                    <p class="empty-description">Items you save will appear here for quick access.</p>
-                    <a href="{% url 'all-listings' %}" class="btn-custom btn-primary mt-3">
-                        <i class="bi bi-search"></i>
-                        Browse Listings
-                    </a>
-                </div>
-                {% endif %}
             </div>
             {% endif %}
-
-            <!-- Contact Info Tab -->
-            <div class="tab-pane" id="contact-tab">
-                {% if profile_user.phone_number or profile_user.email or profile_user.location %}
-                <div class="contact-info">
-                    <div class="contact-item">
-                        <div class="contact-icon">
-                            <i class="bi bi-person"></i>
-                        </div>
-                        <div class="contact-details">
-                            <h4>Name</h4>
-                            <p>
-                                {% if profile_user.first_name and profile_user.last_name %}
-                                    {{ profile_user.first_name }} {{ profile_user.last_name }}
-                                {% elif profile_user.first_name %}
-                                    {{ profile_user.first_name }}
-                                {% else %}
-                                    Not provided
-                                {% endif %}
-                            </p>
-                        </div>
-                    </div>
-                    
-                    {% if profile_user.phone_number and profile_user.show_contact_info %}
-                    <div class="contact-item">
-                        <div class="contact-icon">
-                            <i class="bi bi-phone"></i>
-                        </div>
-                        <div class="contact-details">
-                            <h4>Phone Number</h4>
-                            <p>
-                                {% if user == profile_user or profile_user.show_contact_info %}
-                                    <a href="tel:{{ profile_user.phone_number }}">{{ profile_user.phone_number }}</a>
-                                {% else %}
-                                    <em>Contact info hidden</em>
-                                {% endif %}
-                            </p>
-                        </div>
-                    </div>
-                    {% endif %}
-                    
-                    {% if profile_user.email and profile_user.show_contact_info %}
-                    <div class="contact-item">
-                        <div class="contact-icon">
-                            <i class="bi bi-envelope"></i>
-                        </div>
-                        <div class="contact-details">
-                            <h4>Email Address</h4>
-                            <p>
-                                {% if user == profile_user or profile_user.show_contact_info %}
-                                    <a href="mailto:{{ profile_user.email }}">{{ profile_user.email }}</a>
-                                {% else %}
-                                    <em>Contact info hidden</em>
-                                {% endif %}
-                            </p>
-                        </div>
-                    </div>
-                    {% endif %}
-                    
-                    {% if profile_user.location %}
-                    <div class="contact-item">
-                        <div class="contact-icon">
-                            <i class="bi bi-geo-alt"></i>
-                        </div>
-                        <div class="contact-details">
-                            <h4>Location</h4>
-                            <p>{{ profile_user.location }}</p>
-                        </div>
-                    </div>
-                    {% endif %}
-                    
-                    {% if user == profile_user %}
-                    <div class="text-center mt-4 pt-3 border-top">
-                        <a href="{% url 'profile-edit' profile_user.pk %}" class="btn-custom btn-primary">
-                            <i class="bi bi-pencil"></i>
-                            Edit Contact Information
-                        </a>
-                    </div>
-                    {% endif %}
+            
+            {% if profile_user.phone_number and profile_user.show_contact_info %}
+            <div class="contact-item">
+                <i class="bi bi-phone text-primary"></i>
+                <div class="contact-item-content">
+                    <h6>Phone</h6>
+                    <p class="mb-0">
+                        <a href="tel:{{ profile_user.phone_number }}">{{ profile_user.phone_number }}</a>
+                    </p>
                 </div>
-                {% else %}
-                <div class="empty-state">
-                    <i class="bi bi-person-x empty-icon"></i>
-                    <h3 class="empty-title">No contact information</h3>
-                    <p class="empty-description">
-                        {% if user == profile_user %}
-                        You haven't added any contact information yet. Add your contact details to help buyers reach you.
+            </div>
+            {% endif %}
+            
+            {% if profile_user.location %}
+            <div class="contact-item">
+                <i class="bi bi-geo-alt text-primary"></i>
+                <div class="contact-item-content">
+                    <h6>Location</h6>
+                    <p class="mb-0">{{ profile_user.location }}</p>
+                </div>
+            </div>
+            {% endif %}
+            
+            <div class="contact-item">
+                <i class="bi bi-calendar text-primary"></i>
+                <div class="contact-item-content">
+                    <h6>Member Since</h6>
+                    <p class="mb-0">{{ member_since }}</p>
+                </div>
+            </div>
+            
+            <div class="contact-item">
+                <i class="bi bi-shield-check text-primary"></i>
+                <div class="contact-item-content">
+                    <h6>Account Status</h6>
+                    <p class="mb-0">
+                        {% if profile_user.is_verified %}
+                            <span class="text-success">Verified</span>
                         {% else %}
-                        This user hasn't made their contact information available.
+                            <span class="text-warning">Unverified</span>
                         {% endif %}
                     </p>
-                    {% if user == profile_user %}
-                    <a href="{% url 'profile-edit' profile_user.pk %}" class="btn-custom btn-primary mt-3">
-                        <i class="bi bi-plus-circle"></i>
-                        Add Contact Information
-                    </a>
-                    {% endif %}
                 </div>
-                {% endif %}
             </div>
         </div>
-    </div>
+        
+        {% if user == profile_user %}
+        <div class="text-center mt-4">
+            <a href="{% url 'profile-edit' profile_user.pk %}" class="btn-custom btn-primary">
+                <i class="bi bi-pencil me-2"></i>Edit Contact Information
+            </a>
+        </div>
+        {% endif %}
+    </section>
 </div>
-{% endblock %}
 
-{% block extra_js %}
+<!-- Mobile Logout FAB (Creative Solution) -->
+{% if user == profile_user %}
+<div class="mobile-logout-fab">
+    <div class="fab-overlay" id="fabOverlay"></div>
+    <div class="logout-fab-menu" id="fabMenu">
+        <a href="{% url 'profile-edit' profile_user.pk %}" class="fab-menu-item">
+            <i class="bi bi-pencil"></i>
+            Edit Profile
+        </a>
+        <a href="{% url 'listing-create' %}" class="fab-menu-item">
+            <i class="bi bi-plus-lg"></i>
+            Create Listing
+        </a>
+        {% if stores.exists %}
+        <a href="{% url 'storefront:store_create' %}" class="fab-menu-item">
+            <i class="bi bi-shop"></i>
+            Add Store
+        </a>
+        {% endif %}
+        <hr class="my-2">
+        <form method="post" action="{% url 'logout' %}" class="fab-menu-item logout-item" id="mobileLogoutForm">
+            {% csrf_token %}
+            <i class="bi bi-box-arrow-right"></i>
+            Logout
+        </form>
+    </div>
+    <button class="logout-fab-button" id="fabButton">
+        <i class="bi bi-person"></i>
+    </button>
+</div>
+{% endif %}
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Tab functionality
-        const tabs = document.querySelectorAll('.profile-tab');
-        const tabPanes = document.querySelectorAll('.tab-pane');
-        
-        tabs.forEach(tab => {
-            tab.addEventListener('click', function() {
-                const targetTab = this.getAttribute('data-tab');
-                
-                // Update active tab
-                tabs.forEach(t => {
-                    t.classList.remove('active');
-                    t.setAttribute('aria-selected', 'false');
-                });
-                this.classList.add('active');
-                this.setAttribute('aria-selected', 'true');
-                
-                // Show target tab content
-                tabPanes.forEach(pane => {
-                    pane.classList.remove('active');
-                    pane.setAttribute('aria-hidden', 'true');
-                    if (pane.id === `${targetTab}-tab`) {
-                        pane.classList.add('active');
-                        pane.setAttribute('aria-hidden', 'false');
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('.profile-nav-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                if (this.getAttribute('href').startsWith('#')) {
+                    e.preventDefault();
+                    const targetId = this.getAttribute('href').substring(1);
+                    const targetElement = document.getElementById(targetId);
+                    
+                    if (targetElement) {
+                        // Update active nav link
+                        document.querySelectorAll('.profile-nav-link').forEach(nav => {
+                            nav.classList.remove('active');
+                        });
+                        this.classList.add('active');
+                        
+                        // Scroll to target
+                        window.scrollTo({
+                            top: targetElement.offsetTop - 80,
+                            behavior: 'smooth'
+                        });
                     }
-                });
-                
-                // Add animation class
-                const activePane = document.getElementById(`${targetTab}-tab`);
-                if (activePane) {
-                    activePane.style.animation = 'none';
-                    setTimeout(() => {
-                        activePane.style.animation = 'fadeIn 0.3s ease';
-                    }, 10);
                 }
             });
         });
-        
-        // Tab scrolling functionality
-        const tabsContainer = document.getElementById('profileTabs');
-        const scrollLeftBtn = document.querySelector('.scroll-left');
-        const scrollRightBtn = document.querySelector('.scroll-right');
-        const leftIndicator = document.querySelector('.scroll-indicator.left');
-        const rightIndicator = document.querySelector('.scroll-indicator.right');
-        
-        function updateScrollIndicators() {
-            const scrollLeft = tabsContainer.scrollLeft;
-            const maxScrollLeft = tabsContainer.scrollWidth - tabsContainer.clientWidth;
-            
-            if (scrollLeft > 0) {
-                leftIndicator.classList.add('visible');
-            } else {
-                leftIndicator.classList.remove('visible');
-            }
-            
-            if (scrollLeft < maxScrollLeft - 10) {
-                rightIndicator.classList.add('visible');
-            } else {
-                rightIndicator.classList.remove('visible');
-            }
+
+        // Update active nav based on scroll position
+        function updateActiveNav() {
+            const sections = ['listings', 'saved', 'stores', 'contact'];
+            const scrollPosition = window.scrollY + 100;
+
+            sections.forEach(section => {
+                const element = document.getElementById(section);
+                if (element) {
+                    const offsetTop = element.offsetTop;
+                    const offsetBottom = offsetTop + element.offsetHeight;
+
+                    if (scrollPosition >= offsetTop && scrollPosition < offsetBottom) {
+                        document.querySelectorAll('.profile-nav-link').forEach(nav => {
+                            nav.classList.remove('active');
+                            if (nav.getAttribute('href') === `#${section}`) {
+                                nav.classList.add('active');
+                            }
+                        });
+                    }
+                }
+            });
         }
-        
-        if (scrollLeftBtn && scrollRightBtn) {
-            scrollLeftBtn.addEventListener('click', () => {
-                tabsContainer.scrollBy({ left: -200, behavior: 'smooth' });
+
+        window.addEventListener('scroll', updateActiveNav);
+        updateActiveNav(); // Initial call
+
+        // Listing card hover effects
+        document.querySelectorAll('.listing-card').forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-3px)';
+                this.style.boxShadow = 'var(--shadow-md)';
+                this.style.borderColor = 'var(--primary)';
             });
             
-            scrollRightBtn.addEventListener('click', () => {
-                tabsContainer.scrollBy({ left: 200, behavior: 'smooth' });
+            card.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0)';
+                this.style.boxShadow = 'var(--shadow-sm)';
+                this.style.borderColor = 'var(--border-color)';
+            });
+        });
+
+        // Contact item hover effects
+        document.querySelectorAll('.contact-item').forEach(item => {
+            item.addEventListener('mouseenter', function() {
+                this.style.borderColor = 'var(--primary)';
+                this.style.transform = 'translateY(-2px)';
             });
             
-            tabsContainer.addEventListener('scroll', updateScrollIndicators);
-            window.addEventListener('resize', updateScrollIndicators);
-            
-            // Initial check
-            updateScrollIndicators();
+            item.addEventListener('mouseleave', function() {
+                this.style.borderColor = 'var(--border-color)';
+                this.style.transform = 'translateY(0)';
+            });
+        });
+
+        // Desktop logout button
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (confirm('Are you sure you want to logout?')) {
+                    fetch("{% url 'logout' %}", {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': '{{ csrf_token }}',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    }).then(() => {
+                        window.location.href = "{% url 'login' %}";
+                    });
+                }
+            });
         }
-        
-        // Like button functionality
-        const likeButtons = document.querySelectorAll('.like-btn');
-        
-        likeButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                const listingId = this.getAttribute('data-listing-id');
-                const csrfToken = getCookie('csrftoken');
-                const icon = this.querySelector('i');
+
+        // Mobile FAB functionality (Creative logout solution)
+        const fabButton = document.getElementById('fabButton');
+        const fabMenu = document.getElementById('fabMenu');
+        const fabOverlay = document.getElementById('fabOverlay');
+        const mobileLogoutForm = document.getElementById('mobileLogoutForm');
+
+        if (fabButton && fabMenu && fabOverlay) {
+            // Toggle FAB menu
+            fabButton.addEventListener('click', function() {
+                fabMenu.classList.toggle('active');
+                fabOverlay.classList.toggle('active');
+            });
+
+            // Close menu when clicking overlay
+            fabOverlay.addEventListener('click', function() {
+                fabMenu.classList.remove('active');
+                this.classList.remove('active');
+            });
+
+            // Handle mobile logout
+            if (mobileLogoutForm) {
+                mobileLogoutForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    if (confirm('Are you sure you want to logout?')) {
+                        this.submit();
+                    }
+                });
+            }
+
+            // Close menu when clicking outside on mobile
+            document.addEventListener('click', function(e) {
+                if (fabMenu.classList.contains('active') && 
+                    !fabMenu.contains(e.target) && 
+                    !fabButton.contains(e.target)) {
+                    fabMenu.classList.remove('active');
+                    fabOverlay.classList.remove('active');
+                }
+            });
+
+            // Add animation to FAB button
+            let lastScrollTop = 0;
+            window.addEventListener('scroll', function() {
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                
+                if (scrollTop > lastScrollTop && scrollTop > 100) {
+                    // Scrolling down
+                    fabButton.style.transform = 'translateY(100px)';
+                    fabButton.style.opacity = '0';
+                } else {
+                    // Scrolling up
+                    fabButton.style.transform = 'translateY(0)';
+                    fabButton.style.opacity = '1';
+                }
+                lastScrollTop = scrollTop;
+            });
+
+            // Add pulse animation to FAB button
+            setInterval(() => {
+                fabButton.style.boxShadow = '0 4px 12px rgba(239, 71, 111, 0.6)';
+                setTimeout(() => {
+                    fabButton.style.boxShadow = '0 4px 12px rgba(239, 71, 111, 0.4)';
+                }, 500);
+            }, 3000);
+        }
+
+        // Favorite button functionality
+        document.querySelectorAll('.favorite-form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const button = this.querySelector('button');
+                const icon = button.querySelector('i');
                 
                 // Visual feedback
-                this.style.transform = 'scale(0.95)';
-                this.disabled = true;
+                button.style.transform = 'scale(0.9)';
                 
-                fetch("{% url 'toggle_favorite' 0 %}".replace('0', listingId), {
+                // Toggle state
+                if (icon.classList.contains('bi-heart-fill')) {
+                    icon.className = 'bi bi-heart';
+                    button.classList.remove('btn-danger');
+                    button.classList.add('btn-ghost');
+                } else {
+                    icon.className = 'bi bi-heart-fill text-danger';
+                    button.classList.remove('btn-ghost');
+                    button.classList.add('btn-danger');
+                }
+                
+                // Reset animation
+                setTimeout(() => {
+                    button.style.transform = 'scale(1)';
+                }, 150);
+                
+                // Submit form via AJAX
+                fetch(this.action, {
                     method: 'POST',
                     headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRFToken': csrfToken
+                        'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'X-Requested-With': 'XMLHttpRequest'
                     }
                 })
                 .then(response => response.json())
                 .then(data => {
-                    setTimeout(() => {
-                        this.style.transform = 'scale(1)';
-                        this.disabled = false;
-                    }, 150);
-                    
-                    if (data.is_favorited) {
-                        // Update icon for heart
-                        if (icon) {
-                            icon.className = 'bi bi-heart-fill text-danger';
-                            if (this.textContent.includes('Save')) {
-                                this.innerHTML = '<i class="bi bi-heart-fill text-danger"></i> Remove';
-                            }
-                        }
-                    } else {
-                        // Update icon for unhearted
-                        if (icon) {
-                            icon.className = 'bi bi-heart';
-                            if (this.textContent.includes('Remove')) {
-                                this.innerHTML = '<i class="bi bi-heart"></i> Save';
-                            }
-                        }
-                        // Remove from saved items view
-                        if (this.closest('#saved-tab')) {
-                            const card = this.closest('.listing-card');
-                            card.style.opacity = '0.5';
-                            card.style.transform = 'scale(0.95)';
-                            setTimeout(() => {
-                                card.remove();
-                                // Update empty state if needed
-                                const savedItems = document.querySelectorAll('#saved-tab .listing-card');
-                                if (savedItems.length === 0) {
-                                    // Reload to show empty state
-                                    const savedTab = document.getElementById('saved-tab');
-                                    savedTab.innerHTML = `
-                                        <div class="empty-state">
-                                            <i class="bi bi-bookmark-heart empty-icon"></i>
-                                            <h3 class="empty-title">No saved items</h3>
-                                            <p class="empty-description">Items you save will appear here for quick access.</p>
-                                            <a href="{% url 'all-listings' %}" class="btn-custom btn-primary mt-3">
-                                                <i class="bi bi-search"></i>
-                                                Browse Listings
-                                            </a>
-                                        </div>
-                                    `;
-                                }
-                            }, 300);
-                        }
+                    if (window.showToast) {
+                        const message = data.is_favorited ? 
+                            'Added to favorites!' : 
+                            'Removed from favorites!';
+                        window.showToast(message, 'success');
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    this.disabled = false;
-                    this.style.transform = 'scale(1)';
                 });
             });
         });
-        
-        // Initialize tab accessibility
-        tabs.forEach((tab, index) => {
-            tab.setAttribute('role', 'tab');
-            tab.setAttribute('id', `tab-${index}`);
-            if (index === 0) {
-                tab.setAttribute('aria-selected', 'true');
-            } else {
-                tab.setAttribute('aria-selected', 'false');
-            }
-        });
-        
-        tabPanes.forEach((pane, index) => {
-            pane.setAttribute('role', 'tabpanel');
-            pane.setAttribute('aria-labelledby', `tab-${index}`);
-            if (index === 0) {
-                pane.setAttribute('aria-hidden', 'false');
-            } else {
-                pane.setAttribute('aria-hidden', 'true');
-            }
-        });
-    });
-    
-    // Helper function to get CSRF token
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
+
+        // Parallax effect for profile cover
+        const profileCover = document.querySelector('.profile-cover-container');
+        if (profileCover) {
+            window.addEventListener('scroll', function() {
+                const scrolled = window.pageYOffset;
+                const rate = scrolled * 0.5;
+                profileCover.style.transform = `translate3d(0, ${rate}px, 0)`;
+            });
         }
-        return cookieValue;
-    }
+    });
 </script>
 {% endblock %}

@@ -1,9 +1,901 @@
 {% extends 'base.html' %}
+{% load static %}
 {% load crispy_forms_tags %}
+{% load custom_filters %}
+{% load humanize %}
 
 {% block title %}Checkout - Baysoko{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* ===== GLOBAL STYLES ===== */
+    .container-custom {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    /* ===== PAGE HEADER ===== */
+    .page-header {
+        margin-bottom: 24px;
+        text-align: center;
+    }
+
+    .page-title {
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .page-subtitle {
+        color: var(--text-secondary);
+        font-size: 16px;
+        margin-bottom: 0;
+    }
+
+    /* ===== CHECKOUT LAYOUT ===== */
+    .checkout-container {
+        display: grid;
+        grid-template-columns: 1fr 400px;
+        gap: 24px;
+        margin-bottom: 24px;
+    }
+
+    @media (max-width: 768px) {
+        .checkout-container {
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+    }
+
+    /* ===== FORM SECTIONS ===== */
+    .checkout-section {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 16px;
+        transition: all 0.3s ease;
+    }
+
+    .checkout-section:hover {
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary-light);
+    }
+
+    .section-title {
+        font-size: 20px;
+        font-weight: 800;
+        margin-bottom: 20px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .section-icon {
+        color: var(--primary);
+        font-size: 24px;
+    }
+
+    /* ===== ORDER SUMMARY ===== */
+    .order-summary {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        position: sticky;
+        top: 20px;
+    }
+
+    .summary-title {
+        font-size: 18px;
+        font-weight: 800;
+        margin-bottom: 20px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .summary-icon {
+        color: var(--primary);
+    }
+
+    .order-item {
+        display: flex;
+        gap: 12px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .order-item:last-child {
+        border-bottom: none;
+    }
+
+    .item-image {
+        width: 60px;
+        height: 60px;
+        border-radius: var(--radius-md);
+        object-fit: cover;
+        border: 1px solid var(--border-color);
+    }
+
+    .item-details {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .item-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .item-meta {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-bottom: 4px;
+    }
+
+    .item-price {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--primary);
+    }
+
+    .summary-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        font-size: 14px;
+    }
+
+    .summary-row.total {
+        border-top: 2px solid var(--border-color);
+        margin-top: 12px;
+        padding-top: 16px;
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--text-primary);
+    }
+
+    /* ===== FORM STYLES ===== */
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-label {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+        display: block;
+    }
+
+    .form-control {
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 12px 16px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+    }
+
+    .form-control:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.1);
+        outline: none;
+    }
+
+    .form-control.is-invalid {
+        border-color: var(--danger);
+        box-shadow: 0 0 0 3px rgba(var(--danger-rgb), 0.1);
+    }
+
+    /* ===== RADIO BUTTONS ===== */
+    .radio-group {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+
+    .radio-option {
+        flex: 1;
+        position: relative;
+    }
+
+    .radio-input {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .radio-label {
+        display: block;
+        background: var(--bg-secondary);
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+
+    .radio-input:checked + .radio-label {
+        border-color: var(--primary);
+        background: rgba(var(--primary-rgb), 0.05);
+    }
+
+    .radio-input:checked + .radio-label .radio-icon {
+        color: var(--primary);
+    }
+
+    .radio-icon {
+        font-size: 24px;
+        margin-bottom: 8px;
+        color: var(--text-secondary);
+        transition: color 0.3s ease;
+    }
+
+    .radio-text {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+
+    .radio-desc {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    /* ===== CHECKBOX STYLES ===== */
+    .checkbox-group {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+
+    .checkbox-input {
+        width: 18px;
+        height: 18px;
+        border: 2px solid var(--border-color);
+        border-radius: 4px;
+        background: var(--bg-primary);
+        cursor: pointer;
+        transition: all 0.3s ease;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .checkbox-input:checked {
+        background: var(--primary);
+        border-color: var(--primary);
+    }
+
+    .checkbox-input:checked::after {
+        content: '✓';
+        display: block;
+        text-align: center;
+        color: white;
+        font-size: 12px;
+        font-weight: bold;
+        line-height: 14px;
+    }
+
+    .checkbox-label {
+        font-size: 14px;
+        color: var(--text-secondary);
+        line-height: 1.5;
+        cursor: pointer;
+    }
+
+    .checkbox-label a {
+        color: var(--primary);
+        text-decoration: none;
+    }
+
+    .checkbox-label a:hover {
+        text-decoration: underline;
+    }
+
+    /* ===== BUTTONS ===== */
+    .btn-custom {
+        border: none;
+        border-radius: var(--radius-md);
+        padding: 12px 24px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        text-align: center;
+        justify-content: center;
+    }
+
+    .btn-primary {
+        background: var(--primary);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: var(--primary-dark);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .btn-primary:disabled {
+        background: var(--text-muted);
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .btn-ghost {
+        background: transparent;
+        color: var(--primary);
+        border: 1px solid var(--primary);
+    }
+
+    .btn-ghost:hover {
+        background: var(--primary);
+        color: white;
+    }
+
+    /* ===== ADDRESS ACTIONS ===== */
+    .address-actions {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+
+    .address-btn {
+        padding: 8px 16px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .address-btn:hover {
+        border-color: var(--primary);
+        background: rgba(var(--primary-rgb), 0.05);
+    }
+
+    /* ===== CONTACT INFO ===== */
+    .contact-info {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        margin-top: 24px;
+    }
+
+    .contact-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 12px;
+    }
+
+    .contact-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        font-size: 14px;
+        color: var(--text-secondary);
+    }
+
+    .contact-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .contact-icon {
+        color: var(--primary);
+        font-size: 16px;
+    }
+
+    /* ===== TOAST CONTAINER ===== */
+    .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 576px) {
+        .checkout-section {
+            padding: 16px;
+        }
+
+        .order-summary {
+            padding: 16px;
+        }
+
+        .radio-group {
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .address-actions {
+            flex-direction: column;
+        }
+
+        .address-actions .address-btn {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
+<div class="container-custom">
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1 class="page-title">Checkout</h1>
+        <p class="page-subtitle">Complete your order securely</p>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container"></div>
+
+    <form id="checkoutForm" method="post" novalidate>
+        {% csrf_token %}
+
+        <div class="checkout-container">
+            <!-- Main Form -->
+            <div class="main-form">
+                <!-- Shipping Method -->
+                <div class="checkout-section">
+                    <h3 class="section-title">
+                        <i class="bi bi-truck section-icon"></i>
+                        Shipping Method
+                    </h3>
+
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="standardShipping" name="shipping_method" value="standard" class="radio-input" checked>
+                            <label for="standardShipping" class="radio-label">
+                                <div class="radio-icon">
+                                    <i class="bi bi-box-seam"></i>
+                                </div>
+                                <div class="radio-text">Standard Shipping</div>
+                                <div class="radio-desc">3-5 business days</div>
+                            </label>
+                        </div>
+
+                        <div class="radio-option">
+                            <input type="radio" id="expressShipping" name="shipping_method" value="express" class="radio-input">
+                            <label for="expressShipping" class="radio-label">
+                                <div class="radio-icon">
+                                    <i class="bi bi-lightning-charge"></i>
+                                </div>
+                                <div class="radio-text">Express Shipping</div>
+                                <div class="radio-desc">1-2 business days</div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Personal Information -->
+                <div class="checkout-section" id="personalInfoSection">
+                    <h3 class="section-title">
+                        <i class="bi bi-person section-icon"></i>
+                        Personal Information
+                    </h3>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="id_first_name" class="form-label">First Name *</label>
+                                {{ form.first_name }}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="id_last_name" class="form-label">Last Name *</label>
+                                {{ form.last_name }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="id_email" class="form-label">Email Address *</label>
+                                {{ form.email }}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="id_phone_number" class="form-label">Phone Number *</label>
+                                {{ form.phone_number }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="useAlternateShipping" class="checkbox-input">
+                        <label for="useAlternateShipping" class="checkbox-label">
+                            Ship to a different address
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Shipping Address -->
+                <div class="checkout-section" id="shippingFormSection" style="display: none;">
+                    <h3 class="section-title">
+                        <i class="bi bi-geo-alt section-icon"></i>
+                        Shipping Address
+                    </h3>
+
+                    <div class="address-actions">
+                        <button type="button" id="useLastAddress" class="address-btn">
+                            <i class="bi bi-arrow-clockwise me-2"></i>
+                            Use Last Address
+                        </button>
+                        <button type="button" id="enterNewAddress" class="address-btn">
+                            <i class="bi bi-plus-circle me-2"></i>
+                            Enter New Address
+                        </button>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="id_shipping_address" class="form-label">Street Address *</label>
+                        {{ form.shipping_address }}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="id_city" class="form-label">City *</label>
+                                {{ form.city }}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="id_postal_code" class="form-label">Postal Code *</label>
+                                {{ form.postal_code }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment Information -->
+                <div class="checkout-section">
+                    <h3 class="section-title">
+                        <i class="bi bi-credit-card section-icon"></i>
+                        Payment Information
+                    </h3>
+
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="mpesaPayment" name="payment_method" value="mpesa" class="radio-input" checked>
+                            <label for="mpesaPayment" class="radio-label">
+                                <div class="radio-icon">
+                                    <i class="bi bi-phone"></i>
+                                </div>
+                                <div class="radio-text">M-Pesa</div>
+                                <div class="radio-desc">Pay with mobile money</div>
+                            </label>
+                        </div>
+
+                        <div class="radio-option">
+                            <input type="radio" id="cardPayment" name="payment_method" value="card" class="radio-input">
+                            <label for="cardPayment" class="radio-label">
+                                <div class="radio-icon">
+                                    <i class="bi bi-credit-card"></i>
+                                </div>
+                                <div class="radio-text">Credit/Debit Card</div>
+                                <div class="radio-desc">Visa, Mastercard, etc.</div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="terms" name="terms" class="checkbox-input" required>
+                        <label for="terms" class="checkbox-label">
+                            I agree to the <a href="#" target="_blank">Terms of Service</a> and <a href="#" target="_blank">Privacy Policy</a> *
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Order Summary -->
+            <div class="order-summary">
+                <h4 class="summary-title">
+                    <i class="bi bi-receipt summary-icon"></i>
+                    Order Summary
+                </h4>
+
+                {% for item in cart_items %}
+                <div class="order-item">
+                    <img src="{{ item.listing.image.url|default:'/static/images/placeholder.jpg' }}" alt="{{ item.listing.title }}" class="item-image">
+                    <div class="item-details">
+                        <div class="item-title">{{ item.listing.title }}</div>
+                        <div class="item-meta">Qty: {{ item.quantity }}</div>
+                        <div class="item-price">KES {{ item.total_price|floatformat:0|intcomma }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+
+                <div class="summary-row">
+                    <span>Subtotal</span>
+                    <span>KES {{ subtotal|floatformat:0|intcomma }}</span>
+                </div>
+
+                <div class="summary-row">
+                    <span>Shipping</span>
+                    <span id="shippingCost">KES {{ shipping_cost|floatformat:0|intcomma }}</span>
+                </div>
+
+                <div class="summary-row total">
+                    <span>Total</span>
+                    <span id="totalCost">KES {{ total|floatformat:0|intcomma }}</span>
+                </div>
+
+                <button type="submit" id="placeOrderBtn" class="btn-custom btn-primary w-100 mt-3">
+                    <i class="bi bi-lock me-2"></i>
+                    Place Order
+                </button>
+            </div>
+        </div>
+
+        <!-- Contact Information -->
+        <div class="contact-info">
+            <h5 class="contact-title">Need Help?</h5>
+            <div class="contact-item">
+                <i class="bi bi-telephone contact-icon"></i>
+                <span>+254 700 123 456</span>
+            </div>
+            <div class="contact-item">
+                <i class="bi bi-envelope contact-icon"></i>
+                <span>support@homabaysouq.com</span>
+            </div>
+            <div class="contact-item">
+                <i class="bi bi-clock contact-icon"></i>
+                <span>Mon-Fri: 8AM-6PM</span>
+            </div>
+        </div>
+    </form>
+</div>
+
+<style>
+.bg-gradient-primary {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+}
+
+.sticky-top {
+    z-index: 10;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkoutForm = document.getElementById('checkoutForm');
+    const placeOrderBtn = document.getElementById('placeOrderBtn');
+    const useAlternateShipping = document.getElementById('useAlternateShipping');
+    const personalInfoSection = document.getElementById('personalInfoSection');
+    const shippingFormSection = document.getElementById('shippingFormSection');
+    const useLastAddress = document.getElementById('useLastAddress');
+    const enterNewAddress = document.getElementById('enterNewAddress');
+
+    if (useAlternateShipping) {
+        useAlternateShipping.addEventListener('change', function() {
+            personalInfoSection.style.display = this.checked ? 'none' : 'block';
+            shippingFormSection.style.display = this.checked ? 'block' : 'none';
+
+            if (!this.checked) {
+                const userInfo = {
+                    'id_first_name': '{{ request.user.first_name }}',
+                    'id_last_name': '{{ request.user.last_name }}',
+                    'id_email': '{{ request.user.email }}',
+                    'id_phone_number': '{{ request.user.phone_number|default:"" }}'
+                };
+
+                Object.keys(userInfo).forEach(id => {
+                    const field = document.getElementById(id);
+                    if (field) field.value = userInfo[id];
+                });
+            }
+            toggleShippingFields(this.checked);
+        });
+    }
+
+    function toggleShippingFields(enable) {
+        if (!shippingFormSection) return;
+        const inputs = shippingFormSection.querySelectorAll('input, select, textarea');
+        inputs.forEach(el => {
+            if (enable) {
+                el.removeAttribute('disabled');
+            } else {
+                el.setAttribute('disabled', 'disabled');
+            }
+        });
+    }
+
+    if (useAlternateShipping) {
+        toggleShippingFields(useAlternateShipping.checked);
+    } else {
+        toggleShippingFields(false);
+    }
+
+    if (useLastAddress) {
+        useLastAddress.addEventListener('click', function() {
+            const savedAddress = {
+                'id_shipping_address': '{{ form.initial.shipping_address|escapejs }}',
+                'id_city': '{{ form.initial.city|escapejs }}',
+                'id_postal_code': '{{ form.initial.postal_code|escapejs }}'
+            };
+
+            Object.keys(savedAddress).forEach(id => {
+                const field = document.getElementById(id);
+                if (field) {
+                    field.value = savedAddress[id];
+                    field.classList.remove('is-invalid');
+                }
+            });
+
+            showToast('Previous shipping address loaded', 'success');
+        });
+    }
+
+    if (enterNewAddress) {
+        enterNewAddress.addEventListener('click', function() {
+            ['id_shipping_address', 'id_city', 'id_postal_code'].forEach(id => {
+                const field = document.getElementById(id);
+                if (field) field.value = '';
+            });
+
+            document.getElementById('id_shipping_address').focus();
+            showToast('Enter your new shipping address', 'info');
+        });
+    }
+
+    checkoutForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        if (!document.getElementById('terms').checked) {
+            showToast('Please agree to the Terms of Service and Privacy Policy', 'error');
+            return;
+        }
+
+        let fieldsToValidate;
+        if (useAlternateShipping && useAlternateShipping.checked) {
+            fieldsToValidate = checkoutForm.querySelectorAll('[required]');
+        } else {
+            fieldsToValidate = checkoutForm.querySelectorAll('#addressSection [required]');
+        }
+
+        let isValid = true;
+        fieldsToValidate.forEach(field => {
+            if (!field.value.trim()) {
+                field.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                field.classList.remove('is-invalid');
+            }
+        });
+
+        if (!isValid) {
+            showToast('Please fill in all required fields', 'error');
+            return;
+        }
+
+        placeOrderBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i> Processing...';
+        placeOrderBtn.disabled = true;
+
+        if (useAlternateShipping && !useAlternateShipping.checked) {
+            toggleShippingFields(false);
+        }
+        this.submit();
+    });
+
+    const inputs = checkoutForm.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+        input.addEventListener('blur', function() {
+            if (this.value.trim() === '' && this.hasAttribute('required')) {
+                this.classList.add('is-invalid');
+            } else {
+                this.classList.remove('is-invalid');
+            }
+        });
+
+        input.addEventListener('input', function() {
+            if (this.value.trim() !== '' && this.hasAttribute('required')) {
+                this.classList.remove('is-invalid');
+            }
+        });
+    });
+
+        function showToast(message, type = 'info') {
+        const container = document.querySelector('.toast-container');
+        if (!container || typeof bootstrap === 'undefined' || typeof bootstrap.Toast !== 'function') {
+            try {
+                console.log('TOAST', type, message);
+                if (type === 'error') alert(message);
+            } catch (e) {
+            }
+            return;
+        }
+
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body d-flex align-items-center">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+
+        container.appendChild(toast);
+
+        const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 3000 });
+        bsToast.show();
+
+        toast.addEventListener('hidden.bs.toast', () => {
+            toast.remove();
+        });
+    }
+});
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const djangoMessages = [
+        {% for msg in messages %}
+        { message: "{{ msg|escapejs }}", tags: "{{ msg.tags }}" }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+
+    const mapTag = (tags) => {
+        if (!tags) return 'info';
+        if (tags.indexOf('error') !== -1) return 'error';
+        if (tags.indexOf('warning') !== -1) return 'warning';
+        if (tags.indexOf('success') !== -1) return 'success';
+        return 'info';
+    };
+
+    setTimeout(() => {
+        djangoMessages.forEach(m => {
+            try {
+                const t = mapTag(m.tags);
+                if (typeof showToast === 'function') showToast(m.message, t);
+                else console.log('Message:', t, m.message);
+            } catch (e) {
+                console.error('Error showing toast for message', m, e);
+            }
+        });
+    }, 150);
+});
+</script>
+{% endblock %}
 <div class="container py-4">
     <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:1060;" aria-live="polite" aria-atomic="true"></div>
     

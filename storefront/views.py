@@ -172,7 +172,6 @@ def store_edit(request, slug):
     store = get_object_or_404(Store, slug=slug, owner=request.user)
     
     # Check subscription status for featured eligibility
-    from django.utils import timezone
     has_active_subscription = Subscription.objects.filter(
         store=store, 
         status='active'

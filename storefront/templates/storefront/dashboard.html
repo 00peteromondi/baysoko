@@ -1,17 +1,674 @@
 {% extends 'base.html' %}
+{% load static %}
 {% load humanize %}
+{% load custom_filters %}
 
 {% block title %}Seller Dashboard - Baysoko{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* ===== DASHBOARD STYLES ===== */
+    .container-custom {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    /* ===== DASHBOARD HEADER ===== */
+    .dashboard-header {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .dashboard-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--primary), var(--accent));
+    }
+
+    .dashboard-title {
+        font-size: 24px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .dashboard-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
+    /* ===== QUICK STATS GRID ===== */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+
+    @media (min-width: 768px) {
+        .stats-grid {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+    }
+
+    .stat-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 16px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+    }
+
+    .stat-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: var(--primary);
+        opacity: 0.3;
+    }
+
+    .stat-icon {
+        font-size: 24px;
+        margin-bottom: 8px;
+        color: var(--primary);
+        background: rgba(255, 107, 53, 0.1);
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 12px;
+    }
+
+    .stat-value {
+        font-size: 20px;
+        font-weight: 800;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+        line-height: 1;
+    }
+
+    .stat-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* ===== DASHBOARD NAVIGATION ===== */
+    .dashboard-nav {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 12px 16px;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
+        position: sticky;
+        top: 70px;
+        z-index: 100;
+    }
+
+    .dashboard-nav-items {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .dashboard-nav-items::-webkit-scrollbar {
+        height: 3px;
+    }
+
+    .dashboard-nav-items::-webkit-scrollbar-track {
+        background: var(--bg-secondary);
+        border-radius: 2px;
+    }
+
+    .dashboard-nav-items::-webkit-scrollbar-thumb {
+        background: var(--primary);
+        border-radius: 2px;
+    }
+
+    .dashboard-nav-link {
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 14px;
+        white-space: nowrap;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+        text-decoration: none;
+    }
+
+    .dashboard-nav-link.active {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+
+    .dashboard-nav-link:not(.active) {
+        background: var(--bg-secondary);
+        color: var(--text-secondary);
+        border-color: var(--border-color);
+    }
+
+    .dashboard-nav-link:not(.active):hover {
+        background: var(--primary-light);
+        color: var(--primary);
+        border-color: var(--primary);
+    }
+
+    /* ===== STORES SECTION ===== */
+    .stores-section {
+        margin-bottom: 30px;
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+
+    .section-title {
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 0;
+    }
+
+    .section-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
+    .stores-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 16px;
+    }
+
+    @media (max-width: 768px) {
+        .stores-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .store-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .store-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-lg);
+        border-color: var(--primary);
+    }
+
+    .store-card-header {
+        position: relative;
+        height: 120px;
+        overflow: hidden;
+    }
+
+    .store-cover {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.5s ease;
+    }
+
+    .store-card:hover .store-cover {
+        transform: scale(1.05);
+    }
+
+    .store-cover-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.7) 100%);
+    }
+
+    .store-logo-container {
+        position: absolute;
+        bottom: -30px;
+        left: 16px;
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 4px solid var(--card-bg);
+        background: white;
+        z-index: 2;
+    }
+
+    .store-logo {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .store-premium-badge {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        background: linear-gradient(135deg, var(--warning) 0%, #ff7b00 100%);
+        color: #333;
+        padding: 6px 10px;
+        border-radius: 16px;
+        font-size: 11px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+        z-index: 2;
+    }
+
+    .store-card-content {
+        padding: 16px;
+        padding-top: 40px;
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .store-card-title {
+        font-size: 18px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+        line-height: 1.3;
+    }
+
+    .store-card-description {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-bottom: 12px;
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        flex-grow: 1;
+    }
+
+    .store-card-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .store-card-stat {
+        text-align: center;
+        padding: 8px 4px;
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+    }
+
+    .store-card-stat:hover {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+    }
+
+    .store-card-stat-value {
+        font-size: 14px;
+        font-weight: 800;
+        color: var(--primary);
+        display: block;
+    }
+
+    .store-card-stat-label {
+        font-size: 10px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .store-card-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: auto;
+    }
+
+    /* ===== LISTINGS GRID ===== */
+    .listings-section {
+        margin-bottom: 30px;
+    }
+
+    .listings-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 12px;
+    }
+
+    @media (min-width: 768px) {
+        .listings-grid {
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 16px;
+        }
+    }
+
+    .listing-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .listing-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+    }
+
+    .listing-image-container {
+        position: relative;
+        height: 140px;
+        overflow: hidden;
+    }
+
+    .listing-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.5s ease;
+    }
+
+    .listing-card:hover .listing-image {
+        transform: scale(1.05);
+    }
+
+    .listing-badge {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        background: var(--primary);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 10px;
+        font-weight: 700;
+        z-index: 2;
+    }
+
+    .listing-content {
+        padding: 12px;
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .listing-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 6px;
+        color: var(--text-primary);
+        line-height: 1.3;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .listing-price {
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--primary);
+        margin-bottom: 8px;
+    }
+
+    .listing-actions {
+        margin-top: auto;
+        display: flex;
+        gap: 8px;
+    }
+
+    /* ===== UPGRADE BANNER ===== */
+    .upgrade-banner {
+        background: linear-gradient(135deg, var(--warning) 0%, #ff7b00 100%);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        margin-bottom: 24px;
+        position: relative;
+        overflow: hidden;
+        color: #333;
+    }
+
+    .upgrade-banner::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.2) 100%);
+    }
+
+    .upgrade-content {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 12px;
+    }
+
+    @media (min-width: 768px) {
+        .upgrade-content {
+            flex-direction: row;
+            justify-content: space-between;
+            text-align: left;
+        }
+    }
+
+    .upgrade-text h4 {
+        font-size: 18px;
+        font-weight: 800;
+        margin-bottom: 4px;
+    }
+
+    .upgrade-text p {
+        margin-bottom: 0;
+        font-size: 14px;
+        opacity: 0.9;
+    }
+
+    /* ===== QUICK ACTIONS ===== */
+    .quick-actions {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 30px;
+    }
+
+    .actions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+    }
+
+    .action-card {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        text-align: center;
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        text-decoration: none;
+        color: var(--text-primary);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .action-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+
+    .action-icon {
+        font-size: 24px;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: rgba(255, 107, 53, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--primary);
+    }
+
+    .action-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 0;
+    }
+
+    /* ===== EMPTY STATES ===== */
+    .empty-state {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 40px 20px;
+        text-align: center;
+        border: 2px dashed var(--border-color);
+        margin-bottom: 20px;
+    }
+
+    .empty-state-icon {
+        font-size: 48px;
+        color: var(--text-tertiary);
+        margin-bottom: 16px;
+    }
+
+    .empty-state h3 {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .empty-state p {
+        color: var(--text-secondary);
+        margin-bottom: 20px;
+        font-size: 14px;
+    }
+
+    /* ===== RESPONSIVE DESIGN ===== */
+    @media (max-width: 374px) {
+        .container-custom {
+            padding-left: 6px;
+            padding-right: 6px;
+        }
+        
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .store-card-header {
+            height: 100px;
+        }
+        
+        .store-logo-container {
+            width: 60px;
+            height: 60px;
+        }
+        
+        .store-card-content {
+            padding-top: 35px;
+        }
+        
+        .listings-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    @media (min-width: 375px) and (max-width: 424px) {
+        .container-custom {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+        
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    
+    @media (min-width: 768px) {
+        .container-custom {
+            padding-left: 16px;
+            padding-right: 16px;
+        }
+        
+        .dashboard-title {
+            font-size: 28px;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-custom py-var(--spacing-xl)">
-    <!-- Header Section -->
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
-        <div class="mb-3 mb-md-0">
-            <h1 class="display-4 fw-bold mb-2">Seller Dashboard</h1>
-            <p class="lead text-muted mb-0">Manage your stores and track performance</p>
-        </div>
-        <div class="d-flex gap-2">
+<div class="container-custom py-3">
+    <!-- Dashboard Header -->
+    <div class="dashboard-header">
+        <h1 class="dashboard-title">Seller Dashboard</h1>
+        <p class="dashboard-subtitle">Manage your stores and track performance</p>
+        
+        <div class="d-flex gap-2 mt-3">
             <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-primary">
                 <i class="bi bi-plus-circle me-2"></i>
                 Create New Store
@@ -23,113 +680,80 @@
         </div>
     </div>
 
-    <!-- Navigation Tabs -->
-    <div class="mb-4">
-        <div class="d-flex flex-wrap gap-2 border-bottom pb-2">
-            <a href="{% url 'storefront:seller_dashboard' %}" class="btn-custom btn-ghost active">
-                <i class="bi bi-grid-3x3 me-2"></i>Overview
+    <!-- Dashboard Navigation -->
+    <div class="dashboard-nav">
+        <div class="dashboard-nav-items">
+            <a href="{% url 'storefront:seller_dashboard' %}" class="dashboard-nav-link active">
+                <i class="bi bi-grid-3x3 me-1"></i>
+                Overview
             </a>
-            <a href="{% url 'storefront:seller_analytics' %}" class="btn-custom btn-ghost">
-                <i class="bi bi-graph-up me-2"></i>Analytics
+            <a href="{% url 'storefront:seller_analytics' %}" class="dashboard-nav-link">
+                <i class="bi bi-graph-up me-1"></i>
+                Analytics
             </a>
-            <a href="{% url 'storefront:payment_monitor' %}" class="btn-custom btn-ghost">
-                <i class="bi bi-cash-stack me-2"></i>Payments
+            <a href="{% url 'storefront:payment_monitor' %}" class="dashboard-nav-link">
+                <i class="bi bi-cash-stack me-1"></i>
+                Payments
             </a>
-            <a href="{% url 'order_list' %}" class="btn-custom btn-ghost">
-                <i class="bi bi-bag me-2"></i>Orders
+            <a href="{% url 'order_list' %}" class="dashboard-nav-link">
+                <i class="bi bi-bag me-1"></i>
+                Orders
             </a>
             {% if stores.exists %}
-            <a href="{% url 'storefront:inventory_dashboard' stores.0.slug %}" class="btn-custom btn-ghost">
-                <i class="bi bi-clipboard me-2"></i>Inventory
+            <a href="{% url 'storefront:inventory_dashboard' stores.0.slug %}" class="dashboard-nav-link">
+                <i class="bi bi-clipboard me-1"></i>
+                Inventory
             </a>
-             <a href="{% url 'storefront:store_edit' stores.0.slug %}" class="btn-custom btn-ghost">
-                <i class="bi bi-gear me-2"></i>Settings
+            <a href="{% url 'storefront:store_edit' stores.0.slug %}" class="dashboard-nav-link">
+                <i class="bi bi-gear me-1"></i>
+                Settings
             </a>
-            <a href="{% url 'storefront:bulk_dashboard' stores.0.slug %}" class="btn-custom btn-ghost">
-                <i class="bi bi-upload me-2"></i>Bulk Operations
-            </a>
-           
-            {% else %}
-            <a href="#" class="btn-custom btn-ghost disabled">
-                <i class="bi bi-clipboard me-2"></i>Inventory
-            </a>
-            <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-ghost">
-                <i class="bi bi-gear me-2"></i>Settings
-            </a>
-            <a href="#" class="btn-custom btn-ghost disabled">
-                <i class="bi bi-upload me-2"></i>Bulk Operations
-            </a>
-            
             {% endif %}
-
         </div>
     </div>
 
     <!-- Quick Stats -->
-    <div class="row g-3 mb-4">
-        <div class="col-md-3 col-6">
-            <div class="card-custom text-center h-100">
-                <div class="card-body p-var(--spacing-lg)">
-                    <div class="stat-icon-wrapper mb-3">
-                        <i class="bi bi-shop text-primary fs-2"></i>
-                    </div>
-                    <h2 class="fw-bold mb-1">{{ stores.count|default:0 }}</h2>
-                    <p class="text-muted mb-0 small">Total Stores</p>
-                </div>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="bi bi-shop"></i>
             </div>
+            <div class="stat-value">{{ stores.count|default:0 }}</div>
+            <div class="stat-label">Total Stores</div>
         </div>
-        <div class="col-md-3 col-6">
-            <div class="card-custom text-center h-100">
-                <div class="card-body p-var(--spacing-lg)">
-                    <div class="stat-icon-wrapper mb-3">
-                        <i class="bi bi-grid text-success fs-2"></i>
-                    </div>
-                    <h2 class="fw-bold mb-1">{{ total_listings|default:0 }}</h2>
-                    <p class="text-muted mb-0 small">Total Listings</p>
-                </div>
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="bi bi-grid"></i>
             </div>
+            <div class="stat-value">{{ total_listings|default:0 }}</div>
+            <div class="stat-label">Total Listings</div>
         </div>
-        <div class="col-md-3 col-6">
-            <div class="card-custom text-center h-100">
-                <div class="card-body p-var(--spacing-lg)">
-                    <div class="stat-icon-wrapper mb-3">
-                        <i class="bi bi-star text-warning fs-2"></i>
-                    </div>
-                    <h2 class="fw-bold mb-1">{{ premium_stores|default:0 }}</h2>
-                    <p class="text-muted mb-0 small">Premium Stores</p>
-                </div>
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="bi bi-star"></i>
             </div>
+            <div class="stat-value">{{ premium_stores|default:0 }}</div>
+            <div class="stat-label">Premium Stores</div>
         </div>
-        <div class="col-md-3 col-6">
-            <div class="card-custom text-center h-100">
-                <div class="card-body p-var(--spacing-lg)">
-                    <div class="stat-icon-wrapper mb-3">
-                        <i class="bi bi-bar-chart text-info fs-2"></i>
-                    </div>
-                    <h2 class="fw-bold mb-1">{{ total_views|default:0|intcomma }}</h2>
-                    <p class="text-muted mb-0 small">Total Views</p>
-                </div>
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="bi bi-bar-chart"></i>
             </div>
+            <div class="stat-value">{{ total_views|default:0|intcomma }}</div>
+            <div class="stat-label">Total Views</div>
         </div>
     </div>
 
-    <!-- Free Listing Status -->
+    <!-- Upgrade Banner (for free users) -->
     {% if not stores.exists or not stores.first.is_premium %}
-    <div class="card-custom bg-warning bg-opacity-10 border-warning mb-4">
-        <div class="card-body">
-            <div class="d-flex align-items-center justify-content-between">
-                <div>
-                    <h5 class="fw-bold text-warning mb-1">
-                        <i class="bi bi-lightning-charge me-2"></i>
-                        Free Listing Limit
-                    </h5>
-                    <p class="text-muted mb-0">
-                        You've used {{ total_listings|default:0 }} of {{ free_limit|default:5 }} free listings
-                    </p>
-                </div>
-                <div class="progress flex-grow-1 mx-4" style="height: 10px; max-width: 300px;">
+    <div class="upgrade-banner">
+        <div class="upgrade-content">
+            <div class="upgrade-text">
+                <h4>Free Listing Limit</h4>
+                <p>You've used {{ total_listings|default:0 }} of {{ free_limit|default:5 }} free listings</p>
+                <div class="progress mt-2" style="height: 8px; max-width: 300px; background: rgba(0,0,0,0.1);">
                     {% with progress=total_listings|default:0|floatformat:0 %}
-                    <div class="progress-bar bg-warning" role="progressbar" 
+                    <div class="progress-bar bg-dark" role="progressbar" 
                          style="width: {{ progress }}%" 
                          aria-valuenow="{{ progress }}" 
                          aria-valuemin="0" 
@@ -137,144 +761,92 @@
                     </div>
                     {% endwith %}
                 </div>
-                {% if store_with_slug %}
-                    <a href="{% url 'storefront:store_upgrade' slug=store_with_slug.slug %}" class="btn-custom btn-warning">
-                        <i class="bi bi-arrow-up-circle me-1"></i>
-                        Upgrade Now
-                    </a>
+            </div>
+            <div>
+                {% if stores.exists %}
+                <a href="{% url 'storefront:store_upgrade' slug=stores.first.slug %}" class="btn-custom btn-dark">
+                    <i class="bi bi-lightning-charge me-1"></i>
+                    Upgrade Now
+                </a>
                 {% else %}
-                    <!-- Show create store button if no store exists -->
-                    <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-warning">
-                        <i class="bi bi-plus-circle me-1"></i>
-                        Create Store First
-                    </a>
+                <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-dark">
+                    <i class="bi bi-plus-circle me-1"></i>
+                    Create Store First
+                </a>
                 {% endif %}
-                    
-                
             </div>
         </div>
     </div>
     {% endif %}
 
-    <!-- Stores Section -->
-    <div class="mb-4">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h3 class="fw-bold mb-0">Your Stores</h3>
-            <span class="text-muted">{{ stores.count }} stores</span>
+    <!-- Your Stores Section -->
+    <section class="stores-section">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title">Your Stores</h2>
+                <p class="section-subtitle">{{ stores.count }} stores</p>
+            </div>
+            <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-primary btn-sm">
+                <i class="bi bi-plus-circle me-1"></i>
+                Add Store
+            </a>
         </div>
         
         {% if stores.exists %}
-        <div class="row g-4">
+        <div class="stores-grid">
             {% for store in stores %}
-            <div class="col-lg-6">
-                <div class="card-custom store-card h-100">
-                    <!-- Store Header with Protected Text -->
-                    <div class="store-card-header protected-text-container rounded-top"
-                         style="{% if store.cover_image %}background-image: url('{{ store.cover_image.url }}');{% else %}background: linear-gradient(135deg, var(--primary) 0%, var(--info) 100%);{% endif %}">
-                        <div class="protected-text">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <h4 class="fw-bold mb-1">{{ store.name }}</h4>
-                                    <p class="mb-0 opacity-90">{{ store.listings.count }} listings</p>
-                                </div>
-                                {% if store.is_premium %}
-                                <span class="badge bg-warning text-dark">
-                                    <i class="bi bi-star-fill me-1"></i>Premium
-                                </span>
-                                {% endif %}
-                            </div>
+            <div class="store-card">
+                <!-- Store Header -->
+                <div class="store-card-header">
+                    {% if store.cover_image %}
+                    <img src="{{ store.cover_image.url }}" alt="{{ store.name }}" class="store-cover">
+                    {% else %}
+                    <div class="store-cover" style="background: linear-gradient(135deg, var(--primary) 0%, var(--info) 100%);"></div>
+                    {% endif %}
+                    <div class="store-cover-overlay"></div>
+                    
+                    <div class="store-logo-container">
+                        <img src="{{ store.get_logo_url|default:'https://placehold.co/200x200/c2c2c2/1f1f1f?text=Store' }}"
+                             alt="{{ store.name }}"
+                             class="store-logo">
+                    </div>
+                    
+                    {% if store.is_premium %}
+                    <span class="store-premium-badge">
+                        <i class="bi bi-star-fill"></i>Premium
+                    </span>
+                    {% endif %}
+                </div>
+                
+                <!-- Store Content -->
+                <div class="store-card-content">
+                    <h3 class="store-card-title">{{ store.name }}</h3>
+                    <p class="store-card-description">{{ store.description|default:"Welcome to our store"|truncatechars:120 }}</p>
+                    
+                    <div class="store-card-stats">
+                        <div class="store-card-stat">
+                            <span class="store-card-stat-value">{{ store.listings.count }}</span>
+                            <span class="store-card-stat-label">Products</span>
+                        </div>
+                        <div class="store-card-stat">
+                            <span class="store-card-stat-value">{{ store.reviews.count }}</span>
+                            <span class="store-card-stat-label">Reviews</span>
+                        </div>
+                        <div class="store-card-stat">
+                            <span class="store-card-stat-value">{{ store.get_sales_count|default:"0" }}+</span>
+                            <span class="store-card-stat-label">Sales</span>
                         </div>
                     </div>
                     
-                    <div class="card-body">
-                        <!-- Store Logo and Info -->
-                        <div class="d-flex align-items-start gap-3 mb-3 mt-4">
-                            <div class="flex-shrink-0">
-                                <img src="{{ store.get_logo_url|default:'https://placehold.co/80x80/c2c2c2/1f1f1f?text=Store' }}"
-                                    alt="{{ store.name }}"
-                                    class="border border-3"
-                                    style="width: 80px; height: 80px; object-fit: cover; border-color: var(--border-color) !important; border-radius: var(--radius-full) !important;"
-                                    onerror="this.src='https://placehold.co/80x80/c2c2c2/1f1f1f?text=Logo'">
-                                     
-                            </div>
-                            <div class="flex-grow-1">
-                                <p class="text-muted mb-2 mt-2 line-clamp-2">{{ store.description|default:"No description provided"|truncatechars:120 }}</p>
-                                <div class="d-flex gap-2">
-                                    <span class="badge bg-var(--bg-secondary) text-muted">
-                                        <i class="bi bi-calendar me-1"></i>
-                                        {{ store.created_at|date:"M d, Y" }}
-                                    </span>
-                                    <span class="badge bg-var(--bg-secondary) text-muted">
-                                        <i class="bi bi-eye me-1"></i>
-                                        {{ store.views|default:"0" }} views
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Store Actions -->
-                        <div class="d-flex flex-wrap gap-2 mb-4">
-                            <a href="{% url 'storefront:store_detail' slug=store.slug %}" 
-                               class="btn-custom btn-primary">
-                                <i class="bi bi-eye me-1"></i>View Store
-                            </a>
-                            <a href="{% url 'storefront:store_edit' slug=store.slug %}" 
-                               class="btn-custom btn-ghost">
-                                <i class="bi bi-gear me-1"></i>Manage
-                            </a>
-                            <a href="{% url 'storefront:product_create' store_slug=store.slug %}" 
-                               class="btn-custom btn-success">
-                                <i class="bi bi-plus-lg me-1"></i>Add Listing
-                            </a>
-                            <a href="{% url 'storefront:store_analytics' slug=store.slug %}" 
-                               class="btn-custom btn-info">
-                                <i class="bi bi-graph-up me-1"></i>Analytics
-                            </a>
-                        </div>
-                        
-                        <!-- Recent Listings -->
-                        <h6 class="fw-bold mb-3">Recent Listings</h6>
-                        <div class="row g-2">
-                            {% for listing in store.listings.all|slice:":4" %}
-                            <div class="col-6 col-sm-3">
-                                <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=listing.slug %}" 
-                                   class="text-decoration-none">
-                                    <div class="position-relative rounded overflow-hidden">
-                                        <img src="{{ listing.get_image_url }}" 
-                                             alt="{{ listing.title }}"
-                                             class="img-fluid w-100"
-                                             style="height: 80px; object-fit: cover;"
-                                             onerror="this.src='https://placehold.co/100x80/c2c2c2/1f1f1f?text=Product'">
-                                        <div class="position-absolute bottom-0 start-0 end-0 bg-dark bg-opacity-75 text-white p-1">
-                                            <small class="d-block text-truncate">{{ listing.title }}</small>
-                                            <small class="d-block text-truncate">KSh {{ listing.price|intcomma }}</small>
-                                        </div>
-                                    </div>
-                                </a>
-                            </div>
-                            {% empty %}
-                            <div class="col-12">
-                                <div class="text-center py-3 border rounded">
-                                    <i class="bi bi-inbox text-muted fs-4 mb-2"></i>
-                                    <p class="text-muted mb-0">No listings yet</p>
-                                    <a href="{% url 'storefront:product_create' store_slug=store.slug %}" 
-                                       class="btn-custom btn-sm btn-outline-primary mt-2">
-                                        Create First Listing
-                                    </a>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    
-                    <div class="card-footer bg-transparent border-top-0 pt-0">
-                        {% if not store.is_premium %}
-                        <a href="{% url 'storefront:store_upgrade' slug=store.slug %}" 
-                           class="btn-custom btn-warning w-100">
-                            <i class="bi bi-lightning-charge me-2"></i>
-                            Upgrade to Premium
+                    <div class="store-card-actions">
+                        <a href="{% url 'storefront:store_detail' slug=store.slug %}" 
+                           class="btn-custom btn-primary flex-fill">
+                            <i class="bi bi-eye me-1"></i>View Store
                         </a>
-                        {% endif %}
+                        <a href="{% url 'storefront:store_edit' slug=store.slug %}" 
+                           class="btn-custom btn-ghost">
+                            <i class="bi bi-gear"></i>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -282,63 +854,67 @@
         </div>
         {% else %}
         <!-- Empty State -->
-        <div class="card-custom text-center py-var(--spacing-xxl)">
-            <div class="empty-state-icon mb-3">
-                <i class="bi bi-shop display-1 text-muted"></i>
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <i class="bi bi-shop"></i>
             </div>
-            <h3 class="mb-3">No Stores Yet</h3>
+            <h3>No Stores Yet</h3>
             <p class="text-muted mb-4">Create your first store to start selling on Baysoko</p>
-            <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-primary btn-lg">
+            <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-primary">
                 <i class="bi bi-plus-circle me-2"></i>
                 Create Your First Store
             </a>
         </div>
         {% endif %}
-    </div>
+    </section>
 
     <!-- Your Listings Section -->
-    <div class="mb-4">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h3 class="fw-bold mb-0">Your Listings</h3>
-            <span class="text-muted">{{ user_listings.count }} listings</span>
+    <section class="listings-section">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title">Your Listings</h2>
+                <p class="section-subtitle">{{ user_listings.count }} active listings</p>
+            </div>
+            <a href="{% url 'listing-create' %}" class="btn-custom btn-primary btn-sm">
+                <i class="bi bi-plus-lg me-1"></i>
+                Add Listing
+            </a>
         </div>
         
         {% if user_listings.exists %}
-        <div class="row g-3">
+        <div class="listings-grid">
             {% for listing in user_listings|slice:":8" %}
-            <div class="col-6 col-md-4 col-lg-3">
-                <div class="card-custom product-card h-100">
-                    <a href="{% url 'listing-detail' listing.pk %}" class="text-decoration-none text-reset">
-                        <div class="position-relative overflow-hidden rounded-top" style="height: 160px;">
-                            <img src="{{ listing.get_image_url }}" 
-                                 class="w-100 h-100 object-fit-cover"
-                                 alt="{{ listing.title }}"
-                                 onerror="this.src='https://placehold.co/400x300/c2c2c2/1f1f1f?text=Product'">
-                            {% if listing.is_sold %}
-                            <div class="position-absolute top-0 start-0 bg-danger text-white px-2 py-1">
-                                <small>Sold</small>
-                            </div>
-                            {% endif %}
-                            {% if listing.store and listing.store.is_premium %}
-                            <div class="position-absolute top-0 end-0 bg-warning text-dark px-2 py-1">
-                                <small><i class="bi bi-star-fill"></i></small>
-                            </div>
-                            {% endif %}
-                        </div>
-                        <div class="card-body p-var(--spacing-sm)">
-                            <h6 class="mb-1 text-truncate" title="{{ listing.title }}">{{ listing.title }}</h6>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span class="fw-bold text-primary">KSh {{ listing.price|intcomma }}</span>
-                                <small class="text-muted">{{ listing.condition|default:"New" }}</small>
-                            </div>
-                            <div class="mt-2">
-                                <small class="text-muted">
-                                    <i class="bi bi-shop me-1"></i>
-                                    {{ listing.store.name|default:"No Store" }}
-                                </small>
-                            </div>
-                        </div>
-                    </a>
+            <div class="listing-card">
+                <div class="listing-image-container">
+                    <img src="{{ listing.get_image_url }}" 
+                         class="listing-image"
+                         alt="{{ listing.title }}"
+                         onerror="this.src='https://placehold.co/400x300/c2c2c2/1f1f1f?text=Product'">
+                    {% if listing.is_sold %}
+                    <span class="listing-badge">Sold</span>
+                    {% endif %}
+                </div>
+                <div class="listing-content">
+                    <h3 class="listing-title">{{ listing.title }}</h3>
+                    <div class="listing-price">KSh {{ listing.price|intcomma }}</div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="text-muted">{{ listing.condition|default:"New" }}</small>
+                        <small class="text-muted">
+                            <i class="bi bi-shop"></i>
+                            {{ listing.store.name|default:"No Store" }}
+                        </small>
+                    </div>
+                    <div class="listing-actions">
+                        <a href="{% url 'listing-detail' listing.pk %}" class="btn-custom btn-primary flex-fill btn-sm">
+                            <i class="bi bi-eye me-1"></i>View
+                        </a>
+                        {% if listing.store %}
+                        <a href="{% url 'storefront:product_edit' store_slug=listing.store.slug slug=listing.slug %}" 
+                           class="btn-custom btn-ghost btn-sm">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
             {% endfor %}
@@ -354,9 +930,11 @@
         {% endif %}
         
         {% else %}
-        <div class="card-custom text-center py-5">
-            <i class="bi bi-inbox display-4 text-muted mb-3"></i>
-            <h4 class="mb-3">No Listings Yet</h4>
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <i class="bi bi-inbox"></i>
+            </div>
+            <h3>No Listings Yet</h3>
             <p class="text-muted mb-4">Create your first listing to start selling</p>
             <div class="d-flex gap-3 justify-content-center">
                 <a href="{% url 'listing-create' %}" class="btn-custom btn-primary">
@@ -370,224 +948,140 @@
             </div>
         </div>
         {% endif %}
-    </div>
-
-    <!--Inventory Management Section -->
-    <div class="card-custom mt-4 mb-3">
-        <div class="card-header border-0">
-            <h5 class="fw-bold mb-0">Inventory Management</h5>
-        </div>
-        <div class="card-body">
-            <p class="text-muted mb-3">Manage your inventory efficiently with our bulk operations tools.</p>
-            <div class="d-flex flex-wrap gap-3">
-                {% if stores.exists %}
-                <a href="{% url 'storefront:inventory_dashboard' stores.first.slug %}" class="btn-custom btn-outline-primary">
-                    <i class="bi bi-upload me-2"></i>Manage Inventory
-                </a>
-                <a href="{% url 'storefront:bulk_import_data' stores.first.slug %}" class="btn-custom btn-outline-primary">
-                    <i class="bi bi-upload me-2"></i>Bulk Upload Products
-                </a>
-                <a href="{% url 'storefront:bulk_update_products' stores.first.slug %}" class="btn-custom btn-outline-secondary">
-                    <i class="bi bi-pencil-square me-2"></i>Bulk Update Products
-                </a>
-                {% else %}
-                <a href="#" class="btn-custom btn-outline-primary disabled">
-                    <i class="bi bi-upload me-2"></i>Manage Inventory
-                </a>
-                <a href="#" class="btn-custom btn-outline-primary disabled">
-                    <i class="bi bi-upload me-2"></i>Bulk Upload Products
-                </a>
-                <a href="#" class="btn-custom btn-outline-secondary disabled">
-                    <i class="bi bi-pencil-square me-2"></i>Bulk Update Products
-                </a>
-                {% endif %}
-            </div>
-        </div>
-    </div>
+    </section>
 
     <!-- Quick Actions -->
-    <div class="card-custom">
-        <div class="card-header border-0">
-            <h5 class="fw-bold mb-0">Quick Actions</h5>
+    <section class="quick-actions">
+        <h3 class="section-title mb-3">Quick Actions</h3>
+        <div class="actions-grid">
+            <a href="{% url 'storefront:store_create' %}" class="action-card">
+                <div class="action-icon">
+                    <i class="bi bi-shop"></i>
+                </div>
+                <h4 class="action-title">Create Store</h4>
+            </a>
+            <a href="{% url 'listing-create' %}" class="action-card">
+                <div class="action-icon">
+                    <i class="bi bi-plus-lg"></i>
+                </div>
+                <h4 class="action-title">Sell Item</h4>
+            </a>
+            <a href="{% url 'storefront:seller_analytics' %}" class="action-card">
+                <div class="action-icon">
+                    <i class="bi bi-graph-up"></i>
+                </div>
+                <h4 class="action-title">Analytics</h4>
+            </a>
+            <a href="{% url 'order_list' %}" class="action-card">
+                <div class="action-icon">
+                    <i class="bi bi-bag"></i>
+                </div>
+                <h4 class="action-title">Orders</h4>
+            </a>
+            {% if stores.exists %}
+            <a href="{% url 'storefront:inventory_dashboard' stores.first.slug %}" class="action-card">
+                <div class="action-icon">
+                    <i class="bi bi-clipboard"></i>
+                </div>
+                <h4 class="action-title">Inventory</h4>
+            </a>
+            <a href="{% url 'storefront:bulk_import_data' stores.first.slug %}" class="action-card">
+                <div class="action-icon">
+                    <i class="bi bi-upload"></i>
+                </div>
+                <h4 class="action-title">Bulk Upload</h4>
+            </a>
+            {% endif %}
         </div>
-        <div class="card-body">
-            <div class="row g-3">
-                <div class="col-md-3 col-6">
-                    <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-outline-primary w-100 h-100">
-                        <div class="text-center py-3">
-                            <i class="bi bi-shop fs-1 mb-2"></i>
-                            <h6 class="fw-bold">Create Store</h6>
-                        </div>
-                    </a>
-                </div>
-                <div class="col-md-3 col-6">
-                    <a href="{% url 'listing-create' %}" class="btn-custom btn-outline-success w-100 h-100">
-                        <div class="text-center py-3">
-                            <i class="bi bi-plus-lg fs-1 mb-2"></i>
-                            <h6 class="fw-bold">Sell Item</h6>
-                        </div>
-                    </a>
-                </div>
-                <div class="col-md-3 col-6">
-                    <a href="{% url 'storefront:seller_analytics' %}" class="btn-custom btn-outline-info w-100 h-100">
-                        <div class="text-center py-3">
-                            <i class="bi bi-graph-up fs-1 mb-2"></i>
-                            <h6 class="fw-bold">Analytics</h6>
-                        </div>
-                    </a>
-                </div>
-                <div class="col-md-3 col-6">
-                    <a href="{% url 'order_list' %}" class="btn-custom btn-outline-warning w-100 h-100">
-                        <div class="text-center py-3">
-                            <i class="bi bi-bag fs-1 mb-2"></i>
-                            <h6 class="fw-bold">Orders</h6>
-                        </div>
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
+    </section>
 </div>
 
-<style>
-.store-logo {
-    border-radius: var(--radius-full);
-}
-.stat-icon-wrapper {
-    width: 60px;
-    height: 60px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius-full);
-    margin: 0 auto;
-    background: rgba(255, 107, 53, 0.1);
-}
-
-.store-card {
-    transition: var(--transition);
-}
-
-.store-card:hover {
-    transform: translateY(-5px);
-    box-shadow: var(--shadow-lg);
-}
-
-.store-card-header {
-    height: 150px;
-    background-size: cover;
-    background-position: center;
-    position: relative;
-}
-
-.store-card-header::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 50%, transparent 100%);
-    z-index: 1;
-}
-
-.store-card-header .protected-text {
-    position: relative;
-    z-index: 2;
-    padding: var(--spacing-lg);
-    color: white;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-}
-
-.store-card-header h4 {
-    font-weight: 800;
-    text-shadow: 0 2px 10px rgba(0,0,0,0.5);
-}
-
-.line-clamp-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-.product-card {
-    transition: var(--transition);
-}
-
-.product-card:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--shadow-md);
-}
-
-.product-card img {
-    transition: transform 0.5s ease;
-}
-
-.product-card:hover img {
-    transform: scale(1.05);
-}
-
-.object-fit-cover {
-    object-fit: cover;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-    .store-card-header {
-        height: 120px;
-    }
-    
-    .stat-icon-wrapper {
-        width: 50px;
-        height: 50px;
-    }
-    
-    .stat-icon-wrapper i {
-        font-size: 1.5rem !important;
-    }
-}
-
-@media (max-width: 576px) {
-    .store-card-header {
-        height: 100px;
-    }
-    
-    .store-card-header .protected-text {
-        padding: var(--spacing-md);
-    }
-}
-</style>
-
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Store card hover effects
-    const storeCards = document.querySelectorAll('.store-card');
-    storeCards.forEach(card => {
-        card.addEventListener('mouseenter', function() {
-            const header = this.querySelector('.store-card-header');
-            if (header) {
-                header.style.transform = 'scale(1.02)';
-                header.style.transition = 'transform 0.3s ease';
-            }
+    document.addEventListener('DOMContentLoaded', function() {
+        // Store card hover effects
+        document.querySelectorAll('.store-card').forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-5px)';
+                this.style.boxShadow = 'var(--shadow-lg)';
+                this.style.borderColor = 'var(--primary)';
+            });
+            
+            card.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0)';
+                this.style.boxShadow = 'var(--shadow-sm)';
+                this.style.borderColor = 'var(--border-color)';
+            });
         });
-        
-        card.addEventListener('mouseleave', function() {
-            const header = this.querySelector('.store-card-header');
-            if (header) {
-                header.style.transform = 'scale(1)';
-            }
+
+        // Stat card hover effects
+        document.querySelectorAll('.stat-card').forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-3px)';
+                this.style.boxShadow = 'var(--shadow-md)';
+                this.style.borderColor = 'var(--primary)';
+            });
+            
+            card.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0)';
+                this.style.boxShadow = 'var(--shadow-sm)';
+                this.style.borderColor = 'var(--border-color)';
+            });
         });
+
+        // Store stat hover effects
+        document.querySelectorAll('.store-card-stat').forEach(stat => {
+            stat.addEventListener('mouseenter', function() {
+                this.style.borderColor = 'var(--primary)';
+                this.style.transform = 'translateY(-2px)';
+            });
+            
+            stat.addEventListener('mouseleave', function() {
+                this.style.borderColor = 'var(--border-color)';
+                this.style.transform = 'translateY(0)';
+            });
+        });
+
+        // Action card hover effects
+        document.querySelectorAll('.action-card').forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-3px)';
+                this.style.boxShadow = 'var(--shadow-md)';
+                this.style.borderColor = 'var(--primary)';
+                this.style.color = 'var(--primary)';
+            });
+            
+            card.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0)';
+                this.style.boxShadow = 'none';
+                this.style.borderColor = 'var(--border-color)';
+                this.style.color = 'var(--text-primary)';
+            });
+        });
+
+        // Add animation on load
+        setTimeout(() => {
+            document.querySelectorAll('.store-card').forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                
+                setTimeout(() => {
+                    card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 100);
+            });
+
+            document.querySelectorAll('.stat-card').forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(10px)';
+                
+                setTimeout(() => {
+                    card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 100 + 200);
+            });
+        }, 100);
     });
-    
-    // Initialize tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-});
 </script>
 {% endblock %}
