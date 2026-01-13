@@ -365,6 +365,7 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
+        user_store = Store.objects.filter(owner=self.request.user)
         try:
             context = super().get_context_data(**kwargs)
         except AttributeError:
@@ -382,7 +383,7 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
             context['ai_enabled'] = False
         # Get user's stores for the store selector
         if self.request.user.is_authenticated:
-            context['stores'] = Store.objects.filter(owner=self.request.user)
+            context['stores'] = user_store
         else:
             context['stores'] = Store.objects.none()
         return context

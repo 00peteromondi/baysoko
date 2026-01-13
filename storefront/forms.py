@@ -81,6 +81,11 @@ class StoreForm(forms.ModelForm):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         
+        # Make logo and cover_image fields optional for editing
+        if self.instance and self.instance.pk:
+            self.fields['logo'].required = False
+            self.fields['cover_image'].required = False
+            
         # For existing stores (edit mode), check subscription for featured eligibility
         if self.instance and self.instance.pk and self.user:
             # Check if store has active subscription or valid trial
@@ -157,56 +162,27 @@ class StoreForm(forms.ModelForm):
         
         return cleaned_data
     
-    def clean_logo(self):
-        logo = self.cleaned_data.get('logo')
-        if logo:
-            # Check if it's an image file
-            if not hasattr(logo, 'content_type') or not logo.content_type.startswith('image/'):
-                raise forms.ValidationError('Please upload a valid image file.')
-            
-            # Check file size (10MB limit)
-            if logo.size > 10 * 1024 * 1024:  # 10MB
-                raise forms.ValidationError('Image file is too large (>10MB)')
-            
-            # Additional image validation could go here
-            try:
-                from PIL import Image
-                img = Image.open(logo)
-                img.verify()  # Verify it's a valid image
-                
-                # Check dimensions
-                if img.width > 4000 or img.height > 4000:
-                    raise forms.ValidationError('Image dimensions are too large (max 4000x4000)')
-                    
-            except Exception as e:
-                raise forms.ValidationError('Invalid image file. Please try another file.')
-                
-        return logo
-
-    def clean_cover_image(self):
-        cover_image = self.cleaned_data.get('cover_image')
-        if cover_image:
-            # Check if it's an image file
-            if not hasattr(cover_image, 'content_type') or not cover_image.content_type.startswith('image/'):
-                raise forms.ValidationError('Please upload a valid image file.')
-            
-            # Check file size (10MB limit)
-            if cover_image.size > 10 * 1024 * 1024:  # 10MB
-                raise forms.ValidationError('Image file is too large (>10MB)')
-            
-            # Additional image validation
-            try:
-                from PIL import Image
-                img = Image.open(cover_image)
-                img.verify()  # Verify it's a valid image
-                
-                # Check dimensions
-                if img.width > 4000 or img.height > 4000:
-                    raise forms.ValidationError('Image dimensions are too large (max 4000x4000)')
-                    
-            except Exception as e:
-                raise forms.ValidationError('Invalid image file. Please try another file.')
-
+    def save(self, commit=True):
+        # Get the unsaved store instance
+        store = super().save(commit=False)
+        
+        # Only update logo/cover if new files are provided in cleaned_data
+        # This ensures existing files are preserved when not updating
+        if 'logo' in self.cleaned_data and self.cleaned_data['logo'] is not None:
+            # If logo is explicitly set to None (via clear), it will be None
+            # If it's a new file, it will be set
+            # If it's the existing file (from initial data), it stays as is
+            pass
+        # No else needed - if logo not in cleaned_data or is None and we didn't clear, keep existing
+        
+        if 'cover_image' in self.cleaned_data and self.cleaned_data['cover_image'] is not None:
+            pass
+        
+        if commit:
+            store.save()
+            self.save_m2m()
+        
+        return store
 
 # Reuse ListingForm for creating/editing storefront "products" (listings)
 class ProductForm(ListingForm):

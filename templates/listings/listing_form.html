@@ -837,6 +837,9 @@
         z-index: 3;
         cursor: pointer;
     }
+    .text-muted {
+        color: var(--text-secondary) !important;
+    }
 </style>
 {% endblock %}
 
@@ -994,7 +997,7 @@
                                     <option value="">{% if form.instance.store %}Keep current store: {{ form.instance.store.name }}{% else %}Select a store{% endif %}</option>
                                     {% for store in stores %}
                                         <option value="{{ store.id }}" 
-                                                {% if form.store.value == store.id %}selected{% endif %}>
+                                                {% if form.store.value == store.id or form.instance.store_id == store.id %}selected{% endif %}>
                                             {{ store.name }}
                                         </option>
                                     {% endfor %}
@@ -1023,7 +1026,7 @@
                             {% endif %}
                         {% else %}
                             <!-- Create Mode: Store is required -->
-                            {% if stores %}
+                            {% if stores and stores|length > 0 %}
                                 {% if stores|length == 1 %}
                                     <!-- Only one store - auto-select it -->
                                     <div class="store-option-wrapper selected">
@@ -1032,7 +1035,7 @@
                                         </div>
                                         <div class="store-info">
                                             <div class="store-name">{{ stores.0.name }}</div>
-                                            <div class="store-description">Your only store</div>
+                                            <div class="store-description">Your store</div>
                                         </div>
                                     </div>
                                     <input type="hidden" name="store" value="{{ stores.0.id }}" id="id_store">
@@ -2053,16 +2056,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Handle single store selection for create mode
+// Handle store field for both create and update modes
 document.addEventListener('DOMContentLoaded', function() {
     const isEditMode = {% if form.instance.pk %}true{% else %}false{% endif %};
+    const storeField = document.querySelector('[name="store"]');
     
-    if (!isEditMode) {
-        const storeInput = document.getElementById('id_store');
-        if (storeInput && storeInput.tagName === 'INPUT' && storeInput.type === 'hidden') {
-            // Single store is automatically selected
-            console.log('Single store automatically selected for new listing');
-        }
+    if (isEditMode && storeField && storeField.tagName === 'SELECT') {
+        // Make store field not required for updates
+        storeField.required = false;
+    }
+    
+    // Check if we have a single store hidden input (for create mode)
+    const hiddenStoreInput = document.getElementById('id_store');
+    if (hiddenStoreInput && hiddenStoreInput.type === 'hidden') {
+        console.log('Store automatically selected for new listing:', hiddenStoreInput.value);
     }
 });
 </script>

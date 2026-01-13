@@ -213,17 +213,19 @@ def store_edit(request, slug):
                     # Ensure non-premium stores are not featured
                     store.is_featured = False
                 
-                # Handle logo upload
+                # Handle logo upload - FIXED: Only update if new file is provided or clear is requested
                 if 'logo' in request.FILES:
                     store.logo = request.FILES['logo']
                 elif 'logo-clear' in request.POST:
                     store.logo = None
+                # If neither new file nor clear, keep existing logo (do nothing)
                 
-                # Handle cover image upload
+                # Handle cover image upload - FIXED: Only update if new file is provided or clear is requested
                 if 'cover_image' in request.FILES:
                     store.cover_image = request.FILES['cover_image']
                 elif 'cover_image-clear' in request.POST:
                     store.cover_image = None
+                # If neither new file nor clear, keep existing cover image (do nothing)
                 
                 # Save the store
                 store.save()
@@ -312,6 +314,7 @@ def product_create(request, store_slug):
         return redirect('storefront:product_create', store_slug=user_store.slug)
 
     store = user_store
+    user_stores = Store.objects.filter(owner=request.user)
 
     if request.method == 'POST':
         form = ListingForm(request.POST, request.FILES)
@@ -351,7 +354,7 @@ def product_create(request, store_slug):
 
     # Render using the same template as the generic ListingCreateView so users see the identical "Sell Item" form
     categories = Category.objects.filter(is_active=True)
-    return render(request, 'listings/listing_form.html', {'form': form, 'store': store, 'categories': categories})
+    return render(request, 'listings/listing_form.html', {'form': form, 'store': store, 'categories': categories, 'stores': user_stores})
 
 
 @login_required
