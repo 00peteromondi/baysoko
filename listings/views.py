@@ -21,6 +21,8 @@ from blog.models import BlogPost
 from django.http import JsonResponse, HttpResponse
 import json
 from .decorators import ajax_required
+from storefront.models import Store, Subscription
+from django.utils import timezone
 
 
 from notifications.utils import (
@@ -110,6 +112,21 @@ class ListingListView(ListView):
         
         # Categories data - UPDATED
         context['categories'] = Category.objects.filter(is_active=True)[:8]
+
+        stores = Store.objects.filter(is_active=True)
+
+        context['featured_stores'] = []
+        for store in stores:
+            if store.can_be_featured():
+                # Add calculated fields to store instance
+                store.listing_count = store.listings.filter(is_active=True).count()
+                store.average_rating = store.get_average_store_rating()
+                store.product_count = store.listing_count  # Alias for template
+                context['featured_stores'].append(store)
+        
+        # Sort by listing count and limit to 8
+        context['featured_stores'].sort(key=lambda x: x.listing_count, reverse=True)
+        context['featured_stores'] = context['featured_stores'][:8]
         
         # Featured categories (if your Category model has is_featured field)
         # If not, you can use categories with most listings as featured

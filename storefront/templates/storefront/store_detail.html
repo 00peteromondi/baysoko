@@ -1,756 +1,1289 @@
+
 {% extends 'base.html' %}
 {% load static %}
+{% load custom_filters %}
+{% load humanize %}
 
-{% block title %}{{ store.name }} - Store - HomaBay Souq{% endblock %}
+{% block title %}{{ store.name }} - Store - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== GLOBAL STYLES ===== */
+    .container-custom {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    /* ===== BREADCRUMB ===== */
+    .breadcrumb {
+        background: var(--bg-secondary);
+        padding: 10px 12px;
+        border-radius: var(--radius-md);
+        margin-bottom: 16px;
+        border: 1px solid var(--border-color);
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        font-size: 12px;
+    }
+    
+    .breadcrumb-item a {
+        text-decoration: none;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+    }
+
+    /* ===== STORE HERO SECTION ===== */
+    .store-hero {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
+        position: relative;
+    }
+
+    .store-cover-container {
+        position: relative;
+        height: 180px;
+        overflow: hidden;
+    }
+
+    .store-cover {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .store-cover-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.7) 100%);
+    }
+
+    .store-info-header {
+        padding: 16px;
+        position: relative;
+        margin-top: -40px;
+        z-index: 2;
+    }
+
+    .store-logo-container {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 4px solid var(--card-bg);
+        background: white;
+        margin-bottom: 12px;
+    }
+
+    .store-logo {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .store-title {
+        font-size: 20px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .store-category {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 12px;
+    }
+
+    .store-stats {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    .stat-item {
+        text-align: center;
+    }
+
+    .stat-value {
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--primary);
+        display: block;
+    }
+
+    .stat-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* Premium Badge */
+    .premium-badge {
+        background: linear-gradient(135deg, var(--warning) 0%, var(--warning-dark) 100%);
+        color: #333;
+        padding: 6px 12px;
+        border-radius: 16px;
+        font-size: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-weight: 700;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    /* ===== STORE NAVIGATION ===== */
+    .store-navigation {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 12px 16px;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
+        position: sticky;
+        top: 70px;
+        z-index: 100;
+    }
+
+    .store-nav-items {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .store-nav-items::-webkit-scrollbar {
+        height: 3px;
+    }
+
+    .store-nav-items::-webkit-scrollbar-track {
+        background: var(--bg-secondary);
+        border-radius: 2px;
+    }
+
+    .store-nav-items::-webkit-scrollbar-thumb {
+        background: var(--primary);
+        border-radius: 2px;
+    }
+
+    .nav-link-custom {
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 14px;
+        white-space: nowrap;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+
+    .nav-link-custom.active {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+
+    .nav-link-custom:not(.active) {
+        background: var(--bg-secondary);
+        color: var(--text-secondary);
+        border-color: var(--border-color);
+    }
+
+    .nav-link-custom:not(.active):hover {
+        background: var(--primary-light);
+        color: var(--primary);
+        border-color: var(--primary);
+    }
+
+    /* ===== PRODUCTS GRID ===== */
+    .products-section {
+        margin-bottom: 30px;
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+
+    .section-title {
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 0;
+    }
+
+    .section-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
+    .products-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 12px;
+    }
+
+    @media (min-width: 768px) {
+        .products-grid {
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 16px;
+        }
+    }
+
+    @media (min-width: 992px) {
+        .products-grid {
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        }
+    }
+
+    .product-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .product-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+    }
+
+    .product-image-container {
+        position: relative;
+        height: 140px;
+        overflow: hidden;
+    }
+
+    .product-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.5s ease;
+    }
+
+    .product-card:hover .product-image {
+        transform: scale(1.05);
+    }
+
+    .product-badges {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        z-index: 2;
+    }
+
+    .product-badge {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .product-badge.premium {
+        background: linear-gradient(135deg, var(--warning) 0%, #ff7b00 100%);
+        color: white;
+    }
+
+    .product-badge.condition {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+    }
+
+    .product-favorite {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 2;
+    }
+
+    .favorite-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.95);
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-secondary);
+        font-size: 14px;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .favorite-btn.active {
+        color: var(--danger);
+    }
+
+    .favorite-btn:hover {
+        background: white;
+        color: var(--danger);
+        transform: scale(1.1);
+    }
+
+    .product-content {
+        padding: 12px;
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .product-name {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 6px;
+        color: var(--text-primary);
+        line-height: 1.3;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .product-description {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-bottom: 8px;
+        line-height: 1.4;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        flex-grow: 1;
+    }
+
+    .product-price {
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--primary);
+        margin-bottom: 8px;
+    }
+
+    .product-rating {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-bottom: 12px;
+    }
+
+    .product-cta {
+        margin-top: auto;
+    }
+
+    /* ===== STORE INFO SECTION ===== */
+    .store-info-section {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 16px;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+
+    .info-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+    }
+
+    .info-item:hover {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+    }
+
+    .info-item i {
+        font-size: 20px;
+        color: var(--primary);
+        margin-top: 2px;
+    }
+
+    .info-item-content h6 {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+    }
+
+    .info-item-content p {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-bottom: 0;
+    }
+
+    /* Policies */
+    .policies-section {
+        margin-top: 20px;
+    }
+
+    .policies-content {
+        background: var(--bg-secondary);
+        padding: 12px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+    }
+
+    /* ===== VERIFICATION CARD ===== */
+    .verification-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 16px;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .verification-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--success), var(--accent));
+    }
+
+    .verification-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .verification-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px;
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+    }
+
+    .verification-item:hover {
+        border-color: var(--success);
+        transform: translateX(4px);
+    }
+
+    .verification-item.success i {
+        color: var(--success);
+        font-size: 20px;
+    }
+
+    .verification-item.warning i {
+        color: var(--warning);
+        font-size: 20px;
+    }
+
+    .verification-item-content h6 {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 2px;
+        color: var(--text-primary);
+    }
+
+    .verification-item-content small {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    /* ===== REVIEWS SECTION ===== */
+    .reviews-section {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 16px;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
+    }
+
+    .rating-summary {
+        background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--card-bg) 100%);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        border: 1px solid var(--border-color);
+        margin-bottom: 16px;
+    }
+
+    .rating-number {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: var(--primary);
+        line-height: 1;
+        margin-bottom: 8px;
+    }
+
+    .rating-stars {
+        margin-bottom: 8px;
+    }
+
+    .review-card {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        margin-bottom: 12px;
+        transition: all 0.2s ease;
+    }
+
+    .review-card:hover {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-xs);
+    }
+
+    .reviewer-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 8px;
+    }
+
+    .reviewer-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .reviewer-avatar img {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: 2px solid var(--primary);
+    }
+
+    .reviewer-name {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 2px;
+        color: var(--text-primary);
+    }
+
+    .review-date {
+        font-size: 11px;
+        color: var(--text-secondary);
+    }
+
+    .review-comment {
+        font-size: 13px;
+        color: var(--text-primary);
+        line-height: 1.5;
+        margin-bottom: 8px;
+    }
+
+    .review-helpful {
+        font-size: 11px;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    /* ===== EMPTY STATE ===== */
+    .empty-state {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 40px 20px;
+        text-align: center;
+        border: 2px dashed var(--border-color);
+        margin-bottom: 20px;
+    }
+
+    .empty-state-icon {
+        font-size: 48px;
+        color: var(--text-tertiary);
+        margin-bottom: 16px;
+    }
+
+    .empty-state h3 {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .empty-state p {
+        color: var(--text-secondary);
+        margin-bottom: 20px;
+        font-size: 14px;
+    }
+
+    /* ===== RESPONSIVE DESIGN ===== */
+    
+    /* Small phones (320px - 374px) */
+    @media (max-width: 374px) {
+        .container-custom {
+            padding-left: 6px;
+            padding-right: 6px;
+        }
+        
+        .products-grid {
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+        }
+        
+        .product-image-container {
+            height: 120px;
+        }
+        
+        .store-cover-container {
+            height: 150px;
+        }
+        
+        .store-logo-container {
+            width: 70px;
+            height: 70px;
+        }
+        
+        .store-title {
+            font-size: 18px;
+        }
+    }
+    
+    /* Medium phones (375px - 424px) */
+    @media (min-width: 375px) and (max-width: 424px) {
+        .container-custom {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+        
+        .store-cover-container {
+            height: 160px;
+        }
+    }
+    
+    /* Large phones (425px - 575px) */
+    @media (min-width: 425px) and (max-width: 575px) {
+        .container-custom {
+            padding-left: 12px;
+            padding-right: 12px;
+        }
+        
+        .store-cover-container {
+            height: 180px;
+        }
+    }
+    
+    /* Tablets (576px - 767px) */
+    @media (min-width: 576px) {
+        .container-custom {
+            padding-left: 16px;
+            padding-right: 16px;
+        }
+        
+        .store-cover-container {
+            height: 200px;
+        }
+        
+        .store-title {
+            font-size: 22px;
+        }
+        
+        .store-logo-container {
+            width: 90px;
+            height: 90px;
+        }
+        
+        .products-grid {
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 16px;
+        }
+        
+        .product-image-container {
+            height: 160px;
+        }
+    }
+    
+    /* Medium tablets (768px - 991px) */
+    @media (min-width: 768px) {
+        .store-cover-container {
+            height: 220px;
+        }
+        
+        .store-title {
+            font-size: 24px;
+        }
+        
+        .products-grid {
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        }
+        
+        .product-image-container {
+            height: 180px;
+        }
+    }
+    
+    /* Large tablets (992px - 1199px) */
+    @media (min-width: 992px) {
+        .store-cover-container {
+            height: 240px;
+        }
+        
+        .store-title {
+            font-size: 26px;
+        }
+    }
+    
+    /* Desktop (1200px and above) */
+    @media (min-width: 1200px) {
+        .store-cover-container {
+            height: 260px;
+        }
+        
+        .store-title {
+            font-size: 28px;
+        }
+        
+        .products-grid {
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        }
+        
+        .product-image-container {
+            height: 200px;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container py-var(--spacing-xl)">
-  <!-- Store Header with Enhanced Text Overlay -->
-  <div class="store-header-wrapper rounded-lg mb-2 mt-2 position-relative overflow-hidden"
-       style="{% if store.cover_image %}background-image: url('{{ store.cover_image.url }}');{% else %}background: linear-gradient(135deg, var(--primary) 0%, var(--info) 100%);{% endif %}">
-    
-    <!-- Dark overlay for better text contrast -->
-    <div class="store-header-overlay position-absolute top-0 start-0 w-100 h-100"></div>
-    
-    <!-- Text content with multiple protection layers -->
-    <div class="store-header-content position-relative z-2">
-      <div class="container py-var(--spacing-xxl)">
-        <div class="row align-items-center">
-          <div class="col-lg-8">
-            <!-- Store name with multiple shadow layers -->
-            <h1 class="display-4 fw-bold mb-3 store-title text-shadow-3d">
-              <span class="store-title-text">{{ store.name }}</span>
-            </h1>
-            
-            <!-- Store description with background -->
-            <div class="store-description-container mb-4">
-              <p class="lead store-description">{{ store.description|default:"Welcome to our store" }}</p>
-            </div>
-            
-            <!-- Store Stats with protected backgrounds -->
-            <div class="d-flex flex-wrap gap-4">
-              <div class="stat-item text-protected">
-                <div class="stat-value-bg">
-                  <h3 class="fw-bold mb-0">{{ products.count }}</h3>
-                </div>
-                <small class="stat-label text-protected-label">Products</small>
-              </div>
-              <div class="stat-item text-protected">
-                <div class="stat-value-bg">
-                  <h3 class="fw-bold mb-0">{{ store.get_rating|default:"0.0" }}</h3>
-                </div>
-                <small class="stat-label text-protected-label">Rating</small>
-              </div>
-              <div class="stat-item text-protected">
-                <div class="stat-value-bg">
-                  <h3 class="fw-bold mb-0">{{ store.get_sales_count|default:"0" }}+</h3>
-                </div>
-                <small class="stat-label text-protected-label">Sales</small>
-              </div>
-            </div>
-          </div>
-          <div class="col-lg-4 text-center">
-            <!-- Store Logo with protected background -->
-            <div class="store-logo-wrapper position-relative">
-              <div class="store-logo-background"></div>
-              <img src="{{ store.get_logo_url|default:'https://placehold.co/200x200/c2c2c2/1f1f1f?text=Store' }}"
-                   alt="{{ store.name }}"
-                   class="store-logo position-relative z-1"
-                   onerror="this.src='https://placehold.co/200x200/c2c2c2/1f1f1f?text=Store'">
-              {% if store.is_premium %}
-              <span class="premium-badge position-absolute bg-warning text-dark badge-protected">
-                <i class="bi bi-star-fill"></i> Premium
-              </span>
-              {% endif %}
-            </div>
-          </div>
+<div class="container-custom py-3">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}"><i class="bi bi-house"></i> Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'storefront:store_list' %}">Stores</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ store.name|truncatechars:25 }}</li>
+        </ol>
+    </nav>
+
+    <!-- Store Hero Section -->
+    <div class="store-hero">
+        <!-- Store Cover -->
+        <div class="store-cover-container">
+            {% if store.cover_image %}
+            <img src="{{ store.cover_image.url }}" alt="{{ store.name }}" class="store-cover">
+            {% else %}
+            <div class="store-cover" style="background: linear-gradient(135deg, var(--primary) 0%, var(--info) 100%);"></div>
+            {% endif %}
+            <div class="store-cover-overlay"></div>
         </div>
-      </div>
-    </div>
-  </div>
 
-  <!-- Store Navigation -->
-  <div class="store-navigation mb-2">
-    <div class="d-flex flex-wrap gap-2">
-      <a href="#products" class="btn-custom btn-secondary active">Products</a>
-      <a href="#about" class="btn-custom btn-ghost">About</a>
-      <a href="#reviews" class="btn-custom btn-ghost">Reviews</a>
-      {% if user == store.owner %}
-      <a href="{% url 'storefront:store_edit' slug=store.slug %}" class="btn-custom btn-accent ms-auto">
-        <i class="bi bi-pencil"></i> Edit Store
-      </a>
-      {% endif %}
-    </div>
-  </div>
+        <!-- Store Info -->
+        <div class="store-info-header">
+            <div class="store-logo-container">
+                <img src="{{ store.get_logo_url|default:'https://placehold.co/200x200/c2c2c2/1f1f1f?text=Store' }}" 
+                     alt="{{ store.name }}" class="store-logo">
+            </div>
 
-  <!-- Products Grid -->
-  <section id="products" class="mb-5">
-    <div class="section-header mb-2">
-      <h2 class="section-title">Products ({{ products.count }})</h2>
-      <p class="section-subtitle">Browse our collection</p>
-    </div>
-    
-    {% if products %}
-    <div class="grid-system">
-      {% for product in products %}
-      <div class="product-card card-custom">
-        <!-- Product Image with Text Overlay Protection -->
-        <div class="product-image-wrapper mb-3 position-relative">
-          <img src="{{ product.get_image_url }}" 
-               alt="{{ product.title }}"
-               class="product-image"
-               onerror="this.src='https://placehold.co/400x300/c2c2c2/1f1f1f?text=Product'">
-          
-          <!-- Image overlay for better text contrast -->
-          <div class="product-image-overlay position-absolute top-0 start-0 w-100 h-100"></div>
-          
-          <!-- Badges with protected backgrounds -->
-          <div class="product-badges position-absolute top-0 start-0 z-2">
+            <h1 class="store-title">{{ store.name }}</h1>
+            <p class="store-category">{{ store.description|default:"Welcome to our store"|truncatechars:100 }}</p>
+
+            <div class="store-stats">
+                <div class="stat-item">
+                    <span class="stat-value">{{ products.count }}</span>
+                    <span class="stat-label">Products</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">{{ store.get_average_store_rating|default:"0.0" }}</span>
+                    <span class="stat-label">Rating</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">{{ store.get_sales_count|default:"0" }}+</span>
+                    <span class="stat-label">Sales</span>
+                </div>
+            </div>
+
             {% if store.is_premium %}
-            <span class="badge bg-warning text-dark badge-protected">
-              <i class="bi bi-star-fill"></i> Premium
-            </span>
+            <div class="premium-badge">
+                <i class="bi bi-star-fill"></i> Premium Store
+            </div>
             {% endif %}
-            {% if product.condition %}
-            <span class="badge badge-protected">
-              {{ product.get_condition_display }}
-            </span>
+        </div>
+    </div>
+
+    <!-- Store Navigation -->
+    <div class="store-navigation">
+        <div class="store-nav-items">
+            <a href="#products" class="nav-link-custom active">Products</a>
+            <a href="#about" class="nav-link-custom">About</a>
+            <a href="#reviews" class="nav-link-custom">Reviews</a>
+            {% if user == store.owner %}
+            <a href="{% url 'storefront:store_edit' slug=store.slug %}" class="nav-link-custom ms-auto">
+                <i class="bi bi-pencil me-1"></i> Edit Store
+            </a>
             {% endif %}
-          </div>
-          
-          <!-- Favorite button with contrast -->
-          <div class="product-actions position-absolute top-0 end-0 z-2">
-            <form action="{% url 'toggle_favorite' product.id %}" method="post">
-              {% csrf_token %}
-              <button type="submit" class="favorite-btn btn-protected {% if product.id in user_favorites %}active{% endif %}">
-                <i class="bi bi-heart{% if product.id in user_favorites %}-fill{% endif %}"></i>
-              </button>
-            </form>
-          </div>
+        </div>
+    </div>
+
+    <!-- Products Section -->
+    <section id="products" class="products-section">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title">Products ({{ products.count }})</h2>
+                <p class="section-subtitle">Browse our collection</p>
+            </div>
+            {% if user == store.owner %}
+            <a href="{% url 'storefront:product_create' store_slug=store.slug %}" class="btn-custom btn-primary btn-sm">
+                <i class="bi bi-plus-circle me-1"></i> Add Product
+            </a>
+            {% endif %}
         </div>
         
-        <div class="product-info">
-          <h3 class="product-title">{{ product.title }}</h3>
-          <p class="product-description text-muted">{{ product.description|truncatewords:15 }}</p>
-          
-          <div class="product-meta">
-            <span class="product-price fw-bold text-primary">KSh {{ product.price }}</span>
-            <span class="product-rating text-protected">
-              <i class="bi bi-star-fill text-warning"></i>
-              {{ product.rating_average|default:"0.0" }} ({{ product.rating_count|default:"0" }} Reviews)
-              
-            </span>
-          </div>
-          
-          <div class="product-cta mt-3">
-            <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=product.slug %}" 
-               class="btn-custom btn-primary w-100">
-              View Details
-            </a>
-          </div>
+        {% if products %}
+        <div class="products-grid">
+            {% for product in products %}
+            <div class="product-card">
+                <!-- Product Image -->
+                <div class="product-image-container">
+                    <img src="{{ product.get_image_url }}" 
+                         alt="{{ product.title }}"
+                         class="product-image"
+                         onerror="this.src='https://placehold.co/400x300/c2c2c2/1f1f1f?text=Product'">
+                    
+                    <!-- Product Badges -->
+                    <div class="product-badges">
+                        {% if store.is_premium %}
+                        <span class="product-badge premium">
+                            <i class="bi bi-star-fill"></i> Premium
+                        </span>
+                        {% endif %}
+                        {% if product.condition %}
+                        <span class="product-badge condition">
+                            {{ product.get_condition_display }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Favorite Button -->
+                    <div class="product-favorite">
+                        <form action="{% url 'toggle_favorite' product.id %}" method="post">
+                            {% csrf_token %}
+                            <button type="submit" class="favorite-btn {% if product.id in user_favorites %}active{% endif %}">
+                                <i class="bi bi-heart{% if product.id in user_favorites %}-fill{% endif %}"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Product Content -->
+                <div class="product-content">
+                    <h3 class="product-name">{{ product.title }}</h3>
+                    <p class="product-description">{{ product.description|truncatechars:80 }}</p>
+                    
+                    <div class="product-price">KSh {{ product.price|intcomma }}</div>
+                    
+                    <div class="product-rating">
+                        <i class="bi bi-star-fill text-warning"></i>
+                        {{ product.rating_average|default:"0.0" }}
+                        <span class="text-muted">({{ product.rating_count|default:"0" }})</span>
+                    </div>
+                    
+                    <div class="product-cta">
+                        <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=product.slug %}" 
+                           class="btn-custom btn-primary w-100">
+                            View Details
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
         </div>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <div class="empty-state card-custom text-center py-var(--spacing-xxl)">
-      <i class="bi bi-inbox display-1 text-muted mb-3"></i>
-      <h3>No Products Yet</h3>
-      <p class="text-muted mb-4">This store hasn't added any products yet.</p>
-      {% if user == store.owner %}
-      <a href="{% url 'storefront:product_create' store_slug=store.slug %}" class="btn-custom btn-primary">
-        <i class="bi bi-plus-circle"></i> Add Your First Product
-      </a>
-      {% endif %}
-    </div>
-    {% endif %}
-  </section>
+        {% else %}
+        <!-- Empty State -->
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <i class="bi bi-inbox"></i>
+            </div>
+            <h3>No Products Yet</h3>
+            <p class="text-muted mb-4">This store hasn't added any products yet.</p>
+            {% if user == store.owner %}
+            <a href="{% url 'storefront:product_create' store_slug=store.slug %}" class="btn-custom btn-primary">
+                <i class="bi bi-plus-circle"></i> Add Your First Product
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </section>
 
-  <!-- Store Information -->
-  <section id="about" class="mb-3 mt-2">
-    <div class="row g-4">
-      <div class="col-lg-8">
-        <div class="card-custom">
-          <h3 class="mb-2">
+    <!-- Store Information -->
+    <section id="about" class="store-info-section">
+        <h3 class="section-title mb-4">
             <i class="bi bi-info-circle text-primary me-2"></i>
             About This Store
-          </h3>
-          
-          <div class="info-grid">
+        </h3>
+        
+        <div class="info-grid">
             <div class="info-item">
-              <i class="bi bi-person text-primary"></i>
-              <div>
-                <strong>Store Owner</strong>
-                <p class="mb-0">{{ store.owner.get_full_name|default:store.owner.username }}</p>
-              </div>
+                <i class="bi bi-person text-primary"></i>
+                <div class="info-item-content">
+                    <h6>Store Owner</h6>
+                    <p class="mb-0">{{ store.owner.get_full_name|default:store.owner.username }}</p>
+                </div>
             </div>
             <div class="info-item">
-              <i class="bi bi-geo-alt text-primary"></i>
-              <div>
-                <strong>Location</strong>
-                <p class="mb-0">{{ store.location|default:"Homabay County" }}</p>
-              </div>
+                <i class="bi bi-geo-alt text-primary"></i>
+                <div class="info-item-content">
+                    <h6>Location</h6>
+                    <p class="mb-0">{{ store.location|default:"Homabay County" }}</p>
+                </div>
             </div>
             <div class="info-item">
-              <i class="bi bi-calendar text-primary"></i>
-              <div>
-                <strong>Joined</strong>
-                <p class="mb-0">{{ store.created_at|date:"F Y" }}</p>
-              </div>
+                <i class="bi bi-calendar text-primary"></i>
+                <div class="info-item-content">
+                    <h6>Joined</h6>
+                    <p class="mb-0">{{ store.created_at|date:"F Y" }}</p>
+                </div>
             </div>
             <div class="info-item">
-              <i class="bi bi-chat-dots text-primary"></i>
-              <div>
-                <strong>Response Time</strong>
-                <p class="mb-0">Within 24 hours</p>
-              </div>
+                <i class="bi bi-chat-dots text-primary"></i>
+                <div class="info-item-content">
+                    <h6>Response Time</h6>
+                    <p class="mb-0">Within 24 hours</p>
+                </div>
             </div>
             <div class="info-item">
-              <i class="bi bi-award text-primary"></i>
-              <div>
-                <strong>Ratings</strong>
-                <p class="mb-0">{{ store.get_average_store_rating|default:"0.0" }} / 5.0</p>
-              </div>
-            </div>  
-          </div>
-          
-          {% if store.policies %}
-          <div class="mt-var(--spacing-lg)">
-            <h4 class="mb-3">Store Policies</h4>
-            <div class="policy-content bg-light p-3 rounded">{{ store.policies|linebreaks }}</div>
-          </div>
-          {% endif %}
+                <i class="bi bi-award text-primary"></i>
+                <div class="info-item-content">
+                    <h6>Store Rating</h6>
+                    <p class="mb-0">{{ store.get_average_store_rating|default:"0.0" }} / 5.0</p>
+                </div>
+            </div>
+            <div class="info-item">
+                <i class="bi bi-shop text-primary"></i>
+                <div class="info-item-content">
+                    <h6>Products</h6>
+                    <p class="mb-0">{{ products.count }} items available</p>
+                </div>
+            </div>
         </div>
-      </div>
-      
-      <div class="col-lg-4">
-        <!-- Verification Card -->
-        <div class="card-custom">
-          <h3 class="mb-2">
+        
+        {% if store.policies %}
+        <div class="policies-section">
+            <h5 class="mb-3">Store Policies</h5>
+            <div class="policies-content">
+                {{ store.policies|linebreaks }}
+            </div>
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- Verification Card -->
+    <div class="verification-card">
+        <h3 class="section-title mb-4">
             <i class="bi bi-shield-check text-success me-2"></i>
             Store Verification
-          </h3>
-          
-          <div class="verification-list">
+        </h3>
+        
+        <div class="verification-list">
             <div class="verification-item success">
-              <i class="bi bi-check-circle-fill text-success"></i>
-              <div>
-                <strong>Email Verified</strong>
-                <small>Store owner has verified email</small>
-              </div>
+                <i class="bi bi-check-circle-fill"></i>
+                <div class="verification-item-content">
+                    <h6>Email Verified</h6>
+                    <small>Store owner has verified email</small>
+                </div>
             </div>
             <div class="verification-item success">
-              <i class="bi bi-check-circle-fill text-success"></i>
-              <div>
-                <strong>Phone Verified</strong>
-                <small>M-Pesa number verified</small>
-              </div>
+                <i class="bi bi-check-circle-fill"></i>
+                <div class="verification-item-content">
+                    <h6>Phone Verified</h6>
+                    <small>M-Pesa number verified</small>
+                </div>
             </div>
             {% if store.is_premium %}
             <div class="verification-item warning">
-              <i class="bi bi-award-fill text-warning"></i>
-              <div>
-                <strong>Premium Store</strong>
-                <small>Verified premium seller</small>
-              </div>
+                <i class="bi bi-award-fill"></i>
+                <div class="verification-item-content">
+                    <h6>Premium Store</h6>
+                    <small>Verified premium seller</small>
+                </div>
             </div>
             {% endif %}
-          </div>
         </div>
-      </div>
     </div>
-  </section>
 </div>
-{% load store_tags %}
 
-<!-- Store Reviews Preview -->
-<div class="store-reviews-preview card-custom mt-var(--spacing-xl)" id="reviews">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3 class="mb-0">
-            <i class="bi bi-chat-square-text text-primary me-2"></i>
-            Store Reviews
-        </h3>
-        <a href="{% url 'storefront:store_reviews' slug=store.slug %}" class="btn-custom btn-ghost">
-            View All Reviews
-        </a>
-    </div>
-    
-    <div class="row">
-        <div class="col-md-4 mb-4 mb-md-0">
-            <div class="rating-summary text-center p-4 bg-light rounded">
-                <h2 class="display-3 fw-bold text-primary mb-2">{{ store.get_average_store_rating|default:"0.0" }}</h2>
-                <div class="rating-stars mb-3">
-                    {% with rating=store.get_average_store_rating|default:0 %}
-                    {% for i in "12345" %}
-                        {% if forloop.counter <= rating|floatformat:0|add:"0" %}
-                            <i class="bi bi-star-fill text-warning fs-4"></i>
-                        {% else %}
-                            <i class="bi bi-star text-warning fs-4"></i>
-                        {% endif %}
-                    {% endfor %}
-                    {% endwith %}
+<!-- Store Reviews Section -->
+<div class="container-custom">
+    <div class="reviews-section" id="reviews">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h3 class="section-title mb-0">
+                <i class="bi bi-chat-square-text text-primary me-2"></i>
+                Store Reviews
+            </h3>
+            <a href="{% url 'storefront:store_reviews' slug=store.slug %}" class="btn-custom btn-ghost btn-sm">
+                View All Reviews
+            </a>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-4 mb-4 mb-md-0">
+                <div class="rating-summary text-center">
+                    <h2 class="rating-number">{{ store.get_average_store_rating|default:"0.0" }}</h2>
+                    <div class="rating-stars mb-3">
+                        {% with rating=store.get_average_store_rating|default:0 %}
+                        {% for i in "12345" %}
+                            {% if forloop.counter <= rating|floatformat:0|add:"0" %}
+                                <i class="bi bi-star-fill text-warning fs-4"></i>
+                            {% else %}
+                                <i class="bi bi-star text-warning fs-4"></i>
+                            {% endif %}
+                        {% endfor %}
+                        {% endwith %}
+                    </div>
+                    <p class="text-muted mb-0">{{ store.reviews.count }} reviews</p>
                 </div>
-                <p class="text-muted mb-0">{{ store.reviews.count }} reviews</p>
+                
+                <!-- Review CTA -->
+                <div class="mt-4">
+                    {% if user.is_authenticated and user != store.owner %}
+                        {% load store_filters %}
+                        {% if store|user_can_review_store:user %}
+                        <a href="{% url 'storefront:store_review_create' slug=store.slug %}?next={{ request.path }}" 
+                          class="btn-custom btn-primary w-100">
+                            <i class="bi bi-pencil me-2"></i>Write a Review
+                        </a>
+                        {% else %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            You've already reviewed this store.
+                        </div>
+                        {% endif %}
+                    {% elif not user.is_authenticated %}
+                    <a href="{% url 'login' %}?next={{ request.path }}" 
+                      class="btn-custom btn-primary w-100">
+                        <i class="bi bi-box-arrow-in-right me-2"></i>Login to Review
+                    </a>
+                    {% endif %}
+                </div>
             </div>
             
-            <!-- Review CTA -->
-
-            <div class="mt-4">
-                {% if user.is_authenticated and user != store.owner %}
-                    {% load store_filters %}
-                    {% if store|user_can_review_store:user %}
-                    <a href="{% url 'storefront:store_review_create' slug=store.slug %}?next={{ request.path }}" 
-                      class="btn-custom btn-primary w-100">
-                        <i class="bi bi-pencil me-2"></i>Write a Store Review
-                    </a>
-                    {% else %}
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
-                        You've already reviewed this store.
+            <div class="col-md-8">
+                {% load store_tags %}
+                {% get_store_reviews store 3 as recent_reviews %}
+                {% if recent_reviews %}
+                    {% for review in recent_reviews %}
+                    <div class="review-card">
+                        <div class="reviewer-header">
+                            <div class="reviewer-info">
+                                <div class="reviewer-avatar">
+                                    <img src="{{ review.reviewer.profile.get_avatar_url|default:'https://placehold.co/40x40/c2c2c2/1f1f1f?text=User' }}"
+                                         alt="{{ review.reviewer.username }}">
+                                </div>
+                                <div>
+                                    <h6 class="reviewer-name">{{ review.reviewer.get_full_name|default:review.reviewer.username }}</h6>
+                                    <div class="rating-stars">
+                                        {% for i in "12345" %}
+                                            {% if forloop.counter <= review.rating %}
+                                                <i class="bi bi-star-fill text-warning"></i>
+                                            {% else %}
+                                                <i class="bi bi-star text-warning"></i>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                            <small class="review-date">{{ review.created_at|date:"M d, Y" }}</small>
+                        </div>
+                        <p class="review-comment">{{ review.comment|truncatewords:30 }}</p>
+                        {% if review.helpful_count > 0 %}
+                        <div class="review-helpful">
+                            <i class="bi bi-hand-thumbs-up"></i>
+                            {{ review.helpful_count }} helpful
+                        </div>
+                        {% endif %}
                     </div>
-                    {% endif %}
-                {% elif not user.is_authenticated %}
-                <a href="{% url 'login' %}?next={{ request.path }}" 
-                  class="btn-custom btn-primary w-100">
-                    <i class="bi bi-box-arrow-in-right me-2"></i>Login to Review Store
-                </a>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state">
+                        <div class="empty-state-icon">
+                            <i class="bi bi-chat-square-text"></i>
+                        </div>
+                        <h3>No Reviews Yet</h3>
+                        <p class="text-muted mb-4">Be the first to review this store!</p>
+                        {% if user.is_authenticated and user != store.owner %}
+                            <a href="{% url 'storefront:store_review_create' slug=store.slug %}" class="btn-custom btn-primary">
+                                <i class="bi bi-pencil me-2"></i> Write First Review
+                            </a>
+                        {% endif %}
+                    </div>
                 {% endif %}
             </div>
         </div>
-        
-        <div class="col-md-8">
-            {% get_store_reviews store 3 as recent_reviews %}
-            {% if recent_reviews %}
-                {% for review in recent_reviews %}
-                <div class="review-item mb-4 pb-4 {% if not forloop.last %}border-bottom{% endif %}">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                        <div class="d-flex align-items-center">
-                            <div class="reviewer-avatar me-3">
-                                <img src="{{ review.reviewer.profile.get_avatar_url|default:'https://placehold.co/40x40/c2c2c2/1f1f1f?text=User' }}"
-                                     alt="{{ review.reviewer.username }}"
-                                     class="rounded-circle" width="40" height="40">
-                            </div>
-                            <div>
-                                <h6 class="mb-0">{{ review.reviewer.get_full_name|default:review.reviewer.username }}</h6>
-                                <div class="rating-stars">
-                                    {% for i in "12345" %}
-                                        {% if forloop.counter <= review.rating %}
-                                            <i class="bi bi-star-fill text-warning"></i>
-                                        {% else %}
-                                            <i class="bi bi-star text-warning"></i>
-                                        {% endif %}
-                                    {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-                        <small class="text-muted">{{ review.created_at|date:"M d, Y" }}</small>
-                    </div>
-                    <p class="mb-2">{{ review.comment|truncatewords:30 }}</p>
-                    {% if review.helpful_count > 0 %}
-                    <small class="text-muted">
-                        <i class="bi bi-hand-thumbs-up"></i>
-                        {{ review.helpful_count }} helpful
-                    </small>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            {% else %}
-                <div class="text-center py-5">
-                    <i class="bi bi-chat-square-text display-4 text-muted mb-3"></i>
-                    <h5>No Reviews Yet</h5>
-                    <p class="text-muted">Be the first to review this store!</p>
-                </div>
-            {% endif %}
-        </div>
     </div>
 </div>
-<style>
-/* Enhanced Store Detail Styles with Text Protection */
-.store-header-wrapper {
-  min-height: 400px;
-  border-radius: var(--radius-xl);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  position: relative;
-}
 
-.store-header-overlay {
-  background: linear-gradient(to bottom, 
-    rgba(0, 0, 0, 0.7) 0%, 
-    rgba(0, 0, 0, 0.5) 50%, 
-    rgba(0, 0, 0, 0.3) 100%);
-  z-index: 1;
-}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('.nav-link-custom').forEach(link => {
+            link.addEventListener('click', function(e) {
+                if (this.getAttribute('href').startsWith('#')) {
+                    e.preventDefault();
+                    const targetId = this.getAttribute('href').substring(1);
+                    const targetElement = document.getElementById(targetId);
+                    
+                    if (targetElement) {
+                        // Update active nav link
+                        document.querySelectorAll('.nav-link-custom').forEach(nav => {
+                            nav.classList.remove('active');
+                        });
+                        this.classList.add('active');
+                        
+                        // Scroll to target
+                        window.scrollTo({
+                            top: targetElement.offsetTop - 80,
+                            behavior: 'smooth'
+                        });
+                    }
+                }
+            });
+        });
 
-.store-header-content {
-  z-index: 2;
-}
+        // Update active nav based on scroll position
+        function updateActiveNav() {
+            const sections = ['products', 'about', 'reviews'];
+            const scrollPosition = window.scrollY + 100;
 
-/* Enhanced text shadow for better readability on any background */
-.store-title {
-  color: white;
-  position: relative;
-}
+            sections.forEach(section => {
+                const element = document.getElementById(section);
+                if (element) {
+                    const offsetTop = element.offsetTop;
+                    const offsetBottom = offsetTop + element.offsetHeight;
 
-.store-title-text {
-  text-shadow: 
-    0 2px 4px rgba(0, 0, 0, 0.8),
-    0 4px 8px rgba(0, 0, 0, 0.6),
-    0 8px 16px rgba(0, 0, 0, 0.4);
-  display: inline-block;
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(4px);
-}
+                    if (scrollPosition >= offsetTop && scrollPosition < offsetBottom) {
+                        document.querySelectorAll('.nav-link-custom').forEach(nav => {
+                            nav.classList.remove('active');
+                            if (nav.getAttribute('href') === `#${section}`) {
+                                nav.classList.add('active');
+                            }
+                        });
+                    }
+                }
+            });
+        }
 
-.store-description-container {
-  background: rgba(0, 0, 0, 0.5);
-  padding: 1rem;
-  border-radius: var(--radius-md);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  max-width: fit-content;
-}
+        window.addEventListener('scroll', updateActiveNav);
+        updateActiveNav(); // Initial call
 
-.store-description {
-  color: white;
-  margin-bottom: 0;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
+        // Favorite button functionality
+        document.querySelectorAll('.favorite-form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const button = this.querySelector('.favorite-btn');
+                const icon = button.querySelector('i');
+                
+                // Visual feedback
+                button.style.transform = 'scale(0.9)';
+                
+                // Toggle state
+                if (button.classList.contains('active')) {
+                    button.classList.remove('active');
+                    icon.classList.remove('bi-heart-fill');
+                    icon.classList.add('bi-heart');
+                } else {
+                    button.classList.add('active');
+                    icon.classList.remove('bi-heart');
+                    icon.classList.add('bi-heart-fill');
+                }
+                
+                // Reset animation
+                setTimeout(() => {
+                    button.style.transform = 'scale(1)';
+                }, 150);
+                
+                // Submit form via AJAX
+                fetch(this.action, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (window.showToast) {
+                        const message = data.is_favorited ? 
+                            'Added to favorites!' : 
+                            'Removed from favorites!';
+                        window.showToast(message, 'success');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    if (window.showToast) {
+                        window.showToast('Error updating favorites', 'error');
+                    }
+                });
+            });
+        });
 
-/* Protected stat items */
-.stat-item {
-  text-align: center;
-}
+        // Product card hover effects
+        document.querySelectorAll('.product-card').forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-3px)';
+                this.style.boxShadow = 'var(--shadow-md)';
+                this.style.borderColor = 'var(--primary)';
+            });
+            
+            card.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0)';
+                this.style.boxShadow = 'var(--shadow-sm)';
+                this.style.borderColor = 'var(--border-color)';
+            });
+        });
 
-.stat-value-bg {
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: var(--radius-md);
-  padding: 0.5rem 1rem;
-  display: inline-block;
-  backdrop-filter: blur(4px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.stat-item h3 {
-  font-size: 2.5rem;
-  margin-bottom: 0;
-  color: white;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-}
-
-.stat-label {
-  display: block;
-  margin-top: 0.5rem;
-  color: rgba(255, 255, 255, 0.9);
-  font-weight: 500;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-/* Store logo with protected background */
-.store-logo-wrapper {
-  display: inline-block;
-  position: relative;
-  padding: 1rem;
-}
-
-.store-logo-background {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-}
-
-.store-logo {
-  width: 200px;
-  height: 200px;
-  border-radius: var(--radius-full);
-  border: 4px solid rgba(255, 255, 255, 0.3);
-  background: white;
-  padding: var(--spacing-xs);
-  position: relative;
-  z-index: 1;
-}
-
-.premium-badge {
-  bottom: 20px;
-  right: 20px;
-  background: linear-gradient(135deg, #FFD700, #FFA500);
-  color: #333;
-  padding: 0.5rem 1rem;
-  border-radius: var(--radius-md);
-  font-weight: 700;
-  font-size: 0.875rem;
-  z-index: 3;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-/* Protected badges */
-.badge-protected {
-  backdrop-filter: blur(10px);
-  background: rgba(0, 0, 0, 0.85) !important;
-  color: white !important;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  font-weight: 600;
-  padding: 0.5rem 1rem;
-  margin-bottom: 0.5rem;
-}
-
-.badge-protected.bg-warning {
-  background: rgba(255, 193, 7, 0.95) !important;
-  color: #333 !important;
-}
-
-/* Grid System */
-.grid-system {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--spacing-lg);
-}
-
-.product-card {
-  overflow: hidden;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.product-card:hover {
-  transform: translateY(-5px);
-  box-shadow: var(--shadow-lg);
-}
-
-.product-image-wrapper {
-  position: relative;
-  height: 200px;
-  overflow: hidden;
-  border-radius: var(--radius-md);
-}
-
-.product-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.5s ease;
-}
-
-.product-card:hover .product-image {
-  transform: scale(1.05);
-}
-
-.product-image-overlay {
-  background: linear-gradient(to bottom, 
-    transparent 60%, 
-    rgba(0, 0, 0, 0.4) 100%);
-  pointer-events: none;
-  z-index: 1;
-}
-
-.product-badges {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: var(--spacing-sm);
-}
-
-.product-actions {
-  padding: var(--spacing-sm);
-}
-
-.favorite-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.95);
-  border: 2px solid rgba(0, 0, 0, 0.1);
-  color: #666;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
-
-.btn-protected {
-  backdrop-filter: blur(10px);
-  background: rgba(255, 255, 255, 0.95);
-}
-
-.favorite-btn.active {
-  background: var(--danger);
-  color: white;
-  border-color: var(--danger);
-}
-
-.favorite-btn:hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.product-info {
-  padding: var(--spacing-lg);
-}
-
-.product-title {
-  font-family: var(--font-heading);
-  font-size: 1.1rem;
-  margin-bottom: var(--spacing-xs);
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
-.product-description {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  margin-bottom: var(--spacing-md);
-  line-height: 1.5;
-}
-
-.product-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-md);
-}
-
-.product-price {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--primary);
-}
-
-.product-rating {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-/* Text protection for rating */
-.text-protected {
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-/* Info Grid */
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: var(--spacing-lg);
-}
-
-.info-item {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md);
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-}
-
-.info-item i {
-  font-size: 1.5rem;
-  color: var(--primary);
-  margin-top: var(--spacing-xs);
-}
-
-.verification-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-}
-
-.verification-item {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md);
-  border-radius: var(--radius-md);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-}
-
-.verification-item.success i {
-  color: var(--accent);
-}
-
-.verification-item.warning i {
-  color: var(--warning);
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .store-header-wrapper {
-    min-height: 300px;
-  }
-  
-  .store-logo {
-    width: 150px;
-    height: 150px;
-  }
-  
-  .grid-system {
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  }
-  
-  .store-title {
-    font-size: 2.5rem;
-  }
-}
-
-@media (max-width: 576px) {
-  .grid-system {
-    grid-template-columns: 1fr;
-  }
-  
-  .info-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .store-title {
-    font-size: 2rem;
-  }
-  
-  .store-logo {
-    width: 120px;
-    height: 120px;
-  }
-  
-  .stat-item h3 {
-    font-size: 2rem;
-  }
-}
-
-/* Additional text protection classes */
-.text-shadow-3d {
-  text-shadow: 
-    0 1px 0 #ccc,
-    0 2px 0 #c9c9c9,
-    0 3px 0 #bbb,
-    0 4px 0 #b9b9b9,
-    0 5px 0 #aaa,
-    0 6px 1px rgba(0,0,0,.1),
-    0 0 5px rgba(0,0,0,.1),
-    0 1px 3px rgba(0,0,0,.3),
-    0 3px 5px rgba(0,0,0,.2),
-    0 5px 10px rgba(0,0,0,.25),
-    0 10px 10px rgba(0,0,0,.2),
-    0 20px 20px rgba(0,0,0,.15);
-}
-
-.text-protected-label {
-  background: rgba(0, 0, 0, 0.3);
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--radius-sm);
-  display: inline-block;
-  backdrop-filter: blur(4px);
-}
-</style>
+        // Parallax effect for store cover
+        const storeCover = document.querySelector('.store-cover-container');
+        if (storeCover) {
+            window.addEventListener('scroll', function() {
+                const scrolled = window.pageYOffset;
+                const rate = scrolled * 0.5;
+                storeCover.style.transform = `translate3d(0, ${rate}px, 0)`;
+            });
+        }
+    });
+</script>
 {% endblock %}

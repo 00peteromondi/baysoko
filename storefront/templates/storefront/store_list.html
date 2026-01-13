@@ -1,263 +1,896 @@
+
 {% extends 'base.html' %}
+{% load static %}
 {% load humanize %}
+{% load custom_filters %}
 
 {% block title %}Stores - Baysoko{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* ===== GLOBAL STYLES ===== */
+    .container-custom {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    /* ===== HEADER SECTION ===== */
+    .page-header {
+        margin-bottom: 24px;
+    }
+
+    .page-title {
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .page-subtitle {
+        color: var(--text-secondary);
+        font-size: 16px;
+        margin-bottom: 0;
+    }
+
+    /* ===== STATS CARDS ===== */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+
+    .stat-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 16px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+    }
+
+    .stat-icon {
+        font-size: 32px;
+        margin-bottom: 12px;
+        color: var(--primary);
+    }
+
+    .stat-value {
+        font-size: 24px;
+        font-weight: 800;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+    }
+
+    .stat-label {
+        font-size: 14px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* ===== SEARCH AND FILTER SECTION ===== */
+    .filter-section {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 16px;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
+    }
+
+    .search-input-group {
+        position: relative;
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-secondary);
+        font-size: 16px;
+        z-index: 1;
+    }
+
+    .search-input {
+        padding-left: 40px;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        height: 44px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+
+    .search-input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+    }
+
+    .sort-select {
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        height: 44px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+
+    .sort-select:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+    }
+
+    /* ===== STORES GRID ===== */
+    .stores-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 16px;
+        margin-bottom: 30px;
+    }
+
+    @media (max-width: 768px) {
+        .stores-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .store-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .store-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-lg);
+        border-color: var(--primary);
+    }
+
+    .store-header {
+        position: relative;
+        height: 120px;
+        overflow: hidden;
+    }
+
+    .store-cover {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.5s ease;
+    }
+
+    .store-card:hover .store-cover {
+        transform: scale(1.05);
+    }
+
+    .store-cover-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.7) 100%);
+    }
+
+    .store-logo-container {
+        position: absolute;
+        bottom: -30px;
+        left: 16px;
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 4px solid var(--card-bg);
+        background: white;
+        z-index: 2;
+    }
+
+    .store-logo {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .store-premium-badge {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        background: linear-gradient(135deg, var(--warning) 0%, #ff7b00 100%);
+        color: #333;
+        padding: 6px 10px;
+        border-radius: 16px;
+        font-size: 11px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+        z-index: 2;
+    }
+
+    .store-content {
+        padding: 16px;
+        padding-top: 40px;
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .store-title {
+        font-size: 18px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+        line-height: 1.3;
+    }
+
+    .store-description {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-bottom: 12px;
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        flex-grow: 1;
+    }
+
+    .store-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .store-meta-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--text-secondary);
+        background: var(--bg-secondary);
+        padding: 4px 8px;
+        border-radius: 12px;
+        border: 1px solid var(--border-color);
+    }
+
+    .store-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .store-stat {
+        text-align: center;
+        padding: 8px 4px;
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+    }
+
+    .store-stat:hover {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+    }
+
+    .store-stat-value {
+        font-size: 14px;
+        font-weight: 800;
+        color: var(--primary);
+        display: block;
+    }
+
+    .store-stat-label {
+        font-size: 10px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .store-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: auto;
+    }
+
+    /* ===== RECENT PRODUCTS ===== */
+    .recent-products {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .recent-products-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .products-scroll {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .products-scroll::-webkit-scrollbar {
+        height: 3px;
+    }
+
+    .products-scroll::-webkit-scrollbar-track {
+        background: var(--bg-secondary);
+        border-radius: 2px;
+    }
+
+    .products-scroll::-webkit-scrollbar-thumb {
+        background: var(--primary);
+        border-radius: 2px;
+    }
+
+    .product-preview {
+        flex: 0 0 80px;
+        border-radius: 8px;
+        overflow: hidden;
+        position: relative;
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+    }
+
+    .product-preview:hover {
+        transform: translateY(-2px);
+        border-color: var(--primary);
+    }
+
+    .product-preview-image {
+        width: 100%;
+        height: 60px;
+        object-fit: cover;
+    }
+
+    .product-preview-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 4px;
+    }
+
+    .product-preview-title {
+        color: white;
+        font-size: 10px;
+        font-weight: 600;
+        margin-bottom: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .product-preview-price {
+        color: var(--primary-light);
+        font-size: 9px;
+        font-weight: 700;
+    }
+
+    /* ===== PAGINATION ===== */
+    .pagination-container {
+        margin-top: 30px;
+        margin-bottom: 30px;
+    }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .page-link {
+        padding: 8px 16px;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        color: var(--text-primary);
+        font-weight: 600;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .page-link:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+        background: var(--primary-light);
+    }
+
+    .page-item.active .page-link {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+    }
+
+    .page-item.disabled .page-link {
+        opacity: 0.5;
+        cursor: not-allowed;
+        background: var(--bg-secondary);
+    }
+
+    /* ===== CTA SECTION ===== */
+    .cta-section {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        margin-bottom: 30px;
+        position: relative;
+        overflow: hidden;
+        text-align: center;
+    }
+
+    .cta-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(to right, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.3) 100%);
+    }
+
+    .cta-content {
+        position: relative;
+        z-index: 2;
+    }
+
+    .cta-title {
+        font-size: 24px;
+        font-weight: 800;
+        margin-bottom: 12px;
+        color: white;
+    }
+
+    .cta-subtitle {
+        font-size: 16px;
+        color: rgba(255, 255, 255, 0.9);
+        margin-bottom: 20px;
+    }
+
+    .cta-buttons {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .cta-btn-light {
+        background: white;
+        color: var(--primary);
+        border: 2px solid white;
+    }
+
+    .cta-btn-light:hover {
+        background: rgba(255, 255, 255, 0.9);
+        border-color: white;
+        color: var(--primary);
+    }
+
+    .cta-btn-outline {
+        background: transparent;
+        color: white;
+        border: 2px solid white;
+    }
+
+    .cta-btn-outline:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: white;
+        color: white;
+    }
+
+    /* ===== EMPTY STATE ===== */
+    .empty-state {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 40px 20px;
+        text-align: center;
+        border: 2px dashed var(--border-color);
+        margin-bottom: 30px;
+    }
+
+    .empty-state-icon {
+        font-size: 48px;
+        color: var(--text-tertiary);
+        margin-bottom: 16px;
+    }
+
+    .empty-state h3 {
+        font-size: 20px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .empty-state p {
+        color: var(--text-secondary);
+        margin-bottom: 20px;
+        font-size: 16px;
+    }
+
+    .empty-state-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    /* ===== RESPONSIVE DESIGN ===== */
+    
+    /* Small phones (320px - 374px) */
+    @media (max-width: 374px) {
+        .container-custom {
+            padding-left: 6px;
+            padding-right: 6px;
+        }
+        
+        .page-title {
+            font-size: 24px;
+        }
+        
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .store-logo-container {
+            width: 60px;
+            height: 60px;
+        }
+        
+        .store-content {
+            padding-top: 35px;
+        }
+        
+        .store-title {
+            font-size: 16px;
+        }
+        
+        .store-actions {
+            flex-direction: column;
+        }
+    }
+    
+    /* Medium phones (375px - 424px) */
+    @media (min-width: 375px) and (max-width: 424px) {
+        .container-custom {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+        
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    
+    /* Large phones (425px - 575px) */
+    @media (min-width: 425px) and (max-width: 575px) {
+        .container-custom {
+            padding-left: 12px;
+            padding-right: 12px;
+        }
+        
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .stores-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    /* Tablets (576px - 767px) */
+    @media (min-width: 576px) {
+        .container-custom {
+            padding-left: 16px;
+            padding-right: 16px;
+        }
+        
+        .page-title {
+            font-size: 32px;
+        }
+        
+        .stats-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+        
+        .stores-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    
+    /* Medium tablets (768px - 991px) */
+    @media (min-width: 768px) {
+        .page-title {
+            font-size: 36px;
+        }
+        
+        .stores-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    
+    /* Large tablets (992px - 1199px) */
+    @media (min-width: 992px) {
+        .stores-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+    
+    /* Desktop (1200px and above) */
+    @media (min-width: 1200px) {
+        .stores-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-custom py-var(--spacing-xl)">
-    <!-- Header Section -->
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-2">
-        <div class="mb-3 mb-md-0">
-            <h1 class="display-4 fw-bold mb-2">Discover Stores</h1>
-            <p class="lead text-muted mb-0">Shop from premium businesses in your community</p>
-        </div>
-        <div class="d-flex gap-2">
-            {% if user.is_authenticated %}
-            <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-primary">
-                <i class="bi bi-plus-circle me-2"></i>
-                Create Store
-            </a>
-            {% else %}
-            <a href="{% url 'register' %}" class="btn-custom btn-primary">
-                <i class="bi bi-person-plus me-2"></i>
-                Join to Create
-            </a>
-            {% endif %}
+<div class="container-custom py-3">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
+            <div class="mb-3 mb-md-0">
+                <h1 class="page-title">Discover Stores</h1>
+                <p class="page-subtitle">Shop from premium businesses in your community</p>
+            </div>
+            <div class="d-flex gap-2">
+                {% if user.is_authenticated %}
+                <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-primary">
+                    <i class="bi bi-plus-circle me-2"></i>
+                    Create Store
+                </a>
+                {% else %}
+                <a href="{% url 'register' %}" class="btn-custom btn-primary">
+                    <i class="bi bi-person-plus me-2"></i>
+                    Join to Create
+                </a>
+                {% endif %}
+            </div>
         </div>
     </div>
 
-    <!-- Stats Row -->
-    <div class="row g-3 mb-2">
-        <div class="col-md-4 col-6">
-            <div class="card-custom text-center h-100">
-                <div class="card-body p-4">
-                    <div class="mb-3">
-                        <i class="bi bi-shop text-primary fs-2"></i>
-                    </div>
-                    <h2 class="fw-bold mb-1">{{ stores.count|default:0 }}</h2>
-                    <p class="text-muted mb-0 small">Active Stores</p>
-                </div>
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="bi bi-shop"></i>
             </div>
+            <div class="stat-value">{{ stores.count|default:0 }}</div>
+            <div class="stat-label">Active Stores</div>
         </div>
-        <div class="col-md-4 col-6">
-            <div class="card-custom text-center h-100">
-                <div class="card-body p-4">
-                    <div class="mb-3">
-                        <i class="bi bi-star text-warning fs-2"></i>
-                    </div>
-                    <h2 class="fw-bold mb-1">{{ premium_count|default:0 }}</h2>
-                    <p class="text-muted mb-0 small">Premium Stores</p>
-                </div>
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="bi bi-star"></i>
             </div>
+            <div class="stat-value">{{ premium_count|default:0 }}</div>
+            <div class="stat-label">Premium Stores</div>
         </div>
-        <div class="col-md-4 col-6">
-            <div class="card-custom text-center h-100">
-                <div class="card-body p-4">
-                    <div class="mb-3">
-                        <i class="bi bi-grid text-success fs-2"></i>
-                    </div>
-                    <h2 class="fw-bold mb-1">{{ total_products|default:0 }}</h2>
-                    <p class="text-muted mb-0 small">Total Products</p>
-                </div>
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="bi bi-grid"></i>
             </div>
+            <div class="stat-value">{{ total_products|default:0 }}</div>
+            <div class="stat-label">Total Products</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="bi bi-people"></i>
+            </div>
+            <div class="stat-value">{{ total_sellers|default:0 }}</div>
+            <div class="stat-label">Active Sellers</div>
         </div>
     </div>
 
     <!-- Search and Filter -->
-    <div class="card-custom mb-2">
-        <div class="card-body p-4">
-            <form method="get" action="{% url 'storefront:store_list' %}">
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-8">
-                        <label class="form-label fw-bold">Search Stores</label>
-                        <div class="input-group">
-                            <span class="input-group-text bg-light">
-                                <i class="bi bi-search"></i>
-                            </span>
-                            <input type="search" 
-                                   name="q" 
-                                   class="form-control" 
-                                   placeholder="Search by store name, category, or description..."
-                                   value="{{ request.GET.q|default:'' }}">
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label fw-bold">Sort By</label>
-                        <select name="sort" class="form-select" onchange="this.form.submit()">
-                            <option value="popular" {% if request.GET.sort == 'popular' or not request.GET.sort %}selected{% endif %}>Most Popular</option>
-                            <option value="newest" {% if request.GET.sort == 'newest' %}selected{% endif %}>Newest</option>
-                            <option value="premium" {% if request.GET.sort == 'premium' %}selected{% endif %}>Premium First</option>
-                            <option value="rating" {% if request.GET.sort == 'rating' %}selected{% endif %}>Highest Rated</option>
-                        </select>
+    <div class="filter-section">
+        <form method="get" action="{% url 'storefront:store_list' %}">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-8">
+                    <label class="form-label fw-bold mb-2">Search Stores</label>
+                    <div class="search-input-group">
+                        <i class="bi bi-search search-icon"></i>
+                        <input type="search" 
+                               name="q" 
+                               class="form-control search-input" 
+                               placeholder="Search by store name, category, or description..."
+                               value="{{ request.GET.q|default:'' }}">
                     </div>
                 </div>
-            </form>
-        </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold mb-2">Sort By</label>
+                    <select name="sort" class="form-select sort-select" onchange="this.form.submit()">
+                        <option value="popular" {% if request.GET.sort == 'popular' or not request.GET.sort %}selected{% endif %}>Most Popular</option>
+                        <option value="newest" {% if request.GET.sort == 'newest' %}selected{% endif %}>Newest</option>
+                        <option value="premium" {% if request.GET.sort == 'premium' %}selected{% endif %}>Premium First</option>
+                        <option value="rating" {% if request.GET.sort == 'rating' %}selected{% endif %}>Highest Rated</option>
+                    </select>
+                </div>
+            </div>
+        </form>
     </div>
 
     <!-- Stores Section -->
     <div class="mb-2">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h3 class="fw-bold mb-0 mt-2">All Stores</h3>
-            <span class="text-muted">{{ stores.count }} stores</span>
+            <h2 class="page-title mb-0" style="font-size: 24px;">All Stores</h2>
+            <span class="badge bg-primary rounded-pill px-3 py-2">{{ stores.count }} stores</span>
         </div>
         
         {% if stores %}
-        <div class="row g-4">
+        <div class="stores-grid">
             {% for store in stores %}
-            <div class="col-lg-6">
-                <div class="card-custom store-card h-100">
-                    <!-- Store Header with Protected Text -->
-                    <div class="store-card-header protected-text-container rounded-top position-relative overflow-hidden"
-                         style="{% if store.cover_image %}background-image: url('{{ store.cover_image.url }}');{% else %}background: linear-gradient(135deg, var(--primary) 0%, var(--info) 100%);{% endif %}">
-                        <!-- Overlay for text protection -->
-                        <div class="store-card-overlay position-absolute top-0 start-0 w-100 h-100"></div>
-                        
-                        <!-- Protected text content -->
-                        <div class="protected-text position-relative z-2">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div class="store-title-protected">
-                                    <h4 class="fw-bold mb-1 text-white text-shadow-3d">{{ store.name }}</h4>
-                                    <p class="mb-0 text-white opacity-90 text-protected-bg">{{ store.listings.count }} products</p>
-                                </div>
-                                {% if store.is_premium %}
-                                <span class="badge bg-warning text-dark badge-protected">
-                                    <i class="bi bi-star-fill me-1"></i>Premium
-                                </span>
-                                {% endif %}
-                            </div>
+            <div class="store-card">
+                <!-- Store Header -->
+                <div class="store-header">
+                    {% if store.cover_image %}
+                    <img src="{{ store.cover_image.url }}" alt="{{ store.name }}" class="store-cover">
+                    {% else %}
+                    <div class="store-cover" style="background: linear-gradient(135deg, var(--primary) 0%, var(--info) 100%);"></div>
+                    {% endif %}
+                    <div class="store-cover-overlay"></div>
+                    
+                    <div class="store-logo-container">
+                        <img src="{{ store.get_logo_url|default:'https://placehold.co/200x200/c2c2c2/1f1f1f?text=Store' }}"
+                             alt="{{ store.name }}"
+                             class="store-logo">
+                    </div>
+                    
+                    {% if store.is_premium %}
+                    <span class="store-premium-badge">
+                        <i class="bi bi-star-fill"></i>Premium
+                    </span>
+                    {% endif %}
+                </div>
+                
+                <!-- Store Content -->
+                <div class="store-content">
+                    <h3 class="store-title">{{ store.name }}</h3>
+                    <p class="store-description">{{ store.description|default:"Welcome to our store"|truncatechars:120 }}</p>
+                    
+                    <div class="store-meta">
+                        <span class="store-meta-item">
+                            <i class="bi bi-star"></i>
+                            {{ store.get_average_store_rating|default:"New" }}
+                        </span>
+                        <span class="store-meta-item">
+                            <i class="bi bi-calendar"></i>
+                            {{ store.created_at|date:"M d, Y" }}
+                        </span>
+                    </div>
+                    
+                    <div class="store-stats">
+                        <div class="store-stat">
+                            <span class="store-stat-value">{{ store.listings.count }}</span>
+                            <span class="store-stat-label">Products</span>
+                        </div>
+                        <div class="store-stat">
+                            <span class="store-stat-value">{{ store.reviews.count }}</span>
+                            <span class="store-stat-label">Reviews</span>
+                        </div>
+                        <div class="store-stat">
+                            <span class="store-stat-value">{{ store.get_sales_count|default:"0" }}+</span>
+                            <span class="store-stat-label">Sales</span>
                         </div>
                     </div>
                     
-                    <div class="card-body">
-                        <!-- Store Logo and Info -->
-                        <div class="d-flex align-items-start gap-3 mb-3">
-                            <div class="store-logo-protected-small">
-                                <div class="store-logo-background-list"></div>
-                                <img src="{{ store.get_logo_url|default:'https://placehold.co/80x80/c2c2c2/1f1f1f?text=Store' }}"
-                                     alt="{{ store.name }}"
-                                     class="rounded-circle border border-3 position-relative z-1"
-                                     style="width: 80px; height: 80px; object-fit: cover; border-color: var(--border-color) !important;">
-                            </div>
-                            <div class="flex-grow-1">
-                                <p class="text-muted mb-2 line-clamp-2">{{ store.description|default:"No description provided"|truncatechars:120 }}</p>
-                                <div class="d-flex gap-2">
-                                    <span class="badge bg-light text-muted">
-                                        <i class="bi bi-star me-1"></i>
-                                        {{ store.get_rating|default:"New" }}
-                                    </span>
-                                    <span class="badge bg-light text-muted">
-                                        <i class="bi bi-calendar me-1"></i>
-                                        {{ store.created_at|date:"M d, Y" }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="store-actions">
+                        <a href="{% url 'storefront:store_detail' slug=store.slug %}" 
+                           class="btn-custom btn-primary flex-fill">
+                            <i class="bi bi-eye me-1"></i>View Store
+                        </a>
                         
-                        <!-- Store Actions -->
-                        <div class="d-flex flex-wrap gap-2 mb-4">
-                            <a href="{% url 'storefront:store_detail' slug=store.slug %}" 
-                               class="btn-custom btn-primary">
-                                <i class="bi bi-eye me-1"></i>View Store
-                            </a>
-                            
-                            <!-- Show Analytics only for store owner -->
-                            {% if user == store.owner %}
-                            <a href="{% url 'storefront:store_analytics' slug=store.slug %}" 
-                               class="btn-custom btn-info">
-                                <i class="bi bi-graph-up me-1"></i>Analytics
-                            </a>
-                            {% endif %}
-                            
-                            <button class="btn-custom btn-ghost save-store-btn" data-store-id="{{ store.id }}">
-                                <i class="bi bi-bookmark me-1"></i>Save
-                            </button>
-                        </div>
-                        
-                        <!-- Recent Products -->
-                        <h6 class="fw-bold mb-3">Recent Products</h6>
-                        <div class="row g-2">
-                            {% for listing in store.listings.all|slice:":4" %}
-                            <div class="col-6 col-sm-3">
-                                <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=listing.slug %}" 
-                                   class="text-decoration-none">
-                                    <div class="position-relative rounded overflow-hidden product-image-protected">
-                                        <!-- Product image with overlay -->
-                                        <div class="product-image-overlay-small position-absolute top-0 start-0 w-100 h-100"></div>
-                                        <img src="{{ listing.get_image_url }}" 
-                                             alt="{{ listing.title }}"
-                                             class="img-fluid w-100 position-relative z-1"
-                                             style="height: 80px; object-fit: cover;"
-                                             onerror="this.src='https://placehold.co/100x80/c2c2c2/1f1f1f?text=Product'">
-                                        <div class="position-absolute bottom-0 start-0 end-0 bg-dark bg-opacity-75 text-white p-1 z-2">
-                                            <small class="d-block text-truncate text-protected-inline">{{ listing.title }}</small>
-                                            <small class="d-block text-truncate text-protected-inline">KSh {{ listing.price|intcomma }}</small>
-                                        </div>
-                                    </div>
-                                </a>
-                            </div>
-                            {% empty %}
-                            <div class="col-12">
-                                <div class="text-center py-3 border rounded">
-                                    <i class="bi bi-inbox text-muted fs-4 mb-2"></i>
-                                    <p class="text-muted mb-0">No products yet</p>
+                        {% if user == store.owner %}
+                        <a href="{% url 'storefront:store_analytics' slug=store.slug %}" 
+                           class="btn-custom btn-ghost">
+                            <i class="bi bi-graph-up"></i>
+                        </a>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Recent Products -->
+                    {% if store.listings.all %}
+                    <div class="recent-products">
+                        <h6 class="recent-products-title">Recent Products</h6>
+                        <div class="products-scroll">
+                            {% for listing in store.listings.all|slice:":5" %}
+                            <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=listing.slug %}" 
+                               class="product-preview">
+                                <img src="{{ listing.get_image_url }}" 
+                                     alt="{{ listing.title }}"
+                                     class="product-preview-image"
+                                     onerror="this.src='https://placehold.co/100x80/c2c2c2/1f1f1f?text=Product'">
+                                <div class="product-preview-overlay">
+                                    <div class="product-preview-title">{{ listing.title|truncatechars:15 }}</div>
+                                    <div class="product-preview-price">KSh {{ listing.price|intcomma }}</div>
                                 </div>
-                            </div>
+                            </a>
                             {% endfor %}
                         </div>
                     </div>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
         </div>
         
         {% if is_paginated %}
-        <nav class="mt-4">
-            <ul class="pagination justify-content-center">
-                {% if page_obj.has_previous %}
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">
-                        <i class="bi bi-chevron-left"></i>
-                        Previous
-                    </a>
-                </li>
-                {% endif %}
-                
-                {% for num in page_obj.paginator.page_range %}
-                    {% if page_obj.number == num %}
-                    <li class="page-item active">
-                        <span class="page-link">{{ num }}</span>
-                    </li>
-                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+        <div class="pagination-container">
+            <nav aria-label="Page navigation">
+                <ul class="pagination">
+                    {% if page_obj.has_previous %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ num }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">
-                            {{ num }}
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">
+                            <i class="bi bi-chevron-left"></i>
+                            Previous
                         </a>
                     </li>
                     {% endif %}
-                {% endfor %}
-                
-                {% if page_obj.has_next %}
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">
-                        Next
-                        <i class="bi bi-chevron-right"></i>
-                    </a>
-                </li>
-                {% endif %}
-            </ul>
-        </nav>
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">
+                                {{ num }}
+                            </a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}">
+                            Next
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
         {% endif %}
         
         {% else %}
         <!-- Empty State -->
-        <div class="card-custom text-center py-5">
-            <div class="empty-state-icon mb-4">
-                <i class="bi bi-shop display-1 text-muted"></i>
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <i class="bi bi-shop"></i>
             </div>
-            <h3 class="mb-3">No Stores Found</h3>
+            <h3>No Stores Found</h3>
             <p class="text-muted mb-4">There are no stores matching your search criteria.</p>
-            <div class="d-flex gap-3 justify-content-center">
+            <div class="empty-state-actions">
                 <a href="{% url 'storefront:store_list' %}" class="btn-custom btn-ghost">
                     <i class="bi bi-arrow-clockwise me-2"></i>
                     Clear Filters
@@ -265,12 +898,12 @@
                 {% if user.is_authenticated %}
                 <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-primary">
                     <i class="bi bi-plus-circle me-2"></i>
-                    Create the First Store
+                    Create Store
                 </a>
                 {% else %}
                 <a href="{% url 'register' %}" class="btn-custom btn-primary">
                     <i class="bi bi-person-plus me-2"></i>
-                    Join to Create a Store
+                    Join to Create
                 </a>
                 {% endif %}
             </div>
@@ -279,30 +912,27 @@
     </div>
 
     <!-- CTA Section -->
-    <div class="card-custom protected-text-container text-center position-relative overflow-hidden"
-         style="background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);">
-        <!-- Gradient overlay for text protection -->
-        <div class="cta-overlay position-absolute top-0 start-0 w-100 h-100"></div>
-        
-        <div class="protected-text position-relative z-2">
-            <h2 class="display-6 fw-bold mb-3 text-white text-shadow-3d">Ready to Start Selling?</h2>
-            <p class="lead mb-4 text-white opacity-90 text-protected-bg">Join thousands of sellers on Baysoko</p>
-            <div class="d-flex gap-3 justify-content-center">
+    <div class="cta-section">
+        <div class="cta-overlay"></div>
+        <div class="cta-content">
+            <h2 class="cta-title">Ready to Start Selling?</h2>
+            <p class="cta-subtitle">Join thousands of sellers on Baysoko</p>
+            <div class="cta-buttons">
                 {% if user.is_authenticated %}
-                <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-light">
+                <a href="{% url 'storefront:store_create' %}" class="btn-custom cta-btn-light">
                     <i class="bi bi-plus-circle me-2"></i>
                     Create Your Store
                 </a>
-                <a href="{% url 'storefront:seller_dashboard' %}" class="btn-custom btn-outline-light">
+                <a href="{% url 'storefront:seller_dashboard' %}" class="btn-custom cta-btn-outline">
                     <i class="bi bi-speedometer2 me-2"></i>
                     Go to Dashboard
                 </a>
                 {% else %}
-                <a href="{% url 'register' %}" class="btn-custom btn-light">
+                <a href="{% url 'register' %}" class="btn-custom cta-btn-light">
                     <i class="bi bi-person-plus me-2"></i>
                     Sign Up Free
                 </a>
-                <a href="{% url 'login' %}" class="btn-custom btn-outline-light">
+                <a href="{% url 'login' %}" class="btn-custom cta-btn-outline">
                     <i class="bi bi-box-arrow-in-right me-2"></i>
                     Login
                 </a>
@@ -312,200 +942,109 @@
     </div>
 </div>
 
-<style>
-.store-card {
-    transition: var(--transition);
-}
-
-.store-card:hover {
-    transform: translateY(-5px);
-    box-shadow: var(--shadow-lg);
-}
-
-/* Store card header with overlay */
-.store-card-header {
-    height: 150px;
-    background-size: cover;
-    background-position: center;
-    position: relative;
-}
-
-.store-card-overlay {
-    background: linear-gradient(to top, 
-        rgba(0,0,0,0.8) 0%, 
-        rgba(0,0,0,0.6) 50%, 
-        rgba(0,0,0,0.4) 100%);
-}
-
-.store-card-header .protected-text {
-    padding: var(--spacing-md);
-    color: white;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-}
-
-.store-title-protected {
-    background: rgba(0, 0, 0, 0.3);
-    padding: 0.5rem 1rem;
-    border-radius: var(--radius-sm);
-    backdrop-filter: blur(4px);
-}
-
-.store-card-header h4 {
-    font-weight: 800;
-}
-
-/* Store logo protection */
-.store-logo-protected-small {
-    position: relative;
-}
-
-.store-logo-background-list {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(8px);
-    border-radius: 50%;
-}
-
-/* Product image protection */
-.product-image-protected {
-    position: relative;
-}
-
-.product-image-overlay-small {
-    background: linear-gradient(to bottom, 
-        transparent 40%, 
-        rgba(0, 0, 0, 0.6) 100%);
-    z-index: 1;
-}
-
-.text-protected-inline {
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-/* CTA section overlay */
-.cta-overlay {
-    background: linear-gradient(to right, 
-        rgba(0,0,0,0.3) 0%, 
-        rgba(0,0,0,0.2) 50%, 
-        rgba(0,0,0,0.3) 100%);
-}
-
-.line-clamp-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-/* Badge protection */
-.badge-protected {
-    backdrop-filter: blur(10px);
-    background: rgba(0, 0, 0, 0.85) !important;
-    color: white !important;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    font-weight: 600;
-}
-
-.badge-protected.bg-warning {
-    background: rgba(255, 193, 7, 0.95) !important;
-    color: #333 !important;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-    .store-card-header {
-        height: 120px;
-    }
-}
-
-@media (max-width: 576px) {
-    .store-card-header {
-        height: 100px;
-    }
-    
-    .store-card-header .protected-text {
-        padding: var(--spacing-sm);
-    }
-}
-</style>
-
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Save store functionality
-    const saveButtons = document.querySelectorAll('.save-store-btn');
-    saveButtons.forEach(btn => {
-        btn.addEventListener('click', function() {
-            const storeId = this.dataset.storeId;
-            const icon = this.querySelector('i');
+    document.addEventListener('DOMContentLoaded', function() {
+        // Store card hover effects
+        document.querySelectorAll('.store-card').forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-5px)';
+                this.style.boxShadow = 'var(--shadow-lg)';
+                this.style.borderColor = 'var(--primary)';
+            });
             
-            // Toggle save state
-            if (icon.classList.contains('bi-bookmark')) {
-                icon.classList.remove('bi-bookmark');
-                icon.classList.add('bi-bookmark-fill');
-                icon.style.color = 'var(--primary)';
-                this.innerHTML = '<i class="bi bi-bookmark-fill me-1" style="color: var(--primary);"></i>Saved';
-                showToast('Store saved to favorites', 'success');
-            } else {
-                icon.classList.remove('bi-bookmark-fill');
-                icon.classList.add('bi-bookmark');
-                icon.style.color = '';
-                this.innerHTML = '<i class="bi bi-bookmark me-1"></i>Save';
-                showToast('Store removed from favorites', 'info');
-            }
-            
-            // Animation
-            this.style.transform = 'scale(1.1)';
-            setTimeout(() => {
-                this.style.transform = 'scale(1)';
-            }, 150);
+            card.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0)';
+                this.style.boxShadow = 'var(--shadow-sm)';
+                this.style.borderColor = 'var(--border-color)';
+            });
         });
-    });
-    
-    function showToast(message, type = 'info') {
-        // Create toast container if it doesn't exist
-        let toastContainer = document.querySelector('.toast-container');
-        if (!toastContainer) {
-            toastContainer = document.createElement('div');
-            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
-            toastContainer.style.zIndex = '9999';
-            document.body.appendChild(toastContainer);
+
+        // Stat card hover effects
+        document.querySelectorAll('.stat-card').forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-3px)';
+                this.style.boxShadow = 'var(--shadow-md)';
+                this.style.borderColor = 'var(--primary)';
+            });
+            
+            card.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0)';
+                this.style.boxShadow = 'var(--shadow-sm)';
+                this.style.borderColor = 'var(--border-color)';
+            });
+        });
+
+        // Store stat hover effects
+        document.querySelectorAll('.store-stat').forEach(stat => {
+            stat.addEventListener('mouseenter', function() {
+                this.style.borderColor = 'var(--primary)';
+                this.style.transform = 'translateY(-2px)';
+            });
+            
+            stat.addEventListener('mouseleave', function() {
+                this.style.borderColor = 'var(--border-color)';
+                this.style.transform = 'translateY(0)';
+            });
+        });
+
+        // Product preview hover effects
+        document.querySelectorAll('.product-preview').forEach(preview => {
+            preview.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-2px)';
+                this.style.borderColor = 'var(--primary)';
+            });
+            
+            preview.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0)';
+                this.style.borderColor = 'var(--border-color)';
+            });
+        });
+
+        // Form submission with loading state
+        const searchForm = document.querySelector('form[method="get"]');
+        if (searchForm) {
+            const searchInput = searchForm.querySelector('input[name="q"]');
+            const sortSelect = searchForm.querySelector('select[name="sort"]');
+            
+            // Debounced search
+            let searchTimeout;
+            searchInput.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    searchForm.submit();
+                }, 500);
+            });
+            
+            // Immediate sort
+            sortSelect.addEventListener('change', function() {
+                searchForm.submit();
+            });
         }
-        
-        const toastId = 'toast-' + Date.now();
-        const toast = document.createElement('div');
-        toast.id = toastId;
-        toast.className = `toast align-items-center text-white bg-${type} border-0`;
-        toast.setAttribute('role', 'alert');
-        toast.setAttribute('aria-live', 'assertive');
-        toast.setAttribute('aria-atomic', 'true');
-        
-        toast.innerHTML = `
-            <div class="d-flex">
-                <div class="toast-body d-flex align-items-center">
-                    <i class="bi bi-${type === 'success' ? 'check-circle' : 'info-circle'} me-2"></i>
-                    ${message}
-                </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-            </div>
-        `;
-        
-        toastContainer.appendChild(toast);
-        const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
-        bsToast.show();
-        
-        // Remove toast after it hides
-        toast.addEventListener('hidden.bs.toast', function() {
-            toast.remove();
-        });
-    }
-});
+
+        // Add animation classes on load
+        setTimeout(() => {
+            document.querySelectorAll('.store-card').forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                
+                setTimeout(() => {
+                    card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 100);
+            });
+
+            document.querySelectorAll('.stat-card').forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(10px)';
+                
+                setTimeout(() => {
+                    card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 100 + 200);
+            });
+        }, 100);
+    });
 </script>
 {% endblock %}

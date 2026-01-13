@@ -151,6 +151,40 @@
         color: var(--primary);
     }
 
+    /* Featured Store Section */
+    .featured-section {
+        background: linear-gradient(135deg, rgba(255, 193, 7, 0.1), rgba(255, 193, 7, 0.05));
+        border: 1px solid rgba(255, 193, 7, 0.3);
+    }
+
+    .featured-section:hover {
+        border-color: var(--warning);
+    }
+
+    .featured-badge {
+        background: linear-gradient(135deg, var(--warning), #ff9800);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        margin-left: auto;
+    }
+
+    .featured-disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .featured-disabled .form-check-input {
+        cursor: not-allowed;
+    }
+
+    .premium-required {
+        background: linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(255, 107, 53, 0.05));
+        border: 1px solid rgba(255, 107, 53, 0.3);
+    }
+
     /* Form Grid */
     .form-grid-modern {
         display: grid;
@@ -362,6 +396,27 @@
         margin-top: var(--spacing-xl);
         padding-top: var(--spacing-lg);
         border-top: 1px solid var(--border-color);
+    }
+
+    /* Featured Benefits */
+    .featured-benefits {
+        background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+        border-radius: var(--radius-md);
+        padding: var(--spacing-md);
+        margin-top: var(--spacing-md);
+    }
+
+    .benefit-item {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        margin-bottom: var(--spacing-sm);
+        font-size: 0.9rem;
+    }
+
+    .benefit-item i {
+        color: var(--success);
+        font-size: 1rem;
     }
 
     /* Animations */
@@ -671,23 +726,122 @@
                     </div>
                 </div>
 
-                <!-- Premium Toggle (only for existing stores) -->
-                {% if not creating_store and store.owner == request.user %}
-                <div class="form-section-modern">
-                    <h3 class="section-title-modern">
-                        <i class="bi bi-star"></i>
-                        Premium Features
-                    </h3>
-                    
-                    <div class="form-check form-switch premium-toggle">
-                        {{ form.is_premium|as_crispy_field }}
-                    </div>
-                    <small class="text-muted">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Premium stores get featured placement, advanced analytics, and priority support
-                    </small>
-                </div>
+                <!-- Featured Store Section -->
+                {% if not creating_store %}
+                    {% if can_be_featured %}
+                        <div class="form-section-modern featured-section">
+                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                <h3 class="section-title-modern m-0">
+                                    <i class="bi bi-star"></i>
+                                    Featured Store
+                                </h3>
+                                {% if is_enterprise %}
+                                <span class="featured-badge">
+                                    <i class="bi bi-award me-1"></i>Enterprise
+                                </span>
+                                {% endif %}
+                            </div>
+                            
+                            {% if is_enterprise %}
+                                <div class="alert alert-success mb-3">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-award-fill me-2"></i>
+                                        <div>
+                                            <strong>Enterprise Store</strong>
+                                            <p class="mb-0 small">Your store is automatically featured as an Enterprise subscription holder.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" checked disabled>
+                                    <label class="form-check-label fw-bold">
+                                        Featured Store (Enabled for Enterprise)
+                                    </label>
+                                    <input type="hidden" name="is_featured" value="1">
+                                </div>
+                            {% else %}
+                                <!-- Check if the form has is_featured field (it should for non-enterprise premium stores) -->
+                                {% if 'is_featured' in form.fields %}
+                                    <div class="form-check form-switch">
+                                        {{ form.is_featured|as_crispy_field }}
+                                    </div>
+                                {% else %}
+                                    <div class="alert alert-warning">
+                                        <i class="bi bi-exclamation-triangle me-2"></i>
+                                        Featured store option is not available. Please check your subscription status.
+                                    </div>
+                                {% endif %}
+                            {% endif %}
+                            
+                            <div class="featured-benefits mt-3">
+                                <h6 class="fw-bold mb-2">Featured Store Benefits:</h6>
+                                <div class="benefit-item">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>Top placement in store directory</span>
+                                </div>
+                                <div class="benefit-item">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>Increased visibility to buyers</span>
+                                </div>
+                                <div class="benefit-item">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>Priority support</span>
+                                </div>
+                                <div class="benefit-item">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>Featured badge on your store</span>
+                                </div>
+                            </div>
+                            
+                            <small class="text-muted mt-2 d-block">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Featured stores get premium placement and increased visibility.
+                            </small>
+                        </div>
+                    {% else %}
+                        <div class="form-section-modern premium-required">
+                            <h3 class="section-title-modern">
+                                <i class="bi bi-star"></i>
+                                Featured Store
+                            </h3>
+                            
+                            <div class="alert alert-warning">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-lock-fill me-2"></i>
+                                    <div>
+                                        <h6 class="fw-bold mb-1">Premium Feature</h6>
+                                        <p class="mb-2">Upgrade to a premium plan to get your store featured on the platform.</p>
+                                        <a href="{% url 'storefront:subscription_plan_select' slug=store.slug %}" class="btn-custom btn-warning btn-sm">
+                                            <i class="bi bi-lightning-charge me-1"></i>
+                                            Upgrade to Premium
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="featured-benefits mt-3">
+                                <h6 class="fw-bold mb-2">Unlock These Benefits:</h6>
+                                <div class="benefit-item">
+                                    <i class="bi bi-star-fill text-warning"></i>
+                                    <span>Get featured in store directory</span>
+                                </div>
+                                <div class="benefit-item">
+                                    <i class="bi bi-eye-fill text-warning"></i>
+                                    <span>5x more visibility to buyers</span>
+                                </div>
+                                <div class="benefit-item">
+                                    <i class="bi bi-graph-up-arrow text-warning"></i>
+                                    <span>Advanced analytics dashboard</span>
+                                </div>
+                                <div class="benefit-item">
+                                    <i class="bi bi-shield-check text-warning"></i>
+                                    <span>Priority customer support</span>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
                 {% endif %}
+                
 
                 <!-- Form Actions -->
                 <div class="form-actions-modern">
@@ -728,8 +882,8 @@
                 </div>
                 
                 <div class="tip-item-modern">
-                    <div class="tip-title">🎯 SEO Friendly</div>
-                    <p class="tip-description">Use relevant keywords in your store description for better visibility.</p>
+                    <div class="tip-title">⭐ Get Featured</div>
+                    <p class="tip-description">Upgrade to premium to get featured placement and increase visibility.</p>
                 </div>
                 {% else %}
                 <div class="tip-item-modern">
@@ -743,29 +897,32 @@
                 </div>
                 
                 <div class="tip-item-modern">
-                    <div class="tip-title">⭐ Consider Premium</div>
-                    <p class="tip-description">Upgrade to premium for better visibility, analytics, and features.</p>
+                    <div class="tip-title">⭐ Featured Store Benefits</div>
+                    <p class="tip-description">Get featured for increased visibility, priority placement, and better sales.</p>
                 </div>
                 {% endif %}
             </div>
 
             <!-- Premium CTA -->
-            {% if not creating_store and not store.is_premium %}
+            {% if not creating_store and not can_be_featured %}
             <div class="premium-cta">
                 <h4>🚀 Ready to Grow?</h4>
-                <p>Upgrade to Premium for advanced features and better visibility</p>
-                <a href="{% url 'storefront:store_upgrade' slug=store.slug %}" class="btn-custom btn-warning w-100">
+                <p>Upgrade to Premium for featured placement and advanced features</p>
+                <a href="{% url 'storefront:subscription_plan_select' slug=store.slug %}" class="btn-custom btn-warning w-100">
                     <i class="bi bi-lightning-charge me-1"></i>
                     Upgrade to Premium
                 </a>
             </div>
-            {% elif not creating_store and store.is_premium %}
+            {% elif not creating_store and can_be_featured %}
             <div class="alert alert-success">
                 <div class="d-flex align-items-center">
                     <i class="bi bi-star-fill me-2"></i>
                     <div>
                         <strong>Premium Store</strong>
                         <p class="mb-0 small">You're enjoying premium features!</p>
+                        {% if is_enterprise %}
+                        <span class="badge bg-warning text-dark mt-1">Enterprise</span>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -997,6 +1154,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     initCharacterCounters();
+    
+    // Featured store info tooltip
+    const featuredCheckbox = document.querySelector('input[name="is_featured"]');
+    if (featuredCheckbox) {
+        featuredCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                showToast('Your store will be featured in the directory!', 'success');
+            }
+        });
+    }
 });
 
 // Toast function for form validation

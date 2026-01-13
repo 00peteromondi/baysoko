@@ -27,6 +27,7 @@ class Store(models.Model):
     is_active = models.BooleanField(default=True)
     location = models.CharField(max_length=255, blank=True)
     policies = models.TextField(blank=True, help_text="Store policies, return policy, etc.")
+    is_featured = models.BooleanField(default=False, help_text="Featured stores get premium placement")
 
     class Meta:
         ordering = ['-created_at']
@@ -66,6 +67,26 @@ class Store(models.Model):
         )['total_quantity']
         
         return total_quantity or 0
+
+    def can_be_featured(self):
+        """Check if store can be featured based on subscription status"""
+        from django.utils import timezone
+        from .models import Subscription
+        
+        # Check for active subscription
+        has_active = Subscription.objects.filter(
+            store=self, 
+            status='active'
+        ).exists()
+        
+        # Check for valid trial
+        has_valid_trial = Subscription.objects.filter(
+            store=self,
+            status='trialing',
+            trial_ends_at__gt=timezone.now()
+        ).exists()
+        
+        return has_active or has_valid_trial
     
     def get_rating(self):
         """
@@ -252,14 +273,42 @@ class Store(models.Model):
                 # If user already has stores, require that they have at least one premium store
                 has_premium_store = existing.filter(is_premium=True).exists()
                 # Also allow if there's an active subscription tied to any existing store
-                has_active_subscription = Subscription.objects.filter(store__owner=owner, status='active').exists()
-                if not (has_premium_store or has_active_subscription):
+                from django.utils import timezone
+                has_active_subscription = Subscription.objects.filter(
+                    store__owner=owner, 
+                    status='active'
+                ).exists()
+                has_valid_trial = Subscription.objects.filter(
+                    store__owner=owner,
+                    status='trialing',
+                    trial_ends_at__gt=timezone.now()
+                ).exists()
+                if not (has_premium_store or has_active_subscription or has_valid_trial):
                     raise ValidationError("You must upgrade to Pro (subscribe) to create additional storefronts.")
-
+        
+        # Additional validation for featured stores
+        if self.is_featured:
+            # Check if store can be featured
+            owner = getattr(self, 'owner', None)
+            if owner:
+                has_active = Subscription.objects.filter(
+                    store=self, 
+                    status='active'
+                ).exists()
+                has_valid_trial = Subscription.objects.filter(
+                    store=self,
+                    status='trialing',
+                    trial_ends_at__gt=timezone.now()
+                ).exists()
+                
+                if not (has_active or has_valid_trial):
+                    raise ValidationError("Store must have an active subscription or valid trial to be featured.")
+    
     def save(self, *args, **kwargs):
-        # Run full_clean to ensure model-level validation runs on save as well as via forms
+        # Run clean validation before saving
         self.full_clean()
-        return super().save(*args, **kwargs)
+        super().save(*args, **kwargs)
+    
 
 
 class StoreReview(models.Model):

@@ -167,66 +167,111 @@ def store_create(request):
 @store_owner_required
 def store_edit(request, slug):
     """
-    Edit an existing store with proper error handling and file uploads.
+    Edit an existing store with proper form handling and validation.
     """
     store = get_object_or_404(Store, slug=slug, owner=request.user)
-    # Determine whether this user can start a trial: if they've already had a trial that ended, disallow
-    past_trial_exists = Subscription.objects.filter(
-        store__owner=request.user,
-        trial_ends_at__isnull=False,
-        trial_ends_at__lt=timezone.now()
+    
+    # Check subscription status for featured eligibility
+    from django.utils import timezone
+    has_active_subscription = Subscription.objects.filter(
+        store=store, 
+        status='active'
     ).exists()
-    can_start_trial = not past_trial_exists
+    has_valid_trial = Subscription.objects.filter(
+        store=store,
+        status='trialing',
+        trial_ends_at__gt=timezone.now()
+    ).exists()
+    
+    can_be_featured = has_active_subscription or has_valid_trial
+    is_enterprise = Subscription.objects.filter(
+        store=store,
+        status='active',
+        plan='enterprise'
+    ).exists()
+    
     if request.method == 'POST':
-        form = StoreForm(request.POST, request.FILES, instance=store)
+        form = StoreForm(request.POST, request.FILES, instance=store, user=request.user)
+        
         if form.is_valid():
             try:
-                # Full validation including model clean()
                 store = form.save(commit=False)
-                store.full_clean()
-                store.save()
-
-                # Process logo and cover image
+                
+                # Handle is_featured based on subscription (similar to ListingUpdateView)
+                if 'is_featured' in form.cleaned_data:
+                    if can_be_featured:
+                        # Enterprise stores get automatic featured status
+                        if is_enterprise:
+                            store.is_featured = True
+                        else:
+                            store.is_featured = form.cleaned_data.get('is_featured', False)
+                    else:
+                        # Non-premium users can't set featured
+                        store.is_featured = False
+                        messages.info(request, "Featured status requires an active subscription. The featured flag was not applied.")
+                elif not can_be_featured:
+                    # Ensure non-premium stores are not featured
+                    store.is_featured = False
+                
+                # Handle logo upload
                 if 'logo' in request.FILES:
                     store.logo = request.FILES['logo']
+                elif 'logo-clear' in request.POST:
+                    store.logo = None
+                
+                # Handle cover image upload
                 if 'cover_image' in request.FILES:
                     store.cover_image = request.FILES['cover_image']
+                elif 'cover_image-clear' in request.POST:
+                    store.cover_image = None
+                
+                # Save the store
                 store.save()
-
-                messages.success(request, 'Store updated successfully!')
-                return redirect('storefront:seller_dashboard')
-
+                
+                messages.success(request, "Store updated successfully!")
+                return redirect('storefront:store_detail', slug=store.slug)
+                
             except ValidationError as e:
-                # Handle validation errors
-                messages.error(request, str(e))
-                # Add to form errors for template display
-                for field, errors in e.message_dict.items():
-                    if field == '__all__':
-                        form.add_error(None, errors[0])
-                    else:
-                        form.add_error(field, errors[0])
-        
-        # If form is invalid, add all errors to messages
-        for field, errors in form.errors.items():
-            if field == '__all__':
-                messages.error(request, errors[0])
-            else:
-                messages.error(request, f"{field.title()}: {errors[0]}")
+                messages.error(request, f"Validation error: {str(e)}")
+                return render(request, 'storefront/store_form.html', {
+                    'form': form,
+                    'store': store,
+                    'creating_store': False,
+                    'can_be_featured': can_be_featured,
+                    'is_enterprise': is_enterprise,
+                    'has_active_subscription': has_active_subscription or has_valid_trial,
+                })
+            except Exception as e:
+                messages.error(request, f"Error updating store: {str(e)}")
+                return render(request, 'storefront/store_form.html', {
+                    'form': form,
+                    'store': store,
+                    'creating_store': False,
+                    'can_be_featured': can_be_featured,
+                    'is_enterprise': is_enterprise,
+                    'has_active_subscription': has_active_subscription or has_valid_trial,
+                })
+        else:
+            # Form is invalid, show errors
+            messages.error(request, "Please correct the errors below.")
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f"{field}: {error}")
+    
     else:
-        form = StoreForm(instance=store)
-
+        # GET request - initialize form with instance
+        form = StoreForm(instance=store, user=request.user)
+    
     context = {
         'form': form,
         'store': store,
         'creating_store': False,
-        'has_premium': store.is_premium,
-        'has_active_subscription': Subscription.objects.filter(
-            store__owner=request.user,
-            status='active'
-        ).exists(),
+        'can_be_featured': can_be_featured,
+        'is_enterprise': is_enterprise,
+        'has_active_subscription': has_active_subscription or has_valid_trial,
     }
+    
     return render(request, 'storefront/store_form.html', context)
-
 
 @login_required
 @store_owner_required
