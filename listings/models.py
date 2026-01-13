@@ -209,6 +209,7 @@ class Listing(models.Model):
             return 'up'
         return 'stable'
     
+    # In the save method of Listing model, add store validation
     def save(self, *args, **kwargs):
         # Set original price on first save
         if not self.pk and not self.original_price:
@@ -218,6 +219,29 @@ class Listing(models.Model):
         if self.image:
             import os
             os.makedirs(os.path.join(settings.MEDIA_ROOT, 'listing_images'), exist_ok=True)
+        
+        # Ensure listing has a store (for backward compatibility)
+        if not self.store and self.seller:
+            try:
+                from storefront.models import Store
+                user_store = Store.objects.filter(owner=self.seller).first()
+                if user_store:
+                    self.store = user_store
+                elif self.pk:
+                    # For existing listings without a store, create a default one
+                    default_store, created = Store.objects.get_or_create(
+                        owner=self.seller,
+                        defaults={
+                            'name': f"{self.seller.username}'s Store",
+                            'slug': self.seller.username,
+                            'description': f"Default store for {self.seller.username}"
+                        }
+                    )
+                    self.store = default_store
+            except Exception as e:
+                # Store model might not be available yet (during migrations)
+                pass
+        
         # Enforce that only stores with active subscriptions (or valid trial)
         # can set `is_featured` to True. If the store does not have an
         # eligible subscription, force `is_featured` to False.

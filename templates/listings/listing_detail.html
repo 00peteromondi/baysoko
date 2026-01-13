@@ -1,6 +1,7 @@
 <!-- templates/listings/listing_detail.html -->
 {% extends 'base.html' %}
 {% load static %}
+{% load custom_filters %}
 
 {% block title %}{{ listing.title }} - Baysoko Marketplace{% endblock %}
 
@@ -1521,10 +1522,10 @@
                                 </span>
                             </div>
                             <div class="image-actions">
-                                <button class="btn" id="zoom-toggle" title="Zoom image">
+                                <button class="btn bg-primary" id="zoom-toggle" title="Zoom image">
                                     <i class="bi bi-zoom-in"></i>
                                 </button>
-                                <button class="btn" id="fullscreen-toggle" title="Fullscreen">
+                                <button class="btn bg-success" id="fullscreen-toggle" title="Fullscreen">
                                     <i class="bi bi-arrows-fullscreen"></i>
                                 </button>
                             </div>
@@ -1572,15 +1573,21 @@
                         <div class="price-history">
                             <div class="price-trend trend-{{ listing.price_trend }}">
                                 <i class="bi bi-arrow-{% if listing.price_trend == 'up' %}up{% elif listing.price_trend == 'down' %}down{% else %}right{% endif %}"></i>
-                                {% if listing.price_trend == 'up' %}
-                                Price increased
-                                {% elif listing.price_trend == 'down' %}
-                                Price decreased
+                                {% if listing.original_price and listing.original_price != listing.price %}
+                                    {% with price_change=listing.price|sub:listing.original_price %}
+                                        {% with percent_calc=price_change|mul:100 %}
+                                            {% with percentage=percent_calc|div:listing.original_price|abs_value|floatformat:1 %}
+                                                {% if listing.price_trend == 'up' %}
+                                                Price increased by {{ percentage }}%
+                                                {% elif listing.price_trend == 'down' %}
+                                                Price decreased by {{ percentage }}%
+                                                {% endif %}
+                                                (was KSh {{ listing.original_price }})
+                                            {% endwith %}
+                                        {% endwith %}
+                                    {% endwith %}
                                 {% else %}
                                 Price stable
-                                {% endif %}
-                                {% if listing.original_price and listing.original_price != listing.price %}
-                                (was KSh {{ listing.original_price }})
                                 {% endif %}
                             </div>
                         </div>
@@ -1723,7 +1730,7 @@
                     <div class="d-flex align-items-center gap-2">
                         {% if user.is_authenticated and user != listing.seller %}
                         <a href="{% url 'leave_review' 'listing' listing.id %}" class="btn-custom btn-primary btn-sm">
-                            <i class="bi bi-pencil-square me-1"></i> Write Review
+                            <i class="bi bi-pencil-square me-1"></i> Review
                         </a>
                         {% endif %}
                         <span class="badge bg-primary rounded-pill px-2 py-1">
@@ -2004,7 +2011,7 @@
                                 {% if seller_avg_rating > 0 %}
                                     {{ seller_avg_rating }}
                                 {% else %}
-                                    N/A
+                                    0.0
                                 {% endif %}
                             </span>
                             <span class="stat-label">Rating</span>
@@ -2018,7 +2025,7 @@
                             {% csrf_token %}
                             <button type="submit" class="btn-custom {% if is_favorited %}btn-primary{% else %}btn-ghost{% endif %}">
                                 <i class="bi bi-heart{% if is_favorited %}-fill{% endif %}"></i>
-                                {% if is_favorited %}Liked{% else %}Like{% endif %}
+                                {% if is_favorited %}Likes{% else %}Like{% endif %}
                                 ({{ listing.favorites.count }})
                             </button>
                         </form>
@@ -2155,7 +2162,7 @@
                                     {% if user.is_authenticated %}
                                     <button class="btn-custom btn-ghost btn-sm recent-quick-favorite" 
                                             data-listing-id="{{ recent.id }}">
-                                        <i class="bi bi-heart"></i>
+                                        <i class="bi bi-heart{% if is_favorited %}-fill{% endif %}"></i>  
                                     </button>
                                     {% endif %}
                                 </div>
@@ -2498,7 +2505,7 @@
                         button.classList.add('btn-primary');
                         icon.classList.remove('bi-heart');
                         icon.classList.add('bi-heart-fill');
-                        button.innerHTML = `<i class="bi bi-heart-fill"></i> Liked (${data.favorite_count})`;
+                        button.innerHTML = `<i class="bi bi-heart-fill"></i> Likes (${data.favorite_count})`;
                     } else {
                         button.classList.remove('btn-primary');
                         button.classList.add('btn-ghost');

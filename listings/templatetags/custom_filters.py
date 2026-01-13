@@ -43,3 +43,25 @@ def user_is_seller(order_items, user):
 def mod(value, arg):
     """Returns the modulo of value and arg"""
     return value % arg
+
+@register.filter
+def sub(value, arg):
+    """Subtract arg from value"""
+    return value - arg
+
+@register.filter
+def mul(value, arg):
+    """Multiply value by arg"""
+    return value * arg
+
+@register.filter
+def div(value, arg):
+    """Divide value by arg"""
+    if arg == 0:
+        return 0
+    return value / arg
+
+@register.filter
+def abs_value(value):
+    """Return absolute value"""
+    return abs(value)

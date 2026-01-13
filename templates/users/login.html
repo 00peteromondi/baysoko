@@ -355,6 +355,14 @@
         box-shadow: 0 0 0 4px rgba(255, 107, 53, 0.2);
     }
 
+    .input-modern.error {
+        border-color: var(--danger);
+    }
+
+    .input-modern.success {
+        border-color: var(--success);
+    }
+
     .input-group-modern {
         position: relative;
     }
@@ -461,6 +469,12 @@
         box-shadow: 0 10px 30px rgba(255, 107, 53, 0.4);
     }
 
+    .btn-modern:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+
     .register-link {
         text-align: center;
         margin-top: 2rem;
@@ -480,6 +494,7 @@
         text-decoration: underline;
     }
 
+    /* Enhanced Error Messages - Matching Register Page */
     .error-message {
         color: var(--danger);
         font-size: 0.85rem;
@@ -491,6 +506,48 @@
         background: rgba(239, 71, 111, 0.1);
         border-radius: var(--radius-md);
         border: 1px solid rgba(239, 71, 111, 0.2);
+        animation: slideInUp 0.3s ease-out;
+    }
+
+    .success-message {
+        color: var(--success);
+        font-size: 0.85rem;
+        margin-top: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        background: rgba(6, 214, 160, 0.1);
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(6, 214, 160, 0.2);
+        animation: slideInUp 0.3s ease-out;
+    }
+
+    /* Global Form Error Message */
+    .global-form-error {
+        background: rgba(239, 71, 111, 0.1);
+        border: 1px solid rgba(239, 71, 111, 0.2);
+        border-radius: var(--radius-lg);
+        padding: 1rem 1.5rem;
+        margin-bottom: 2rem;
+        animation: slideInUp 0.3s ease-out;
+    }
+
+    .global-form-error-content {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        color: var(--danger);
+    }
+
+    .global-form-error-icon {
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+
+    .global-form-error-text {
+        font-size: 0.95rem;
+        font-weight: 500;
     }
 
     /* Trust Indicators */
@@ -623,6 +680,17 @@
         }
     }
 
+    @keyframes slideInUp {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
     .creative-content {
         animation: slideInLeft 0.8s ease-out;
     }
@@ -653,6 +721,26 @@
 
     @keyframes spin {
         to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+
+    /* Form validation animations */
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+        20%, 40%, 60%, 80% { transform: translateX(5px); }
+    }
+
+    .shake {
+        animation: shake 0.5s ease-in-out;
+    }
+
+    /* Error field highlighting */
+    .form-group-modern.has-error .input-modern {
+        border-color: var(--danger);
+    }
+
+    .form-group-modern.has-error .form-label-modern {
+        color: var(--danger);
     }
 </style>
 {% endblock %}
@@ -746,13 +834,39 @@
             <p class="form-subtitle">Sign in to continue to your account</p>
         </div>
 
+        <!-- Display Django messages -->
         {% if messages %}
             {% for message in messages %}
                 <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                    {{ message }}
+                    <div class="d-flex align-items-center">
+                        {% if message.tags == 'success' %}
+                            <i class="bi bi-check-circle-fill me-2"></i>
+                        {% elif message.tags == 'error' or message.tags == 'danger' %}
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        {% elif message.tags == 'warning' %}
+                            <i class="bi bi-exclamation-circle-fill me-2"></i>
+                        {% elif message.tags == 'info' %}
+                            <i class="bi bi-info-circle-fill me-2"></i>
+                        {% endif %}
+                        <div>{{ message }}</div>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             {% endfor %}
+        {% endif %}
+
+        <!-- Display form non-field errors -->
+        {% if form.non_field_errors %}
+            <div class="global-form-error">
+                <div class="global-form-error-content">
+                    <i class="bi bi-exclamation-triangle-fill global-form-error-icon"></i>
+                    <div class="global-form-error-text">
+                        {% for error in form.non_field_errors %}
+                            {{ error }}<br>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
         {% endif %}
 
         <!-- Social Login Section -->
@@ -780,8 +894,10 @@
         <form method="post" novalidate id="loginForm">
             {% csrf_token %}
             
-            <div class="form-group-modern">
-                <label class="form-label-modern" for="id_username">Email or Username</label>
+            <div class="form-group-modern {% if form.username.errors %}has-error{% endif %}">
+                <label class="form-label-modern" for="id_username">
+                    Email or Username <span class="text-danger">*</span>
+                </label>
                 <div class="input-group-modern">
                     <input type="text" 
                            name="username" 
@@ -790,7 +906,8 @@
                            placeholder="Enter your email or username"
                            value="{{ form.username.value|default:'' }}"
                            required
-                           autofocus>
+                           autofocus
+                           autocomplete="username">
                 </div>
                 {% if form.username.errors %}
                     <div class="error-message">
@@ -800,17 +917,20 @@
                 {% endif %}
             </div>
 
-            <div class="form-group-modern">
-                <label class="form-label-modern" for="id_password">Password</label>
+            <div class="form-group-modern {% if form.password.errors %}has-error{% endif %}">
+                <label class="form-label-modern" for="id_password">
+                    Password <span class="text-danger">*</span>
+                </label>
                 <div class="input-group-modern">
                     <input type="password" 
                            name="password" 
                            class="input-modern {% if form.password.errors %}error{% endif %}" 
                            id="id_password" 
                            placeholder="Enter your password"
-                           required>
-                    <button type="button" class="password-toggle" id="togglePassword">
-                        <i class="bi bi-eye" id="passwordIcon"></i>
+                           required
+                           autocomplete="current-password">
+                    <button type="button" class="password-toggle" id="togglePassword" data-target="id_password">
+                        <i class="bi bi-eye"></i>
                     </button>
                 </div>
                 {% if form.password.errors %}
@@ -832,7 +952,7 @@
                 <a href="{% url 'password_reset' %}" class="forgot-password">Forgot password?</a>
             </div>
 
-            <button type="submit" class="btn-modern">
+            <button type="submit" class="btn-modern" id="submitButton">
                 <i class="bi bi-box-arrow-in-right"></i>
                 Sign In
             </button>
@@ -868,7 +988,7 @@
         // Password toggle functionality
         const togglePassword = document.getElementById('togglePassword');
         const passwordInput = document.getElementById('id_password');
-        const passwordIcon = document.getElementById('passwordIcon');
+        const passwordIcon = document.getElementById('togglePassword') ? document.getElementById('togglePassword').querySelector('i') : null;
 
         if (togglePassword && passwordInput) {
             togglePassword.addEventListener('click', function() {
@@ -876,11 +996,15 @@
                 passwordInput.setAttribute('type', type);
                 
                 if (type === 'text') {
-                    passwordIcon.classList.remove('bi-eye');
-                    passwordIcon.classList.add('bi-eye-slash');
+                    if (passwordIcon) {
+                        passwordIcon.classList.remove('bi-eye');
+                        passwordIcon.classList.add('bi-eye-slash');
+                    }
                 } else {
-                    passwordIcon.classList.remove('bi-eye-slash');
-                    passwordIcon.classList.add('bi-eye');
+                    if (passwordIcon) {
+                        passwordIcon.classList.remove('bi-eye-slash');
+                        passwordIcon.classList.add('bi-eye');
+                    }
                 }
             });
         }
@@ -910,12 +1034,125 @@
             }
         }
 
-        // Form submission - save remember me preference
+        // Form validation
+        function validateForm() {
+            const usernameInput = document.getElementById('id_username');
+            const passwordInput = document.getElementById('id_password');
+            const submitButton = document.getElementById('submitButton');
+            
+            let isValid = true;
+            
+            // Check username
+            if (usernameInput && !usernameInput.value.trim()) {
+                isValid = false;
+                usernameInput.classList.add('error');
+            } else if (usernameInput) {
+                usernameInput.classList.remove('error');
+            }
+            
+            // Check password
+            if (passwordInput && !passwordInput.value.trim()) {
+                isValid = false;
+                passwordInput.classList.add('error');
+            } else if (passwordInput) {
+                passwordInput.classList.remove('error');
+            }
+            
+            // Update submit button
+            if (submitButton) {
+                submitButton.disabled = !isValid;
+            }
+            
+            return isValid;
+        }
+
+        // Real-time validation
+        const usernameInput = document.getElementById('id_username');
+        const passwordInput = document.getElementById('id_password');
+        
+        if (usernameInput) {
+            usernameInput.addEventListener('input', function() {
+                if (this.value.trim()) {
+                    this.classList.remove('error');
+                    this.classList.add('success');
+                } else {
+                    this.classList.remove('success');
+                }
+                validateForm();
+            });
+            
+            usernameInput.addEventListener('blur', function() {
+                if (!this.value.trim()) {
+                    this.classList.add('error');
+                    this.classList.add('shake');
+                    setTimeout(() => this.classList.remove('shake'), 500);
+                    showInlineError(this, 'Username or email is required');
+                } else {
+                    hideInlineError(this);
+                }
+            });
+        }
+        
+        if (passwordInput) {
+            passwordInput.addEventListener('input', function() {
+                if (this.value.trim()) {
+                    this.classList.remove('error');
+                }
+                validateForm();
+            });
+            
+            passwordInput.addEventListener('blur', function() {
+                if (!this.value.trim()) {
+                    this.classList.add('error');
+                    this.classList.add('shake');
+                    setTimeout(() => this.classList.remove('shake'), 500);
+                    showInlineError(this, 'Password is required');
+                } else {
+                    hideInlineError(this);
+                }
+            });
+        }
+
+        // Form submission
         const form = document.getElementById('loginForm');
         if (form) {
-            form.addEventListener('submit', function() {
+            form.addEventListener('submit', function(e) {
+                if (!validateForm()) {
+                    e.preventDefault();
+                    
+                    // Show error messages
+                    showGlobalCartMessage('Please fill in all required fields correctly.', 'danger');
+                    
+                    // Highlight errors
+                    const requiredFields = form.querySelectorAll('input[required]');
+                    requiredFields.forEach(field => {
+                        if (!field.value.trim()) {
+                            field.classList.add('error');
+                            field.classList.add('shake');
+                            setTimeout(() => field.classList.remove('shake'), 500);
+                        }
+                    });
+                    
+                    return false;
+                }
+                
+                // Save remember me preference
                 if (rememberInput) {
                     localStorage.setItem('rememberMe', rememberInput.checked);
+                }
+                
+                // Show loading state
+                const submitBtn = form.querySelector('button[type="submit"]');
+                if (submitBtn) {
+                    const originalHTML = submitBtn.innerHTML;
+                    submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Signing In...';
+                    submitBtn.disabled = true;
+                    
+                    // Re-enable after 5 seconds if still on page
+                    setTimeout(() => {
+                        submitBtn.innerHTML = originalHTML;
+                        submitBtn.disabled = false;
+                    }, 5000);
                 }
             });
         }
@@ -928,7 +1165,6 @@
             googleBtn.addEventListener('click', function(e) {
                 this.classList.add('loading');
                 setTimeout(() => {
-                    // Remove loading class after 3 seconds if still on page
                     this.classList.remove('loading');
                 }, 3000);
             });
@@ -944,7 +1180,6 @@
         }
 
         // Auto-focus username input
-        const usernameInput = document.getElementById('id_username');
         if (usernameInput) {
             setTimeout(() => {
                 usernameInput.focus();
@@ -960,22 +1195,104 @@
                 input.style.backgroundColor = 'var(--bg-primary)';
             });
         }
+
+        // Handle URL parameters for errors
+        function handleUrlErrors() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const error = urlParams.get('error');
+            const message = urlParams.get('message');
+            
+            if (error || message) {
+                showGlobalCartMessage(error || message, 'danger');
+            }
+            
+            // Clear URL parameters without reloading
+            if (error || message) {
+                const newUrl = window.location.pathname;
+                window.history.replaceState({}, document.title, newUrl);
+            }
+        }
+        
+        handleUrlErrors();
+
+        // Helper functions
+        function showInlineError(input, message) {
+            // Remove existing error
+            hideInlineError(input);
+            
+            // Create error element
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.innerHTML = `<i class="bi bi-exclamation-circle"></i>${message}`;
+            
+            // Insert after input group
+            const inputGroup = input.closest('.input-group-modern') || input.parentNode;
+            inputGroup.parentNode.insertBefore(errorDiv, inputGroup.nextSibling);
+        }
+
+        function hideInlineError(input) {
+            const inputGroup = input.closest('.input-group-modern') || input.parentNode;
+            const parent = inputGroup.parentNode;
+            const existingError = parent.querySelector('.error-message');
+            if (existingError && existingError.parentNode === parent) {
+                existingError.remove();
+            }
+        }
     });
 
-    // Handle social login errors
-    function showSocialLoginError(provider) {
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'alert alert-danger alert-dismissible fade show';
-        errorDiv.innerHTML = `
-            <i class="bi bi-exclamation-triangle me-2"></i>
-            <span>Failed to connect to ${provider}. Please try again or use email login.</span>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    // Global function to show messages (matching register page)
+    function showGlobalCartMessage(message, type = 'success') {
+        // Remove existing messages
+        const existingMessages = document.querySelectorAll('.global-cart-message');
+        existingMessages.forEach(msg => msg.remove());
+        
+        // Create new message
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `global-cart-message ${type}`;
+        messageDiv.style.cssText = `
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            z-index: 9999;
+            animation: slideInRight 0.3s ease-out;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            max-width: 300px;
+            background: ${type === 'success' ? 'var(--success)' : 'var(--danger)'};
+            color: white;
+        `;
+        messageDiv.innerHTML = `
+            <i class="bi ${type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill'}"></i>
+            <span>${message}</span>
         `;
         
-        const formHeader = document.querySelector('.form-header');
-        if (formHeader) {
-            formHeader.parentNode.insertBefore(errorDiv, formHeader.nextSibling);
-        }
+        document.body.appendChild(messageDiv);
+        
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            messageDiv.style.animation = 'slideOutRight 0.3s ease-out';
+            setTimeout(() => messageDiv.remove(), 300);
+        }, 5000);
     }
+
+    // Animation for slideOutRight
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideOutRight {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+        }
+    `;
+    document.head.appendChild(style);
 </script>
 {% endblock %}

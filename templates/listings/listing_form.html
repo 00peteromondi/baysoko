@@ -736,6 +736,107 @@
             grid-template-columns: repeat(2, 1fr);
         }
     }
+
+    /* Store field specific styles */
+    .store-option-wrapper {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        padding: var(--spacing-sm);
+        border-radius: var(--radius-md);
+        transition: var(--transition);
+        cursor: pointer;
+    }
+
+    .store-option-wrapper:hover {
+        background: rgba(255, 107, 53, 0.05);
+    }
+
+    .store-option-wrapper.selected {
+        background: rgba(6, 214, 160, 0.1);
+        border: 2px solid var(--accent);
+    }
+
+    .store-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--primary);
+        font-size: 1.2rem;
+    }
+
+    .store-info {
+        flex: 1;
+    }
+
+    .store-name {
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 2px;
+    }
+
+    .store-description {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+    }
+
+    /* Image Clear Checkbox */
+    .image-clear-checkbox {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        margin-top: var(--spacing-sm);
+        padding: var(--spacing-sm);
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+    }
+
+    .image-clear-checkbox input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+
+    .image-clear-checkbox label {
+        cursor: pointer;
+        font-size: 0.9rem;
+        color: var(--text-primary);
+        user-select: none;
+    }
+
+    /* Current Images Display */
+    .current-images-container {
+        margin-top: var(--spacing-lg);
+        padding: var(--spacing-md);
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+    }
+
+    .current-images-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: var(--spacing-md);
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+    }
+
+    .image-remove-checkbox {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 20px;
+        height: 20px;
+        z-index: 3;
+        cursor: pointer;
+    }
 </style>
 {% endblock %}
 
@@ -867,7 +968,7 @@
                             <option value="">Choose a category</option>
                             {% for category in categories %}
                                 <option value="{{ category.id }}" 
-                                        {% if form.category.value == category.id %}selected{% endif %}>
+                                        {% if form.category.value == category.id or form.instance.category_id == category.id %}selected{% endif %}>
                                     {{ category.name }}
                                 </option>
                             {% endfor %}
@@ -881,30 +982,91 @@
                     </div>
 
                     <!-- Store Field -->
-                    {% if stores %}
                     <div class="form-group">
-                        <label for="id_store" class="form-label">
+                        <label for="id_store" class="form-label {% if not form.instance.pk %}required-field{% endif %}">
                             <i class="bi bi-shop me-2"></i>Store
                         </label>
-                        {% if stores|length == 1 %}
-                        <input type="hidden" name="store" value="{{ stores.0.id }}">
-                        <div class="form-control bg-light">{{ stores.0.name }}</div>
+                        
+                        {% if form.instance.pk %}
+                            <!-- Update Mode: Store is optional -->
+                            {% if stores %}
+                                <select name="store" id="id_store" class="form-select {% if form.store.errors %}error{% endif %}">
+                                    <option value="">{% if form.instance.store %}Keep current store: {{ form.instance.store.name }}{% else %}Select a store{% endif %}</option>
+                                    {% for store in stores %}
+                                        <option value="{{ store.id }}" 
+                                                {% if form.store.value == store.id %}selected{% endif %}>
+                                            {{ store.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="form-text text-muted">
+                                    {% if form.instance.store %}
+                                        Leave blank to keep the listing in "{{ form.instance.store.name }}"
+                                    {% else %}
+                                        Select a store for this listing (optional)
+                                    {% endif %}
+                                </small>
+                            {% elif form.instance.store %}
+                                <!-- No stores available but listing has a store -->
+                                <div class="form-control bg-light">
+                                    <i class="bi bi-shop me-2"></i>{{ form.instance.store.name }}
+                                    <small class="text-muted ms-2">(Current store - cannot be changed)</small>
+                                </div>
+                                <input type="hidden" name="store" value="{{ form.instance.store.id }}">
+                            {% else %}
+                                <!-- No stores and no current store -->
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                    <strong>No store available!</strong> This listing has no store assigned.
+                                    <a href="{% url 'storefront:store_create' %}?from=listing" class="alert-link">Create a store</a> to manage it properly.
+                                </div>
+                            {% endif %}
                         {% else %}
-                        <select name="store" id="id_store" class="form-select {% if form.store.errors %}error{% endif %}">
-                            <option value="">Select store (optional)</option>
-                            {% for store in stores %}
-                                <option value="{{ store.id }}" {% if form.store.value == store.id %}selected{% endif %}>{{ store.name }}</option>
-                            {% endfor %}
-                        </select>
+                            <!-- Create Mode: Store is required -->
+                            {% if stores %}
+                                {% if stores|length == 1 %}
+                                    <!-- Only one store - auto-select it -->
+                                    <div class="store-option-wrapper selected">
+                                        <div class="store-icon">
+                                            <i class="bi bi-shop"></i>
+                                        </div>
+                                        <div class="store-info">
+                                            <div class="store-name">{{ stores.0.name }}</div>
+                                            <div class="store-description">Your only store</div>
+                                        </div>
+                                    </div>
+                                    <input type="hidden" name="store" value="{{ stores.0.id }}" id="id_store">
+                                    <small class="form-text text-muted">This listing will be added to your store</small>
+                                {% else %}
+                                    <!-- Multiple stores - let user choose -->
+                                    <select name="store" id="id_store" class="form-select {% if form.store.errors %}error{% endif %}" required>
+                                        <option value="">Select a store for this listing</option>
+                                        {% for store in stores %}
+                                            <option value="{{ store.id }}" 
+                                                    {% if form.store.value == store.id %}selected{% endif %}>
+                                                {{ store.name }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="form-text text-muted">Select which store this listing should belong to</small>
+                                {% endif %}
+                            {% else %}
+                                <!-- No stores - show warning -->
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                    <strong>No store found!</strong> You need to create a store before you can list items. 
+                                    <a href="{% url 'storefront:store_create' %}?from=listing" class="alert-link">Create a store now</a>.
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                        
                         {% if form.store.errors %}
                             <div class="error-message">
                                 <i class="bi bi-exclamation-circle"></i>
                                 {{ form.store.errors.0 }}
                             </div>
                         {% endif %}
-                        {% endif %}
                     </div>
-                    {% endif %}
 
                     <!-- Condition Field -->
                     <div class="form-group">
@@ -919,7 +1081,7 @@
                             {% for value, text in form.condition.field.choices %}
                                 {% if value %}
                                     <option value="{{ value }}" 
-                                            {% if form.condition.value == value %}selected{% endif %}>
+                                            {% if form.condition.value == value or form.instance.condition == value %}selected{% endif %}>
                                         {{ text }}
                                     </option>
                                 {% endif %}
@@ -944,7 +1106,7 @@
                                   placeholder="Describe your item in detail. Include features, specifications, and any relevant information that would help buyers make a decision..."
                                   rows="6"
                                   maxlength="2000"
-                                  required>{{ form.description.value|default:'' }}</textarea>
+                                  required>{{ form.description.value|default:form.instance.description|default:'' }}</textarea>
                         <div class="char-counter mt-2" id="description-counter">0/2000 characters</div>
                         {% if form.description.errors %}
                             <div class="error-message">
@@ -978,7 +1140,7 @@
                                name="{{ form.brand.name }}" 
                                id="{{ form.brand.id_for_label }}" 
                                class="form-control {% if form.brand.errors %}error{% endif %}"
-                               value="{{ form.brand.value|default:'' }}"
+                               value="{{ form.brand.value|default:form.instance.brand|default:'' }}"
                                placeholder="e.g., Apple, Samsung, Nike">
                         {% if form.brand.errors %}
                             <div class="error-message">
@@ -997,7 +1159,7 @@
                                name="{{ form.model.name }}" 
                                id="{{ form.model.id_for_label }}" 
                                class="form-control {% if form.model.errors %}error{% endif %}"
-                               value="{{ form.model.value|default:'' }}"
+                               value="{{ form.model.value|default:form.instance.model|default:'' }}"
                                placeholder="e.g., iPhone 13 Pro Max, Galaxy S21">
                         {% if form.model.errors %}
                             <div class="error-message">
@@ -1016,7 +1178,7 @@
                                name="{{ form.color.name }}" 
                                id="{{ form.color.id_for_label }}" 
                                class="form-control {% if form.color.errors %}error{% endif %}"
-                               value="{{ form.color.value|default:'' }}"
+                               value="{{ form.color.value|default:form.instance.color|default:'' }}"
                                placeholder="e.g., Black, Silver, Gold">
                         {% if form.color.errors %}
                             <div class="error-message">
@@ -1035,7 +1197,7 @@
                                name="{{ form.material.name }}" 
                                id="{{ form.material.id_for_label }}" 
                                class="form-control {% if form.material.errors %}error{% endif %}"
-                               value="{{ form.material.value|default:'' }}"
+                               value="{{ form.material.value|default:form.instance.material|default:'' }}"
                                placeholder="e.g., Plastic, Metal, Leather">
                         {% if form.material.errors %}
                             <div class="error-message">
@@ -1054,7 +1216,7 @@
                                name="{{ form.dimensions.name }}" 
                                id="{{ form.dimensions.id_for_label }}" 
                                class="form-control {% if form.dimensions.errors %}error{% endif %}"
-                               value="{{ form.dimensions.value|default:'' }}"
+                               value="{{ form.dimensions.value|default:form.instance.dimensions|default:'' }}"
                                placeholder="e.g., 10 x 5 x 2 cm">
                         {% if form.dimensions.errors %}
                             <div class="error-message">
@@ -1073,7 +1235,7 @@
                                name="{{ form.weight.name }}" 
                                id="{{ form.weight.id_for_label }}" 
                                class="form-control {% if form.weight.errors %}error{% endif %}"
-                               value="{{ form.weight.value|default:'' }}"
+                               value="{{ form.weight.value|default:form.instance.weight|default:'' }}"
                                placeholder="e.g., 500g, 1.2kg">
                         {% if form.weight.errors %}
                             <div class="error-message">
@@ -1093,7 +1255,7 @@
                                   class="form-control {% if form.meta_description.errors %}error{% endif %}"
                                   placeholder="Brief description for search engines (optional)"
                                   rows="3"
-                                  maxlength="160">{{ form.meta_description.value|default:'' }}</textarea>
+                                  maxlength="160">{{ form.meta_description.value|default:form.instance.meta_description|default:'' }}</textarea>
                         <div class="char-counter mt-2" id="meta-counter">0/160 characters</div>
                         {% if form.meta_description.errors %}
                             <div class="error-message">
@@ -1129,7 +1291,7 @@
                                    name="{{ form.price.name }}" 
                                    id="{{ form.price.id_for_label }}" 
                                    class="form-control {% if form.price.errors %}error{% endif %}"
-                                   value="{{ form.price.value|default:'' }}"
+                                   value="{{ form.price.value|default:form.instance.price|default:'' }}"
                                    placeholder="0.00"
                                    min="0"
                                    step="0.01"
@@ -1152,7 +1314,7 @@
                                name="{{ form.stock.name }}" 
                                id="{{ form.stock.id_for_label }}" 
                                class="form-control {% if form.stock.errors %}error{% endif %}"
-                               value="{{ form.stock.value|default:'1' }}"
+                               value="{{ form.stock.value|default:form.instance.stock|default:'1' }}"
                                placeholder="1"
                                min="1"
                                required>
@@ -1177,7 +1339,7 @@
                             {% for value, text in form.location.field.choices %}
                                 {% if value %}
                                     <option value="{{ value }}" 
-                                            {% if form.location.value == value %}selected{% endif %}>
+                                            {% if form.location.value == value or form.instance.location == value %}selected{% endif %}>
                                         {{ text }}
                                     </option>
                                 {% endif %}
@@ -1204,7 +1366,7 @@
                             {% for value, text in form.delivery_option.field.choices %}
                                 {% if value %}
                                     <option value="{{ value }}" 
-                                            {% if form.delivery_option.value == value %}selected{% endif %}>
+                                            {% if form.delivery_option.value == value or form.instance.delivery_option == value %}selected{% endif %}>
                                         {{ text }}
                                     </option>
                                 {% endif %}
@@ -1214,6 +1376,29 @@
                             <div class="error-message">
                                 <i class="bi bi-exclamation-circle"></i>
                                 {{ form.delivery_option.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Is Featured Field -->
+                    <div class="form-group full-width">
+                        <div class="form-check">
+                            <input type="checkbox" 
+                                   name="{{ form.is_featured.name }}" 
+                                   id="{{ form.is_featured.id_for_label }}" 
+                                   class="form-check-input {% if form.is_featured.errors %}error{% endif %}"
+                                   {% if form.is_featured.value or form.instance.is_featured %}checked{% endif %}>
+                            <label for="{{ form.is_featured.id_for_label }}" class="form-check-label form-label">
+                                <i class="bi bi-star-fill me-2"></i>Feature this listing
+                            </label>
+                        </div>
+                        <small class="form-text text-muted">
+                            Featured listings appear prominently on the homepage. This requires an active subscription.
+                        </small>
+                        {% if form.is_featured.errors %}
+                            <div class="error-message">
+                                <i class="bi bi-exclamation-circle"></i>
+                                {{ form.is_featured.errors.0 }}
                             </div>
                         {% endif %}
                     </div>
@@ -1234,12 +1419,31 @@
 
                 <!-- Main Image Upload -->
                 <div class="image-upload-section">
-                    <h4 class="form-label required-field">
+                    <h4 class="form-label {% if not form.instance.pk %}required-field{% endif %}">
                         <i class="bi bi-star me-2"></i>Main Photo
                     </h4>
                     <p class="section-description" style="margin-top: -0.5rem; margin-bottom: 1rem;">
                         This will be the primary image displayed in search results
                     </p>
+                    
+                    {% if form.instance.pk and form.instance.image %}
+                        <!-- Current main image for updates -->
+                        <div class="mb-4">
+                            <p class="mb-2"><strong>Current main image:</strong></p>
+                            <div class="preview-item main-image" style="max-width: 200px;">
+                                <img src="{{ form.instance.get_image_url }}" class="preview-img" alt="Current main image">
+                                <div class="preview-badge">Current</div>
+                            </div>
+                            
+                            <!-- Clear image checkbox for updates -->
+                            <div class="image-clear-checkbox mt-3">
+                                <input type="checkbox" name="image-clear" id="image-clear">
+                                <label for="image-clear">Remove current main image and upload a new one</label>
+                            </div>
+                            
+                            <p class="text-muted mt-3 mb-0">Or upload a new image to replace it:</p>
+                        </div>
+                    {% endif %}
                     
                     <div class="upload-area" id="main-image-upload-area">
                         <div class="upload-icon">
@@ -1249,7 +1453,7 @@
                         <p class="upload-subtitle">Drag & drop your image here or click to browse</p>
                         <p class="upload-requirements">
                             <i class="bi bi-info-circle"></i>
-                            Recommended: Square ratio, high quality, good lighting
+                            Recommended: Square ratio, high quality, good lighting (Max 10MB)
                         </p>
                         <input type="file" 
                                name="image" 
@@ -1262,25 +1466,10 @@
                         </button>
                     </div>
                     
+                    <!-- New main image preview -->
                     <div class="image-previews-container">
                         <div id="main-image-preview" class="preview-grid">
-                            {% if form.instance.pk and form.instance.image %}
-                            <div class="preview-item main-image">
-                                <img src="{{ form.instance.get_image_url }}" class="preview-img" alt="Main image">
-                                <div class="preview-overlay">
-                                    <div class="preview-actions">
-                                        <form method="post" action="{% url 'storefront:product_edit' form.instance.pk %}">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="remove_main_image" value="1">
-                                            <button type="submit" title="Remove main image" class="preview-action-btn">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
-                                        </form>
-                                    </div>
-                                </div>
-                                <div class="preview-badge">Main</div>
-                            </div>
-                            {% endif %}
+                            <!-- New main image preview will be inserted here by JavaScript -->
                         </div>
                     </div>
                     
@@ -1309,7 +1498,7 @@
                         <p class="upload-subtitle">Drag & drop multiple images or click to browse</p>
                         <p class="upload-requirements">
                             <i class="bi bi-info-circle"></i>
-                            You can select up to 9 additional images
+                            You can select up to 9 additional images (Max 10MB each)
                         </p>
                         <input type="file" 
                                name="images" 
@@ -1322,53 +1511,48 @@
                         </button>
                     </div>
                     
+                    <!-- New additional images preview -->
                     <div class="image-previews-container">
                         <div id="additional-images-preview" class="preview-grid">
-                            {% if form.instance.pk %}
-                                {% for img in form.instance.images.all %}
-                                <div class="preview-item">
-                                    <img src="{{ img.get_image_url }}" class="preview-img" alt="{{ img.caption|default:'Image' }}">
-                                    <div class="preview-overlay">
-                                        <div class="preview-actions">
-                                            <form method="post" action="{% url 'storefront:image_delete' img.pk %}">
-                                                {% csrf_token %}
-                                                <input type="hidden" name="next" value="{% url 'storefront:product_edit' form.instance.pk %}">
-                                                <button type="submit" title="Delete image" class="preview-action-btn">
-                                                    <i class="bi bi-trash"></i>
-                                                </button>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            {% endif %}
+                            <!-- New additional images preview will be inserted here by JavaScript -->
                         </div>
                     </div>
                 </div>
 
-                <!-- Existing Images (for update only) -->
-                {% if existing_images %}
-                <div class="image-upload-section">
-                    <h4 class="form-label">Existing Photos</h4>
-                    <p class="section-description" style="margin-top: -0.5rem; margin-bottom: 1rem;">
-                        Current photos for this listing
-                    </p>
-                    
-                    <div id="existing-images-preview" class="preview-grid">
+                <!-- Existing Additional Images (for updates only) -->
+                {% if form.instance.pk and existing_images %}
+                <div class="current-images-container">
+                    <div class="current-images-title">
+                        <i class="bi bi-images"></i> Existing Additional Photos
+                    </div>
+                    <div class="preview-grid">
                         {% for img in existing_images %}
                         <div class="preview-item">
-                            <img src="{{ img.get_image_url }}" class="preview-img" alt="Existing image">
+                            <img src="{{ img.get_image_url }}" class="preview-img" alt="Existing image {{ forloop.counter }}">
+                            <input type="checkbox" 
+                                   class="image-remove-checkbox" 
+                                   name="delete_images" 
+                                   value="{{ img.id }}" 
+                                   id="delete_image_{{ img.id }}">
                             <div class="preview-overlay">
                                 <div class="preview-actions">
-                                    <button type="button" title="Delete image" class="preview-action-btn delete-existing-image" data-image-id="{{ img.id }}">
+                                    <button type="button" 
+                                            class="preview-action-btn" 
+                                            onclick="toggleImageDelete('delete_image_{{ img.id }}')"
+                                            title="Mark for deletion">
                                         <i class="bi bi-trash"></i>
                                     </button>
                                 </div>
                             </div>
-                            <input type="checkbox" name="delete_images" value="{{ img.id }}" style="display: none;" id="delete_{{ img.id }}">
+                            <label for="delete_image_{{ img.id }}" class="preview-badge" style="cursor: pointer;">
+                                Keep
+                            </label>
                         </div>
                         {% endfor %}
                     </div>
+                    <small class="form-text text-muted mt-2">
+                        Check the trash icon on images you want to remove. Unchecked images will be kept.
+                    </small>
                 </div>
                 {% endif %}
             </div>
@@ -1404,6 +1588,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('listing-form');
     const submitBtn = document.getElementById('submit-btn');
     const loadingOverlay = document.getElementById('loading-overlay');
+    
+    // Initialize variables for image handling
+    let mainImageFile = null;
+    let additionalImageFiles = [];
+    const maxAdditionalImages = 9;
     
     // AI Toggle
     const aiToggle = document.getElementById('use_ai_toggle');
@@ -1462,10 +1651,30 @@ document.addEventListener('DOMContentLoaded', function() {
         const additionalImagesPreview = document.getElementById('additional-images-preview');
         const mainImageUploadArea = document.getElementById('main-image-upload-area');
         const additionalImagesUploadArea = document.getElementById('additional-images-upload-area');
+        const clearImageCheckbox = document.getElementById('image-clear');
         
-        let mainImageFile = null;
-        let additionalImageFiles = [];
-        const maxAdditionalImages = 9;
+        // Clear checkbox handling for updates
+        if (clearImageCheckbox && isEditMode) {
+            clearImageCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    // If clearing image, remove required attribute
+                    if (mainImageInput) {
+                        mainImageInput.required = false;
+                    }
+                    // Clear any new image preview
+                    mainImagePreview.innerHTML = '';
+                    mainImageFile = null;
+                    if (mainImageInput) {
+                        mainImageInput.value = '';
+                    }
+                } else {
+                    // If not clearing, re-add required for new listings
+                    if (!isEditMode && mainImageInput) {
+                        mainImageInput.required = true;
+                    }
+                }
+            });
+        }
         
         // Drag and Drop
         function setupDragDrop(uploadArea, input) {
@@ -1508,6 +1717,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
+            // Check file size (10MB limit)
             if (file.size > 10 * 1024 * 1024) {
                 showToast('Image file is too large. Maximum size is 10MB.', 'error');
                 return;
@@ -1515,7 +1725,12 @@ document.addEventListener('DOMContentLoaded', function() {
             
             mainImageFile = file;
             displayImagePreview(file, mainImagePreview, true);
-            mainImageInput.files = createFileList([file]);
+            
+            // Uncheck clear checkbox if it exists
+            if (clearImageCheckbox) {
+                clearImageCheckbox.checked = false;
+            }
+            
             showToast('Main image uploaded successfully', 'success');
         }
         
@@ -1542,7 +1757,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 displayImagePreview(file, additionalImagesPreview, false);
             });
             
-            additionalImagesInput.files = createFileList(additionalImageFiles);
             showToast(`${validFiles.length} additional image(s) uploaded`, 'success');
         }
         
@@ -1579,7 +1793,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         const index = additionalImageFiles.findIndex(f => f.name === file.name);
                         if (index > -1) {
                             additionalImageFiles.splice(index, 1);
-                            additionalImagesInput.files = createFileList(additionalImageFiles);
                             showToast('Additional image removed', 'info');
                         }
                     }
@@ -1588,7 +1801,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (isMain) {
                     const badge = document.createElement('div');
                     badge.className = 'preview-badge';
-                    badge.textContent = 'Main';
+                    badge.textContent = 'New Main';
                     previewItem.appendChild(badge);
                 }
                 
@@ -1604,12 +1817,6 @@ document.addEventListener('DOMContentLoaded', function() {
             };
             
             reader.readAsDataURL(file);
-        }
-        
-        function createFileList(files) {
-            const dt = new DataTransfer();
-            files.forEach(file => dt.items.add(file));
-            return dt.files;
         }
         
         // Setup
@@ -1632,26 +1839,56 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // Toggle image delete for existing images
+    function toggleImageDelete(checkboxId) {
+        const checkbox = document.getElementById(checkboxId);
+        if (checkbox) {
+            checkbox.checked = !checkbox.checked;
+            const badge = checkbox.closest('.preview-item').querySelector('.preview-badge');
+            if (badge) {
+                badge.textContent = checkbox.checked ? 'Delete' : 'Keep';
+                badge.style.background = checkbox.checked ? 'var(--danger)' : 'var(--primary)';
+            }
+        }
+    }
+    
     // Form Submission
     function initFormSubmission() {
         if (form) {
             form.addEventListener('submit', function(e) {
                 const mainImageInput = document.getElementById('id_image');
+                const clearImageCheckbox = document.getElementById('image-clear');
                 
-                if (!mainImageInput.files.length && !isEditMode) {
-                    e.preventDefault();
-                    showToast('Please upload a main image for your listing.', 'error');
-                    mainImageInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    return;
+                // For new listings, require a main image
+                if (!isEditMode) {
+                    if (!mainImageInput.files.length) {
+                        e.preventDefault();
+                        showToast('Please upload a main image for your listing.', 'error');
+                        mainImageInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        return;
+                    }
+                }
+                
+                // For updates with clear checkbox checked, ensure new image is uploaded
+                if (isEditMode && clearImageCheckbox && clearImageCheckbox.checked) {
+                    if (!mainImageInput.files.length) {
+                        e.preventDefault();
+                        showToast('You selected to remove the current main image. Please upload a new main image or uncheck "Remove current main image".', 'error');
+                        return;
+                    }
                 }
                 
                 // Validate required fields
                 const requiredFields = form.querySelectorAll('[required]');
                 let isValid = true;
+                let firstErrorField = null;
                 
                 requiredFields.forEach(field => {
-                    if (!field.value.trim()) {
+                    if (!field.value.trim() && field.type !== 'file') {
                         field.classList.add('error');
+                        if (!firstErrorField) {
+                            firstErrorField = field;
+                        }
                         isValid = false;
                     } else {
                         field.classList.remove('error');
@@ -1661,7 +1898,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!isValid) {
                     e.preventDefault();
                     showToast('Please fill in all required fields.', 'error');
+                    if (firstErrorField) {
+                        firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
                     return;
+                }
+                
+                // Validate price
+                const priceInput = document.getElementById('{{ form.price.id_for_label }}');
+                if (priceInput && priceInput.value) {
+                    const price = parseFloat(priceInput.value);
+                    if (price < 0) {
+                        e.preventDefault();
+                        showToast('Price cannot be negative.', 'error');
+                        priceInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        return;
+                    }
+                }
+                
+                // Validate stock
+                const stockInput = document.getElementById('{{ form.stock.id_for_label }}');
+                if (stockInput && stockInput.value) {
+                    const stock = parseInt(stockInput.value);
+                    if (stock < 1) {
+                        e.preventDefault();
+                        showToast('Stock quantity must be at least 1.', 'error');
+                        stockInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        return;
+                    }
                 }
                 
                 // Show loading overlay
@@ -1677,9 +1941,27 @@ document.addEventListener('DOMContentLoaded', function() {
     if (priceInput) {
         priceInput.addEventListener('blur', function() {
             if (this.value) {
-                this.value = parseFloat(this.value).toFixed(2);
+                const num = parseFloat(this.value);
+                if (!isNaN(num)) {
+                    this.value = num.toFixed(2);
+                }
             }
         });
+    }
+
+    // Store field handling for updates
+    if (isEditMode) {
+        const storeSelect = document.getElementById('id_store');
+        if (storeSelect && storeSelect.tagName === 'SELECT') {
+            // Make store field not required for updates
+            storeSelect.required = false;
+            
+            // Update the placeholder option text
+            const placeholderOption = storeSelect.querySelector('option[value=""]');
+            if (placeholderOption) {
+                placeholderOption.textContent = 'Keep current store';
+            }
+        }
     }
     
     // Initialize all functions
@@ -1689,12 +1971,25 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Toast notification function
     function showToast(message, type = 'info', duration = 5000) {
-        const toastContainer = document.querySelector('.toast-container') || createToastContainer();
+        // Create toast container if it doesn't exist
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+            document.body.appendChild(toastContainer);
+        }
+        
         const toastId = 'toast-' + Date.now();
+        const typeIcons = {
+            'success': 'check-circle',
+            'error': 'exclamation-triangle',
+            'warning': 'exclamation-triangle',
+            'info': 'info-circle'
+        };
         
         const toast = document.createElement('div');
         toast.id = toastId;
-        toast.className = `toast align-items-center text-white bg-${type} border-0`;
+        toast.className = `toast align-items-center text-white bg-${type === 'error' ? 'danger' : type} border-0`;
         toast.setAttribute('role', 'alert');
         toast.setAttribute('aria-live', 'assertive');
         toast.setAttribute('aria-atomic', 'true');
@@ -1702,7 +1997,7 @@ document.addEventListener('DOMContentLoaded', function() {
         toast.innerHTML = `
             <div class="d-flex">
                 <div class="toast-body d-flex align-items-center">
-                    <i class="bi bi-${type === 'danger' ? 'exclamation-triangle' : type === 'success' ? 'check-circle' : 'info-circle'} me-2"></i>
+                    <i class="bi bi-${typeIcons[type] || 'info-circle'} me-2"></i>
                     ${message}
                 </div>
                 <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
@@ -1710,6 +2005,8 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
         
         toastContainer.appendChild(toast);
+        
+        // Initialize Bootstrap toast
         const bsToast = new bootstrap.Toast(toast, { delay: duration });
         bsToast.show();
         
@@ -1717,13 +2014,6 @@ document.addEventListener('DOMContentLoaded', function() {
         toast.addEventListener('hidden.bs.toast', function() {
             toast.remove();
         });
-    }
-    
-    function createToastContainer() {
-        const container = document.createElement('div');
-        container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
-        document.body.appendChild(container);
-        return container;
     }
     
     // Auto-scroll to first error on page load
@@ -1737,7 +2027,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Handle window resize
 window.addEventListener('resize', function() {
-    // Update progress steps for mobile
     const formProgress = document.querySelector('.form-progress');
     if (window.innerWidth < 768) {
         formProgress.classList.add('mobile');
@@ -1745,47 +2034,35 @@ window.addEventListener('resize', function() {
         formProgress.classList.remove('mobile');
     }
 });
-// Add to the existing JavaScript section
-// Handle existing image deletion
+
+// Fix for update mode - make main image not required initially
 document.addEventListener('DOMContentLoaded', function() {
-    const deleteButtons = document.querySelectorAll('.delete-existing-image');
-    deleteButtons.forEach(btn => {
-        btn.addEventListener('click', function() {
-            const imageId = this.getAttribute('data-image-id');
-            const checkbox = document.getElementById(`delete_${imageId}`);
-            const previewItem = this.closest('.preview-item');
-            
-            if (checkbox) {
-                checkbox.checked = !checkbox.checked;
-                if (checkbox.checked) {
-                    previewItem.style.opacity = '0.5';
-                    previewItem.style.borderColor = 'var(--danger)';
-                    this.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i>';
-                    this.title = 'Restore image';
-                } else {
-                    previewItem.style.opacity = '1';
-                    previewItem.style.borderColor = '';
-                    this.innerHTML = '<i class="bi bi-trash"></i>';
-                    this.title = 'Delete image';
-                }
-            }
-        });
-    });
+    const isEditMode = {% if form.instance.pk %}true{% else %}false{% endif %};
     
-    // Fix form submission for updates
-    const form = document.getElementById('listing-form');
-    if (form) {
-        form.addEventListener('submit', function(e) {
-            const isEditMode = {% if form.instance.pk %}true{% else %}false{% endif %};
-            
-            // For edit mode, don't require main image
-            if (isEditMode) {
-                const mainImageInput = document.getElementById('id_image');
-                if (mainImageInput) {
-                    mainImageInput.required = false;
-                }
-            }
-        });
+    if (isEditMode) {
+        const mainImageInput = document.getElementById('id_image');
+        if (mainImageInput) {
+            mainImageInput.required = false;
+        }
+        
+        // Also ensure store field is not required for updates
+        const storeField = document.querySelector('[name="store"]');
+        if (storeField) {
+            storeField.required = false;
+        }
+    }
+});
+
+// Handle single store selection for create mode
+document.addEventListener('DOMContentLoaded', function() {
+    const isEditMode = {% if form.instance.pk %}true{% else %}false{% endif %};
+    
+    if (!isEditMode) {
+        const storeInput = document.getElementById('id_store');
+        if (storeInput && storeInput.tagName === 'INPUT' && storeInput.type === 'hidden') {
+            // Single store is automatically selected
+            console.log('Single store automatically selected for new listing');
+        }
     }
 });
 </script>

@@ -41,6 +41,32 @@ from django.db.models import Count, Q
 from django.utils import timezone
 from datetime import timedelta
 
+
+# Add this helper function near the top of views.py
+def _assign_store_to_listing(listing, user):
+    """Helper function to assign a store to a listing"""
+    from storefront.models import Store
+    
+    if listing.store:
+        return listing.store
+    
+    # Try to get user's stores
+    user_stores = Store.objects.filter(owner=user)
+    
+    if user_stores.exists():
+        # Use the first store or a specific one based on business logic
+        return user_stores.first()
+    
+    # Create a default store if none exists
+    default_store = Store.objects.create(
+        owner=user,
+        name=f"{user.username}'s Store",
+        slug=user.username,
+        description=f"Default store for {user.username}"
+    )
+    
+    return default_store
+
 # In your listings/views.py - Updated ListingListView class
 class ListingListView(ListView):
     model = Listing
@@ -464,8 +490,10 @@ class ListingUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
             context['stores'] = Store.objects.filter(owner=self.request.user)
         else:
             context['stores'] = Store.objects.none()
+        # Pass existing store for template
+        context['current_store'] = self.object.store
         return context
-
+    
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
@@ -475,41 +503,38 @@ class ListingUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
         if self.object.store:
             kwargs['initial']['store'] = self.object.store
         return kwargs
-
     def test_func(self):
         listing = self.get_object()
         return self.request.user == listing.seller
 
+    # Update the ListingUpdateView class form_valid method
     def form_valid(self, form):
         form.instance.seller = self.request.user
         
-        # Handle store assignment
-        try:
-            selected_store = form.cleaned_data.get('store')
-        except Exception:
-            selected_store = None
-
-        if selected_store:
-            if selected_store.owner != self.request.user:
-                messages.error(self.request, "Invalid store selection.")
-                return render(self.request, 'listings/listing_form.html', {
-                    'form': form, 
-                    'categories': Category.objects.filter(is_active=True), 
-                    'stores': Store.objects.filter(owner=self.request.user)
-                })
-            form.instance.store = selected_store
+        # Handle store field - for updates, keep existing if not provided
+        store = form.cleaned_data.get('store')
+        if store:
+            form.instance.store = store
+        elif not form.instance.store:
+            # If no store selected and no existing store, use user's first store
+            user_store = Store.objects.filter(owner=self.request.user).first()
+            if user_store:
+                form.instance.store = user_store
+            else:
+                messages.warning(self.request, "No store selected. Please create a store first.")
+                return redirect('storefront:store_create')
         
-        # Handle main image update - only if new image is provided
-        if 'image' in self.request.FILES:
+        # Handle main image update - only if new image provided
+        if 'image' in self.request.FILES and self.request.FILES['image']:
             form.instance.image = self.request.FILES['image']
         elif 'image-clear' in self.request.POST:
-            # Handle image removal
+            # Only clear if explicitly requested
             form.instance.image = None
         
         # Enforce is_featured rules
         try:
             if 'is_featured' in form.cleaned_data and form.cleaned_data.get('is_featured'):
-                store = form.instance.store or Store.objects.filter(owner=self.request.user).first()
+                store = form.instance.store or form.cleaned_data.get('store')
                 from storefront.models import Subscription
                 from django.utils import timezone as _tz
                 now = _tz.now()

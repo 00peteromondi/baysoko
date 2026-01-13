@@ -4,14 +4,12 @@ from .models import Listing, Category, Review, Payment
 from . import ai_listing_helper
 
 class ListingForm(forms.ModelForm):
-    # Remove the multiple images field from here for now
-    # We'll handle multiple images in the view
     class Meta:
         model = Listing
-        fields = ['title', 'description', 'price', 'category', 'store', 'location', 'image', 'condition', 'delivery_option', 'stock', 'brand', 'model', 'dimensions', 'weight', 'color', 'material', 'meta_description', 'is_featured']
-        widgets = {
-            'is_featured': forms.CheckboxInput(attrs={'class': 'form-check-input', 'style': 'margin-left:0'}),
-        }
+        fields = ['title', 'description', 'price', 'category', 'store', 'location', 
+                 'image', 'condition', 'delivery_option', 'stock', 'brand', 
+                 'model', 'dimensions', 'weight', 'color', 'material', 
+                 'meta_description', 'is_featured']
         widgets = {
             'title': forms.TextInput(attrs={'placeholder': 'Enter a catchy title for your item', 'class': 'form-control'}),
             'price': forms.NumberInput(attrs={'min': '0', 'step': '0.01', 'placeholder': '0.00', 'class': 'form-control'}),
@@ -28,22 +26,10 @@ class ListingForm(forms.ModelForm):
             'color': forms.TextInput(attrs={'placeholder': 'e.g., Black, White, Blue, Red', 'class': 'form-control'}),
             'material': forms.TextInput(attrs={'placeholder': 'e.g., Metal, Wood, Cotton, Plastic', 'class': 'form-control'}),
             'meta_description': forms.Textarea(attrs={'rows': 2, 'placeholder': 'SEO description (auto-generated if empty)', 'maxlength': '160', 'class': 'form-control'}),
+            'is_featured': forms.CheckboxInput(attrs={'class': 'form-check-input', 'style': 'margin-left:0'}),
         }
-
     
-    def clean_image(self):
-        image = self.cleaned_data.get('image')
-        if image:
-            # Cloudinary handles file validation, but you can add custom validation
-            if hasattr(image, 'size') and image.size > 10 * 1024 * 1024:  # 10MB limit
-                raise forms.ValidationError("Image file too large ( > 10MB )")
-        
-        # For updates, allow empty image (keep existing one)
-        if not image and not self.instance.pk:
-            raise forms.ValidationError("Main image is required for new listings.")
-        
-        return image
-
+    # Update the __init__ method of ListingForm class
     def __init__(self, *args, **kwargs):
         # Accept an optional 'user' kwarg to limit the store choices
         user = kwargs.pop('user', None)
@@ -55,20 +41,70 @@ class ListingForm(forms.ModelForm):
         except Exception:
             Store = None
 
-        # Add a store field as a ModelChoice limited to the current user's stores
         if Store:
-            # Make the store field required when the user has at least one store.
+            # Get user's stores
             user_stores_qs = Store.objects.none()
             if user and user.is_authenticated:
                 user_stores_qs = Store.objects.filter(owner=user)
 
-            self.fields['store'] = forms.ModelChoiceField(
-                queryset=user_stores_qs,
-                required=(user_stores_qs.exists()),
-                label='Store',
-                help_text='Select which store/business this listing belongs to'
-            )
+            # For updates, include the current store even if user no longer owns it
+            if self.instance and self.instance.pk and self.instance.store:
+                # Add current store to queryset if it's not already there
+                if self.instance.store not in user_stores_qs:
+                    user_stores_qs = user_stores_qs | Store.objects.filter(id=self.instance.store.id)
 
+            # Determine if the field is required
+            # For new listings (no pk), store is REQUIRED
+            # For updates (has pk), store is optional (can keep existing)
+            is_required = not self.instance.pk  # Required for new, optional for updates
+            
+            # Only create the field if we have stores or it's an update
+            if user_stores_qs.exists() or (self.instance and self.instance.pk):
+                self.fields['store'] = forms.ModelChoiceField(
+                    queryset=user_stores_qs,
+                    required=is_required,
+                    label='Store',
+                    help_text='Select which store/business this listing belongs to' + (' (required)' if is_required else ' (optional - leave blank to keep current store)')
+                )
+                
+                # Set initial value for updates
+                if self.instance and self.instance.pk and self.instance.store:
+                    self.initial['store'] = self.instance.store
+            else:
+                # No stores available - hide the field
+                if 'store' in self.fields:
+                    del self.fields['store']
+
+    def clean_store(self):
+        """Additional validation for store field"""
+        store = self.cleaned_data.get('store')
+        
+        # For new listings, store is required
+        if not self.instance.pk and not store:
+            raise forms.ValidationError("Please select a store for your listing.")
+        
+        # For updates, if no store selected, keep the current one
+        if self.instance.pk and not store:
+            store = self.instance.store
+        
+        return store
+
+    # Update the clean_image method to be more permissive for updates
+    def clean_image(self):
+        image = self.cleaned_data.get('image')
+        
+        # For updates, allow empty image (keep existing one)
+        # Only require image for new listings
+        if not image and not self.instance.pk:
+            raise forms.ValidationError("Main image is required for new listings.")
+        
+        if image:
+            # Cloudinary handles file validation, but you can add custom validation
+            if hasattr(image, 'size') and image.size > 10 * 1024 * 1024:  # 10MB limit
+                raise forms.ValidationError("Image file too large ( > 10MB )")
+        
+        return image
+        
 class CheckoutForm(forms.Form):
     shipping_address = forms.CharField(
         max_length=200,
@@ -210,37 +246,25 @@ class AIListingForm(ListingForm):
             'location': forms.Select(attrs={'class': 'form-select form-control ai-suggestable'}),
             'condition': forms.Select(attrs={'class': 'form-select form-control ai-suggestable'}),
             'delivery_option': forms.Select(attrs={'class': 'form-select form-control ai-suggestable'}),
-            'brand': forms.TextInput(attrs={'placeholder': 'e.g., Samsung, Nike, Apple, etc.'}),
-            'model': forms.TextInput(attrs={'placeholder': 'Model name/number'}),
-            'dimensions': forms.TextInput(attrs={'placeholder': 'e.g., 10x5x3 inches or 30x20x15 cm'}),
-            'weight': forms.TextInput(attrs={'placeholder': 'e.g., 0.5 kg or 150g'}),
-            'color': forms.TextInput(attrs={'placeholder': 'e.g., Black, White, Blue, Red'}),
-            'material': forms.TextInput(attrs={'placeholder': 'e.g., Metal, Wood, Cotton, Plastic'}),
+            'brand': forms.TextInput(attrs={'placeholder': 'e.g., Samsung, Nike, Apple, etc.', 'class': 'form-control'}),
+            'model': forms.TextInput(attrs={'placeholder': 'Model name/number', 'class': 'form-control'}),
+            'dimensions': forms.TextInput(attrs={'placeholder': 'e.g., 10x5x3 inches or 30x20x15 cm', 'class': 'form-control'}),
+            'weight': forms.TextInput(attrs={'placeholder': 'e.g., 0.5 kg or 150g', 'class': 'form-control'}),
+            'color': forms.TextInput(attrs={'placeholder': 'e.g., Black, White, Blue, Red', 'class': 'form-control'}),
+            'material': forms.TextInput(attrs={'placeholder': 'e.g., Metal, Wood, Cotton, Plastic', 'class': 'form-control'}),
             'meta_description': forms.Textarea(attrs={
                 'rows': 2,
                 'placeholder': 'SEO description (auto-generated if empty)',
-                'maxlength': '160'
+                'maxlength': '160',
+                'class': 'form-control'
             }),
+            'is_featured': forms.CheckboxInput(attrs={'class': 'form-check-input', 'style': 'margin-left:0'}),
         }
     
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        
-        # Add store field if user has stores
-        try:
-            from storefront.models import Store
-            if Store and user and user.is_authenticated:
-                user_stores_qs = Store.objects.filter(owner=user)
-                self.fields['store'] = forms.ModelChoiceField(
-                    queryset=user_stores_qs,
-                    required=(user_stores_qs.exists()),
-                    label='Store',
-                    help_text='Select which store/business this listing belongs to'
-                )
-        except:
-            pass
-    
+          
     def generate_with_ai(self):
         """Generate missing fields using AI."""
         from .ai_listing_helper import listing_ai
