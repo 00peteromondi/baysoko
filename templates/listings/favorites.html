@@ -1,203 +1,268 @@
+<!-- templates/listings/favorites.html -->
 {% extends 'base.html' %}
 {% load static %}
+{% load custom_filters %}
 
-{% block title %}My Favorites - Baysoko{% endblock %}
+{% block title %}My Favorites - Baysoko Marketplace{% endblock %}
 
 {% block extra_css %}
 <style>
-    .favorites-container {
-        padding: var(--spacing-xl) 0;
-        animation: fadeIn 0.6s ease-out;
+    /* ===== GLOBAL STYLES ===== */
+    .container-custom {
+        padding-left: 8px;
+        padding-right: 8px;
     }
     
-    .page-header {
-        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-        border-radius: var(--radius-xl);
-        padding: var(--spacing-xl);
-        color: white;
-        margin-bottom: var(--spacing-xl);
-        position: relative;
+    /* ===== BREADCRUMB ===== */
+    .breadcrumb {
+        background: var(--bg-secondary);
+        padding: 10px 12px;
+        border-radius: var(--radius-md);
+        margin-bottom: 16px;
+        border: 1px solid var(--border-color);
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        font-size: 12px;
+    }
+    
+    .breadcrumb-item a {
+        text-decoration: none;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+    }
+    
+    /* ===== FAVORITES HERO SECTION ===== */
+    .favorites-hero {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
         overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
+        position: relative;
     }
     
-    .page-header::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: url('{% static "images/pattern.png" %}') center/cover;
-        opacity: 0.1;
+    .favorites-header {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        padding: 16px;
+        color: white;
     }
     
-    .page-header h1 {
+    .favorites-header h1 {
+        font-size: 18px;
         font-weight: 800;
-        margin-bottom: 0.5rem;
-        position: relative;
-        z-index: 2;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
     
-    .page-header p {
-        font-size: 1.2rem;
-        opacity: 0.9;
-        position: relative;
-        z-index: 2;
+    /* ===== FILTERS BAR ===== */
+    .filters-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+        flex-wrap: wrap;
+        gap: 12px;
     }
     
+    .results-count {
+        color: var(--text-primary);
+        font-weight: 600;
+        font-size: 14px;
+    }
+    
+    .sort-options {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .sort-select {
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 6px 10px;
+        font-size: 13px;
+        color: var(--text-primary);
+        min-width: 140px;
+    }
+    
+    /* ===== FAVORITES GRID ===== */
     .favorites-grid {
+        padding: 16px;
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: var(--spacing-lg);
-        margin-bottom: var(--spacing-xl);
+        gap: 16px;
     }
     
     .favorite-card {
         background: var(--card-bg);
-        border: 2px solid var(--border-color);
         border-radius: var(--radius-lg);
         overflow: hidden;
         box-shadow: var(--shadow-sm);
-        transition: var(--transition);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
         height: 100%;
         display: flex;
         flex-direction: column;
-        position: relative;
+        animation: fadeIn 0.5s ease-out forwards;
+        animation-delay: calc(var(--index) * 0.1s);
     }
     
     .favorite-card:hover {
-        transform: translateY(-10px) scale(1.02);
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-md);
         border-color: var(--primary);
-        box-shadow: var(--shadow-xl);
     }
     
     .favorite-image {
         position: relative;
-        height: 220px;
+        height: 200px;
         overflow: hidden;
+        background: var(--bg-secondary);
     }
     
     .favorite-image img {
         width: 100%;
         height: 100%;
         object-fit: cover;
-        transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: transform 0.5s ease;
     }
     
     .favorite-card:hover .favorite-image img {
-        transform: scale(1.15);
+        transform: scale(1.05);
     }
     
     .favorite-badges {
         position: absolute;
-        top: var(--spacing-md);
-        left: var(--spacing-md);
+        top: 10px;
+        left: 10px;
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-xs);
-        z-index: 3;
+        gap: 6px;
+        z-index: 10;
     }
     
-    .favorite-badge {
-        font-size: 0.75rem;
-        padding: 0.4rem 0.8rem;
-        border-radius: var(--radius-full);
+    .status-badge {
+        padding: 5px 10px;
+        border-radius: 12px;
+        font-size: 11px;
         font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    
+    .status-badge.available {
+        background: linear-gradient(135deg, var(--success) 0%, var(--accent-dark) 100%);
+        color: white;
+    }
+    
+    .status-badge.sold {
+        background: linear-gradient(135deg, var(--danger) 0%, #d12a4e 100%);
+        color: white;
     }
     
     .favorite-actions {
         position: absolute;
-        top: var(--spacing-md);
-        right: var(--spacing-md);
+        top: 10px;
+        right: 10px;
         display: flex;
-        gap: var(--spacing-xs);
-        z-index: 3;
+        gap: 6px;
+        z-index: 10;
     }
     
     .favorite-actions .btn {
-        width: 40px;
-        height: 40px;
-        border-radius: var(--radius-full);
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(20px);
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        transition: all 0.3s ease;
     }
     
     .favorite-actions .btn:hover {
-        transform: scale(1.15) rotate(5deg);
+        transform: scale(1.1);
         background: white;
-        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
-    }
-    
-    .favorite-actions .btn-remove {
-        color: var(--danger);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
     }
     
     .favorite-actions .btn-remove:hover {
         background: var(--danger);
         color: white;
+        border-color: var(--danger);
     }
     
     .favorite-content {
-        padding: var(--spacing-lg);
+        padding: 16px;
         flex-grow: 1;
         display: flex;
         flex-direction: column;
     }
     
     .favorite-title {
-        font-size: 1.2rem;
+        font-size: 16px;
         font-weight: 700;
-        margin-bottom: var(--spacing-sm);
-        line-height: 1.4;
+        margin-bottom: 8px;
         color: var(--text-primary);
-        font-family: var(--font-heading);
+        line-height: 1.3;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
     }
     
     .favorite-description {
         color: var(--text-secondary);
-        font-size: 0.95rem;
-        margin-bottom: var(--spacing-lg);
+        font-size: 13px;
+        line-height: 1.5;
+        margin-bottom: 12px;
         flex-grow: 1;
-        line-height: 1.6;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
     }
     
     .favorite-meta {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: var(--spacing-lg);
-        padding-top: var(--spacing-md);
+        margin-bottom: 16px;
+        padding-top: 12px;
         border-top: 1px solid var(--border-color);
     }
     
     .favorite-price {
-        font-size: 1.5rem;
+        font-size: 18px;
         font-weight: 800;
         color: var(--primary);
-        font-family: var(--font-heading);
     }
     
     .favorite-location {
         display: flex;
         align-items: center;
-        gap: var(--spacing-xs);
-        font-size: 0.85rem;
-        color: var(--text-muted);
+        gap: 4px;
+        font-size: 12px;
+        color: var(--text-secondary);
     }
     
     .favorite-footer {
         display: flex;
-        gap: var(--spacing-sm);
+        gap: 8px;
         margin-top: auto;
     }
     
@@ -205,238 +270,251 @@
         flex: 1;
         border-radius: var(--radius-md);
         font-weight: 600;
-        padding: 0.75rem;
-        text-transform: uppercase;
-        font-size: 0.9rem;
-        letter-spacing: 0.5px;
+        font-size: 13px;
+        padding: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
     }
     
+    /* ===== EMPTY STATE ===== */
     .empty-state {
+        padding: 40px 16px;
         text-align: center;
-        padding: var(--spacing-xxl) var(--spacing-xl);
-        background: var(--bg-secondary);
-        border: 2px dashed var(--border-color);
-        border-radius: var(--radius-xl);
-        margin: var(--spacing-xl) 0;
+        grid-column: 1 / -1;
     }
     
     .empty-state-icon {
-        font-size: 5rem;
-        margin-bottom: var(--spacing-lg);
+        font-size: 48px;
         color: var(--primary);
         opacity: 0.3;
-        animation: float 4s ease-in-out infinite;
+        margin-bottom: 16px;
     }
     
     .empty-state h3 {
-        margin-bottom: var(--spacing-md);
-        color: var(--text-primary);
+        font-size: 18px;
         font-weight: 700;
+        margin-bottom: 8px;
+        color: var(--text-primary);
     }
     
     .empty-state p {
-        margin-bottom: var(--spacing-xl);
-        max-width: 500px;
-        margin-left: auto;
-        margin-right: auto;
-        font-size: 1.1rem;
-        line-height: 1.6;
-    }
-    
-    .filters-bar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: var(--spacing-lg);
-        padding: var(--spacing-lg);
-        background: var(--bg-secondary);
-        border-radius: var(--radius-lg);
-        border: 2px solid var(--border-color);
-    }
-    
-    .sort-options {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-sm);
-    }
-    
-    .sort-select {
-        background: var(--bg-primary);
-        border: 2px solid var(--border-color);
-        color: var(--text-primary);
-        border-radius: var(--radius-md);
-        padding: 0.6rem 1rem;
-        font-weight: 500;
-        transition: var(--transition);
-    }
-    
-    .sort-select:focus {
-        border-color: var(--primary);
-        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
-        outline: none;
-    }
-    
-    .results-count {
         color: var(--text-secondary);
-        font-size: 1rem;
-        font-weight: 500;
+        font-size: 14px;
+        max-width: 400px;
+        margin: 0 auto 20px;
+        line-height: 1.5;
     }
     
-    @keyframes cardAppear {
-        from {
-            opacity: 0;
-            transform: translateY(30px) scale(0.95);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-        }
-    }
+    /* ===== RESPONSIVE DESIGN ===== */
     
-    .favorite-card {
-        animation: cardAppear 0.6s ease-out forwards;
-        animation-delay: calc(var(--index) * 0.1s);
-    }
-    
-    .badge.bg-success {
-        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%) !important;
-    }
-    
-    .badge.bg-danger {
-        background: linear-gradient(135deg, var(--danger) 0%, #d42a5e 100%) !important;
-    }
-    
-    .badge.bg-info {
-        background: linear-gradient(135deg, var(--info) 0%, #0d6f9c 100%) !important;
-    }
-    
-    @media (max-width: 768px) {
+    /* Small phones (320px - 374px) */
+    @media (max-width: 374px) {
         .favorites-grid {
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        }
+        
+        .favorite-image {
+            height: 160px;
         }
         
         .filters-bar {
             flex-direction: column;
-            align-items: stretch;
-            gap: var(--spacing-md);
+            align-items: flex-start;
         }
         
         .sort-options {
+            width: 100%;
             justify-content: space-between;
+        }
+    }
+    
+    /* Tablets (576px - 767px) */
+    @media (min-width: 576px) {
+        .container-custom {
+            padding-left: 16px;
+            padding-right: 16px;
+        }
+        
+        .favorites-header h1 {
+            font-size: 22px;
+        }
+        
+        .favorites-grid {
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+    }
+    
+    /* Desktop (768px and above) */
+    @media (min-width: 768px) {
+        .favorites-grid {
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
         }
         
         .favorite-image {
-            height: 180px;
+            height: 220px;
+        }
+    }
+    
+    /* ===== ANIMATIONS ===== */
+    @keyframes fadeIn {
+        from { 
+            opacity: 0; 
+            transform: translateY(20px); 
+        }
+        to { 
+            opacity: 1; 
+            transform: translateY(0); 
         }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container favorites-container">
-    <nav aria-label="breadcrumb" class="mb-4">
+<div class="container-custom py-3">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
         <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'home' %}"><i class="bi bi-house"></i> Home</a></li>
             <li class="breadcrumb-item"><a href="{% url 'profile' user.pk %}">Profile</a></li>
             <li class="breadcrumb-item active" aria-current="page">Favorites</li>
         </ol>
     </nav>
 
-    <div class="page-header">
-        <h1>My Favorites</h1>
-        <p>Items you've saved for later</p>
-    </div>
+    <!-- Favorites Hero Section -->
+    <div class="favorites-hero">
+        <div class="favorites-header">
+            <h1><i class="bi bi-heart-fill"></i> My Favorite Items</h1>
+        </div>
 
-    <div class="filters-bar">
-        <div class="results-count">
+        <!-- Filters Bar -->
+        <div class="filters-bar">
+            <div class="results-count">
+                {% if favorites %}
+                    {{ favorites|length }} favorite item{{ favorites|length|pluralize }}
+                {% else %}
+                    No favorites yet
+                {% endif %}
+            </div>
+            <div class="sort-options">
+                <label for="sort-favorites" class="form-label mb-0 small">Sort by:</label>
+                <select class="sort-select" id="sort-favorites">
+                    <option value="date_added">Date Added</option>
+                    <option value="price_low">Price: Low to High</option>
+                    <option value="price_high">Price: High to Low</option>
+                    <option value="name">Name A-Z</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Favorites Grid -->
+        <div class="favorites-grid">
             {% if favorites %}
-                Showing {{ favorites|length }} favorite item{{ favorites|length|pluralize }}
+                {% for favorite in favorites %}
+                <div class="favorite-card" 
+                     data-price="{{ favorite.listing.price }}" 
+                     data-date="{{ favorite.date_added|date:'Y-m-d' }}" 
+                     data-name="{{ favorite.listing.title }}"
+                     style="--index: {{ forloop.counter0 }}">
+                    <div class="favorite-image">
+                        <img src="{{ favorite.listing.get_image_url }}" 
+                             alt="{{ favorite.listing.title }}"
+                             onerror="this.src='https://placehold.co/600x400/c2c2c2/1f1f1f?text=No+Image'">
+                        
+                        <div class="favorite-badges">
+                            {% if favorite.listing.is_sold %}
+                            <span class="status-badge sold">
+                                <i class="bi bi-x-circle"></i> Sold
+                            </span>
+                            {% else %}
+                            <span class="status-badge available">
+                                <i class="bi bi-check-circle"></i> Available
+                            </span>
+                            {% endif %}
+                            <span class="status-badge" style="background: var(--info); color: white;">
+                                <i class="bi bi-tag"></i> {{ favorite.listing.category.name|truncatechars:12 }}
+                            </span>
+                        </div>
+                        
+                        <div class="favorite-actions">
+                            <form action="{% url 'toggle_favorite' favorite.listing.id %}" method="post" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-remove" title="Remove from favorites">
+                                    <i class="bi bi-heart-fill"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <div class="favorite-content">
+                        <h3 class="favorite-title">{{ favorite.listing.title }}</h3>
+                        
+                        <p class="favorite-description">
+                            {{ favorite.listing.description|truncatewords:20 }}
+                        </p>
+                        
+                        <div class="favorite-meta">
+                            <span class="favorite-price">KSh {{ favorite.listing.price }}</span>
+                            <span class="favorite-location">
+                                <i class="bi bi-geo-alt"></i> 
+                                {{ favorite.listing.get_location_display|truncatechars:15 }}
+                            </span>
+                        </div>
+                        
+                        <div class="favorite-footer">
+                            <a href="{% url 'listing-detail' favorite.listing.pk %}" class="btn btn-primary">
+                                <i class="bi bi-eye"></i> View
+                            </a>
+                            
+                            {% if user.is_authenticated and favorite.listing.stock > 0 and not favorite.listing.is_sold %}
+                            <form method="post" action="{% url 'add_to_cart' favorite.listing.id %}" class="d-inline w-100">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-primary">
+                                    <i class="bi bi-cart-plus"></i> Add to Cart
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
             {% else %}
-                No favorites yet
+            <!-- Empty State -->
+            <div class="empty-state">
+                <div class="empty-state-icon">
+                    <i class="bi bi-heart"></i>
+                </div>
+                <h3>No favorites yet</h3>
+                <p>You haven't added any items to your favorites. Start browsing our listings and save items you love for easy access later.</p>
+                <div class="d-flex gap-2 justify-content-center flex-wrap mt-3">
+                    <a href="{% url 'all-listings' %}" class="btn btn-primary">
+                        <i class="bi bi-search me-1"></i> Browse Listings
+                    </a>
+                    <a href="{% url 'home' %}" class="btn btn-outline-primary">
+                        <i class="bi bi-house me-1"></i> Back to Home
+                    </a>
+                </div>
+            </div>
             {% endif %}
         </div>
-        <div class="sort-options">
-            <label for="sort-favorites" class="form-label mb-0">Sort by:</label>
-            <select class="sort-select" id="sort-favorites">
-                <option value="date_added">Date Added</option>
-                <option value="price_low">Price: Low to High</option>
-                <option value="price_high">Price: High to Low</option>
-                <option value="name">Name A-Z</option>
-            </select>
-        </div>
     </div>
-
-    {% if favorites %}
-    <div class="favorites-grid">
-        {% for favorite in favorites %}
-        <div class="favorite-card" data-price="{{ favorite.listing.price }}" data-date="{{ favorite.date_added|date:'Y-m-d' }}" data-name="{{ favorite.listing.title }}" style="--index: {{ forloop.counter0 }}">
-            <div class="favorite-image">
-                <img src="{{ favorite.listing.get_image_url }}" alt="{{ favorite.listing.title }}">
-                <div class="favorite-badges">
-                    {% if favorite.listing.is_sold %}
-                    <span class="favorite-badge bg-danger">Sold</span>
-                    {% else %}
-                    <span class="favorite-badge bg-success">Available</span>
-                    {% endif %}
-                    <span class="favorite-badge bg-info">{{ favorite.listing.category.name }}</span>
-                </div>
-                <div class="favorite-actions">
-                    <form action="{% url 'toggle_favorite' favorite.listing.id %}" method="post" class="d-inline">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-remove" title="Remove from favorites">
-                            <i class="bi bi-heart-fill"></i>
-                        </button>
-                    </form>
-                </div>
-            </div>
-            <div class="favorite-content">
-                <h3 class="favorite-title">{{ favorite.listing.title }}</h3>
-                <p class="favorite-description">{{ favorite.listing.description|truncatewords:15 }}</p>
-                <div class="favorite-meta">
-                    <span class="favorite-price">KSh {{ favorite.listing.price }}</span>
-                    <span class="favorite-location">
-                        <i class="bi bi-geo-alt"></i> {{ favorite.listing.get_location_display }}
-                    </span>
-                </div>
-                <div class="favorite-footer">
-                    <a href="{% url 'listing-detail' favorite.listing.pk %}" class="btn btn-primary">View Details</a>
-                    {% if user.is_authenticated and favorite.listing.stock > 0 and not favorite.listing.is_sold %}
-                    <form method="post" action="{% url 'add_to_cart' favorite.listing.id %}" class="d-inline">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-outline-primary">Add to Cart</button>
-                    </form>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    {% else %}
-    <div class="empty-state">
-        <div class="empty-state-icon">
-            <i class="bi bi-heart"></i>
-        </div>
-        <h3>No favorites yet</h3>
-        <p>You haven't added any items to your favorites. Start browsing our listings and save items you love for easy access later.</p>
-        <div class="d-flex gap-2 justify-content-center flex-wrap">
-            <a href="{% url 'all-listings' %}" class="btn btn-primary">Browse Listings</a>
-            <a href="{% url 'home' %}" class="btn btn-outline-primary">Back to Home</a>
-        </div>
-    </div>
-    {% endif %}
 </div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const sortSelect = document.getElementById('sort-favorites');
         const favoritesGrid = document.querySelector('.favorites-grid');
+        const favoriteCards = document.querySelectorAll('.favorite-card');
         
-        if (sortSelect && favoritesGrid) {
+        if (sortSelect && favoriteCards.length > 0) {
             sortSelect.addEventListener('change', function() {
                 const sortValue = this.value;
-                const favoriteCards = Array.from(favoritesGrid.querySelectorAll('.favorite-card'));
+                const cardsArray = Array.from(favoriteCards);
                 
-                favoriteCards.sort((a, b) => {
+                cardsArray.sort((a, b) => {
                     switch(sortValue) {
                         case 'price_low':
                             return parseFloat(a.dataset.price) - parseFloat(b.dataset.price);
@@ -450,20 +528,47 @@
                     }
                 });
                 
+                // Clear grid and re-add sorted cards
                 favoritesGrid.innerHTML = '';
-                
-                favoriteCards.forEach(card => {
+                cardsArray.forEach((card, index) => {
+                    card.style.setProperty('--index', index);
                     favoritesGrid.appendChild(card);
                 });
             });
         }
         
+        // Remove confirmation
         const removeButtons = document.querySelectorAll('.favorite-actions .btn-remove');
         removeButtons.forEach(button => {
             button.addEventListener('click', function(e) {
                 if (!confirm('Are you sure you want to remove this item from your favorites?')) {
                     e.preventDefault();
                 }
+            });
+        });
+        
+        // Add to cart form handling
+        const addToCartForms = document.querySelectorAll('.favorite-footer form');
+        addToCartForms.forEach(form => {
+            form.addEventListener('submit', function(e) {
+                const button = this.querySelector('button');
+                const originalText = button.innerHTML;
+                
+                button.innerHTML = '<i class="bi bi-hourglass-split spin"></i>';
+                button.disabled = true;
+                
+                setTimeout(() => {
+                    button.innerHTML = '<i class="bi bi-cart-check"></i> Added!';
+                    button.classList.remove('btn-outline-primary');
+                    button.classList.add('btn-success');
+                    
+                    setTimeout(() => {
+                        button.innerHTML = originalText;
+                        button.classList.remove('btn-success');
+                        button.classList.add('btn-outline-primary');
+                        button.disabled = false;
+                    }, 2000);
+                }, 500);
             });
         });
     });

@@ -1,3 +1,4 @@
+<!-- templates/listings/checkout.html -->
 {% extends 'base.html' %}
 {% load static %}
 {% load custom_filters %}
@@ -559,6 +560,28 @@
         color: var(--text-primary);
     }
     
+    /* Crispy Forms Adjustments */
+    .form-check-label {
+        font-size: 14px;
+        color: var(--text-secondary);
+    }
+    
+    .form-check-input {
+        margin-right: 8px;
+    }
+    
+    /* Error Styling */
+    .alert-danger {
+        background: rgba(234, 67, 53, 0.1);
+        border-color: var(--danger);
+        color: var(--danger);
+    }
+    
+    .invalid-feedback {
+        font-size: 12px;
+        margin-top: 4px;
+    }
+    
     /* ===== RESPONSIVE DESIGN ===== */
     
     /* Small phones (320px - 374px) */
@@ -743,6 +766,12 @@
 
         <!-- Left Column: Shipping Form -->
         <div class="form-section">
+            {% if not checkout_form %}
+            <!-- Fallback form when no form is provided -->
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                Unable to load checkout form. Please try again.
+            </div>
             <form method="post" id="checkoutForm" novalidate>
                 {% csrf_token %}
                 
@@ -751,12 +780,136 @@
                     Shipping Details
                 </h3>
                 
-                {% if form.non_field_errors %}
-                <div class="info-card" style="border-color: var(--danger); background: rgba(234, 67, 53, 0.05);">
+                <!-- Alternate Shipping Toggle -->
+                <div class="form-switch">
+                    <div class="switch-control">
+                        <input type="checkbox" class="switch-input" id="useAlternateShipping" name="use_alternate_shipping">
+                        <span class="switch-slider"></span>
+                    </div>
+                    <label for="useAlternateShipping" class="switch-label">Ship to a different address</label>
+                </div>
+                
+                <!-- Account Info -->
+                <div id="accountInfo">
+                    <div class="info-card">
+                        <h6><i class="bi bi-person-circle"></i> Using Account Details</h6>
+                        <div class="row g-2">
+                            <div class="col-12">
+                                <strong>{{ request.user.get_full_name|default:request.user.username }}</strong>
+                            </div>
+                            <div class="col-12">
+                                <small class="text-muted">{{ request.user.email }}</small>
+                            </div>
+                            {% if request.user.phone_number %}
+                            <div class="col-12">
+                                <small class="text-muted">{{ request.user.phone_number }}</small>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Alternate Shipping Form (hidden by default) -->
+                <div id="alternateShippingForm" style="display: none;">
+                    <div class="row">
+                        <div class="col-md-6 form-group">
+                            <label class="form-label">First Name *</label>
+                            <input type="text" name="first_name" class="form-control" placeholder="John">
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label class="form-label">Last Name *</label>
+                            <input type="text" name="last_name" class="form-control" placeholder="Doe">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 form-group">
+                            <label class="form-label">Email *</label>
+                            <input type="email" name="email" class="form-control" placeholder="john@example.com">
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label class="form-label">Phone Number *</label>
+                            <input type="text" name="phone_number" class="form-control" placeholder="0712345678">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Common Shipping Fields -->
+                <div class="form-group">
+                    <label class="form-label">Shipping Address *</label>
+                    <textarea name="shipping_address" class="form-control" rows="3" placeholder="Enter your complete shipping address" required></textarea>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 form-group">
+                        <label class="form-label">City *</label>
+                        <input type="text" name="city" class="form-control" placeholder="Nairobi" required>
+                    </div>
+                    <div class="col-md-6 form-group">
+                        <label class="form-label">Postal Code *</label>
+                        <input type="text" name="postal_code" class="form-control" placeholder="00100" required>
+                    </div>
+                </div>
+                
+                <!-- Payment Method -->
+                <h3 class="section-title mt-4">
+                    <i class="bi bi-credit-card"></i>
+                    Payment Method
+                </h3>
+                
+                <div class="form-group">
+                    <label class="form-label">Select Payment Method *</label>
+                    <select name="payment_method" class="form-control" required>
+                        <option value="">Choose...</option>
+                        <option value="mpesa">M-Pesa</option>
+                        <option value="card">Credit/Debit Card</option>
+                        <option value="cash">Cash on Delivery</option>
+                    </select>
+                </div>
+                
+                <!-- M-Pesa Phone Number -->
+                <div id="mpesaFields" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">M-Pesa Phone Number *</label>
+                        <input type="text" name="mpesa_phone" class="form-control" placeholder="0712345678">
+                    </div>
+                    <div class="alert alert-info small">
+                        <i class="bi bi-info-circle me-2"></i>
+                        You'll receive an M-Pesa prompt on this number to complete payment.
+                    </div>
+                </div>
+                
+                <!-- Terms Agreement -->
+                <div class="info-card mt-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="terms" required>
+                        <label class="form-check-label" for="terms">
+                            I agree to the <a href="#" class="text-primary">Terms of Service</a> and <a href="#" class="text-primary">Privacy Policy</a>
+                        </label>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn-checkout" id="placeOrderBtn">
+                    <i class="bi bi-lock-fill"></i>
+                    Proceed to Payment - KSh {{ cart.get_total_price }}
+                </button>
+            </form>
+            {% else %}
+            <!-- Form with crispy forms when form is provided -->
+            <form method="post" id="checkoutForm" novalidate>
+                {% csrf_token %}
+                
+                <h3 class="section-title">
+                    <i class="bi bi-truck"></i>
+                    Shipping Details
+                </h3>
+                
+                {% if checkout_form.non_field_errors %}
+                <div class="alert alert-danger">
                     <div class="d-flex align-items-center gap-2">
-                        <i class="bi bi-exclamation-triangle text-danger"></i>
+                        <i class="bi bi-exclamation-triangle"></i>
                         <div>
-                            {% for error in form.non_field_errors %}
+                            {% for error in checkout_form.non_field_errors %}
                             <p class="mb-0 small">{{ error }}</p>
                             {% endfor %}
                         </div>
@@ -767,14 +920,14 @@
                 <!-- Alternate Shipping Toggle -->
                 <div class="form-switch">
                     <div class="switch-control">
-                        <input type="checkbox" class="switch-input" id="useAlternateShipping" name="use_alternate_shipping" {% if use_alternate_shipping %}checked{% endif %}>
+                        <input type="checkbox" class="switch-input" id="useAlternateShipping" name="use_alternate_shipping" {% if checkout_form.use_alternate_shipping.value %}checked{% endif %}>
                         <span class="switch-slider"></span>
                     </div>
-                    <label for="useAlternateShipping" class="switch-label">Use different shipping address</label>
+                    <label for="useAlternateShipping" class="switch-label">Ship to a different address</label>
                 </div>
                 
                 <!-- Account Info (Hidden when alternate shipping is checked) -->
-                <div id="accountInfo" {% if use_alternate_shipping %}style="display: none;"{% endif %}>
+                <div id="accountInfo" {% if checkout_form.use_alternate_shipping.value %}style="display: none;"{% endif %}>
                     <div class="info-card">
                         <h6><i class="bi bi-person-circle"></i> Using Account Details</h6>
                         <div class="row g-2">
@@ -794,90 +947,45 @@
                 </div>
                 
                 <!-- Alternate Shipping Form (Shown when toggle is checked) -->
-                <div id="alternateShippingForm" {% if not use_alternate_shipping %}style="display: none;"{% endif %}>
+                <div id="alternateShippingForm" {% if not checkout_form.use_alternate_shipping.value %}style="display: none;"{% endif %}>
                     <div class="row">
-                        <div class="col-md-6 form-group">
-                            <label for="{{ form.first_name.id_for_label }}" class="form-label">First Name *</label>
-                            {{ form.first_name }}
-                            {% if form.first_name.errors %}
-                            <div class="text-danger small mt-1">
-                                {% for error in form.first_name.errors %}
-                                {{ error }}
-                                {% endfor %}
-                            </div>
-                            {% endif %}
+                        <div class="col-md-6">
+                            {{ checkout_form.first_name|as_crispy_field }}
                         </div>
-                        <div class="col-md-6 form-group">
-                            <label for="{{ form.last_name.id_for_label }}" class="form-label">Last Name *</label>
-                            {{ form.last_name }}
-                            {% if form.last_name.errors %}
-                            <div class="text-danger small mt-1">
-                                {% for error in form.last_name.errors %}
-                                {{ error }}
-                                {% endfor %}
-                            </div>
-                            {% endif %}
+                        <div class="col-md-6">
+                            {{ checkout_form.last_name|as_crispy_field }}
                         </div>
                     </div>
                     
                     <div class="row">
-                        <div class="col-md-6 form-group">
-                            <label for="{{ form.email.id_for_label }}" class="form-label">Email *</label>
-                            {{ form.email }}
-                            {% if form.email.errors %}
-                            <div class="text-danger small mt-1">
-                                {% for error in form.email.errors %}
-                                {{ error }}
-                                {% endfor %}
-                            </div>
-                            {% endif %}
+                        <div class="col-md-6">
+                            {{ checkout_form.email|as_crispy_field }}
                         </div>
-                        <div class="col-md-6 form-group">
-                            <label for="{{ form.phone_number.id_for_label }}" class="form-label">Phone Number *</label>
-                            {{ form.phone_number }}
-                            {% if form.phone_number.errors %}
-                            <div class="text-danger small mt-1">
-                                {% for error in form.phone_number.errors %}
-                                {{ error }}
-                                {% endfor %}
-                            </div>
-                            {% endif %}
+                        <div class="col-md-6">
+                            {{ checkout_form.phone_number|as_crispy_field }}
                         </div>
                     </div>
                 </div>
                 
-
-
-                <!-- Shipping Address -->
-                <div class="form-group">
-                    <div class="mb-3">
-                        <label for="{{ form.shipping_address.id_for_label }}" class="form-label">
-                            {{ form.shipping_address.label }}
-                            {% if form.shipping_address.field.required %}<span class="text-danger">*</span>{% endif %}
-                        </label>
-                        {{ form.shipping_address|as_crispy_field }}
+                <!-- Common Shipping Fields -->
+                <div class="row">
+                    <div class="col-12">
+                        {{ checkout_form.shipping_address|as_crispy_field }}
                     </div>
                 </div>
-
+                
                 <div class="row">
-                    <div class="col-md-6 form-group">
-                        <div class="mb-3">
-                            <label class="form-label">
-                                {{ form.city.label }}
-                                {% if form.city.field.required %}<span class="text-danger">*</span>{% endif %}
-                            </label>
-                            {{ form.city|as_crispy_field }}
-                        </div>
+                    <div class="col-md-6">
+                        {{ checkout_form.city|as_crispy_field }}
                     </div>
-                    <div class="col-md-6 form-group">
-                        <div class="mb-3">
-                            <label for="{{ form.postal_code.id_for_label }}" class="form-label">
-                                {{ form.postal_code.label }}
-                                {% if form.postal_code.field.required %}<span class="text-danger">*</span>{% endif %}
-                            </label>
-                            {{ form.postal_code|as_crispy_field }}
-                        </div>
+                    <div class="col-md-6">
+                        {{ checkout_form.postal_code|as_crispy_field }}
                     </div>
+                </div>
+                
+                <!-- Shipping Notes -->
+                <div class="form-group">
+                    {{ checkout_form.shipping_notes|as_crispy_field }}
                 </div>
                 
                 <!-- Previous Address Button -->
@@ -885,23 +993,42 @@
                 <div class="info-card">
                     <h6><i class="bi bi-clock-history"></i> Use Previous Address?</h6>
                     <div class="d-flex gap-2">
-                        <button type="button" class="btn-custom btn-primary btn-sm" id="useLastAddress">
+                        <button type="button" class="btn btn-primary btn-sm" id="useLastAddress">
                             <i class="bi bi-check-circle me-1"></i> Use Last Address
                         </button>
-                        <button type="button" class="btn-custom btn-ghost btn-sm" id="enterNewAddress">
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="enterNewAddress">
                             <i class="bi bi-pencil me-1"></i> Enter New
                         </button>
                     </div>
                 </div>
                 {% endif %}
                 
+                <!-- Payment Method -->
+                <h3 class="section-title mt-4">
+                    <i class="bi bi-credit-card"></i>
+                    Payment Method
+                </h3>
+                
+                <div class="form-group">
+                    {{ checkout_form.payment_method|as_crispy_field }}
+                </div>
+                
+                <!-- M-Pesa Phone Number (shown when M-Pesa selected) -->
+                <div id="mpesaFields" style="display: none;">
+                    <div class="form-group">
+                        {{ checkout_form.mpesa_phone|as_crispy_field }}
+                    </div>
+                    <div class="alert alert-info small">
+                        <i class="bi bi-info-circle me-2"></i>
+                        You'll receive an M-Pesa prompt on this number to complete payment.
+                    </div>
+                </div>
+                
                 <!-- Terms Agreement -->
-                <div class="info-card">
+                <div class="info-card mt-4">
                     <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="terms" required>
-                        <label class="form-check-label small" for="terms">
-                            I agree to the <a href="#" class="text-primary">Terms of Service</a> and <a href="#" class="text-primary">Privacy Policy</a>
-                        </label>
+                        {{ checkout_form.terms_accepted|as_crispy_field }}
+                        <small class="text-muted">By checking this box, you agree to our <a href="#" class="text-primary">Terms of Service</a> and <a href="#" class="text-primary">Privacy Policy</a></small>
                     </div>
                 </div>
                 
@@ -910,6 +1037,7 @@
                     Proceed to Payment - KSh {{ cart.get_total_price }}
                 </button>
             </form>
+            {% endif %}
         </div>
 
         <!-- Right Column: Order Summary -->
@@ -936,9 +1064,16 @@
                             </div>
                         </div>
                     </div>
+                    {% empty %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-cart-x text-muted" style="font-size: 2rem;"></i>
+                        <p class="text-muted mt-2">Your cart is empty</p>
+                        <a href="{% url 'all-listings' %}" class="btn btn-primary btn-sm">Browse Products</a>
+                    </div>
                     {% endfor %}
                 </div>
                 
+                {% if cart.items.all %}
                 <!-- Totals -->
                 <div class="totals-section">
                     <div class="total-row">
@@ -968,6 +1103,7 @@
                         <li><i class="bi bi-check-circle"></i> Escrow service</li>
                     </ul>
                 </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -1009,7 +1145,9 @@
         const alternateShippingForm = document.getElementById('alternateShippingForm');
         const useLastAddress = document.getElementById('useLastAddress');
         const enterNewAddress = document.getElementById('enterNewAddress');
-        const termsCheckbox = document.getElementById('terms');
+        const paymentMethod = document.getElementById('id_payment_method') || checkoutForm?.querySelector('[name="payment_method"]');
+        const mpesaFields = document.getElementById('mpesaFields');
+        const mpesaPhoneField = document.getElementById('id_mpesa_phone') || checkoutForm?.querySelector('[name="mpesa_phone"]');
         const toastContainer = document.getElementById('toastContainer');
         
         // ===== TOAST NOTIFICATION SYSTEM =====
@@ -1068,7 +1206,10 @@
                     const alternateFields = alternateShippingForm.querySelectorAll('input, select, textarea');
                     alternateFields.forEach(field => {
                         field.disabled = false;
+                        field.required = true;
                     });
+                    
+                    showToast('Enter different shipping address', 'info');
                 } else {
                     accountInfo.style.display = 'block';
                     alternateShippingForm.style.display = 'none';
@@ -1077,41 +1218,85 @@
                     const alternateFields = alternateShippingForm.querySelectorAll('input, select, textarea');
                     alternateFields.forEach(field => {
                         field.disabled = true;
+                        field.required = false;
                     });
                     
-                    // Fill with user's account info
+                    // Fill with user's account info if fields exist
                     fillWithAccountInfo();
+                    
+                    showToast('Using your account details', 'info');
                 }
             });
             
             // Initialize based on current state
-            if (!useAlternateShipping.checked) {
+            if (useAlternateShipping.checked) {
+                accountInfo.style.display = 'none';
+                alternateShippingForm.style.display = 'block';
+            } else {
                 fillWithAccountInfo();
             }
         }
         
         function fillWithAccountInfo() {
-            const firstNameField = document.getElementById('{{ form.first_name.id_for_label }}');
-            const lastNameField = document.getElementById('{{ form.last_name.id_for_label }}');
-            const emailField = document.getElementById('{{ form.email.id_for_label }}');
-            const phoneField = document.getElementById('{{ form.phone_number.id_for_label }}');
+            const firstNameField = document.getElementById('id_first_name') || checkoutForm?.querySelector('[name="first_name"]');
+            const lastNameField = document.getElementById('id_last_name') || checkoutForm?.querySelector('[name="last_name"]');
+            const emailField = document.getElementById('id_email') || checkoutForm?.querySelector('[name="email"]');
+            const phoneField = document.getElementById('id_phone_number') || checkoutForm?.querySelector('[name="phone_number"]');
             
-            if (firstNameField) firstNameField.value = '{{ request.user.first_name|escapejs }}';
-            if (lastNameField) lastNameField.value = '{{ request.user.last_name|escapejs }}';
-            if (emailField) emailField.value = '{{ request.user.email|escapejs }}';
-            if (phoneField) phoneField.value = '{{ request.user.phone_number|default:""|escapejs }}';
+            if (firstNameField && !firstNameField.value) {
+                firstNameField.value = '{{ request.user.first_name|escapejs }}';
+            }
+            if (lastNameField && !lastNameField.value) {
+                lastNameField.value = '{{ request.user.last_name|escapejs }}';
+            }
+            if (emailField && !emailField.value) {
+                emailField.value = '{{ request.user.email|escapejs }}';
+            }
+            if (phoneField && !phoneField.value && '{{ request.user.phone_number|escapejs }}') {
+                phoneField.value = '{{ request.user.phone_number|escapejs }}';
+            }
+        }
+        
+        // ===== PAYMENT METHOD TOGGLE =====
+        if (paymentMethod && mpesaFields) {
+            paymentMethod.addEventListener('change', function() {
+                if (this.value === 'mpesa') {
+                    mpesaFields.style.display = 'block';
+                    if (mpesaPhoneField) {
+                        mpesaPhoneField.required = true;
+                        // Pre-fill with user's phone if available
+                        if (!mpesaPhoneField.value && '{{ request.user.phone_number|escapejs }}') {
+                            mpesaPhoneField.value = '{{ request.user.phone_number|escapejs }}';
+                        }
+                    }
+                    showToast('M-Pesa selected. Enter your phone number.', 'info');
+                } else {
+                    mpesaFields.style.display = 'none';
+                    if (mpesaPhoneField) {
+                        mpesaPhoneField.required = false;
+                    }
+                    showToast('Payment method updated', 'info');
+                }
+            });
+            
+            // Initialize on page load
+            if (paymentMethod.value === 'mpesa') {
+                mpesaFields.style.display = 'block';
+            }
         }
         
         // ===== PREVIOUS ADDRESS HANDLING =====
         if (useLastAddress) {
             useLastAddress.addEventListener('click', function() {
-                const shippingAddressField = document.getElementById('{{ form.shipping_address.id_for_label }}');
-                const cityField = document.getElementById('{{ form.city.id_for_label }}');
-                const postalCodeField = document.getElementById('{{ form.postal_code.id_for_label }}');
+                // These would be populated from a previous order API
+                const shippingAddressField = document.getElementById('id_shipping_address') || checkoutForm?.querySelector('[name="shipping_address"]');
+                const cityField = document.getElementById('id_city') || checkoutForm?.querySelector('[name="city"]');
+                const postalCodeField = document.getElementById('id_postal_code') || checkoutForm?.querySelector('[name="postal_code"]');
                 
-                if (shippingAddressField) shippingAddressField.value = '{{ form.initial.shipping_address|escapejs }}';
-                if (cityField) cityField.value = '{{ form.initial.city|escapejs }}';
-                if (postalCodeField) postalCodeField.value = '{{ form.initial.postal_code|escapejs }}';
+                // For demo purposes - in real app, fetch from user's last order
+                if (shippingAddressField) shippingAddressField.value = '123 Previous Street';
+                if (cityField) cityField.value = 'Nairobi';
+                if (postalCodeField) postalCodeField.value = '00100';
                 
                 showToast('Previous address loaded', 'success');
             });
@@ -1119,9 +1304,9 @@
         
         if (enterNewAddress) {
             enterNewAddress.addEventListener('click', function() {
-                const shippingAddressField = document.getElementById('{{ form.shipping_address.id_for_label }}');
-                const cityField = document.getElementById('{{ form.city.id_for_label }}');
-                const postalCodeField = document.getElementById('{{ form.postal_code.id_for_label }}');
+                const shippingAddressField = document.getElementById('id_shipping_address') || checkoutForm?.querySelector('[name="shipping_address"]');
+                const cityField = document.getElementById('id_city') || checkoutForm?.querySelector('[name="city"]');
+                const postalCodeField = document.getElementById('id_postal_code') || checkoutForm?.querySelector('[name="postal_code"]');
                 
                 if (shippingAddressField) {
                     shippingAddressField.value = '';
@@ -1137,30 +1322,35 @@
         // ===== FORM VALIDATION =====
         function validateForm() {
             let isValid = true;
-            const requiredFields = [];
             
             // Always require shipping address, city, and postal code
-            requiredFields.push(
-                '{{ form.shipping_address.id_for_label }}',
-                '{{ form.city.id_for_label }}',
-                '{{ form.postal_code.id_for_label }}'
-            );
+            const requiredFields = [
+                checkoutForm?.querySelector('[name="shipping_address"]'),
+                checkoutForm?.querySelector('[name="city"]'), 
+                checkoutForm?.querySelector('[name="postal_code"]'),
+                checkoutForm?.querySelector('[name="payment_method"]'),
+                checkoutForm?.querySelector('#terms') || checkoutForm?.querySelector('[name="terms_accepted"]')
+            ];
             
             // If alternate shipping is checked, also require name, email, phone
             if (useAlternateShipping && useAlternateShipping.checked) {
                 requiredFields.push(
-                    '{{ form.first_name.id_for_label }}',
-                    '{{ form.last_name.id_for_label }}',
-                    '{{ form.email.id_for_label }}',
-                    '{{ form.phone_number.id_for_label }}'
+                    checkoutForm?.querySelector('[name="first_name"]'),
+                    checkoutForm?.querySelector('[name="last_name"]'),
+                    checkoutForm?.querySelector('[name="email"]'),
+                    checkoutForm?.querySelector('[name="phone_number"]')
                 );
             }
             
+            // If M-Pesa is selected, require phone number
+            if (paymentMethod && paymentMethod.value === 'mpesa') {
+                requiredFields.push(checkoutForm?.querySelector('[name="mpesa_phone"]'));
+            }
+            
             // Validate each required field
-            requiredFields.forEach(fieldId => {
-                const field = document.getElementById(fieldId);
-                if (field) {
-                    const value = field.value.trim();
+            requiredFields.forEach(field => {
+                if (field && field.required) {
+                    const value = field.value ? field.value.trim() : '';
                     const parent = field.closest('.form-group');
                     
                     if (!value) {
@@ -1178,80 +1368,86 @@
                 }
             });
             
-            // Validate terms agreement
-            if (!termsCheckbox.checked) {
-                termsCheckbox.classList.add('is-invalid');
-                showToast('Please agree to the terms and conditions', 'error');
-                isValid = false;
-            } else {
-                termsCheckbox.classList.remove('is-invalid');
+            // Validate M-Pesa phone format
+            if (paymentMethod && paymentMethod.value === 'mpesa' && mpesaPhoneField) {
+                const phoneRegex = /^(\+254|0)[1-9]\d{8}$/;
+                if (!phoneRegex.test(mpesaPhoneField.value.trim())) {
+                    mpesaPhoneField.classList.add('is-invalid');
+                    showToast('Please enter a valid Kenyan phone number (e.g., 0712345678 or +254712345678)', 'error');
+                    isValid = false;
+                }
             }
             
             return isValid;
         }
         
         // ===== FORM SUBMISSION =====
-        checkoutForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            // Validate form
-            if (!validateForm()) {
-                showToast('Please fill in all required fields', 'error');
-                return;
-            }
-            
-            // Show loading state
-            const originalText = placeOrderBtn.innerHTML;
-            placeOrderBtn.innerHTML = '<i class="bi bi-hourglass-split spin"></i> Processing...';
-            placeOrderBtn.disabled = true;
-            
-            // Disable all form fields to prevent double submission
-            const formElements = checkoutForm.elements;
-            for (let i = 0; i < formElements.length; i++) {
-                formElements[i].disabled = true;
-            }
-            
-            // If alternate shipping is not checked, we need to ensure those fields are not validated
-            if (!useAlternateShipping.checked) {
-                // Temporarily fill and disable the fields
-                fillWithAccountInfo();
+        if (checkoutForm) {
+            checkoutForm.addEventListener('submit', function(e) {
+                e.preventDefault();
                 
-                // Disable the fields so Django doesn't validate them
-                const alternateFields = alternateShippingForm.querySelectorAll('input, select, textarea');
-                alternateFields.forEach(field => {
-                    field.disabled = true;
-                });
-            }
-            
-            // Submit the form
-            setTimeout(() => {
-                checkoutForm.submit();
-            }, 500);
-        });
+                // Validate form
+                if (!validateForm()) {
+                    showToast('Please fill in all required fields correctly', 'error');
+                    
+                    // Scroll to first error
+                    const firstError = document.querySelector('.is-invalid');
+                    if (firstError) {
+                        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        firstError.focus();
+                    }
+                    return;
+                }
+                
+                // Show loading state
+                const originalText = placeOrderBtn.innerHTML;
+                placeOrderBtn.innerHTML = '<i class="bi bi-hourglass-split spin"></i> Processing...';
+                placeOrderBtn.disabled = true;
+                
+                // Disable all form fields to prevent double submission
+                const formElements = checkoutForm.elements;
+                for (let i = 0; i < formElements.length; i++) {
+                    formElements[i].disabled = true;
+                }
+                
+                // If alternate shipping is not checked, we need to ensure those fields are not validated
+                if (useAlternateShipping && !useAlternateShipping.checked) {
+                    // Temporarily fill and disable the fields
+                    fillWithAccountInfo();
+                    
+                    // Disable the fields so Django doesn't validate them
+                    const alternateFields = alternateShippingForm.querySelectorAll('input, select, textarea');
+                    alternateFields.forEach(field => {
+                        field.disabled = true;
+                    });
+                }
+                
+                // Submit the form
+                setTimeout(() => {
+                    checkoutForm.submit();
+                }, 1000);
+            });
+        }
         
         // ===== REAL-TIME VALIDATION =====
-        const formInputs = checkoutForm.querySelectorAll('input, select, textarea');
-        formInputs.forEach(input => {
-            input.addEventListener('blur', function() {
-                if (this.hasAttribute('required') && !this.value.trim()) {
-                    this.classList.add('is-invalid');
-                } else {
-                    this.classList.remove('is-invalid');
-                }
+        if (checkoutForm) {
+            const formInputs = checkoutForm.querySelectorAll('input, select, textarea');
+            formInputs.forEach(input => {
+                input.addEventListener('blur', function() {
+                    if (this.hasAttribute('required') && !this.value.trim()) {
+                        this.classList.add('is-invalid');
+                    } else {
+                        this.classList.remove('is-invalid');
+                    }
+                });
+                
+                input.addEventListener('input', function() {
+                    if (this.value.trim()) {
+                        this.classList.remove('is-invalid');
+                    }
+                });
             });
-            
-            input.addEventListener('input', function() {
-                if (this.value.trim()) {
-                    this.classList.remove('is-invalid');
-                }
-            });
-        });
-        
-        termsCheckbox.addEventListener('change', function() {
-            if (this.checked) {
-                this.classList.remove('is-invalid');
-            }
-        });
+        }
         
         // ===== INITIALIZATION =====
         function initialize() {
