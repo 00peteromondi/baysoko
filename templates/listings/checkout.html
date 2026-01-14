@@ -1013,6 +1013,9 @@
                     {{ checkout_form.payment_method|as_crispy_field }}
                 </div>
                 
+                <!-- Store payment method in hidden field for next page -->
+                <input type="hidden" name="selected_payment_method" id="selectedPaymentMethod" value="{{ checkout_form.payment_method.value|default:'mpesa' }}">
+                
                 <!-- M-Pesa Phone Number (shown when M-Pesa selected) -->
                 <div id="mpesaFields" style="display: none;">
                     <div class="form-group">
@@ -1149,6 +1152,7 @@
         const mpesaFields = document.getElementById('mpesaFields');
         const mpesaPhoneField = document.getElementById('id_mpesa_phone') || checkoutForm?.querySelector('[name="mpesa_phone"]');
         const toastContainer = document.getElementById('toastContainer');
+        const selectedPaymentMethodField = document.getElementById('selectedPaymentMethod');
         
         // ===== TOAST NOTIFICATION SYSTEM =====
         window.showToast = function(message, type = 'info') {
@@ -1277,11 +1281,21 @@
                     }
                     showToast('Payment method updated', 'info');
                 }
+                
+                // Update hidden field with selected payment method
+                if (selectedPaymentMethodField) {
+                    selectedPaymentMethodField.value = this.value;
+                }
             });
             
             // Initialize on page load
             if (paymentMethod.value === 'mpesa') {
                 mpesaFields.style.display = 'block';
+            }
+            
+            // Set initial value in hidden field
+            if (selectedPaymentMethodField && paymentMethod.value) {
+                selectedPaymentMethodField.value = paymentMethod.value;
             }
         }
         
@@ -1400,26 +1414,35 @@
                 }
                 
                 // Show loading state
-                const originalText = placeOrderBtn.innerHTML;
                 placeOrderBtn.innerHTML = '<i class="bi bi-hourglass-split spin"></i> Processing...';
                 placeOrderBtn.disabled = true;
                 
-                // Disable all form fields to prevent double submission
-                const formElements = checkoutForm.elements;
-                for (let i = 0; i < formElements.length; i++) {
-                    formElements[i].disabled = true;
+                // Store payment method in session for next page
+                if (paymentMethod) {
+                    sessionStorage.setItem('selected_payment_method', paymentMethod.value);
                 }
+                
+                // CRITICAL FIX: Don't disable the CSRF token field
+                // Only disable the submit button and form fields that we want to exclude from submission
                 
                 // If alternate shipping is not checked, we need to ensure those fields are not validated
                 if (useAlternateShipping && !useAlternateShipping.checked) {
                     // Temporarily fill and disable the fields
                     fillWithAccountInfo();
                     
-                    // Disable the fields so Django doesn't validate them
-                    const alternateFields = alternateShippingForm.querySelectorAll('input, select, textarea');
+                    // Disable the alternate shipping fields so Django doesn't validate them
+                    // But do NOT disable the CSRF token
+                    const alternateFields = alternateShippingForm.querySelectorAll('input:not([name="csrfmiddlewaretoken"]), select, textarea');
                     alternateFields.forEach(field => {
                         field.disabled = true;
                     });
+                }
+                
+                // IMPORTANT: Re-enable any fields that might have been disabled before submission
+                // Ensure CSRF token is enabled
+                const csrfTokenField = checkoutForm.querySelector('[name="csrfmiddlewaretoken"]');
+                if (csrfTokenField && csrfTokenField.disabled) {
+                    csrfTokenField.disabled = false;
                 }
                 
                 // Submit the form
@@ -1477,6 +1500,13 @@
                     firstInvalid.focus();
                 }
             }, 500);
+            
+            // Check if we have a stored payment method from session
+            const storedPaymentMethod = sessionStorage.getItem('selected_payment_method');
+            if (storedPaymentMethod && paymentMethod) {
+                paymentMethod.value = storedPaymentMethod;
+                paymentMethod.dispatchEvent(new Event('change'));
+            }
         }
         
         // Start initialization
@@ -1492,6 +1522,11 @@
                     document.querySelector('.order-summary-card')?.classList.remove('sticky');
                 }
             }, 250);
+        });
+        
+        // Clean up session storage on page unload
+        window.addEventListener('beforeunload', function() {
+            sessionStorage.removeItem('selected_payment_method');
         });
     });
 </script>

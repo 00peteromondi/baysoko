@@ -1,389 +1,1038 @@
+<!-- templates/listings/payment.html -->
 {% extends 'base.html' %}
+{% load static %}
+{% load custom_filters %}
 
-{% block title %}Payment - Order #{{ order.id }} - HomaBay Souq{% endblock %}
+{% block title %}Payment - Order #{{ order.id }} - Baysoko{% endblock %}
 
 {% block extra_css %}
 <style>
-    .payment-container {
-        min-height: 70vh;
+    /* ===== GLOBAL STYLES ===== */
+    .container-custom {
+        padding-left: 8px;
+        padding-right: 8px;
     }
     
-    .payment-card {
-        border-radius: 16px;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+    /* ===== BREADCRUMB ===== */
+    .breadcrumb {
+        background: var(--bg-secondary);
+        padding: 10px 12px;
+        border-radius: var(--radius-md);
+        margin-bottom: 16px;
+        border: 1px solid var(--border-color);
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        font-size: 12px;
+    }
+    
+    .breadcrumb-item a {
+        text-decoration: none;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+    }
+    
+    /* ===== PAYMENT HERO SECTION ===== */
+    .payment-hero {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
         overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
     }
     
     .payment-header {
-        background: linear-gradient(135deg, var(--primary-gemini) 0%, var(--brand-dark-700) 100%);
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        padding: 16px;
         color: white;
-        padding: 2rem;
+        text-align: center;
     }
     
-    .payment-method-card {
-    border: 2px solid var(--muted-border);
-        border-radius: 12px;
+    .payment-header h1 {
+        font-size: 18px;
+        font-weight: 800;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+    
+    /* ===== STEP INDICATOR ===== */
+    .step-indicator {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        position: relative;
+        flex: 1;
+    }
+    
+    .step.active .step-number {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        border-color: var(--primary);
+    }
+    
+    .step.completed .step-number {
+        background: var(--success);
+        color: white;
+        border-color: var(--success);
+    }
+    
+    .step-number {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--card-bg);
+        border: 2px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 14px;
         transition: all 0.3s ease;
+    }
+    
+    .step-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-align: center;
+        white-space: nowrap;
+    }
+    
+    .step.active .step-label {
+        color: var(--primary);
+        font-weight: 700;
+    }
+    
+    .step-line {
+        flex: 1;
+        height: 2px;
+        background: var(--border-color);
+        margin: 0 8px;
+        position: relative;
+        top: -16px;
+    }
+    
+    .step-line.active {
+        background: var(--primary);
+    }
+    
+    /* ===== FORM SECTIONS ===== */
+    .form-section {
+        padding: 16px;
+    }
+    
+    .section-title {
+        font-size: 16px;
+        font-weight: 800;
+        margin-bottom: 16px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .section-title i {
+        color: var(--primary);
+        background: rgba(255, 107, 53, 0.1);
+        padding: 8px;
+        border-radius: 8px;
+        font-size: 14px;
+    }
+    
+    /* Form Fields */
+    .form-group {
+        margin-bottom: 16px;
+    }
+    
+    .form-label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--text-primary);
+    }
+    
+    .form-control {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+    
+    .form-control:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+    }
+    
+    /* Payment Method Cards */
+    .payment-method-card {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        border: 2px solid var(--border-color);
+        margin-bottom: 12px;
+        transition: all 0.2s ease;
         cursor: pointer;
-        padding: 1.5rem;
-        margin-bottom: 1rem;
     }
     
     .payment-method-card:hover {
-        border-color: var(--primary-gemini);
+        border-color: var(--primary);
         transform: translateY(-2px);
+        box-shadow: var(--shadow-sm);
     }
     
     .payment-method-card.selected {
-        border-color: var(--primary-gemini);
-        background-color: rgba(var(--primary-gemini-rgb), 0.05);
+        border-color: var(--primary);
+        background-color: rgba(255, 107, 53, 0.05);
     }
     
+    .payment-method-card .form-check {
+        margin: 0;
+    }
+    
+    .payment-method-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        margin-right: 12px;
+        flex-shrink: 0;
+    }
+    
+    .mpesa-icon {
+        background: linear-gradient(135deg, #00A300 0%, #007A00 100%);
+        color: white;
+    }
+    
+    .card-icon {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+    }
+    
+    .cash-icon {
+        background: linear-gradient(135deg, #FFC107 0%, #FF9800 100%);
+        color: white;
+    }
+    
+    .method-details h6 {
+        margin-bottom: 4px;
+        color: var(--text-primary);
+        font-size: 14px;
+        font-weight: 700;
+    }
+    
+    .method-details p {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    
+    /* Payment Status */
     .payment-status {
-        padding: 0.5rem 1rem;
-        border-radius: 50px;
+        padding: 4px 12px;
+        border-radius: 20px;
         font-weight: 600;
+        font-size: 12px;
+        display: inline-block;
     }
     
     .status-pending {
-        background-color: var(--status-pending-bg, #fff3cd);
-        color: var(--status-pending-text, #856404);
-    }
-
-    .status-initiated {
-        background-color: var(--status-initiated-bg, #d1edff);
-        color: var(--status-initiated-text, #0c5460);
-    }
-
-    .status-completed {
-        background-color: var(--status-completed-bg, #d4edda);
-        color: var(--status-completed-text, #155724);
-    }
-
-    .status-failed {
-        background-color: var(--status-failed-bg, #f8d7da);
-        color: var(--status-failed-text, #721c24);
+        background-color: #fff3cd;
+        color: #856404;
     }
     
+    .status-initiated {
+        background-color: #d1edff;
+        color: #0c5460;
+    }
+    
+    .status-completed {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .status-failed {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    /* M-Pesa Simulation */
     .mpesa-simulation {
-        background: linear-gradient(135deg, var(--mpesa-green) 0%, var(--mpesa-green-dark) 100%);
+        background: linear-gradient(135deg, #00A300 0%, #007A00 100%);
         color: white;
         border-radius: 12px;
-        padding: 1.5rem;
+        padding: 16px;
+        margin-bottom: 16px;
     }
     
-    .payment-timeline {
-        position: relative;
-        padding-left: 2rem;
+    .mpesa-simulation .text-center {
+        margin-bottom: 16px;
     }
     
-    .payment-timeline::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 2px;
-        background: var(--muted-border);
+    .mpesa-simulation .display-4 {
+        font-size: 2.5rem;
+        margin-bottom: 8px;
     }
     
-    .timeline-step {
-        position: relative;
-        margin-bottom: 2rem;
+    /* Alert Styling */
+    .alert {
+        border-radius: var(--radius-md);
+        padding: 12px;
+        margin-bottom: 16px;
+        border: 1px solid transparent;
     }
     
-    .timeline-step::before {
-        content: '';
-        position: absolute;
-        left: -2rem;
-        top: 0.25rem;
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        background: var(--muted-700);
-        margin-left: -5px;
+    .alert-info {
+        background-color: #d1edff;
+        border-color: #bee5eb;
+        color: #0c5460;
     }
     
-    .timeline-step.active::before {
-        background: var(--primary-gemini);
-        box-shadow: 0 0 0 3px rgba(var(--primary-gemini-rgb), 0.2);
+    .alert-warning {
+        background-color: #fff3cd;
+        border-color: #ffeaa7;
+        color: #856404;
     }
     
-    .timeline-step.completed::before {
-        background: var(--status-completed-text, #28a745);
+    .alert-success {
+        background-color: #d4edda;
+        border-color: #c3e6cb;
+        color: #155724;
     }
     
-    .security-badge {
-        background: var(--surface-100);
-        border: 1px solid var(--muted-border);
+    /* Buttons */
+    .btn-payment {
+        width: 100%;
+        padding: 12px;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        border: none;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .btn-payment:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .btn-payment:active {
+        transform: translateY(0);
+    }
+    
+    .btn-payment:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+        transform: none;
+    }
+    
+    .btn-outline-info {
+        border: 1px solid var(--primary);
+        color: var(--primary);
+        background: transparent;
+        padding: 6px 12px;
+        border-radius: var(--radius-md);
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-outline-info:hover {
+        background: var(--primary);
+        color: white;
+    }
+    
+    /* ===== ORDER SUMMARY CARD ===== */
+    .order-summary-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 20px;
+    }
+    
+    .summary-header {
+        background: var(--bg-secondary);
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .summary-header h5 {
+        font-size: 16px;
+        font-weight: 800;
+        margin: 0;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .summary-content {
+        padding: 16px;
+    }
+    
+    /* Order Items */
+    .order-items {
+        max-height: 300px;
+        overflow-y: auto;
+        margin-bottom: 16px;
+        padding-right: 4px;
+    }
+    
+    .order-items::-webkit-scrollbar {
+        width: 4px;
+    }
+    
+    .order-items::-webkit-scrollbar-track {
+        background: var(--bg-secondary);
+        border-radius: 2px;
+    }
+    
+    .order-items::-webkit-scrollbar-thumb {
+        background: var(--primary);
+        border-radius: 2px;
+    }
+    
+    .order-item {
+        display: flex;
+        gap: 12px;
+        padding: 10px;
+        border-bottom: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+    }
+    
+    .order-item:hover {
+        background: var(--bg-secondary);
         border-radius: 8px;
-        padding: 1rem;
     }
     
-    @media (max-width: 768px) {
+    .order-item:last-child {
+        border-bottom: none;
+    }
+    
+    .item-image {
+        width: 50px;
+        height: 50px;
+        border-radius: 8px;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+    
+    .item-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.3s ease;
+    }
+    
+    .order-item:hover .item-image img {
+        transform: scale(1.05);
+    }
+    
+    .item-details {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    
+    .item-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+        line-height: 1.3;
+    }
+    
+    .item-meta {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+    
+    .item-price {
+        font-weight: 700;
+        font-size: 14px;
+        color: var(--primary);
+        display: flex;
+        align-items: center;
+    }
+    
+    /* Totals */
+    .totals-section {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        margin-bottom: 16px;
+        border: 1px solid var(--border-color);
+    }
+    
+    .total-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        font-size: 14px;
+    }
+    
+    .total-row.total {
+        font-weight: 800;
+        font-size: 18px;
+        color: var(--primary);
+        border-top: 1px solid var(--border-color);
+        padding-top: 10px;
+        margin-top: 6px;
+    }
+    
+    /* Security Badge */
+    .security-badge {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        margin-top: 16px;
+    }
+    
+    .security-badge h6 {
+        margin-bottom: 8px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 700;
+    }
+    
+    /* Help Card */
+    .help-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 16px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-top: 20px;
+    }
+    
+    .help-card h6 {
+        margin-bottom: 12px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 700;
+    }
+    
+    .help-contact {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .contact-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-secondary);
+        font-size: 13px;
+        text-decoration: none;
+        transition: color 0.2s ease;
+    }
+    
+    .contact-item:hover {
+        color: var(--primary);
+    }
+    
+    .contact-item i {
+        color: var(--primary);
+        font-size: 14px;
+    }
+    
+    /* ===== TOAST NOTIFICATIONS ===== */
+    .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1060;
+    }
+    
+    .toast {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-lg);
+        backdrop-filter: blur(10px);
+    }
+    
+    .toast-body {
+        padding: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-primary);
+    }
+    
+    /* Processing Section */
+    .processing-section {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        text-align: center;
+        margin-bottom: 16px;
+    }
+    
+    .spinner-border {
+        width: 3rem;
+        height: 3rem;
+    }
+    
+    /* ===== ANIMATIONS ===== */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    @keyframes slideInRight {
+        from { opacity: 0; transform: translateX(20px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+    
+    .animate-fade-in {
+        animation: fadeIn 0.5s ease-out;
+    }
+    
+    .animate-slide-right {
+        animation: slideInRight 0.5s ease-out;
+    }
+    
+    /* ===== RESPONSIVE DESIGN ===== */
+    @media (max-width: 374px) {
+        .container-custom {
+            padding-left: 6px;
+            padding-right: 6px;
+        }
+        
         .payment-header {
-            padding: 1.5rem 1rem;
+            padding: 12px;
         }
         
-        .payment-timeline {
-            padding-left: 1.5rem;
+        .payment-header h1 {
+            font-size: 16px;
         }
         
-        .timeline-step::before {
-            left: -1.5rem;
+        .step-indicator {
+            padding: 8px 12px;
+        }
+        
+        .step-number {
+            width: 28px;
+            height: 28px;
+            font-size: 12px;
+        }
+        
+        .step-label {
+            font-size: 9px;
+        }
+        
+        .form-section {
+            padding: 12px;
+        }
+        
+        .section-title {
+            font-size: 14px;
+        }
+    }
+    
+    @media (min-width: 375px) and (max-width: 424px) {
+        .payment-header h1 {
+            font-size: 17px;
+        }
+        
+        .step-label {
+            font-size: 10px;
+        }
+    }
+    
+    @media (min-width: 425px) and (max-width: 575px) {
+        .payment-header h1 {
+            font-size: 18px;
+        }
+    }
+    
+    @media (min-width: 576px) {
+        .container-custom {
+            padding-left: 16px;
+            padding-right: 16px;
+        }
+        
+        .payment-header {
+            padding: 20px;
+        }
+        
+        .payment-header h1 {
+            font-size: 22px;
+        }
+        
+        .form-section {
+            padding: 20px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+        }
+        
+        .step-label {
+            font-size: 12px;
+        }
+    }
+    
+    @media (min-width: 768px) {
+        .payment-hero {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            padding: 20px;
+        }
+        
+        .payment-header {
+            grid-column: 1 / -1;
+        }
+        
+        .step-indicator {
+            grid-column: 1 / -1;
+        }
+        
+        .order-summary-card {
+            position: sticky;
+            top: 100px;
+            align-self: start;
+        }
+    }
+    
+    @media (min-width: 992px) {
+        .payment-hero {
+            grid-template-columns: 1.5fr 1fr;
+            gap: 32px;
+            padding: 24px;
         }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container py-4 payment-container">
-    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:1060;" aria-live="polite" aria-atomic="true"></div>
+<div class="container-custom py-3">
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+    
     <!-- Breadcrumb -->
-    <nav aria-label="breadcrumb" class="mb-4">
+    <nav aria-label="breadcrumb" class="mb-3">
         <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'home' %}"><i class="bi bi-house"></i> Home</a></li>
             <li class="breadcrumb-item"><a href="{% url 'view_cart' %}">Cart</a></li>
             <li class="breadcrumb-item"><a href="{% url 'checkout' %}">Checkout</a></li>
             <li class="breadcrumb-item active" aria-current="page">Payment</li>
         </ol>
     </nav>
 
-    <div class="row">
-        <div class="col-lg-8">
-            <div class="card payment-card mb-4">
-                <div class="payment-header text-center">
-                    <h2 class="mb-2"><i class="bi bi-lock-fill me-2"></i>Secure Payment</h2>
-                    <p class="mb-0">Complete your purchase for Order #{{ order.id }}</p>
-                </div>
-                
-                <div class="card-body p-4">
-                    <!-- Payment Status -->
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h4 class="mb-0">Payment Details</h4>
-                        <span class="payment-status status-{{ order.payment.status }}">
-                            {{ order.payment.get_status_display }}
-                        </span>
-                    </div>
-                    
-                    <!-- Payment Method Selection (Only show if payment is pending) -->
-                    {% if order.payment.status == 'pending' %}
-                    <div class="mb-4">
-                        <h5 class="mb-3">Choose Payment Method</h5>
-                        
-                        <!-- M-Pesa Option -->
-                        <div class="payment-method-card" data-method="mpesa">
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="payment_method" id="mpesa" value="mpesa" checked>
-                                <label class="form-check-label w-100" for="mpesa">
-                                    <div class="d-flex align-items-center">
-                                        <i class="bi bi-phone fs-1 text-success me-3"></i>
-                                        <div class="flex-grow-1">
-                                            <h6 class="mb-1">M-Pesa</h6>
-                                            <p class="mb-0 text-muted">Pay instantly via M-Pesa. You'll receive a prompt on your phone.</p>
-                                        </div>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <!-- Card Option -->
-                        <div class="payment-method-card" data-method="card">
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="payment_method" id="card" value="card">
-                                <label class="form-check-label w-100" for="card">
-                                    <div class="d-flex align-items-center">
-                                        <i class="bi bi-credit-card fs-1 text-primary me-3"></i>
-                                        <div class="flex-grow-1">
-                                            <h6 class="mb-1">Credit/Debit Card</h6>
-                                            <p class="mb-0 text-muted">Pay securely with your credit or debit card.</p>
-                                        </div>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <!-- Cash on Delivery Option -->
-                        <div class="payment-method-card" data-method="cash">
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="payment_method" id="cash" value="cash">
-                                <label class="form-check-label w-100" for="cash">
-                                    <div class="d-flex align-items-center">
-                                        <i class="bi bi-cash-coin fs-1 text-warning me-3"></i>
-                                        <div class="flex-grow-1">
-                                            <h6 class="mb-1">Cash on Delivery</h6>
-                                            <p class="mb-0 text-muted">Pay with cash when your order is delivered.</p>
-                                        </div>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Payment Form (Dynamic based on selection) -->
-                    <div id="paymentFormContainer">
-                        <!-- M-Pesa Payment Form -->
-                        <div class="payment-method-form" id="mpesaForm">
-                            <div class="mpesa-simulation mb-4">
-                                <div class="text-center mb-3">
-                                    <i class="bi bi-phone display-4 mb-2"></i>
-                                    <h4>M-Pesa Payment</h4>
-                                    <p>You will receive a prompt on your phone to complete payment</p>
-                                </div>
-                                
-                                <div class="mb-3">
-                                    <label for="mpesaNumber" class="form-label">M-Pesa Phone Number</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text">+254</span>
-                                        <input type="tel" class="form-control" id="mpesaNumber" 
-                                               placeholder="7XX XXX XXX" 
-                                               value="{% if order.phone_number %}{{ order.phone_number|slice:'3:' }}{% endif %}">
-                                    </div>
-                                    <small class="text-white-50">Enter your M-Pesa registered phone number</small>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Card Payment Form -->
-                        <div class="payment-method-form" id="cardForm" style="display: none;">
-                            <div class="alert alert-info">
-                                <h6><i class="bi bi-credit-card me-2"></i>Card Payment</h6>
-                                <p class="mb-0">Your card payment will be processed securely. Click "Complete Payment" to proceed.</p>
-                            </div>
-                        </div>
-                        
-                        <!-- Cash on Delivery Info -->
-                        <div class="payment-method-form" id="cashForm" style="display: none;">
-                            <div class="alert alert-warning">
-                                <h6><i class="bi bi-cash-coin me-2"></i>Cash on Delivery</h6>
-                                <p class="mb-0">You will pay with cash when your order is delivered. Our delivery agent will contact you to arrange the delivery time.</p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Payment Action Button -->
-                    <button type="button" class="btn btn-primary w-100 py-3" id="processPaymentBtn">
-                        <i class="bi bi-lock-fill me-2"></i>Complete Payment - KSh {{ order.total_price }}
-                    </button>
-                    {% endif %}
-                    
-                    <!-- Payment Processing Section -->
-                    <div id="paymentProcessingSection" {% if order.payment.status != 'initiated' %}style="display: none;"{% endif %}>
-                        <div class="alert alert-info text-center">
-                            <i class="bi bi-phone display-4 text-info mb-3"></i>
-                            <h5>Check Your Phone</h5>
-                            <p class="mb-2">Enter your M-Pesa PIN to complete payment of</p>
-                            <h4 class="text-info mb-3">KSh {{ order.total_price }}</h4>
-                            <div class="spinner-border text-info mb-3" role="status">
-                                <span class="visually-hidden">Processing...</span>
-                            </div>
-                            <p class="small text-muted mb-2">Waiting for payment confirmation...</p>
-                            <button type="button" class="btn btn-outline-info btn-sm" id="checkStatusBtn">
-                                <i class="bi bi-arrow-clockwise me-1"></i> Check Status
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- Payment Success Section -->
-                    <div id="paymentSuccessSection" {% if order.payment.status != 'completed' %}style="display: none;"{% endif %}>
-                        <div class="alert alert-success text-center">
-                            <i class="bi bi-check-circle display-4 text-success mb-3"></i>
-                            <h5>Payment Successful!</h5>
-                            <p class="mb-2">Your payment has been processed successfully.</p>
-                            {% if order.payment.transaction_id %}
-                            <p class="mb-2"><strong>Transaction ID:</strong> {{ order.payment.transaction_id }}</p>
-                            {% endif %}
-                            <a href="{% url 'order_detail' order.id %}" class="btn btn-success mt-2">
-                                <i class="bi bi-eye me-2"></i> View Order Details
-                            </a>
-                        </div>
-                    </div>
-                    
-                    <!-- Security Badge -->
-                    <div class="security-badge mt-4">
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-shield-check text-success fs-4 me-3"></i>
-                            <div>
-                                <h6 class="mb-1">Secure Payment</h6>
-                                <p class="mb-0 small">Your payment information is encrypted and secure. We do not store your M-Pesa PIN or card details.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    <!-- Main Payment Container -->
+    <div class="payment-hero">
+        <!-- Header -->
+        <div class="payment-header">
+            <h1><i class="bi bi-lock-fill"></i> Secure Payment</h1>
+            <p class="mb-0">Complete your purchase for Order #{{ order.id }}</p>
+        </div>
+
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step completed">
+                <div class="step-number">1</div>
+                <span class="step-label">Shipping</span>
+            </div>
+            <div class="step-line active"></div>
+            <div class="step active">
+                <div class="step-number">2</div>
+                <span class="step-label">Payment</span>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <span class="step-label">Confirmation</span>
             </div>
         </div>
-        
-        <div class="col-lg-4">
-            <!-- Order Summary -->
-            <div class="card payment-card sticky-top" style="top: 100px;">
-                <div class="card-header bg-light py-3">
-                    <h5 class="mb-0"><i class="bi bi-receipt me-2"></i>Order Summary</h5>
-                </div>
-                <div class="card-body">
-                    <div class="order-items mb-3">
-                        {% for item in order.order_items.all %}
-                        <div class="d-flex align-items-center mb-3 pb-3 border-bottom">
-                            <img src="{{ item.listing.get_image_url }}" 
-                                 alt="{{ item.listing.title }}"
-                                 class="rounded me-3"
-                                 width="50"
-                                 height="50"
-                                 style="object-fit: cover;"
-                                 onerror="this.src='https://placehold.co/50x50/c2c2c2/1f1f1f?text=HS'">
-                            <div class="flex-grow-1">
-                                <h6 class="mb-1">{{ item.listing.title }}</h6>
-                                <small class="text-muted">Qty: {{ item.quantity }}</small>
+
+        <!-- Left Column: Payment Form -->
+        <div class="form-section">
+            <!-- Payment Status -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="section-title mb-0"><i class="bi bi-credit-card"></i> Payment Details</h4>
+                <span class="payment-status status-{{ order.payment.status }}">
+                    {{ order.payment.get_status_display }}
+                </span>
+            </div>
+            
+            <!-- Payment Method Selection (Only show if payment is pending) -->
+            {% if order.payment.status == 'pending' %}
+            <div class="mb-4">
+                <h5 class="section-title"><i class="bi bi-wallet2"></i> Choose Payment Method</h5>
+                
+                <!-- M-Pesa Option -->
+                <div class="payment-method-card" data-method="mpesa">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="payment_method" id="mpesa" value="mpesa" 
+                               {% if order.payment.method == 'mpesa' or selected_payment_method == 'mpesa' %}checked{% endif %}>
+                        <label class="form-check-label w-100" for="mpesa">
+                            <div class="d-flex align-items-center">
+                                <div class="payment-method-icon mpesa-icon">
+                                    <i class="bi bi-phone"></i>
+                                </div>
+                                <div class="method-details">
+                                    <h6>M-Pesa</h6>
+                                    <p>Pay instantly via M-Pesa. You'll receive a prompt on your phone.</p>
+                                </div>
                             </div>
-                            <span class="fw-bold text-primary">KSh {{ item.get_total_price }}</span>
-                        </div>
-                        {% endfor %}
+                        </label>
                     </div>
-                    
-                    <div class="d-flex justify-content-between mb-2">
-                        <span>Subtotal:</span>
-                        <span>KSh {{ order.total_price }}</span>
+                </div>
+                
+                <!-- Card Option -->
+                <div class="payment-method-card" data-method="card">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="payment_method" id="card" value="card"
+                               {% if order.payment.method == 'card' or selected_payment_method == 'card' %}checked{% endif %}>
+                        <label class="form-check-label w-100" for="card">
+                            <div class="d-flex align-items-center">
+                                <div class="payment-method-icon card-icon">
+                                    <i class="bi bi-credit-card"></i>
+                                </div>
+                                <div class="method-details">
+                                    <h6>Credit/Debit Card</h6>
+                                    <p>Pay securely with your credit or debit card.</p>
+                                </div>
+                            </div>
+                        </label>
                     </div>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span>Shipping:</span>
-                        <span class="text-success">Free</span>
-                    </div>
-                    <div class="d-flex justify-content-between mb-3">
-                        <span>Tax:</span>
-                        <span>KSh 0.00</span>
-                    </div>
-                    <hr>
-                    <div class="d-flex justify-content-between mb-3">
-                        <strong>Total:</strong>
-                        <strong class="text-primary fs-5">KSh {{ order.total_price }}</strong>
-                    </div>
-                    
-                    <!-- Shipping Information -->
-                    <div class="mt-4">
-                        <h6 class="mb-3">Shipping Information</h6>
-                        <div class="small">
-                            <p class="mb-1"><strong>Name:</strong> {{ order.first_name }} {{ order.last_name }}</p>
-                            <p class="mb-1"><strong>Phone:</strong> {{ order.phone_number }}</p>
-                            <p class="mb-1"><strong>Address:</strong> {{ order.shipping_address }}</p>
-                            <p class="mb-0"><strong>City:</strong> {{ order.city }}, {{ order.postal_code }}</p>
-                        </div>
+                </div>
+                
+                <!-- Cash on Delivery Option -->
+                <div class="payment-method-card" data-method="cash">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="payment_method" id="cash" value="cash"
+                               {% if order.payment.method == 'cash' or selected_payment_method == 'cash' %}checked{% endif %}>
+                        <label class="form-check-label w-100" for="cash">
+                            <div class="d-flex align-items-center">
+                                <div class="payment-method-icon cash-icon">
+                                    <i class="bi bi-cash-coin"></i>
+                                </div>
+                                <div class="method-details">
+                                    <h6>Cash on Delivery</h6>
+                                    <p>Pay with cash when your order is delivered.</p>
+                                </div>
+                            </div>
+                        </label>
                     </div>
                 </div>
             </div>
             
-            <!-- Support Card -->
-            <div class="card border-0 shadow-sm mt-4">
-                <div class="card-body text-center">
-                    <h6 class="mb-2">Need Help with Payment?</h6>
-                    <p class="text-muted small mb-3">Our support team is here to assist you</p>
-                    <div class="d-flex flex-column gap-2">
-                        <a href="tel:+254700123456" class="btn btn-outline-primary btn-sm">
-                            <i class="bi bi-telephone me-1"></i> Call Support
-                        </a>
-                        <a href="mailto:support@homabaysouq.com" class="btn btn-outline-secondary btn-sm">
-                            <i class="bi bi-envelope me-1"></i> Email Us
-                        </a>
+            <!-- Payment Form (Dynamic based on selection) -->
+            <div id="paymentFormContainer">
+                <!-- M-Pesa Payment Form -->
+                <div class="payment-method-form" id="mpesaForm">
+                    <div class="mpesa-simulation">
+                        <div class="text-center mb-3">
+                            <i class="bi bi-phone display-4 mb-2"></i>
+                            <h4>M-Pesa Payment</h4>
+                            <p>You will receive a prompt on your phone to complete payment</p>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="mpesaNumber" class="form-label">M-Pesa Phone Number</label>
+                            <div class="input-group">
+                                <span class="input-group-text">+254</span>
+                                <input type="tel" class="form-control" id="mpesaNumber" 
+                                       placeholder="7XX XXX XXX" 
+                                       value="{% if order.phone_number %}{{ order.phone_number|slice:'3:' }}{% endif %}">
+                            </div>
+                            <small class="text-white-50">Enter your M-Pesa registered phone number</small>
+                        </div>
                     </div>
                 </div>
+                
+                <!-- Card Payment Form -->
+                <div class="payment-method-form" id="cardForm" style="display: none;">
+                    <div class="alert alert-info">
+                        <h6><i class="bi bi-credit-card me-2"></i>Card Payment</h6>
+                        <p class="mb-0">Your card payment will be processed securely. Click "Complete Payment" to proceed.</p>
+                    </div>
+                </div>
+                
+                <!-- Cash on Delivery Info -->
+                <div class="payment-method-form" id="cashForm" style="display: none;">
+                    <div class="alert alert-warning">
+                        <h6><i class="bi bi-cash-coin me-2"></i>Cash on Delivery</h6>
+                        <p class="mb-0">You will pay with cash when your order is delivered. Our delivery agent will contact you to arrange the delivery time.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Payment Action Button -->
+            <button type="button" class="btn-payment" id="processPaymentBtn">
+                <i class="bi bi-lock-fill"></i>
+                Complete Payment - KSh {{ order.total_price }}
+            </button>
+            {% endif %}
+            
+            <!-- Payment Processing Section -->
+            <div id="paymentProcessingSection" {% if order.payment.status != 'initiated' %}style="display: none;"{% endif %}>
+                <div class="processing-section">
+                    <i class="bi bi-phone display-4 text-primary mb-3"></i>
+                    <h5>Check Your Phone</h5>
+                    <p class="mb-2">Enter your M-Pesa PIN to complete payment of</p>
+                    <h4 class="text-primary mb-3">KSh {{ order.total_price }}</h4>
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Processing...</span>
+                    </div>
+                    <p class="small text-muted mb-2">Waiting for payment confirmation...</p>
+                    <button type="button" class="btn-outline-info" id="checkStatusBtn">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Check Status
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Payment Success Section -->
+            <div id="paymentSuccessSection" {% if order.payment.status != 'completed' %}style="display: none;"{% endif %}>
+                <div class="alert alert-success text-center">
+                    <i class="bi bi-check-circle display-4 text-success mb-3"></i>
+                    <h5>Payment Successful!</h5>
+                    <p class="mb-2">Your payment has been processed successfully.</p>
+                    {% if order.payment.transaction_id %}
+                    <p class="mb-2"><strong>Transaction ID:</strong> {{ order.payment.transaction_id }}</p>
+                    {% endif %}
+                    <a href="{% url 'order_detail' order.id %}" class="btn-payment mt-2">
+                        <i class="bi bi-eye me-2"></i> View Order Details
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Security Badge -->
+            <div class="security-badge">
+                <h6><i class="bi bi-shield-check"></i> Secure Payment</h6>
+                <p class="mb-0 small">Your payment information is encrypted and secure. We do not store your M-Pesa PIN or card details.</p>
+            </div>
+        </div>
+
+        <!-- Right Column: Order Summary -->
+        <div class="order-summary-card animate-slide-right">
+            <div class="summary-header">
+                <h5><i class="bi bi-receipt"></i> Order Summary</h5>
+            </div>
+            
+            <div class="summary-content">
+                <!-- Order Items -->
+                <div class="order-items">
+                    {% for item in order.order_items.all %}
+                    <div class="order-item">
+                        <div class="item-image">
+                            <img src="{{ item.listing.get_image_url }}" 
+                                 alt="{{ item.listing.title }}"
+                                 onerror="this.src='https://placehold.co/50x50/c2c2c2/1f1f1f?text=HS'">
+                        </div>
+                        <div class="item-details">
+                            <div class="item-title">{{ item.listing.title|truncatechars:50 }}</div>
+                            <div class="item-meta">Qty: {{ item.quantity }}</div>
+                        </div>
+                        <span class="item-price">KSh {{ item.get_total_price }}</span>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-cart-x text-muted" style="font-size: 2rem;"></i>
+                        <p class="text-muted mt-2">No items in order</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                {% if order.order_items.all %}
+                <!-- Totals -->
+                <div class="totals-section">
+                    <div class="total-row">
+                        <span>Subtotal</span>
+                        <span>KSh {{ order.total_price }}</span>
+                    </div>
+                    <div class="total-row">
+                        <span>Shipping</span>
+                        <span class="text-success">Free</span>
+                    </div>
+                    <div class="total-row">
+                        <span>Tax</span>
+                        <span>KSh 0.00</span>
+                    </div>
+                    <div class="total-row total">
+                        <span>Total</span>
+                        <span>KSh {{ order.total_price }}</span>
+                    </div>
+                </div>
+                
+                <!-- Shipping Information -->
+                <div class="mb-3">
+                    <h6 class="section-title"><i class="bi bi-truck"></i> Shipping Information</h6>
+                    <div class="small">
+                        <p class="mb-1"><strong>Name:</strong> {{ order.first_name }} {{ order.last_name }}</p>
+                        <p class="mb-1"><strong>Phone:</strong> {{ order.phone_number }}</p>
+                        <p class="mb-1"><strong>Address:</strong> {{ order.shipping_address }}</p>
+                        <p class="mb-0"><strong>City:</strong> {{ order.city }}, {{ order.postal_code }}</p>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Section -->
+    <div class="help-card">
+        <h6><i class="bi bi-question-circle"></i> Need Help with Payment?</h6>
+        <div class="help-contact">
+            <a href="tel:+254700123456" class="contact-item">
+                <i class="bi bi-telephone"></i>
+                <span>+254 700 123 456</span>
+            </a>
+            <a href="mailto:support@baysoko.com" class="contact-item">
+                <i class="bi bi-envelope"></i>
+                <span>support@baysoko.com</span>
+            </a>
+            <div class="contact-item">
+                <i class="bi bi-clock"></i>
+                <span>Mon-Fri: 8:00 AM - 6:00 PM</span>
             </div>
         </div>
     </div>
@@ -429,8 +1078,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Initialize form display
-    updatePaymentFormDisplay();
+    // Initialize form display and selection state
+    function initializePaymentMethods() {
+        // Set initial selection state
+        const selectedMethod = document.querySelector('input[name="payment_method"]:checked');
+        if (selectedMethod) {
+            const selectedCard = selectedMethod.closest('.payment-method-card');
+            if (selectedCard) {
+                selectedCard.classList.add('selected');
+            }
+        }
+        
+        updatePaymentFormDisplay();
+    }
+    
+    initializePaymentMethods();
     
     // Format phone number input
     const phoneInput = document.getElementById('mpesaNumber');
@@ -475,7 +1137,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function initiateMpesaPayment(phoneNumber) {
         // Disable button and show loading
-        processPaymentBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i> Initiating Payment...';
+        processPaymentBtn.innerHTML = '<i class="bi bi-hourglass-split spin"></i> Initiating Payment...';
         processPaymentBtn.disabled = true;
         
         // Send AJAX request to initiate payment
@@ -623,69 +1285,61 @@ document.addEventListener('DOMContentLoaded', function() {
         return cookieValue;
     }
     
-    // Toast function (safe fallback if container or Bootstrap not available)
-    function showToast(message, type = 'info') {
-        const container = document.querySelector('.toast-container');
-        if (!container || typeof bootstrap === 'undefined' || typeof bootstrap.Toast !== 'function') {
-            try {
-                console.log('TOAST', type, message);
-                if (type === 'error') alert(message);
-            } catch (e) {
-                // swallow errors
-            }
-            return;
-        }
-
-        // Create toast element
+    // Toast function
+    window.showToast = function(message, type = 'info') {
         const toast = document.createElement('div');
-        toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} border-0`;
-        toast.setAttribute('role', 'alert');
-        toast.setAttribute('aria-live', 'assertive');
-        toast.setAttribute('aria-atomic', 'true');
-
+        toast.className = `toast animate-fade-in`;
         toast.innerHTML = `
-            <div class="d-flex">
-                <div class="toast-body d-flex align-items-center">
-                    <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
-                    ${message}
-                </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            <div class="toast-body">
+                <i class="bi ${getToastIcon(type)}"></i>
+                <span>${message}</span>
             </div>
         `;
-
-        container.appendChild(toast);
-
-        const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 5000 });
-        bsToast.show();
-
-        toast.addEventListener('hidden.bs.toast', () => {
-            toast.remove();
-        });
+        
+        // Add type-specific styling
+        if (type === 'success') {
+            toast.style.borderLeft = '4px solid var(--success)';
+        } else if (type === 'error') {
+            toast.style.borderLeft = '4px solid var(--danger)';
+        } else if (type === 'warning') {
+            toast.style.borderLeft = '4px solid var(--warning)';
+        } else {
+            toast.style.borderLeft = '4px solid var(--primary)';
+        }
+        
+        const toastContainer = document.getElementById('toastContainer');
+        if (toastContainer) {
+            toastContainer.appendChild(toast);
+            
+            // Remove toast after 4 seconds
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100px)';
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 300);
+            }, 4000);
+        }
+    };
+    
+    function getToastIcon(type) {
+        switch(type) {
+            case 'success': return 'bi-check-circle-fill text-success';
+            case 'error': return 'bi-exclamation-circle-fill text-danger';
+            case 'warning': return 'bi-exclamation-triangle-fill text-warning';
+            default: return 'bi-info-circle-fill text-primary';
+        }
     }
     
-    // Initial setup based on current payment status
-    const currentStatus = '{{ order.payment.status }}';
-    if (currentStatus === 'initiated') {
-        document.getElementById('paymentFormContainer').style.display = 'none';
-        document.getElementById('paymentProcessingSection').style.display = 'block';
-        processPaymentBtn.style.display = 'none';
-        startStatusChecking();
-    } else if (currentStatus === 'completed') {
-        document.getElementById('paymentFormContainer').style.display = 'none';
-        document.getElementById('paymentSuccessSection').style.display = 'block';
-        processPaymentBtn.style.display = 'none';
-    }
-});
-</script>
-<script>
-// Render Django messages as toasts
-document.addEventListener('DOMContentLoaded', function() {
+    // Display Django messages as toasts
     const djangoMessages = [
         {% for msg in messages %}
         { message: "{{ msg|escapejs }}", tags: "{{ msg.tags }}" }{% if not forloop.last %},{% endif %}
         {% endfor %}
     ];
-
+    
     const mapTag = (tags) => {
         if (!tags) return 'info';
         if (tags.indexOf('error') !== -1) return 'error';
@@ -693,18 +1347,30 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tags.indexOf('success') !== -1) return 'success';
         return 'info';
     };
-
+    
     setTimeout(() => {
         djangoMessages.forEach(m => {
             try {
                 const t = mapTag(m.tags);
                 if (typeof showToast === 'function') showToast(m.message, t);
-                else console.log('Message:', t, m.message);
             } catch (e) {
                 console.error('Error showing toast for message', m, e);
             }
         });
     }, 150);
+    
+    // Initial setup based on current payment status
+    const currentStatus = '{{ order.payment.status }}';
+    if (currentStatus === 'initiated') {
+        document.getElementById('paymentFormContainer').style.display = 'none';
+        document.getElementById('paymentProcessingSection').style.display = 'block';
+        if (processPaymentBtn) processPaymentBtn.style.display = 'none';
+        startStatusChecking();
+    } else if (currentStatus === 'completed') {
+        document.getElementById('paymentFormContainer').style.display = 'none';
+        document.getElementById('paymentSuccessSection').style.display = 'block';
+        if (processPaymentBtn) processPaymentBtn.style.display = 'none';
+    }
 });
 </script>
 {% endblock %}

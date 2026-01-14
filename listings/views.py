@@ -1109,6 +1109,7 @@ def checkout(request):
         
         if form.is_valid():
             logger.info('Checkout form is valid for user=%s; cleaned keys=%s', request.user, list(form.cleaned_data.keys()))
+            request.session['selected_payment_method'] = form.cleaned_data.get('payment_method', 'mpesa')
             try:
                 with transaction.atomic():
                     # Create order
@@ -1218,7 +1219,9 @@ logger = logging.getLogger(__name__)
 @login_required
 def process_payment(request, order_id):
     order = get_object_or_404(Order, id=order_id, user=request.user)
-    
+    selected_payment_method = request.session.get('selected_payment_method', 'mpesa')
+    if 'selected_payment_method' in request.session:
+        del request.session['selected_payment_method']
     if order.status != 'pending':
         messages.warning(request, "This order has already been processed.")
         return redirect('order_detail', order_id=order.id)
