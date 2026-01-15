@@ -95,7 +95,7 @@ def notify_new_order(seller, buyer, order):
     
     # SMS to seller
     sms_message = f"New order #{order.id} from {buyer.get_full_name() or buyer.username}. Total: KSh {order.total_price}. Please process within 24 hours."
-    notification_service.send_sms(seller.user.phone_number, sms_message)
+    notification_service.send_sms(seller.phone_number, sms_message)
     
     # Email to seller
     email_context = {
