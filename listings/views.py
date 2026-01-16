@@ -7,6 +7,7 @@ from django.db.models import Q, Count, Avg, F
 from django.db import utils as db_utils
 from django.conf import settings
 from .models import Listing, Category, Favorite, Activity, RecentlyViewed, Review, Order, OrderItem, Cart, CartItem, Payment, Escrow, ListingImage
+from chats.models import Message
 from .forms import ListingForm, AIListingForm
 from storefront.models import Store
 from django.contrib.auth import get_user_model
@@ -23,7 +24,9 @@ import json
 from .decorators import ajax_required
 from storefront.models import Store, Subscription
 from django.utils import timezone
-
+from django.db.models import Subquery, OuterRef
+from django.db.models.functions import Coalesce
+from django.db.models import Case, When, Value
 
 from notifications.utils import (
     notify_order_created, notify_order_shipped, notify_order_delivered,
@@ -229,6 +232,79 @@ class ListingListView(ListView):
             seller_reviews_count[seller.id] = reviews.count()
         context['seller_ratings'] = seller_ratings
         context['seller_reviews_count'] = seller_reviews_count
+
+        
+        context['latest_reviews'] = Review.objects.filter(
+            is_public=True,
+            comment__isnull=False,
+            comment__gt=''
+        ).select_related(
+            'user', 'listing', 'seller'
+        ).annotate(
+            # Get reviewer's first name or username
+            reviewer_name=Coalesce(
+                Subquery(
+                    User.objects.filter(pk=OuterRef('user_id')).values('first_name')[:1]
+                ),
+                Subquery(
+                    User.objects.filter(pk=OuterRef('user_id')).values('username')[:1]
+                ),
+                Value('Anonymous')
+            ),
+            # Get review type display
+            type_display=Case(
+                When(review_type='listing', then=Value('Product')),
+                When(review_type='seller', then=Value('Seller')),
+                When(review_type='order', then=Value('Order')),
+                default=Value('Review')
+            )
+        ).order_by('-created_at')[:3]
+
+        # Prepare testimonial data
+        testimonials = []
+        for review in context['latest_reviews']:
+            # Get user's profile picture or use default
+            try:
+                avatar_url = review.user.profile.avatar.url if hasattr(review.user, 'profile') else ''
+            except:
+                avatar_url = ''
+            
+            # Default avatar if none exists
+            if not avatar_url:
+                avatar_url = "https://ui-avatars.com/api/?name=" + review.reviewer_name + "&background=random&color=fff"
+            
+            # Prepare testimonial text
+            if review.listing:
+                context_text = f" about '{review.listing.title}'"
+            elif review.seller:
+                context_text = f" about {review.seller.username}"
+            else:
+                context_text = ""
+            
+            testimonials.append({
+                'content': review.comment,
+                'rating': review.rating,
+                'author_name': review.reviewer_name,
+                'author_title': f"Verified Buyer{context_text}",
+                'avatar_url': avatar_url,
+                'date': review.created_at.strftime('%B %Y'),
+                'stars': '⭐' * int(review.rating),
+                'type': review.type_display,
+            })
+
+        context['testimonials'] = testimonials
+
+        # Also add review stats for the empty state
+        context['total_reviews'] = Review.objects.filter(is_public=True).count()
+        context['avg_rating'] = Review.objects.filter(is_public=True).aggregate(Avg('rating'))['rating__avg'] or 0
+        context['has_reviews'] = context['total_reviews'] > 0
+
+        
+        # Delivered orders for review button
+        if self.request.user.is_authenticated:
+            context['delivered_orders'] = Order.objects.filter(user=self.request.user, status='delivered')
+        else:
+            context['delivered_orders'] = Order.objects.none()
         
         # Blog posts
         try:
@@ -1447,6 +1523,27 @@ def check_payment_status(request, order_id):
         'payment_status': 'processing',
         'message': 'Payment is being processed...'
     })
+
+@login_required
+def get_unread_messages_count(request):
+    """AJAX endpoint to get unread messages count for current user"""
+    try:
+        # Adjust this query based on your Message model structure
+        unread_count = Message.objects.filter(
+            recipient=request.user,
+            is_read=False
+        ).count()
+        
+        return JsonResponse({
+            'unread_messages_count': unread_count,
+            'status': 'success'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'unread_messages_count': 0,
+            'status': 'error',
+            'error': str(e)
+        }, status=500)
     
 @csrf_exempt
 @require_POST

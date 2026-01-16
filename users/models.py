@@ -32,10 +32,26 @@ class User(AbstractUser):
             null=True,
             blank=True
         )
+        cover_photo = CloudinaryField(
+            'image',
+            folder='homabay_souq/covers/',
+            transformation=[
+                {'width': 1200, 'height': 400, 'crop': 'fill'},
+                {'quality': 'auto'},
+                {'format': 'webp'}
+            ],
+            null=True,
+            blank=True
+        )
     else:
         # Fallback to regular ImageField
         profile_picture = models.ImageField(
             upload_to='profile_pics/',
+            null=True,
+            blank=True
+        )
+        cover_photo = models.ImageField(
+            upload_to='cover_photos/',
             null=True,
             blank=True
         )
@@ -61,6 +77,24 @@ class User(AbstractUser):
                 # Fallback to default image
                 return '/static/images/default_profile_pic.svg'
         return '/static/images/default_profile_pic.svg'
+    
+    def get_cover_photo_url(self):
+        """Safe method to get cover photo URL that works with both Cloudinary and local storage"""
+        if self.cover_photo:
+            try:
+                # For Cloudinary
+                if hasattr(self.cover_photo, 'url'):
+                    return self.cover_photo.url
+                # For regular ImageField
+                elif hasattr(self.cover_photo, 'name'):
+                    from django.core.files.storage import default_storage
+                    if default_storage.exists(self.cover_photo.name):
+                        return default_storage.url(self.cover_photo.name)
+            except Exception as e:
+                print(f"Error getting cover photo URL: {e}")
+                # Fallback to default image
+                return '/static/images/default_cover_photo.jpg'
+        return '/static/images/default_cover_photo.jpg'
 
     def save(self, *args, **kwargs):
         # Ensure the directory exists before saving for local storage

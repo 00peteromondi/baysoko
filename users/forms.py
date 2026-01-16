@@ -162,13 +162,15 @@ class CustomUserChangeForm(forms.ModelForm):
             'phone_number', 
             'bio', 
             'profile_picture',
+            'cover_photo',
             'show_contact_info'
         ]
         widgets = {
             'bio': forms.Textarea(attrs={'rows': 4, 'maxlength': 500}),
             'profile_picture': forms.FileInput(attrs={'accept': 'image/*'}),
+            'cover_photo': forms.FileInput(attrs={'accept': 'image/*'}),
         }
-    
+
     def clean_username(self):
         username = self.cleaned_data.get('username')
         if User.objects.filter(username=username).exclude(pk=self.instance.pk).exists():
