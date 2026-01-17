@@ -185,6 +185,8 @@ class ListingListView(ListView):
         ).exclude(original_price__isnull=True).filter(
             original_price__gt=F('price')
         ).order_by('-date_created')[:4]
+
+        context['my_orders']= Order.objects.filter(user=self.request.user) if self.request.user.is_authenticated else None
         
        # Replace this section in the ListingListView.get_context_data method:
         user_favorites = set()
@@ -687,7 +689,7 @@ class ListingDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
 
 def all_listings(request):
     # Get all active listings
-    listings = Listing.objects.filter(is_active=True).order_by('-date_created')
+    listings = Listing.objects.filter(is_active=True)
     
     # Get filter parameters
     category_id = request.GET.get('category')
@@ -695,13 +697,10 @@ def all_listings(request):
     min_price = request.GET.get('min_price')
     max_price = request.GET.get('max_price')
     search_query = request.GET.get('q')
-    sort_by = request.GET.get('sort_by', 'newest')
-    
-    # Convert categories to JSON-serializable format
-    categories_data = [{"id": cat.id, "name": cat.name} for cat in Category.objects.filter(is_active=True)]
-    
-    # Convert locations to JSON-serializable format 
-    locations_data = [{"code": code, "name": name} for code, name in Listing.HOMABAY_LOCATIONS]
+    sort_by = request.GET.get('sort', 'newest')
+    featured = request.GET.get('featured')
+    recent = request.GET.get('recent')
+    instock = request.GET.get('instock')
     
     # Apply filters
     if category_id and category_id != 'all':
@@ -711,10 +710,16 @@ def all_listings(request):
         listings = listings.filter(location=location)
     
     if min_price:
-        listings = listings.filter(price__gte=min_price)
+        try:
+            listings = listings.filter(price__gte=float(min_price))
+        except ValueError:
+            pass
     
     if max_price:
-        listings = listings.filter(price__lte=max_price)
+        try:
+            listings = listings.filter(price__lte=float(max_price))
+        except ValueError:
+            pass
     
     if search_query:
         listings = listings.filter(
@@ -724,6 +729,20 @@ def all_listings(request):
             Q(model__icontains=search_query)
         )
     
+    # Apply new filters
+    if featured == 'true':
+        listings = listings.filter(is_featured=True)
+    
+    if recent == 'true':
+        # Show listings from last 7 days
+        from django.utils import timezone
+        from datetime import timedelta
+        one_week_ago = timezone.now() - timedelta(days=7)
+        listings = listings.filter(date_created__gte=one_week_ago)
+    
+    if instock == 'true':
+        listings = listings.filter(stock__gt=0)
+    
     # Apply sorting
     if sort_by == 'price_low':
         listings = listings.order_by('price')
@@ -731,8 +750,36 @@ def all_listings(request):
         listings = listings.order_by('-price')
     elif sort_by == 'oldest':
         listings = listings.order_by('date_created')
+    elif sort_by == 'featured':
+        listings = listings.order_by('-is_featured', '-date_created')
+    elif sort_by == 'popular':
+        # Sort by number of favorites
+        listings = listings.annotate(
+            favorite_count=Count('favorites')
+        ).order_by('-favorite_count', '-date_created')
     else:  # newest is default
         listings = listings.order_by('-date_created')
+    
+    # Get categories for filter dropdown
+    categories = Category.objects.filter(is_active=True)
+    
+    # Get unique locations from listings
+    from collections import defaultdict
+    locations_count = defaultdict(int)
+    for code, name in Listing.HOMABAY_LOCATIONS:
+        count = Listing.objects.filter(location=code, is_active=True).count()
+        if count > 0:
+            locations_count[code] = count
+    
+    # Create locations list with counts
+    locations = []
+    for code, name in Listing.HOMABAY_LOCATIONS:
+        if code in locations_count:
+            locations.append({
+                'code': code,
+                'name': name,
+                'count': locations_count[code]
+            })
     
     # Pagination
     paginator = Paginator(listings, 12)
@@ -743,22 +790,23 @@ def all_listings(request):
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         listings_data = []
         for listing in page_obj:
-                listings_data.append({
+            listings_data.append({
                 'id': listing.id,
                 'title': listing.title,
                 'price': str(listing.price),
                 'image_url': listing.get_image_url(),
-                'category': listing.category.name,
-                'category_icon': listing.category.icon,
+                'category': listing.category.name if listing.category else '',
+                'category_icon': listing.category.icon if listing.category else '',
                 'store': listing.store.name if listing.store else '',
-                'store_url': listing.store.get_absolute_url() if listing.store else '',
+                'store_logo': listing.store.get_logo_url() if listing.store else '',
                 'location': listing.get_location_display(),
                 'date_created': listing.date_created.strftime('%b %d, %Y'),
                 'url': listing.get_absolute_url(),
                 'stock': listing.stock,
                 'is_sold': listing.is_sold,
+                'is_featured': listing.is_featured,
             })
-
+        
         return JsonResponse({
             'listings': listings_data,
             'has_next': page_obj.has_next(),
@@ -769,22 +817,10 @@ def all_listings(request):
         })
     
     # For regular requests, return the full page
-    # Convert categories to a list of dicts for JSON serialization
-    categories_data = [{'id': cat.id, 'name': cat.name} for cat in Category.objects.filter(is_active=True)]
-    
-    # Get location counts and convert to JSON-serializable format
-    locations_count = {}
-    for code, name in Listing.HOMABAY_LOCATIONS:
-        locations_count[code] = Listing.objects.filter(location=code, is_active=True).count()
-    
-    # Convert locations to a list of tuples for JSON serialization
-    locations_data = [{'code': code, 'name': name, 'count': locations_count.get(code, 0)} 
-                     for code, name in Listing.HOMABAY_LOCATIONS]
-    
     context = {
         'listings': page_obj,
-        'categories': categories_data,
-        'locations': locations_data,
+        'categories': categories,
+        'locations': locations,
         'selected_category': category_id,
         'selected_location': location,
         'min_price': min_price,
@@ -792,7 +828,6 @@ def all_listings(request):
         'search_query': search_query,
         'sort_by': sort_by,
         'total_listings_count': listings.count(),
-        'locations_count': locations_count,
     }
     
     # Add featured listings for carousel
@@ -823,7 +858,6 @@ def all_listings(request):
         context['recently_viewed'] = [rv.listing for rv in recently_viewed]
     
     return render(request, 'listings/all_listings.html', context)
-
 
 @login_required
 @require_POST
@@ -1128,7 +1162,7 @@ def add_to_cart(request, listing_id):
         'cart_total': cart_total,
         'item_count': cart_item_count,
         'listing_title': listing.title,
-        'redirect_url': reverse('listing-detail', args=[listing_id])
+        'redirect_url': reverse('all-listings')
     }
     
     if is_ajax:
@@ -1136,7 +1170,7 @@ def add_to_cart(request, listing_id):
     else:
         # For non-AJAX requests, show message and redirect
         messages.success(request, message)
-        return redirect(reverse('listing-detail', args=[listing_id]))
+        return redirect(reverse('all-listings'))
     
 @login_required
 def checkout(request):
