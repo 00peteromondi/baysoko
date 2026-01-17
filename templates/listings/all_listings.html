@@ -10,7 +10,8 @@
     :root {
         --sidebar-width: 280px;
         --grid-gap: 20px;
-        --success: #06D6A0; /* Green for cart button */
+        --success: #06D6A0;
+        --success-dark: #05B88A;
     }
     
     .container-custom {
@@ -784,15 +785,16 @@
         transform: translateY(-1px);
     }
     
-    /* Cart button styles - FIXED */
+    /* CART BUTTON STYLES - FIXED STATE MANAGEMENT */
     .action-cart {
         background: var(--bg-secondary);
         color: var(--text-primary);
         border: 1px solid var(--border-color);
         transition: all 0.3s ease;
+        position: relative;
     }
     
-    .action-cart:hover {
+    .action-cart:hover:not(.in-cart) {
         background: var(--bg-secondary);
         border-color: var(--primary);
         color: var(--primary);
@@ -803,11 +805,31 @@
         background: var(--success) !important;
         color: white !important;
         border-color: var(--success) !important;
+        padding-right: 28px;
     }
     
     .action-cart.in-cart:hover {
-        background: var(--accent-dark) !important;
-        border-color: var(--accent-dark) !important;
+        background: var(--success-dark) !important;
+        border-color: var(--success-dark) !important;
+    }
+    
+    /* Cart quantity indicator */
+    .cart-quantity-indicator {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        background: white;
+        color: var(--success);
+        border: 2px solid var(--success);
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        font-size: 10px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     }
     
     /* Like Button */
@@ -1593,7 +1615,7 @@
                     <!-- Pro Logo Badge -->
                     {% if listing.is_featured %}
                     <div class="pro-logo">
-                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i> PRO
                     </div>
                     {% endif %}
                     
@@ -1667,7 +1689,7 @@
                                     <button type="submit" class="action-button action-cart" 
                                             id="cart-btn-{{ listing.id }}"
                                             data-initial-text="<i class='bi bi-cart-plus'></i> Cart"
-                                            data-in-cart-text="<i class='bi bi-cart-check'></i> {quantity} in cart">
+                                            data-in-cart-text="<i class='bi bi-cart-check'></i> Cart">
                                         <i class="bi bi-cart-plus"></i>
                                         Cart
                                     </button>
@@ -1761,8 +1783,129 @@
 
 {% block extra_js %}
 <script>
+// ===== CART STATE MANAGEMENT =====
+// This maintains persistent cart state across page interactions
+class CartStateManager {
+    constructor() {
+        this.state = {
+            items: {},  // {listingId: quantity}
+            total: 0,
+            itemCount: 0
+        };
+        this.initialized = false;
+        this.storageKey = 'baysoko_cart_state';
+    }
+
+    // Initialize from server data and localStorage
+    initialize() {
+        if (this.initialized) return;
+        
+        // Try to load from localStorage first (persists across page refreshes)
+        this.loadFromStorage();
+        
+        // Then merge with server data from context
+        this.mergeServerData();
+        
+        this.initialized = true;
+        console.log('CartStateManager initialized:', this.state);
+    }
+
+    // Load cart state from localStorage
+    loadFromStorage() {
+        try {
+            const stored = localStorage.getItem(this.storageKey);
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                this.state.items = parsed.items || {};
+                this.state.total = parsed.total || 0;
+                this.state.itemCount = parsed.itemCount || 0;
+            }
+        } catch (error) {
+            console.error('Error loading cart from storage:', error);
+            // Clear corrupted data
+            localStorage.removeItem(this.storageKey);
+        }
+    }
+
+    // Save cart state to localStorage
+    saveToStorage() {
+        try {
+            localStorage.setItem(this.storageKey, JSON.stringify(this.state));
+        } catch (error) {
+            console.error('Error saving cart to storage:', error);
+        }
+    }
+
+    // Merge with server data from Django context
+    mergeServerData() {
+        // Server cart data from context
+        {% if cart_items %}
+            {% for item in cart_items %}
+                this.state.items[{{ item.listing.id }}] = {{ item.quantity }};
+            {% endfor %}
+            this.state.total = {{ cart_total|default:0 }};
+            this.state.itemCount = {{ cart_item_count|default:0 }};
+        {% endif %}
+    }
+
+    // Update cart state from AJAX response
+    updateFromResponse(data) {
+        if (data.listing_id) {
+            const listingId = data.listing_id;
+            const quantity = data.quantity || 1;
+            
+            if (quantity > 0) {
+                this.state.items[listingId] = quantity;
+            } else {
+                // Remove from cart if quantity is 0
+                delete this.state.items[listingId];
+            }
+            
+            // Update totals
+            this.state.itemCount = data.cart_item_count || Object.values(this.state.items).reduce((a, b) => a + b, 0);
+            this.state.total = data.cart_total || 0;
+            
+            // Save to localStorage
+            this.saveToStorage();
+            
+            console.log('Cart state updated:', { listingId, quantity, state: this.state });
+        }
+    }
+
+    // Update entire cart state (for sync from server)
+    updateEntireState(items, total, itemCount) {
+        this.state.items = items || {};
+        this.state.total = total || 0;
+        this.state.itemCount = itemCount || Object.values(this.state.items).reduce((a, b) => a + b, 0);
+        this.saveToStorage();
+    }
+
+    // Get quantity for a specific listing
+    getQuantity(listingId) {
+        return this.state.items[listingId] || 0;
+    }
+
+    // Check if item is in cart
+    isInCart(listingId) {
+        return this.getQuantity(listingId) > 0;
+    }
+
+    // Clear cart state
+    clear() {
+        this.state = { items: {}, total: 0, itemCount: 0 };
+        this.saveToStorage();
+    }
+}
+
+// Global cart state instance
+const cartState = new CartStateManager();
+
+// ===== MAIN DOCUMENT READY =====
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Listings page loaded - filters initialized');
+    console.log('Listings page loaded - initializing cart state');
+    
+    // Initialize cart state manager
+    cartState.initialize();
     
     // ===== DOM ELEMENTS =====
     const mobileFilterToggle = document.getElementById('mobileFilterToggle');
@@ -1822,7 +1965,207 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // ===== FILTER STATE MANAGEMENT =====
+    // ===== UPDATE CART BUTTONS ON PAGE LOAD =====
+    updateAllCartButtons();
+    
+    // ===== CART BUTTON UPDATER FUNCTIONS =====
+    function updateCartButton(listingId, quantity) {
+        const cartButtons = document.querySelectorAll(`.cart-form[data-listing-id="${listingId}"] .action-cart`);
+        
+        cartButtons.forEach(button => {
+            if (quantity > 0) {
+                // Item is in cart - green style with quantity indicator
+                button.classList.add('in-cart');
+                button.innerHTML = `<i class="bi bi-cart-check"></i> Cart`;
+                
+                // Add or update quantity indicator
+                let indicator = button.querySelector('.cart-quantity-indicator');
+                if (!indicator) {
+                    indicator = document.createElement('span');
+                    indicator.className = 'cart-quantity-indicator';
+                    button.appendChild(indicator);
+                }
+                indicator.textContent = quantity;
+                indicator.style.display = 'flex';
+                
+                // Add title for accessibility
+                button.title = `${quantity} item${quantity > 1 ? 's' : ''} in cart`;
+            } else {
+                // Item not in cart - default style
+                button.classList.remove('in-cart');
+                button.innerHTML = `<i class="bi bi-cart-plus"></i> Cart`;
+                
+                // Remove quantity indicator if exists
+                const indicator = button.querySelector('.cart-quantity-indicator');
+                if (indicator) {
+                    indicator.remove();
+                }
+                
+                // Reset title
+                button.title = 'Add to cart';
+            }
+        });
+    }
+    
+    function updateAllCartButtons() {
+        // Update all cart buttons based on current cart state
+        Object.keys(cartState.state.items).forEach(listingId => {
+            const quantity = cartState.state.items[listingId];
+            if (quantity > 0) {
+                updateCartButton(parseInt(listingId), quantity);
+            }
+        });
+    }
+    
+    // ===== CART FORM HANDLING =====
+    function handleCartFormSubmit(e) {
+        e.preventDefault();
+        const form = e.target.closest('.cart-form');
+        if (!form) return;
+        
+        const listingId = form.getAttribute('data-listing-id');
+        const cartButton = form.querySelector('.action-cart');
+        const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        if (!listingId || !cartButton) return;
+        
+        // Show loading state
+        const originalHTML = cartButton.innerHTML;
+        cartButton.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+        cartButton.disabled = true;
+        
+        // Get current quantity for optimistic update
+        const currentQuantity = cartState.getQuantity(listingId);
+        const optimisticQuantity = currentQuantity + 1;
+        
+        // Optimistic update - immediately show the item in cart
+        cartState.state.items[listingId] = optimisticQuantity;
+        cartState.state.itemCount += 1;
+        updateCartButton(parseInt(listingId), optimisticQuantity);
+        
+        // Make AJAX request
+        fetch(form.action, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Add to cart response:', data);
+            
+            if (data.success) {
+                // Update cart state from server response
+                cartState.updateFromResponse(data);
+                
+                // Update the button with actual quantity
+                updateCartButton(data.listing_id, data.quantity || optimisticQuantity);
+                
+                // Update global cart in base.html
+                document.dispatchEvent(new CustomEvent('cartUpdated', {
+                    detail: { 
+                        itemCount: data.cart_item_count || cartState.state.itemCount, 
+                        total: data.cart_total || cartState.state.total 
+                    }
+                }));
+                
+                // Show success message
+                if (window.showToast) {
+                    window.showToast(data.message || 'Added to cart!', 'success');
+                }
+            } else {
+                // Revert optimistic update on error
+                cartState.state.items[listingId] = currentQuantity;
+                cartState.state.itemCount -= 1;
+                updateCartButton(parseInt(listingId), currentQuantity);
+                
+                if (window.showToast) {
+                    window.showToast(data.error || 'Failed to add to cart', 'error');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error adding to cart:', error);
+            
+            // Revert optimistic update on error
+            cartState.state.items[listingId] = currentQuantity;
+            cartState.state.itemCount -= 1;
+            updateCartButton(parseInt(listingId), currentQuantity);
+            
+            if (window.showToast) {
+                window.showToast('Error adding to cart. Please try again.', 'error');
+            }
+        })
+        .finally(() => {
+            // Reset button state
+            cartButton.disabled = false;
+            cartButton.innerHTML = originalHTML;
+        });
+    }
+    
+    // Attach cart form event listeners
+    document.addEventListener('submit', function(e) {
+        if (e.target.classList.contains('cart-form')) {
+            handleCartFormSubmit(e);
+        }
+    });
+    
+    // ===== LISTEN FOR GLOBAL CART UPDATES =====
+    // This syncs cart state when cart is updated from other pages/modals
+    document.addEventListener('globalCartUpdated', function(event) {
+        console.log('Global cart update received:', event.detail);
+        
+        // We could fetch fresh cart data here, but for now just update our state
+        // The cart buttons are already updated via the form handlers
+    });
+    
+    // ===== LIKE BUTTON FUNCTIONALITY =====
+    document.addEventListener('submit', function(e) {
+        if (e.target.classList.contains('favorite-form')) {
+            e.preventDefault();
+            const form = e.target;
+            const button = form.querySelector('.listing-like');
+            
+            fetch(form.action, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.is_favorited) {
+                    button.classList.add('liked');
+                    button.innerHTML = '<i class="bi bi-heart-fill"></i>';
+                } else {
+                    button.classList.remove('liked');
+                    button.innerHTML = '<i class="bi bi-heart"></i>';
+                }
+                
+                if (window.showToast) {
+                    const message = data.is_favorited ? 
+                        'Added to favorites!' : 
+                        'Removed from favorites!';
+                    window.showToast(message, 'success');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                if (window.showToast) {
+                    window.showToast('Error updating favorites', 'error');
+                }
+            });
+        }
+    });
+    
+    // ===== FILTER FUNCTIONALITY =====
     let currentFilters = {
         category: '{{ selected_category|default:"all" }}',
         location: '{{ selected_location|default:"all" }}',
@@ -2239,17 +2582,28 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Close mobile filters
             closeMobileFilters();
-        })
-        .catch(error => {
-            console.error('Error loading listings:', error);
-            if (window.showToast) {
-                window.showToast('Error loading listings. Please try again.', 'error');
-            }
-            // Fallback to full page reload
-            window.location.href = url;
+            
+            // Re-attach cart button listeners after AJAX update
+            attachCartButtonListeners();
         })
         .finally(() => {
             loadingOverlay.classList.remove('active');
+        });
+    }
+    
+    // ===== ATTACH CART BUTTON LISTENERS TO NEW ELEMENTS =====
+    function attachCartButtonListeners() {
+        document.querySelectorAll('.cart-form').forEach(form => {
+            form.addEventListener('submit', handleCartFormSubmit);
+            
+            // Also update the button state for newly loaded listings
+            const listingId = form.getAttribute('data-listing-id');
+            if (listingId) {
+                const quantity = cartState.getQuantity(parseInt(listingId));
+                if (quantity > 0) {
+                    updateCartButton(parseInt(listingId), quantity);
+                }
+            }
         });
     }
     
@@ -2287,6 +2641,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const inStock = listing.stock > 0;
             const lowStock = listing.stock > 0 && listing.stock <= 10;
             const outOfStock = listing.stock === 0;
+            const isInCart = cartState.isInCart(listing.id);
+            const cartQuantity = cartState.getQuantity(listing.id);
             
             listingsHTML += `
                 <article class="listing-card" 
@@ -2356,10 +2712,11 @@ document.addEventListener('DOMContentLoaded', function() {
                                 ${!listing.is_sold && inStock ? `
                                 <form action="/cart/add/${listing.id}/" method="post" class="cart-form" data-listing-id="${listing.id}">
                                     <input type="hidden" name="csrfmiddlewaretoken" value="${getCookie('csrftoken')}">
-                                    <button type="submit" class="action-button action-cart" 
+                                    <button type="submit" class="action-button action-cart ${isInCart ? 'in-cart' : ''}" 
                                             id="cart-btn-${listing.id}">
-                                        <i class="bi bi-cart-plus"></i>
+                                        <i class="bi bi-cart-${isInCart ? 'check' : 'plus'}"></i>
                                         Cart
+                                        ${isInCart ? `<span class="cart-quantity-indicator" style="display: ${cartQuantity > 0 ? 'flex' : 'none'}">${cartQuantity}</span>` : ''}
                                     </button>
                                 </form>` : ''}
                                 
@@ -2381,7 +2738,7 @@ document.addEventListener('DOMContentLoaded', function() {
         listingsContainer.innerHTML = listingsHTML;
         
         // Reattach event listeners
-        attachEventListenersToNewElements();
+        attachCartButtonListeners();
     }
     
     // ===== UPDATE PAGINATION FROM DATA =====
@@ -2389,64 +2746,68 @@ document.addEventListener('DOMContentLoaded', function() {
         const paginationContainer = document.querySelector('.pagination-container');
         
         if (!data.has_next && !data.has_previous && data.current_page === 1) {
-            paginationContainer.style.display = 'none';
+            if (paginationContainer) {
+                paginationContainer.style.display = 'none';
+            }
             return;
         }
         
-        paginationContainer.style.display = 'block';
-        
-        let paginationHTML = `
-            <nav class="pagination" aria-label="Listings pagination" id="pagination-container">
-        `;
-        
-        // Previous button
-        if (data.has_previous) {
-            paginationHTML += `
-                <a class="page-button" href="#" data-page="${data.current_page - 1}">
-                    <i class="bi bi-chevron-left"></i> Prev
-                </a>
+        if (paginationContainer) {
+            paginationContainer.style.display = 'block';
+            
+            let paginationHTML = `
+                <nav class="pagination" aria-label="Listings pagination" id="pagination-container">
             `;
-        } else {
-            paginationHTML += `
-                <span class="page-button" aria-disabled="true">
-                    <i class="bi bi-chevron-left"></i> Prev
-                </span>
-            `;
-        }
-        
-        // Page numbers
-        const startPage = Math.max(1, data.current_page - 2);
-        const endPage = Math.min(data.num_pages, data.current_page + 2);
-        
-        for (let i = startPage; i <= endPage; i++) {
-            if (i === data.current_page) {
-                paginationHTML += `<span class="page-button active">${i}</span>`;
+            
+            // Previous button
+            if (data.has_previous) {
+                paginationHTML += `
+                    <a class="page-button" href="#" data-page="${data.current_page - 1}">
+                        <i class="bi bi-chevron-left"></i> Prev
+                    </a>
+                `;
             } else {
-                paginationHTML += `<a class="page-button" href="#" data-page="${i}">${i}</a>`;
+                paginationHTML += `
+                    <span class="page-button" aria-disabled="true">
+                        <i class="bi bi-chevron-left"></i> Prev
+                    </span>
+                `;
             }
+            
+            // Page numbers
+            const startPage = Math.max(1, data.current_page - 2);
+            const endPage = Math.min(data.num_pages, data.current_page + 2);
+            
+            for (let i = startPage; i <= endPage; i++) {
+                if (i === data.current_page) {
+                    paginationHTML += `<span class="page-button active">${i}</span>`;
+                } else {
+                    paginationHTML += `<a class="page-button" href="#" data-page="${i}">${i}</a>`;
+                }
+            }
+            
+            // Next button
+            if (data.has_next) {
+                paginationHTML += `
+                    <a class="page-button" href="#" data-page="${data.current_page + 1}">
+                        Next <i class="bi bi-chevron-right"></i>
+                    </a>
+                `;
+            } else {
+                paginationHTML += `
+                    <span class="page-button" aria-disabled="true">
+                        Next <i class="bi bi-chevron-right"></i>
+                    </span>
+                `;
+            }
+            
+            paginationHTML += `</nav>`;
+            
+            paginationContainer.innerHTML = paginationHTML;
+            
+            // Attach pagination event listeners
+            attachPaginationListeners();
         }
-        
-        // Next button
-        if (data.has_next) {
-            paginationHTML += `
-                <a class="page-button" href="#" data-page="${data.current_page + 1}">
-                    Next <i class="bi bi-chevron-right"></i>
-                </a>
-            `;
-        } else {
-            paginationHTML += `
-                <span class="page-button" aria-disabled="true">
-                    Next <i class="bi bi-chevron-right"></i>
-                </span>
-            `;
-        }
-        
-        paginationHTML += `</nav>`;
-        
-        paginationContainer.innerHTML = paginationHTML;
-        
-        // Attach pagination event listeners
-        attachPaginationListeners();
     }
     
     // ===== ATTACH PAGINATION LISTENERS =====
@@ -2459,102 +2820,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     currentFilters.page = page;
                     applyFilters();
                 }
-            });
-        });
-    }
-    
-    // ===== ATTACH EVENT LISTENERS TO NEW ELEMENTS =====
-    function attachEventListenersToNewElements() {
-        // Cart forms
-        document.querySelectorAll('.cart-form').forEach(form => {
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const listingId = this.getAttribute('data-listing-id');
-                const cartButton = this.querySelector('.action-cart');
-                
-                // Show loading state
-                const originalHTML = cartButton.innerHTML;
-                cartButton.innerHTML = '<i class="bi bi-hourglass-split"></i>';
-                cartButton.disabled = true;
-                
-                fetch(this.action, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value,
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Update cart button
-                        cartButton.classList.add('in-cart');
-                        cartButton.innerHTML = `<i class="bi bi-cart-check"></i> ${data.quantity || 1} in cart`;
-                        
-                        // Show success message
-                        if (window.showToast) {
-                            window.showToast(data.message || 'Added to cart!', 'success');
-                        }
-                        
-                        // Update global cart
-                        if (window.handleGlobalCartUpdate) {
-                            window.handleGlobalCartUpdate(data.cart_item_count || 0, data.cart_total || 0);
-                        }
-                    } else {
-                        if (window.showToast) {
-                            window.showToast(data.error || 'Failed to add to cart', 'error');
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    if (window.showToast) {
-                        window.showToast('Error adding to cart', 'error');
-                    }
-                })
-                .finally(() => {
-                    cartButton.innerHTML = originalHTML;
-                    cartButton.disabled = false;
-                });
-            });
-        });
-        
-        // Like forms
-        document.querySelectorAll('.favorite-form').forEach(form => {
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const button = this.querySelector('.listing-like');
-                
-                fetch(this.action, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value,
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.is_favorited) {
-                        button.classList.add('liked');
-                        button.innerHTML = '<i class="bi bi-heart-fill"></i>';
-                    } else {
-                        button.classList.remove('liked');
-                        button.innerHTML = '<i class="bi bi-heart"></i>';
-                    }
-                    
-                    if (window.showToast) {
-                        const message = data.is_favorited ? 
-                            'Added to favorites!' : 
-                            'Removed from favorites!';
-                        window.showToast(message, 'success');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    if (window.showToast) {
-                        window.showToast('Error updating favorites', 'error');
-                    }
-                });
             });
         });
     }
@@ -2578,16 +2843,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // ===== GLOBAL CART UPDATE HELPER =====
-    function handleGlobalCartUpdate(itemCount, total) {
-        // This function will be called from base.html cart updates
-        console.log('Global cart updated:', { itemCount, total });
-    }
-    
-    // Expose to window
-    window.handleGlobalCartUpdate = handleGlobalCartUpdate;
-    
-    // CSRF token helper
+    // ===== CSRF TOKEN HELPER =====
     function getCookie(name) {
         let cookieValue = null;
         if (document.cookie && document.cookie !== '') {
@@ -2602,6 +2858,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return cookieValue;
     }
+    
+    // Expose cart state manager globally for other scripts
+    window.cartStateManager = cartState;
 });
 </script>
 {% endblock %}
