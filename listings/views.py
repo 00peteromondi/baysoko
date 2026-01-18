@@ -104,6 +104,7 @@ class ListingListView(ListView):
         
         return queryset
 
+    
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
@@ -700,9 +701,252 @@ def all_listings(request):
     sort_by = request.GET.get('sort', 'newest')
     featured = request.GET.get('featured')
     recent = request.GET.get('recent')
-    instock = request.GET.get('instock')
+    instock = request.GET.get('instock', 'true')  # Default to true
     
     # Apply filters
+    if category_id and category_id != 'all':
+        listings = listings.filter(category__id=category_id)
+    
+    if location and location != 'all':
+        listings = listings.filter(location=location)
+    
+    if min_price:
+        try:
+            listings = listings.filter(price__gte=float(min_price))
+        except (ValueError, TypeError):
+            pass
+    
+    if max_price:
+        try:
+            listings = listings.filter(price__lte=float(max_price))
+        except (ValueError, TypeError):
+            pass
+    
+    if search_query:
+        listings = listings.filter(
+            Q(title__icontains=search_query) | 
+            Q(description__icontains=search_query) |
+            Q(brand__icontains=search_query) |
+            Q(model__icontains=search_query)
+        )
+    
+    # Apply new filters
+    if featured == 'true':
+        listings = listings.filter(is_featured=True)
+    
+    if recent == 'true':
+        one_week_ago = timezone.now() - timedelta(days=7)
+        listings = listings.filter(date_created__gte=one_week_ago)
+    
+    if instock == 'true':
+        listings = listings.filter(stock__gt=0)
+    
+    # Apply sorting
+    if sort_by == 'price_low':
+        listings = listings.order_by('price')
+    elif sort_by == 'price_high':
+        listings = listings.order_by('-price')
+    elif sort_by == 'oldest':
+        listings = listings.order_by('date_created')
+    elif sort_by == 'featured':
+        listings = listings.order_by('-is_featured', '-date_created')
+    elif sort_by == 'popular':
+        listings = listings.annotate(
+            favorite_count=Count('favorites')
+        ).order_by('-favorite_count', '-date_created')
+    else:  # newest is default
+        listings = listings.order_by('-date_created')
+    
+    # Get categories for filter dropdown
+    categories = Category.objects.filter(is_active=True)
+    
+    # Get unique locations from listings
+    from collections import defaultdict
+    locations_count = defaultdict(int)
+    for code, name in Listing.HOMABAY_LOCATIONS:
+        count = Listing.objects.filter(location=code, is_active=True).count()
+        if count > 0:
+            locations_count[code] = count
+    
+    # Create locations list with counts
+    locations = []
+    for code, name in Listing.HOMABAY_LOCATIONS:
+        if code in locations_count:
+            locations.append({
+                'code': code,
+                'name': name,
+                'count': locations_count[code]
+            })
+    
+    # Get cart items for initial page load
+    cart_items = {}
+    cart_total = 0
+    cart_item_count = 0
+    
+    if request.user.is_authenticated:
+        try:
+            # Get or create cart for user
+            cart, created = Cart.objects.get_or_create(user=request.user)
+            cart_items = {str(item.listing.id): item.quantity for item in cart.items.all()}
+            cart_total = cart.get_total_price()
+            cart_item_count = cart.items.count()
+        except Exception as e:
+            print(f"Cart error: {str(e)}")
+            # If cart doesn't exist, create one
+            try:
+                cart = Cart.objects.create(user=request.user)
+                cart_total = 0
+                cart_item_count = 0
+            except:
+                cart_total = 0
+                cart_item_count = 0
+    
+    # Get user favorites
+    user_favorites = []
+    if request.user.is_authenticated:
+        user_favorites = list(Favorite.objects.filter(
+            user=request.user
+        ).values_list('listing_id', flat=True))
+    
+    # For AJAX requests, return JSON (using the new format)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        paginator = Paginator(listings, 12)
+        page_number = request.GET.get('page', 1)
+        
+        try:
+            page_obj = paginator.page(page_number)
+        except:
+            page_obj = paginator.page(1)
+            
+        listings_data = []
+        for listing in page_obj:
+            # Calculate stock status
+            stock_status = 'in_stock'
+            if listing.stock == 0:
+                stock_status = 'out_of_stock'
+            elif listing.stock <= 10:
+                stock_status = 'low_stock'
+            
+            # Check if listing is in user's cart
+            cart_quantity = cart_items.get(str(listing.id), 0)
+            
+            # Check if listing is favorited
+            is_favorited = listing.id in user_favorites
+            
+            # Check if listing is recent (within 7 days)
+            is_recent = False
+            if listing.date_created:
+                is_recent = listing.date_created > timezone.now() - timedelta(days=7)
+            
+            listing_data = {
+                'id': listing.id,
+                'title': listing.title,
+                'price': float(listing.price),
+                'stock': listing.stock,
+                'stock_status': stock_status,
+                'location': listing.location,
+                'location_name': listing.get_location_display(),
+                'category': listing.category.name if listing.category else '',
+                'category_id': listing.category.id if listing.category else None,
+                'category_icon': listing.category.icon if listing.category else 'bi-tag',
+                'image_url': listing.get_image_url(),
+                'is_featured': listing.is_featured,
+                'is_recent': is_recent,
+                'is_sold': listing.is_sold,
+                'url': listing.get_absolute_url(),
+                'cart_quantity': cart_quantity,
+                'is_favorited': is_favorited,
+                'date_created': listing.date_created.strftime('%Y-%m-%d %H:%M') if listing.date_created else '',
+            }
+            
+            # Add store info if available
+            if listing.store:
+                listing_data['store_name'] = listing.store.name
+                listing_data['store_logo'] = listing.store.get_logo_url()
+                listing_data['store_url'] = listing.store.get_absolute_url()
+            
+            listings_data.append(listing_data)
+        
+        return JsonResponse({
+            'success': True,
+            'listings': listings_data,
+            'cart_items': cart_items,
+            'cart_total': float(cart_total),
+            'cart_item_count': cart_item_count,
+            'pagination': {
+                'has_next': page_obj.has_next(),
+                'has_previous': page_obj.has_previous(),
+                'current_page': page_obj.number,
+                'num_pages': paginator.num_pages,
+                'total_count': paginator.count,
+                'next_page': page_obj.next_page_number() if page_obj.has_next() else None,
+                'previous_page': page_obj.previous_page_number() if page_obj.has_previous() else None,
+            },
+            'user_authenticated': request.user.is_authenticated,
+        })
+    
+    # Pagination for regular requests
+    paginator = Paginator(listings, 12)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # For regular requests, return the full page
+    context = {
+        'listings': page_obj,
+        'categories': categories,
+        'locations': locations,
+        'selected_category': category_id,
+        'selected_location': location,
+        'min_price': min_price,
+        'max_price': max_price,
+        'search_query': search_query,
+        'sort_by': sort_by,
+        'total_listings_count': listings.count(),
+        'user_favorites': user_favorites,
+        'cart_items': cart_items,
+        'cart_total': cart_total,
+        'cart_item_count': cart_item_count,
+    }
+    
+    # Add featured listings for carousel
+    context['featured_listings'] = Listing.objects.filter(
+        is_featured=True, 
+        is_active=True,
+        is_sold=False
+    ).order_by('-date_created')[:6]
+    
+    # Add popular categories
+    context['popular_categories'] = Category.objects.filter(
+        is_active=True
+    ).annotate(
+        listing_count=Count('listing', filter=Q(listing__is_active=True))
+    ).filter(listing_count__gt=0).order_by('-listing_count')[:12]
+    
+    # Add recently viewed
+    if request.user.is_authenticated:
+        recently_viewed = RecentlyViewed.objects.filter(
+            user=request.user
+        ).select_related('listing').order_by('-viewed_at')[:6]
+        context['recently_viewed'] = [rv.listing for rv in recently_viewed]
+
+    return render(request, 'listings/all_listings.html', context)
+
+def all_listings_json(request):
+    # Get all active listings
+    listings = Listing.objects.filter(is_active=True)
+    
+    # Get filter parameters from request
+    category_id = request.GET.get('category')
+    location = request.GET.get('location')
+    min_price = request.GET.get('min_price')
+    max_price = request.GET.get('max_price')
+    search_query = request.GET.get('q')
+    sort_by = request.GET.get('sort', 'newest')
+    featured = request.GET.get('featured')
+    recent = request.GET.get('recent')
+    instock = request.GET.get('instock')
+    
+    # Apply filters (same logic as all_listings view)
     if category_id and category_id != 'all':
         listings = listings.filter(category__id=category_id)
     
@@ -734,9 +978,6 @@ def all_listings(request):
         listings = listings.filter(is_featured=True)
     
     if recent == 'true':
-        # Show listings from last 7 days
-        from django.utils import timezone
-        from datetime import timedelta
         one_week_ago = timezone.now() - timedelta(days=7)
         listings = listings.filter(date_created__gte=one_week_ago)
     
@@ -753,111 +994,146 @@ def all_listings(request):
     elif sort_by == 'featured':
         listings = listings.order_by('-is_featured', '-date_created')
     elif sort_by == 'popular':
-        # Sort by number of favorites
         listings = listings.annotate(
             favorite_count=Count('favorites')
         ).order_by('-favorite_count', '-date_created')
     else:  # newest is default
         listings = listings.order_by('-date_created')
     
-    # Get categories for filter dropdown
-    categories = Category.objects.filter(is_active=True)
+    # Get cart items for authenticated user
+    cart_items = {}
+    if request.user.is_authenticated:
+        try:
+            cart = request.user.cart
+            for item in cart.items.all():
+                cart_items[str(item.listing.id)] = {
+                    'quantity': item.quantity,
+                    'item_total': float(item.get_total_price())
+                }
+        except Exception:
+            pass
     
-    # Get unique locations from listings
-    from collections import defaultdict
-    locations_count = defaultdict(int)
-    for code, name in Listing.HOMABAY_LOCATIONS:
-        count = Listing.objects.filter(location=code, is_active=True).count()
-        if count > 0:
-            locations_count[code] = count
-    
-    # Create locations list with counts
-    locations = []
-    for code, name in Listing.HOMABAY_LOCATIONS:
-        if code in locations_count:
-            locations.append({
-                'code': code,
-                'name': name,
-                'count': locations_count[code]
-            })
+    # Get favorite listings for authenticated user
+    favorite_ids = []
+    if request.user.is_authenticated:
+        favorite_ids = list(Favorite.objects.filter(
+            user=request.user
+        ).values_list('listing_id', flat=True))
     
     # Pagination
     paginator = Paginator(listings, 12)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    page_number = request.GET.get('page', 1)
     
-    # For AJAX requests, return JSON
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        listings_data = []
-        for listing in page_obj:
-            listings_data.append({
-                'id': listing.id,
-                'title': listing.title,
-                'price': str(listing.price),
-                'image_url': listing.get_image_url(),
-                'category': listing.category.name if listing.category else '',
-                'category_icon': listing.category.icon if listing.category else '',
-                'store': listing.store.name if listing.store else '',
-                'store_logo': listing.store.get_logo_url() if listing.store else '',
-                'location': listing.get_location_display(),
-                'date_created': listing.date_created.strftime('%b %d, %Y'),
-                'url': listing.get_absolute_url(),
-                'stock': listing.stock,
-                'is_sold': listing.is_sold,
-                'is_featured': listing.is_featured,
-            })
+    try:
+        page_obj = paginator.page(page_number)
+    except:
+        page_obj = paginator.page(1)
+    
+    # Prepare listings data for JSON response
+    listings_data = []
+    for listing in page_obj:
+        # Calculate stock status
+        stock_status = 'in_stock'
+        if listing.stock == 0:
+            stock_status = 'out_of_stock'
+        elif listing.stock <= 10:
+            stock_status = 'low_stock'
         
-        return JsonResponse({
-            'listings': listings_data,
+        # Check if listing is in user's cart
+        cart_quantity = 0
+        if str(listing.id) in cart_items:
+            cart_quantity = cart_items[str(listing.id)]['quantity']
+        
+        # Check if listing is favorited
+        is_favorited = False
+        if request.user.is_authenticated:
+            is_favorited = listing.id in favorite_ids
+        
+        # Check if listing is recent (within 7 days)
+        is_recent = False
+        if listing.date_created:
+            is_recent = listing.date_created > timezone.now() - timedelta(days=7)
+        
+        listing_data = {
+            'id': listing.id,
+            'title': listing.title,
+            'price': float(listing.price),
+            'formatted_price': f"KSh {listing.price:,.2f}",
+            'stock': listing.stock,
+            'stock_status': stock_status,
+            'location': listing.location,
+            'location_name': listing.get_location_display(),
+            'category': listing.category.name if listing.category else '',
+            'category_id': listing.category.id if listing.category else None,
+            'category_icon': listing.category.icon if listing.category else 'bi-tag',
+            'image_url': listing.get_image_url(),
+            'is_featured': listing.is_featured,
+            'is_recent': is_recent,
+            'is_sold': listing.is_sold,
+            'url': listing.get_absolute_url(),
+            'cart_quantity': cart_quantity,
+            'is_favorited': is_favorited,
+            'date_created': listing.date_created.strftime('%Y-%m-%d %H:%M') if listing.date_created else '',
+            'relative_date': listing.date_created.strftime('%b %d') if listing.date_created else '',
+        }
+        
+        # Add store info if available
+        if listing.store:
+            listing_data['store_name'] = listing.store.name
+            listing_data['store_logo'] = listing.store.get_logo_url()
+            listing_data['store_url'] = listing.store.get_absolute_url()
+        
+        listings_data.append(listing_data)
+    
+    # Return JSON response
+    return JsonResponse({
+        'success': True,
+        'listings': listings_data,
+        'cart_items': cart_items,
+        'filters': {
+            'category': category_id,
+            'location': location,
+            'min_price': min_price,
+            'max_price': max_price,
+            'search_query': search_query,
+            'sort_by': sort_by,
+            'featured': featured,
+            'recent': recent,
+            'instock': instock,
+        },
+        'pagination': {
             'has_next': page_obj.has_next(),
             'has_previous': page_obj.has_previous(),
             'current_page': page_obj.number,
             'num_pages': paginator.num_pages,
             'total_count': paginator.count,
+            'next_page': page_obj.next_page_number() if page_obj.has_next() else None,
+            'previous_page': page_obj.previous_page_number() if page_obj.has_previous() else None,
+        },
+        'user_authenticated': request.user.is_authenticated,
+    })
+
+@login_required
+def get_cart_items(request):
+    cart = request.user.cart
+    cart_items = cart.items.all()
+    
+    items_data = []
+    for item in cart_items:
+        items_data.append({
+            'listing_id': item.listing.id,
+            'quantity': item.quantity,
+            'title': item.listing.title,
+            'price': str(item.listing.price),
+            'total': str(item.get_total_price())
         })
     
-    # For regular requests, return the full page
-    context = {
-        'listings': page_obj,
-        'categories': categories,
-        'locations': locations,
-        'selected_category': category_id,
-        'selected_location': location,
-        'min_price': min_price,
-        'max_price': max_price,
-        'search_query': search_query,
-        'sort_by': sort_by,
-        'total_listings_count': listings.count(),
-    }
-    
-    # Add featured listings for carousel
-    context['featured_listings'] = Listing.objects.filter(
-        is_featured=True, 
-        is_active=True,
-        is_sold=False
-    ).order_by('-date_created')[:6]
-    
-    # Add popular categories
-    context['popular_categories'] = Category.objects.filter(
-        is_active=True
-    ).annotate(
-        listing_count=Count('listing', filter=Q(listing__is_active=True))
-    ).filter(listing_count__gt=0).order_by('-listing_count')[:12]
-    
-    # Add user favorites for template
-    if request.user.is_authenticated:
-        user_favorites = Favorite.objects.filter(
-            user=request.user
-        ).values_list('listing_id', flat=True)
-        context['user_favorites'] = list(user_favorites)
-        
-        # Recently viewed
-        recently_viewed = RecentlyViewed.objects.filter(
-            user=request.user
-        ).select_related('listing').order_by('-viewed_at')[:6]
-        context['recently_viewed'] = [rv.listing for rv in recently_viewed]
-    
-    return render(request, 'listings/all_listings.html', context)
+    return JsonResponse({
+        'cart_items': items_data,
+        'cart_item_count': cart.items.count(),
+        'cart_total': str(cart.get_total_price())
+    })
+
 
 @login_required
 @require_POST
@@ -1077,6 +1353,8 @@ import json
 def add_to_cart(request, listing_id):
     """Add item to cart - FIXED for AJAX handling"""
     listing = get_object_or_404(Listing, id=listing_id, is_sold=False)
+
+   
     
     # Check if this is an AJAX request
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
@@ -1086,7 +1364,7 @@ def add_to_cart(request, listing_id):
         response_data = {
             'success': False, 
             'error': 'This item is out of stock.',
-            'redirect_url': reverse('listing-detail', args=[listing_id])
+            'redirect_url': reverse('view_cart')
         }
         
         if is_ajax:
@@ -1132,7 +1410,7 @@ def add_to_cart(request, listing_id):
             response_data = {
                 'success': False, 
                 'error': f'Only {listing.stock} units available.',
-                'redirect_url': reverse('listing-detail', args=[listing_id])
+                'redirect_url': reverse('view_cart')
             }
             
             if is_ajax:
@@ -1162,7 +1440,7 @@ def add_to_cart(request, listing_id):
         'cart_total': cart_total,
         'item_count': cart_item_count,
         'listing_title': listing.title,
-        'redirect_url': reverse('all-listings')
+        'redirect_url': reverse('view_cart')
     }
     
     if is_ajax:
@@ -1170,7 +1448,7 @@ def add_to_cart(request, listing_id):
     else:
         # For non-AJAX requests, show message and redirect
         messages.success(request, message)
-        return redirect(reverse('all-listings'))
+        return redirect(reverse('view_cart'))
     
 @login_required
 def checkout(request):

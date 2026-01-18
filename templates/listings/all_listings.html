@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static custom_filters %}
+{% load static custom_filters cart_filters %}
 {% load humanize %}
 
 {% block title %}All Listings - Baysoko Marketplace{% endblock %}
@@ -11,7 +11,7 @@
         --sidebar-width: 280px;
         --grid-gap: 20px;
         --success: #06D6A0;
-        --success-dark: #05B88A;
+        --success-dark: #05b487;
     }
     
     .container-custom {
@@ -785,16 +785,17 @@
         transform: translateY(-1px);
     }
     
-    /* CART BUTTON STYLES - FIXED STATE MANAGEMENT */
+    /* Cart button styles */
     .action-cart {
         background: var(--bg-secondary);
         color: var(--text-primary);
         border: 1px solid var(--border-color);
         transition: all 0.3s ease;
         position: relative;
+        overflow: hidden;
     }
     
-    .action-cart:hover:not(.in-cart) {
+    .action-cart:hover {
         background: var(--bg-secondary);
         border-color: var(--primary);
         color: var(--primary);
@@ -805,31 +806,37 @@
         background: var(--success) !important;
         color: white !important;
         border-color: var(--success) !important;
-        padding-right: 28px;
+        animation: cartBounce 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
     
     .action-cart.in-cart:hover {
         background: var(--success-dark) !important;
         border-color: var(--success-dark) !important;
+        transform: translateY(-1px);
     }
     
-    /* Cart quantity indicator */
-    .cart-quantity-indicator {
+    /* Cart button loading state */
+    .action-cart.loading {
+        opacity: 0.8;
+        cursor: not-allowed;
+    }
+    
+    .action-cart.loading::after {
+        content: '';
         position: absolute;
-        top: -8px;
-        right: -8px;
-        background: white;
-        color: var(--success);
-        border: 2px solid var(--success);
+        top: 50%;
+        left: 50%;
+        width: 16px;
+        height: 16px;
+        margin: -8px 0 0 -8px;
+        border: 2px solid transparent;
+        border-top-color: currentColor;
         border-radius: 50%;
-        width: 20px;
-        height: 20px;
-        font-size: 10px;
-        font-weight: 800;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        animation: spin 0.8s linear infinite;
+    }
+    
+    .action-cart.loading span {
+        visibility: hidden;
     }
     
     /* Like Button */
@@ -950,6 +957,27 @@
         font-weight: 600;
         height: 36px;
     }
+
+    .cart-count-badge {
+        position: static;
+        display: inline-flex;
+        width: 20px;
+        height: 20px;
+        margin: 0 4px;
+        font-size: 0.75rem;
+    
+    }
+
+    .cart-total {
+        font-weight: 700;
+        color: var(--primary);
+        background: rgba(255, 107, 53, 0.1);
+        padding: 0.25rem 0.5rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.85rem;
+        margin-left: 0.5rem;
+    }
+
     
     /* ===== MOBILE FILTER TOGGLE ===== */
     .mobile-filter-toggle {
@@ -1019,12 +1047,22 @@
     }
     
     @keyframes cartBounce {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.1); }
+        0% { transform: scale(1); }
+        30% { transform: scale(1.1); }
+        50% { transform: scale(0.95); }
+        70% { transform: scale(1.05); }
+        100% { transform: scale(1); }
     }
     
-    .action-cart.in-cart {
-        animation: cartBounce 0.3s ease;
+    @keyframes slideInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
     
     /* ===== RESPONSIVE DESIGN ===== */
@@ -1335,6 +1373,10 @@
             font-size: 16px;
         }
     }
+    #total-results {
+        font-size: 14px;
+        color: var(--text-secondary);
+    }
 </style>
 {% endblock %}
 
@@ -1601,21 +1643,22 @@
             </div>
 
             <!-- Listings Grid -->
-            <div class="listings-grid" id="listings-container">
+            <div class="listings-grid animated" id="listings-container">
                 {% for listing in listings %}
-                <article class="listing-card" 
+                <article class="listing-card animated" 
                          data-listing-id="{{ listing.id }}"
                          data-price="{{ listing.price }}"
                          data-category="{{ listing.category.id }}"
                          data-location="{{ listing.location }}"
                          data-featured="{% if listing.is_featured %}true{% else %}false{% endif %}"
                          data-recent="{% if listing.is_recent %}true{% else %}false{% endif %}"
-                         data-stock="{{ listing.stock }}">
+                         data-stock="{{ listing.stock }}"
+                         style="animation-delay: {{ forloop.counter0|divisibleby:4|add:forloop.counter0|divisibleby:3|add:forloop.counter0|divisibleby:2|add:forloop.counter0|add:1|divisibleby:5|yesno:'0.1s,0.2s,0.3s,0.4s' }}">
                     
                     <!-- Pro Logo Badge -->
                     {% if listing.is_featured %}
                     <div class="pro-logo">
-                        <i class="bi bi-star-fill"></i> PRO
+                        <i class="bi bi-star-fill"></i> Featured
                     </div>
                     {% endif %}
                     
@@ -1683,28 +1726,49 @@
                                 View
                             </a>
                             <div class="d-flex align-items-center gap-2">
+                                <!-- Cart Button -->
                                 {% if user.is_authenticated and not listing.is_sold and listing.stock > 0 and listing.seller != user %}
-                                <form action="{% url 'add_to_cart' listing.id %}" method="post" class="cart-form" data-listing-id="{{ listing.id }}">
-                                    {% csrf_token %}
-                                    <button type="submit" class="action-button action-cart" 
-                                            id="cart-btn-{{ listing.id }}"
-                                            data-initial-text="<i class='bi bi-cart-plus'></i> Cart"
-                                            data-in-cart-text="<i class='bi bi-cart-check'></i> Cart">
-                                        <i class="bi bi-cart-plus"></i>
-                                        Cart
-                                    </button>
-                                </form>
+                                {% with cart_item=listing|in_cart:request.user %}
+                                <button type="button" 
+                                        class="action-button action-cart {% if cart_item %}in-cart{% endif %}" 
+                                        id="cart-btn-{{ listing.id }}"
+                                        data-listing-id="{{ listing.id }}"
+                                        data-initial-text="<i class='bi bi-cart-plus'></i> Cart"
+                                        data-in-cart-text="<i class='bi bi-cart-check'></i> {quantity} in cart"
+                                        data-cart-quantity="{{ cart_item.quantity|default:0 }}"
+                                        onclick="{% if cart_item_count == 0 %}addToCartAndReload({{ listing.id }}){% else %}handleListingCartClick(this, {{ listing.id }}){% endif %}">
+                                    <i class="bi {% if cart_item %}bi-cart-check{% else %}bi-cart-plus{% endif %}"></i>
+                                    <span class="cart-btn-text">
+                                        {% if cart_item %}
+                                            {{ cart_item.quantity }} in cart
+                                        {% else %}
+                                            Cart
+                                        {% endif %}
+                                    </span>
+                                </button>
+                                <script>
+                                    // Simple helper function for empty cart case
+                                    function addToCartAndReload(listingId) {
+                                        fetch(`/cart/add/${listingId}/`, {
+                                            method: 'POST',
+                                            headers: {
+                                                'X-CSRFToken': getCookie('csrftoken')
+                                            }
+                                        })
+                                        .then(() => location.reload());
+                                    }
+                                </script>
+                                {% endwith %}
                                 {% endif %}
                                 
                                 <!-- Like Button -->
                                 {% if user.is_authenticated %}
-                                <form action="{% url 'toggle_favorite' listing.id %}" method="post" class="favorite-form">
-                                    {% csrf_token %}
-                                    <button type="submit" class="listing-like {% if listing.id in user_favorites %}liked{% endif %}" 
-                                            data-listing-id="{{ listing.id }}">
-                                        <i class="bi bi-heart{% if listing.id in user_favorites %}-fill{% endif %}"></i>
-                                    </button>
-                                </form>
+                                <button type="button" 
+                                        class="listing-like {% if listing.id in user_favorites %}liked{% endif %}" 
+                                        data-listing-id="{{ listing.id }}"
+                                        onclick="handleFavoriteClick(this, {{ listing.id }})">
+                                    <i class="bi bi-heart{% if listing.id in user_favorites %}-fill{% endif %}"></i>
+                                </button>
                                 {% endif %}
                             </div>
                         </div>
@@ -1732,8 +1796,9 @@
             <div class="pagination-container">
                 <nav class="pagination" aria-label="Listings pagination" id="pagination-container">
                     {% if listings.has_previous %}
-                    <a class="page-button" href="?page={{ listings.previous_page_number }}" 
-                       data-page="{{ listings.previous_page_number }}">
+                    <a class="page-button" href="#" 
+                       data-page="{{ listings.previous_page_number }}"
+                       onclick="handlePaginationClick(event, {{ listings.previous_page_number }})">
                         <i class="bi bi-chevron-left"></i> Prev
                     </a>
                     {% else %}
@@ -1748,7 +1813,7 @@
                             {% if listings.number == i %}
                             <span class="page-button active">{{ i }}</span>
                             {% else %}
-                            <a class="page-button" href="?page={{ i }}" data-page="{{ i }}">{{ i }}</a>
+                            <a class="page-button" href="#" data-page="{{ i }}" onclick="handlePaginationClick(event, {{ i }})">{{ i }}</a>
                             {% endif %}
                         {% endif %}
                     {% endfor %}
@@ -1759,8 +1824,9 @@
                     {% endif %}
 
                     {% if listings.has_next %}
-                    <a class="page-button" href="?page={{ listings.next_page_number }}" 
-                       data-page="{{ listings.next_page_number }}">
+                    <a class="page-button" href="#" 
+                       data-page="{{ listings.next_page_number }}"
+                       onclick="handlePaginationClick(event, {{ listings.next_page_number }})">
                         Next <i class="bi bi-chevron-right"></i>
                     </a>
                     {% else %}
@@ -1783,145 +1849,805 @@
 
 {% block extra_js %}
 <script>
-// ===== CART STATE MANAGEMENT =====
-// This maintains persistent cart state across page interactions
-class CartStateManager {
-    constructor() {
-        this.state = {
-            items: {},  // {listingId: quantity}
-            total: 0,
-            itemCount: 0
-        };
-        this.initialized = false;
-        this.storageKey = 'baysoko_cart_state';
-    }
+// Global state for filters
+let currentFilters = {
+    category: '{{ selected_category|default:"all" }}',
+    location: '{{ selected_location|default:"all" }}',
+    min_price: '{{ min_price|default:"" }}',
+    max_price: '{{ max_price|default:"" }}',
+    featured: {% if 'featured' in request.GET and request.GET.featured == 'true' %}true{% else %}false{% endif %},
+    recent: {% if 'recent' in request.GET and request.GET.recent == 'true' %}true{% else %}false{% endif %},
+    instock: {% if 'instock' not in request.GET or request.GET.instock == 'true' %}true{% else %}false{% endif %},
+    sort: '{{ sort_by|default:"newest" }}',
+    q: '{{ search_query|default:"" }}',
+    page: '{{ request.GET.page|default:1 }}'
+};
 
-    // Initialize from server data and localStorage
-    initialize() {
-        if (this.initialized) return;
-        
-        // Try to load from localStorage first (persists across page refreshes)
-        this.loadFromStorage();
-        
-        // Then merge with server data from context
-        this.mergeServerData();
-        
-        this.initialized = true;
-        console.log('CartStateManager initialized:', this.state);
-    }
-
-    // Load cart state from localStorage
-    loadFromStorage() {
-        try {
-            const stored = localStorage.getItem(this.storageKey);
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                this.state.items = parsed.items || {};
-                this.state.total = parsed.total || 0;
-                this.state.itemCount = parsed.itemCount || 0;
+// CSRF token helper
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
             }
-        } catch (error) {
-            console.error('Error loading cart from storage:', error);
-            // Clear corrupted data
-            localStorage.removeItem(this.storageKey);
         }
     }
+    return cookieValue;
+}
 
-    // Save cart state to localStorage
-    saveToStorage() {
-        try {
-            localStorage.setItem(this.storageKey, JSON.stringify(this.state));
-        } catch (error) {
-            console.error('Error saving cart to storage:', error);
+// Handle cart button click for listings - ALWAYS ADDS/INCREMENTS QUANTITY
+function handleListingCartClick(button, listingId) {
+    // Don't proceed if button is loading
+    if (button.classList.contains('loading')) return;
+    
+    const currentQuantity = parseInt(button.getAttribute('data-cart-quantity') || 0);
+    const url = `/cart/add/${listingId}/`;
+    
+    // Show loading state
+    button.classList.add('loading');
+    button.disabled = true;
+    const originalHTML = button.innerHTML;
+    
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({action: 'add'})
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
-    }
-
-    // Merge with server data from Django context
-    mergeServerData() {
-        // Server cart data from context
-        {% if cart_items %}
-            {% for item in cart_items %}
-                this.state.items[{{ item.listing.id }}] = {{ item.quantity }};
-            {% endfor %}
-            this.state.total = {{ cart_total|default:0 }};
-            this.state.itemCount = {{ cart_item_count|default:0 }};
-        {% endif %}
-    }
-
-    // Update cart state from AJAX response
-    updateFromResponse(data) {
-        if (data.listing_id) {
-            const listingId = data.listing_id;
-            const quantity = data.quantity || 1;
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            const newQuantity = data.item_quantity || (currentQuantity + 1);
             
-            if (quantity > 0) {
-                this.state.items[listingId] = quantity;
-            } else {
-                // Remove from cart if quantity is 0
-                delete this.state.items[listingId];
+            // Update button state
+            button.classList.add('in-cart');
+            button.innerHTML = `<i class="bi bi-cart-check"></i> <span class="cart-btn-text">${newQuantity} in cart</span>`;
+            button.setAttribute('data-cart-quantity', newQuantity);
+            
+            // Add bounce animation
+            button.style.animation = 'cartBounce 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+            setTimeout(() => {
+                button.style.animation = '';
+            }, 500);
+            
+            // Show success message
+            if (window.showToast) {
+                window.showToast(data.message || 'Added to cart!', 'success');
             }
             
-            // Update totals
-            this.state.itemCount = data.cart_item_count || Object.values(this.state.items).reduce((a, b) => a + b, 0);
-            this.state.total = data.cart_total || 0;
+            // Dispatch cart update event for navbar with proper total
+            if (data.cart_total !== undefined && data.cart_item_count !== undefined) {
+                document.dispatchEvent(new CustomEvent('cartUpdated', {
+                    detail: {
+                        itemCount: data.cart_item_count,
+                        total: data.cart_total
+                    }
+                }));
+                
+                console.log('Cart updated - dispatching event:', { 
+                    itemCount: data.cart_item_count, 
+                    total: data.cart_total 
+                });
+            }
             
-            // Save to localStorage
-            this.saveToStorage();
+            // Update navbar cart total directly (as backup)
+            updateNavbarCartTotal(data.cart_total, data.cart_item_count);
             
-            console.log('Cart state updated:', { listingId, quantity, state: this.state });
+        } else {
+            if (window.showToast) {
+                window.showToast(data.error || 'Failed to add to cart', 'error');
+            }
+            button.innerHTML = originalHTML;
         }
-    }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        if (window.showToast) {
+            window.showToast('Error adding to cart', 'error');
+        }
+        button.innerHTML = originalHTML;
+    })
+    .finally(() => {
+        button.classList.remove('loading');
+        button.disabled = false;
+    });
+}
 
-    // Update entire cart state (for sync from server)
-    updateEntireState(items, total, itemCount) {
-        this.state.items = items || {};
-        this.state.total = total || 0;
-        this.state.itemCount = itemCount || Object.values(this.state.items).reduce((a, b) => a + b, 0);
-        this.saveToStorage();
-    }
+// Separate function to remove item from cart
+function handleRemoveFromCart(listingId, buttonElement) {
+    const url = `/cart/remove/${listingId}/`;
+    
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // Find and update the button
+            const button = buttonElement || document.getElementById(`cart-btn-${listingId}`);
+            if (button) {
+                button.classList.remove('in-cart');
+                button.innerHTML = `<i class="bi bi-cart-plus"></i> <span class="cart-btn-text">Cart</span>`;
+                button.setAttribute('data-cart-quantity', 0);
+            }
+            
+            if (window.showToast) {
+                window.showToast(data.message || 'Removed from cart', 'success');
+            }
+            
+            // Dispatch cart update event for navbar
+            if (data.cart_total !== undefined && data.cart_item_count !== undefined) {
+                document.dispatchEvent(new CustomEvent('cartUpdated', {
+                    detail: {
+                        itemCount: data.cart_item_count,
+                        total: data.cart_total
+                    }
+                }));
+                
+                // Update navbar cart total directly
+                updateNavbarCartTotal(data.cart_total, data.cart_item_count);
+            }
+        } else {
+            if (window.showToast) {
+                window.showToast(data.error || 'Failed to remove from cart', 'error');
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error removing from cart:', error);
+        if (window.showToast) {
+            window.showToast('Error removing from cart', 'error');
+        }
+    });
+}
 
-    // Get quantity for a specific listing
-    getQuantity(listingId) {
-        return this.state.items[listingId] || 0;
-    }
-
-    // Check if item is in cart
-    isInCart(listingId) {
-        return this.getQuantity(listingId) > 0;
-    }
-
-    // Clear cart state
-    clear() {
-        this.state = { items: {}, total: 0, itemCount: 0 };
-        this.saveToStorage();
+// Update navbar cart total directly
+function updateNavbarCartTotal(total, count) {
+    console.log('Updating navbar cart total:', { total, count });
+    
+    // Update cart count badges
+    document.querySelectorAll('.cart-count-badge, .mobile-cart-badge').forEach(badge => {
+        if (count > 0) {
+            badge.textContent = count;
+            badge.style.display = 'flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    });
+    
+    // Update cart total in header
+    const cartTotalElements = document.querySelectorAll('.cart-total');
+    cartTotalElements.forEach(element => {
+        if (count > 0) {
+            element.textContent = `KSh ${parseFloat(total).toFixed(2)}`;
+            element.style.display = 'inline';
+        } else {
+            element.style.display = 'none';
+        }
+    });
+    
+    // Update cart empty text
+    const cartEmptyTextElements = document.querySelectorAll('.cart-empty-text');
+    cartEmptyTextElements.forEach(element => {
+        if (count > 0) {
+            element.style.display = 'none';
+        } else {
+            element.style.display = 'inline';
+        }
+    });
+    
+    // Also update desktop cart badge
+    const desktopCartBadge = document.getElementById('desktopCartBadge');
+    if (desktopCartBadge) {
+        if (count > 0) {
+            desktopCartBadge.textContent = count;
+            desktopCartBadge.style.display = 'inline-flex';
+        } else {
+            desktopCartBadge.style.display = 'none';
+        }
     }
 }
 
-// Global cart state instance
-const cartState = new CartStateManager();
+// Handle favorite button click
+function handleFavoriteClick(button, listingId) {
+    const url = `/favorites/toggle/${listingId}/`;
+    const isLiked = button.classList.contains('liked');
+    
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (data.is_favorited) {
+                button.classList.add('liked');
+                button.innerHTML = '<i class="bi bi-heart-fill"></i>';
+            } else {
+                button.classList.remove('liked');
+                button.innerHTML = '<i class="bi bi-heart"></i>';
+            }
+            
+            if (window.showToast) {
+                const message = data.is_favorited ? 
+                    'Added to favorites!' : 
+                    'Removed from favorites!';
+                window.showToast(message, 'success');
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        if (window.showToast) {
+            window.showToast('Error updating favorites', 'error');
+        }
+    });
+}
 
-// ===== MAIN DOCUMENT READY =====
+// Handle pagination click
+function handlePaginationClick(event, page) {
+    event.preventDefault();
+    currentFilters.page = page;
+    applyFilters();
+}
+
+// Apply filters and update listings via AJAX
+function applyFilters() {
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const listingsContainer = document.getElementById('listings-container');
+    const totalResults = document.getElementById('total-results');
+    const activeFiltersContainer = document.getElementById('active-filters-container');
+    
+    // Show loading
+    loadingOverlay.classList.add('active');
+    
+    // Build query string
+    const params = new URLSearchParams();
+    
+    // Add all active filters
+    if (currentFilters.q && currentFilters.q.trim() !== '') {
+        params.append('q', currentFilters.q.trim());
+    }
+    
+    if (currentFilters.category && currentFilters.category !== 'all') {
+        params.append('category', currentFilters.category);
+    }
+    
+    if (currentFilters.location && currentFilters.location !== 'all') {
+        params.append('location', currentFilters.location);
+    }
+    
+    if (currentFilters.min_price && currentFilters.min_price !== '') {
+        params.append('min_price', currentFilters.min_price);
+    }
+    
+    if (currentFilters.max_price && currentFilters.max_price !== '') {
+        params.append('max_price', currentFilters.max_price);
+    }
+    
+    if (currentFilters.featured) {
+        params.append('featured', 'true');
+    }
+    
+    if (currentFilters.recent) {
+        params.append('recent', 'true');
+    }
+    
+    if (currentFilters.instock) {
+        params.append('instock', 'true');
+    }
+    
+    if (currentFilters.sort && currentFilters.sort !== 'newest') {
+        params.append('sort', currentFilters.sort);
+    }
+    
+    if (currentFilters.page && currentFilters.page !== 1) {
+        params.append('page', currentFilters.page);
+    }
+    
+    // Make AJAX request
+    const url = `{% url 'all-listings' %}?${params.toString()}`;
+    
+    fetch(url, {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // Update results count
+            if (totalResults) {
+                totalResults.textContent = data.pagination.total_count || 0;
+                totalResults.parentElement.classList.add('results-count-updated');
+                setTimeout(() => {
+                    totalResults.parentElement.classList.remove('results-count-updated');
+                }, 500);
+            }
+            
+            // Update listings grid
+            updateListingsGrid(data);
+            
+            // Update pagination
+            updatePagination(data);
+            
+            // Update active filters display
+            updateActiveFiltersDisplay();
+            
+            // Update URL without reloading page
+            history.pushState({ filters: currentFilters }, '', url);
+        }
+    })
+    .catch(error => {
+        console.error('Filter error:', error);
+        if (window.showToast) {
+            window.showToast('Error applying filters', 'error');
+        }
+    })
+    .finally(() => {
+        loadingOverlay.classList.remove('active');
+    });
+}
+
+// Update listings grid with new data
+function updateListingsGrid(data) {
+    const listingsContainer = document.getElementById('listings-container');
+    
+    if (!data.listings || data.listings.length === 0) {
+        listingsContainer.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px;">
+                <div style="font-size: 4rem; margin-bottom: 20px; opacity: 0.3; color: var(--primary);">
+                    <i class="bi bi-search-heart"></i>
+                </div>
+                <h3 style="font-size: 1.5rem; margin-bottom: 12px; color: var(--text-primary); font-weight: 800;">
+                    No listings match your criteria
+                </h3>
+                <p style="margin-bottom: 30px; color: var(--text-secondary); max-width: 400px; margin-left: auto; margin-right: auto;">
+                    Try adjusting your filters or search terms.
+                </p>
+                <button onclick="clearAllFilters()" class="filter-button filter-button-primary" 
+                        style="margin: 0 auto; display: block;">
+                    <i class="bi bi-arrow-clockwise"></i> Reset All Filters
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    // Build listings HTML
+    let listingsHTML = '';
+    
+    data.listings.forEach((listing, index) => {
+        const inStock = listing.stock > 0;
+        const lowStock = listing.stock > 0 && listing.stock <= 10;
+        const outOfStock = listing.stock === 0;
+        const isFeatured = listing.is_featured;
+        const cartQuantity = listing.cart_quantity || 0;
+        const inCart = cartQuantity > 0;
+        const delay = (index * 0.05) + 0.1;
+        
+        listingsHTML += `
+            <article class="listing-card animated" 
+                     data-listing-id="${listing.id}"
+                     data-price="${listing.price}"
+                     data-category="${listing.category_id}"
+                     data-location="${listing.location}"
+                     data-featured="${isFeatured}"
+                     data-recent="${listing.is_recent}"
+                     data-stock="${listing.stock}"
+                     style="animation-delay: ${delay}s">
+                
+                ${isFeatured ? `
+                <div class="pro-logo">
+                    <i class="bi bi-star-fill"></i> Featured
+                </div>` : ''}
+                
+                <div class="listing-category-badge">
+                    <i class="bi ${listing.category_icon || 'bi-tag'}"></i>
+                    ${listing.category || 'Uncategorized'}
+                </div>
+                
+                <div class="listing-image">
+                    <img src="${listing.image_url}" 
+                         alt="${listing.title}"
+                         loading="lazy"
+                         onerror="this.onerror=null; this.src='{% static 'images/placeholder.jpg' %}'">
+                    
+                    <div class="listing-overlay">
+                        <h3 class="listing-title">${listing.title}</h3>
+                    </div>
+                </div>
+                
+                ${listing.store_name ? `
+                <div class="listing-store">
+                    <img src="${listing.store_logo || '{% static 'images/placeholder.jpg' %}'}" 
+                         alt="${listing.store_name}" 
+                         class="store-avatar"
+                         onerror="this.onerror=null; this.src='{% static 'images/placeholder.jpg' %}'">
+                    <div class="store-info">
+                        <div class="store-name">
+                            <a href="${listing.store_url || '#'}">
+                                ${listing.store_name}
+                            </a>
+                        </div>
+                    </div>
+                </div>` : ''}
+                
+                <div class="listing-content">
+                    <div class="listing-meta">
+                        <div class="listing-price">${parseFloat(listing.price).toLocaleString('en-KE')}</div>
+                        <div class="listing-location">
+                            <i class="bi bi-geo-alt"></i>
+                            ${listing.location_name || listing.location}
+                        </div>
+                    </div>
+                    
+                    <div class="listing-stock ${inStock && !lowStock ? 'stock-in' : lowStock ? 'stock-low' : 'stock-out'}">
+                        <i class="bi bi-${inStock && !lowStock ? 'check-circle' : lowStock ? 'exclamation-circle' : 'x-circle'}"></i>
+                        ${inStock && !lowStock ? 'In Stock' : lowStock ? `Low Stock (${listing.stock})` : 'Out of Stock'}
+                    </div>
+                    
+                    <div class="listing-actions">
+                        <a href="${listing.url}" class="action-button action-view">
+                            <i class="bi bi-eye"></i>
+                            View
+                        </a>
+                        <div class="d-flex align-items-center gap-2">
+                            ${inStock && !listing.is_sold ? `
+                            <button type="button" 
+                                    class="action-button action-cart ${inCart ? 'in-cart' : ''}" 
+                                    id="cart-btn-${listing.id}"
+                                    data-listing-id="${listing.id}"
+                                    data-cart-quantity="${cartQuantity}"
+                                    onclick="handleListingCartClick(this, ${listing.id})">
+                                <i class="bi ${inCart ? 'bi-cart-check' : 'bi-cart-plus'}"></i>
+                                <span class="cart-btn-text">${inCart ? `${cartQuantity} in cart` : 'Cart'}</span>
+                            </button>` : ''}
+                            
+                            ${data.user_authenticated ? `
+                            <button type="button" 
+                                    class="listing-like ${listing.is_favorited ? 'liked' : ''}" 
+                                    data-listing-id="${listing.id}"
+                                    onclick="handleFavoriteClick(this, ${listing.id})">
+                                <i class="bi bi-heart${listing.is_favorited ? '-fill' : ''}"></i>
+                            </button>` : ''}
+                        </div>
+                    </div>
+                </div>
+            </article>
+        `;
+    });
+    
+    // Update container with fade animation
+    listingsContainer.style.opacity = '0';
+    listingsContainer.style.transform = 'translateY(10px)';
+    
+    setTimeout(() => {
+        listingsContainer.innerHTML = listingsHTML;
+        
+        setTimeout(() => {
+            listingsContainer.style.opacity = '1';
+            listingsContainer.style.transform = 'translateY(0)';
+            listingsContainer.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+        }, 50);
+    }, 300);
+}
+
+// Update pagination
+function updatePagination(data) {
+    const paginationContainer = document.querySelector('.pagination-container');
+    
+    if (!data.pagination || (!data.pagination.has_next && !data.pagination.has_previous && data.pagination.current_page === 1)) {
+        if (paginationContainer) {
+            paginationContainer.style.display = 'none';
+        }
+        return;
+    }
+    
+    if (paginationContainer) {
+        paginationContainer.style.display = 'block';
+        
+        const pagination = data.pagination;
+        let paginationHTML = `
+            <nav class="pagination" aria-label="Listings pagination">
+        `;
+        
+        // Previous button
+        if (pagination.has_previous) {
+            paginationHTML += `
+                <a class="page-button" href="#" 
+                   data-page="${pagination.previous_page || pagination.current_page - 1}"
+                   onclick="handlePaginationClick(event, ${pagination.previous_page || pagination.current_page - 1})">
+                    <i class="bi bi-chevron-left"></i> Prev
+                </a>
+            `;
+        } else {
+            paginationHTML += `
+                <span class="page-button" aria-disabled="true">
+                    <i class="bi bi-chevron-left"></i> Prev
+                </span>
+            `;
+        }
+        
+        // Page numbers
+        const startPage = Math.max(1, pagination.current_page - 2);
+        const endPage = Math.min(pagination.num_pages, pagination.current_page + 2);
+        
+        for (let i = startPage; i <= endPage; i++) {
+            if (i === pagination.current_page) {
+                paginationHTML += `<span class="page-button active">${i}</span>`;
+            } else {
+                paginationHTML += `<a class="page-button" href="#" data-page="${i}" onclick="handlePaginationClick(event, ${i})">${i}</a>`;
+            }
+        }
+        
+        // Next button
+        if (pagination.has_next) {
+            paginationHTML += `
+                <a class="page-button" href="#" 
+                   data-page="${pagination.next_page || pagination.current_page + 1}"
+                   onclick="handlePaginationClick(event, ${pagination.next_page || pagination.current_page + 1})">
+                    Next <i class="bi bi-chevron-right"></i>
+                </a>
+            `;
+        } else {
+            paginationHTML += `
+                <span class="page-button" aria-disabled="true">
+                    Next <i class="bi bi-chevron-right"></i>
+                </span>
+            `;
+        }
+        
+        paginationHTML += `</nav>`;
+        paginationContainer.innerHTML = paginationHTML;
+    }
+}
+
+// Update active filters display
+function updateActiveFiltersDisplay() {
+    const activeFiltersContainer = document.getElementById('active-filters-container');
+    const activeFilters = document.getElementById('active-filters');
+    
+    if (!activeFiltersContainer || !activeFilters) return;
+    
+    let filtersHTML = '';
+    let hasActiveFilters = false;
+    
+    // Search filter
+    if (currentFilters.q && currentFilters.q.trim() !== '') {
+        hasActiveFilters = true;
+        filtersHTML += `
+            <div class="filter-tag" data-filter="search">
+                Search: "${currentFilters.q}"
+                <button type="button" class="filter-tag-remove" onclick="removeFilter('search')">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+        `;
+    }
+    
+    // Category filter
+    if (currentFilters.category && currentFilters.category !== 'all') {
+        hasActiveFilters = true;
+        const categorySelect = document.getElementById('category-filter');
+        const selectedOption = categorySelect ? categorySelect.options[categorySelect.selectedIndex] : null;
+        const categoryName = selectedOption ? selectedOption.text : 'Category';
+        
+        filtersHTML += `
+            <div class="filter-tag" data-filter="category">
+                ${categoryName}
+                <button type="button" class="filter-tag-remove" onclick="removeFilter('category')">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+        `;
+    }
+    
+    // Location filter
+    if (currentFilters.location && currentFilters.location !== 'all') {
+        hasActiveFilters = true;
+        const locationSelect = document.getElementById('location-filter');
+        const selectedOption = locationSelect ? locationSelect.options[locationSelect.selectedIndex] : null;
+        const locationName = selectedOption ? selectedOption.text : 'Location';
+        
+        filtersHTML += `
+            <div class="filter-tag" data-filter="location">
+                ${locationName}
+                <button type="button" class="filter-tag-remove" onclick="removeFilter('location')">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+        `;
+    }
+    
+    // Price filter
+    if (currentFilters.min_price || currentFilters.max_price) {
+        hasActiveFilters = true;
+        let priceText = '';
+        if (currentFilters.min_price && currentFilters.max_price) {
+            priceText = `Price: KSh ${currentFilters.min_price} - ${currentFilters.max_price}`;
+        } else if (currentFilters.min_price) {
+            priceText = `Price: From KSh ${currentFilters.min_price}`;
+        } else if (currentFilters.max_price) {
+            priceText = `Price: Up to KSh ${currentFilters.max_price}`;
+        }
+        
+        filtersHTML += `
+            <div class="filter-tag" data-filter="price">
+                ${priceText}
+                <button type="button" class="filter-tag-remove" onclick="removeFilter('price')">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+        `;
+    }
+    
+    // Featured filter
+    if (currentFilters.featured) {
+        hasActiveFilters = true;
+        filtersHTML += `
+            <div class="filter-tag" data-filter="featured">
+                Featured Items
+                <button type="button" class="filter-tag-remove" onclick="removeFilter('featured')">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+        `;
+    }
+    
+    // Recent filter
+    if (currentFilters.recent) {
+        hasActiveFilters = true;
+        filtersHTML += `
+            <div class="filter-tag" data-filter="recent">
+                Recently Added
+                <button type="button" class="filter-tag-remove" onclick="removeFilter('recent')">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+        `;
+    }
+    
+    // In stock filter
+    if (currentFilters.instock) {
+        hasActiveFilters = true;
+        filtersHTML += `
+            <div class="filter-tag" data-filter="instock">
+                In Stock Only
+                <button type="button" class="filter-tag-remove" onclick="removeFilter('instock')">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+        `;
+    }
+    
+    activeFilters.innerHTML = filtersHTML;
+    
+    if (hasActiveFilters) {
+        activeFiltersContainer.classList.add('active');
+    } else {
+        activeFiltersContainer.classList.remove('active');
+    }
+}
+
+// Remove specific filter
+function removeFilter(filterType) {
+    switch(filterType) {
+        case 'search':
+            currentFilters.q = '';
+            document.getElementById('main-search-input').value = '';
+            break;
+        case 'category':
+            currentFilters.category = 'all';
+            document.getElementById('category-filter').value = 'all';
+            break;
+        case 'location':
+            currentFilters.location = 'all';
+            document.getElementById('location-filter').value = 'all';
+            break;
+        case 'price':
+            currentFilters.min_price = '';
+            currentFilters.max_price = '';
+            document.getElementById('min_price').value = '';
+            document.getElementById('max_price').value = '';
+            // Reset price buttons
+            document.querySelectorAll('.price-filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            break;
+        case 'featured':
+            currentFilters.featured = false;
+            document.getElementById('featured-filter').checked = false;
+            break;
+        case 'recent':
+            currentFilters.recent = false;
+            document.getElementById('recent-filter').checked = false;
+            break;
+        case 'instock':
+            currentFilters.instock = true; // Default is true
+            document.getElementById('instock-filter').checked = true;
+            break;
+    }
+    
+    applyFilters();
+}
+
+// Clear all filters
+function clearAllFilters() {
+    // Reset filter state
+    currentFilters = {
+        category: 'all',
+        location: 'all',
+        min_price: '',
+        max_price: '',
+        featured: false,
+        recent: false,
+        instock: true,
+        sort: 'newest',
+        q: '',
+        page: 1
+    };
+    
+    // Reset UI elements
+    document.getElementById('category-filter').value = 'all';
+    document.getElementById('location-filter').value = 'all';
+    document.getElementById('min_price').value = '';
+    document.getElementById('max_price').value = '';
+    document.getElementById('featured-filter').checked = false;
+    document.getElementById('recent-filter').checked = false;
+    document.getElementById('instock-filter').checked = true;
+    document.getElementById('sort-filter').value = 'newest';
+    document.getElementById('mobile-sort').value = 'newest';
+    document.getElementById('main-search-input').value = '';
+    
+    // Reset price buttons
+    document.querySelectorAll('.price-filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    applyFilters();
+}
+
+// Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Listings page loaded - initializing cart state');
+    console.log('Listings page loaded - initializing filters');
     
-    // Initialize cart state manager
-    cartState.initialize();
-    
-    // ===== DOM ELEMENTS =====
+    // ===== MOBILE FILTER TOGGLE =====
     const mobileFilterToggle = document.getElementById('mobileFilterToggle');
     const filtersSidebar = document.getElementById('filtersSidebar');
     const closeFiltersBtn = document.getElementById('closeFiltersBtn');
     const mobileFiltersOverlay = document.getElementById('mobileFiltersOverlay');
-    const loadingOverlay = document.getElementById('loadingOverlay');
-    const listingsContainer = document.getElementById('listings-container');
-    const resultsCount = document.getElementById('results-count');
-    const totalResults = document.getElementById('total-results');
-    const activeFiltersContainer = document.getElementById('active-filters-container');
-    const activeFilters = document.getElementById('active-filters');
-    const mainSearchForm = document.getElementById('main-search-form');
-    const mainSearchInput = document.getElementById('main-search-input');
     
-    // ===== MOBILE FILTER TOGGLE =====
     function openMobileFilters() {
         filtersSidebar.classList.add('mobile-open');
         mobileFiltersOverlay.classList.add('active');
@@ -1947,15 +2673,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     if (closeFiltersBtn) {
-        closeFiltersBtn.addEventListener('click', function() {
-            closeMobileFilters();
-        });
+        closeFiltersBtn.addEventListener('click', closeMobileFilters);
     }
     
     if (mobileFiltersOverlay) {
-        mobileFiltersOverlay.addEventListener('click', function() {
-            closeMobileFilters();
-        });
+        mobileFiltersOverlay.addEventListener('click', closeMobileFilters);
     }
     
     // Close filters on escape key
@@ -1964,220 +2686,6 @@ document.addEventListener('DOMContentLoaded', function() {
             closeMobileFilters();
         }
     });
-    
-    // ===== UPDATE CART BUTTONS ON PAGE LOAD =====
-    updateAllCartButtons();
-    
-    // ===== CART BUTTON UPDATER FUNCTIONS =====
-    function updateCartButton(listingId, quantity) {
-        const cartButtons = document.querySelectorAll(`.cart-form[data-listing-id="${listingId}"] .action-cart`);
-        
-        cartButtons.forEach(button => {
-            if (quantity > 0) {
-                // Item is in cart - green style with quantity indicator
-                button.classList.add('in-cart');
-                button.innerHTML = `<i class="bi bi-cart-check"></i> Cart`;
-                
-                // Add or update quantity indicator
-                let indicator = button.querySelector('.cart-quantity-indicator');
-                if (!indicator) {
-                    indicator = document.createElement('span');
-                    indicator.className = 'cart-quantity-indicator';
-                    button.appendChild(indicator);
-                }
-                indicator.textContent = quantity;
-                indicator.style.display = 'flex';
-                
-                // Add title for accessibility
-                button.title = `${quantity} item${quantity > 1 ? 's' : ''} in cart`;
-            } else {
-                // Item not in cart - default style
-                button.classList.remove('in-cart');
-                button.innerHTML = `<i class="bi bi-cart-plus"></i> Cart`;
-                
-                // Remove quantity indicator if exists
-                const indicator = button.querySelector('.cart-quantity-indicator');
-                if (indicator) {
-                    indicator.remove();
-                }
-                
-                // Reset title
-                button.title = 'Add to cart';
-            }
-        });
-    }
-    
-    function updateAllCartButtons() {
-        // Update all cart buttons based on current cart state
-        Object.keys(cartState.state.items).forEach(listingId => {
-            const quantity = cartState.state.items[listingId];
-            if (quantity > 0) {
-                updateCartButton(parseInt(listingId), quantity);
-            }
-        });
-    }
-    
-    // ===== CART FORM HANDLING =====
-    function handleCartFormSubmit(e) {
-        e.preventDefault();
-        const form = e.target.closest('.cart-form');
-        if (!form) return;
-        
-        const listingId = form.getAttribute('data-listing-id');
-        const cartButton = form.querySelector('.action-cart');
-        const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]').value;
-        
-        if (!listingId || !cartButton) return;
-        
-        // Show loading state
-        const originalHTML = cartButton.innerHTML;
-        cartButton.innerHTML = '<i class="bi bi-hourglass-split"></i>';
-        cartButton.disabled = true;
-        
-        // Get current quantity for optimistic update
-        const currentQuantity = cartState.getQuantity(listingId);
-        const optimisticQuantity = currentQuantity + 1;
-        
-        // Optimistic update - immediately show the item in cart
-        cartState.state.items[listingId] = optimisticQuantity;
-        cartState.state.itemCount += 1;
-        updateCartButton(parseInt(listingId), optimisticQuantity);
-        
-        // Make AJAX request
-        fetch(form.action, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': csrfToken,
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log('Add to cart response:', data);
-            
-            if (data.success) {
-                // Update cart state from server response
-                cartState.updateFromResponse(data);
-                
-                // Update the button with actual quantity
-                updateCartButton(data.listing_id, data.quantity || optimisticQuantity);
-                
-                // Update global cart in base.html
-                document.dispatchEvent(new CustomEvent('cartUpdated', {
-                    detail: { 
-                        itemCount: data.cart_item_count || cartState.state.itemCount, 
-                        total: data.cart_total || cartState.state.total 
-                    }
-                }));
-                
-                // Show success message
-                if (window.showToast) {
-                    window.showToast(data.message || 'Added to cart!', 'success');
-                }
-            } else {
-                // Revert optimistic update on error
-                cartState.state.items[listingId] = currentQuantity;
-                cartState.state.itemCount -= 1;
-                updateCartButton(parseInt(listingId), currentQuantity);
-                
-                if (window.showToast) {
-                    window.showToast(data.error || 'Failed to add to cart', 'error');
-                }
-            }
-        })
-        .catch(error => {
-            console.error('Error adding to cart:', error);
-            
-            // Revert optimistic update on error
-            cartState.state.items[listingId] = currentQuantity;
-            cartState.state.itemCount -= 1;
-            updateCartButton(parseInt(listingId), currentQuantity);
-            
-            if (window.showToast) {
-                window.showToast('Error adding to cart. Please try again.', 'error');
-            }
-        })
-        .finally(() => {
-            // Reset button state
-            cartButton.disabled = false;
-            cartButton.innerHTML = originalHTML;
-        });
-    }
-    
-    // Attach cart form event listeners
-    document.addEventListener('submit', function(e) {
-        if (e.target.classList.contains('cart-form')) {
-            handleCartFormSubmit(e);
-        }
-    });
-    
-    // ===== LISTEN FOR GLOBAL CART UPDATES =====
-    // This syncs cart state when cart is updated from other pages/modals
-    document.addEventListener('globalCartUpdated', function(event) {
-        console.log('Global cart update received:', event.detail);
-        
-        // We could fetch fresh cart data here, but for now just update our state
-        // The cart buttons are already updated via the form handlers
-    });
-    
-    // ===== LIKE BUTTON FUNCTIONALITY =====
-    document.addEventListener('submit', function(e) {
-        if (e.target.classList.contains('favorite-form')) {
-            e.preventDefault();
-            const form = e.target;
-            const button = form.querySelector('.listing-like');
-            
-            fetch(form.action, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value,
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.is_favorited) {
-                    button.classList.add('liked');
-                    button.innerHTML = '<i class="bi bi-heart-fill"></i>';
-                } else {
-                    button.classList.remove('liked');
-                    button.innerHTML = '<i class="bi bi-heart"></i>';
-                }
-                
-                if (window.showToast) {
-                    const message = data.is_favorited ? 
-                        'Added to favorites!' : 
-                        'Removed from favorites!';
-                    window.showToast(message, 'success');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                if (window.showToast) {
-                    window.showToast('Error updating favorites', 'error');
-                }
-            });
-        }
-    });
-    
-    // ===== FILTER FUNCTIONALITY =====
-    let currentFilters = {
-        category: '{{ selected_category|default:"all" }}',
-        location: '{{ selected_location|default:"all" }}',
-        min_price: '{{ min_price|default:"" }}',
-        max_price: '{{ max_price|default:"" }}',
-        featured: {% if 'featured' in request.GET and request.GET.featured == 'true' %}true{% else %}false{% endif %},
-        recent: {% if 'recent' in request.GET and request.GET.recent == 'true' %}true{% else %}false{% endif %},
-        instock: {% if 'instock' not in request.GET or request.GET.instock == 'true' %}true{% else %}false{% endif %},
-        sort: '{{ sort_by|default:"newest" }}',
-        q: '{{ search_query|default:"" }}',
-        page: '{{ request.GET.page|default:1 }}'
-    };
     
     // ===== FILTER ELEMENT REFERENCES =====
     const categoryFilter = document.getElementById('category-filter');
@@ -2193,39 +2701,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const applyFiltersBtn = document.getElementById('apply-filters');
     const clearFiltersBtn = document.getElementById('clear-filters');
     const resetAllFiltersBtn = document.getElementById('reset-all-filters');
-    
-    // ===== INITIALIZE FILTER UI =====
-    function initializeFilterUI() {
-        // Set initial values
-        categoryFilter.value = currentFilters.category;
-        locationFilter.value = currentFilters.location;
-        minPriceInput.value = currentFilters.min_price;
-        maxPriceInput.value = currentFilters.max_price;
-        featuredFilter.checked = currentFilters.featured;
-        recentFilter.checked = currentFilters.recent;
-        instockFilter.checked = currentFilters.instock;
-        sortFilter.value = currentFilters.sort;
-        if (mobileSortFilter) mobileSortFilter.value = currentFilters.sort;
-        
-        // Update price buttons active state
-        updatePriceButtonsState();
-        
-        // Update active filters display
-        updateActiveFiltersDisplay();
-    }
-    
-    // Initialize UI
-    initializeFilterUI();
+    const mainSearchForm = document.getElementById('main-search-form');
+    const mainSearchInput = document.getElementById('main-search-input');
     
     // ===== PRICE FILTER BUTTONS =====
     function updatePriceButtonsState() {
         const minPrice = currentFilters.min_price;
         const maxPrice = currentFilters.max_price;
         
-        // Remove active class from all buttons
         priceFilterButtons.forEach(btn => btn.classList.remove('active'));
         
-        // Activate matching button
         priceFilterButtons.forEach(btn => {
             const btnMin = btn.getAttribute('data-min');
             const btnMax = btn.getAttribute('data-max');
@@ -2236,20 +2721,20 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Initialize price buttons state
+    updatePriceButtonsState();
+    
     priceFilterButtons.forEach(button => {
         button.addEventListener('click', function() {
             const min = this.getAttribute('data-min');
             const max = this.getAttribute('data-max');
             
-            // Update inputs
             minPriceInput.value = min;
             maxPriceInput.value = max;
             
-            // Update filter state
             currentFilters.min_price = min;
             currentFilters.max_price = max;
             
-            // Update button states
             updatePriceButtonsState();
             
             // Auto-apply on mobile
@@ -2262,12 +2747,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // ===== FILTER INPUT HANDLERS =====
     categoryFilter.addEventListener('change', function() {
         currentFilters.category = this.value;
-        updateActiveFiltersDisplay();
+        currentFilters.page = 1; // Reset to first page when filter changes
     });
     
     locationFilter.addEventListener('change', function() {
         currentFilters.location = this.value;
-        updateActiveFiltersDisplay();
+        currentFilters.page = 1;
         // Auto-apply on mobile
         if (window.innerWidth < 992) {
             setTimeout(applyFilters, 300);
@@ -2276,31 +2761,29 @@ document.addEventListener('DOMContentLoaded', function() {
     
     minPriceInput.addEventListener('input', function() {
         currentFilters.min_price = this.value;
-        // Clear active buttons when typing
+        currentFilters.page = 1;
         priceFilterButtons.forEach(btn => btn.classList.remove('active'));
-        updateActiveFiltersDisplay();
     });
     
     maxPriceInput.addEventListener('input', function() {
         currentFilters.max_price = this.value;
-        // Clear active buttons when typing
+        currentFilters.page = 1;
         priceFilterButtons.forEach(btn => btn.classList.remove('active'));
-        updateActiveFiltersDisplay();
     });
     
     featuredFilter.addEventListener('change', function() {
         currentFilters.featured = this.checked;
-        updateActiveFiltersDisplay();
+        currentFilters.page = 1;
     });
     
     recentFilter.addEventListener('change', function() {
         currentFilters.recent = this.checked;
-        updateActiveFiltersDisplay();
+        currentFilters.page = 1;
     });
     
     instockFilter.addEventListener('change', function() {
         currentFilters.instock = this.checked;
-        updateActiveFiltersDisplay();
+        currentFilters.page = 1;
     });
     
     sortFilter.addEventListener('change', function() {
@@ -2328,513 +2811,22 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // ===== APPLY FILTERS =====
-    applyFiltersBtn.addEventListener('click', function() {
-        applyFilters();
-        closeMobileFilters();
-    });
+    if (applyFiltersBtn) {
+        applyFiltersBtn.addEventListener('click', function() {
+            applyFilters();
+            closeMobileFilters();
+        });
+    }
     
     // ===== CLEAR FILTERS =====
-    clearFiltersBtn.addEventListener('click', function() {
-        // Reset all filters
-        currentFilters = {
-            category: 'all',
-            location: 'all',
-            min_price: '',
-            max_price: '',
-            featured: false,
-            recent: false,
-            instock: true,
-            sort: 'newest',
-            q: '',
-            page: 1
-        };
-        
-        // Reset UI
-        initializeFilterUI();
-        
-        // Clear search input
-        if (mainSearchInput) {
-            mainSearchInput.value = '';
-        }
-        
-        applyFilters();
-        closeMobileFilters();
-    });
+    if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener('click', clearAllFilters);
+    }
     
     // Reset all filters from no results
     if (resetAllFiltersBtn) {
-        resetAllFiltersBtn.addEventListener('click', function() {
-            clearFiltersBtn.click();
-        });
+        resetAllFiltersBtn.addEventListener('click', clearAllFilters);
     }
-    
-    // ===== ACTIVE FILTERS DISPLAY =====
-    function updateActiveFiltersDisplay() {
-        const activeFiltersHTML = [];
-        
-        // Search filter
-        if (currentFilters.q) {
-            activeFiltersHTML.push(`
-                <div class="filter-tag" data-filter="search">
-                    Search: "${currentFilters.q}"
-                    <button type="button" class="filter-tag-remove" data-filter="search">
-                        <i class="bi bi-x"></i>
-                    </button>
-                </div>
-            `);
-        }
-        
-        // Category filter
-        if (currentFilters.category && currentFilters.category !== 'all') {
-            const categoryOption = categoryFilter.querySelector(`option[value="${currentFilters.category}"]`);
-            const categoryName = categoryOption ? categoryOption.text : '';
-            activeFiltersHTML.push(`
-                <div class="filter-tag" data-filter="category">
-                    ${categoryName}
-                    <button type="button" class="filter-tag-remove" data-filter="category">
-                        <i class="bi bi-x"></i>
-                    </button>
-                </div>
-            `);
-        }
-        
-        // Location filter
-        if (currentFilters.location && currentFilters.location !== 'all') {
-            const locationOption = locationFilter.querySelector(`option[value="${currentFilters.location}"]`);
-            const locationName = locationOption ? locationOption.text : '';
-            activeFiltersHTML.push(`
-                <div class="filter-tag" data-filter="location">
-                    ${locationName}
-                    <button type="button" class="filter-tag-remove" data-filter="location">
-                        <i class="bi bi-x"></i>
-                    </button>
-                </div>
-            `);
-        }
-        
-        // Price filter
-        if (currentFilters.min_price || currentFilters.max_price) {
-            let priceText = '';
-            if (currentFilters.min_price && currentFilters.max_price) {
-                priceText = `Price: KSh ${currentFilters.min_price} - ${currentFilters.max_price}`;
-            } else if (currentFilters.min_price) {
-                priceText = `Price: From KSh ${currentFilters.min_price}`;
-            } else if (currentFilters.max_price) {
-                priceText = `Price: Up to KSh ${currentFilters.max_price}`;
-            }
-            
-            activeFiltersHTML.push(`
-                <div class="filter-tag" data-filter="price">
-                    ${priceText}
-                    <button type="button" class="filter-tag-remove" data-filter="price">
-                        <i class="bi bi-x"></i>
-                    </button>
-                </div>
-            `);
-        }
-        
-        // Featured filter
-        if (currentFilters.featured) {
-            activeFiltersHTML.push(`
-                <div class="filter-tag" data-filter="featured">
-                    Featured Items
-                    <button type="button" class="filter-tag-remove" data-filter="featured">
-                        <i class="bi bi-x"></i>
-                    </button>
-                </div>
-            `);
-        }
-        
-        // Recent filter
-        if (currentFilters.recent) {
-            activeFiltersHTML.push(`
-                <div class="filter-tag" data-filter="recent">
-                    Recently Added
-                    <button type="button" class="filter-tag-remove" data-filter="recent">
-                        <i class="bi bi-x"></i>
-                    </button>
-                </div>
-            `);
-        }
-        
-        // In stock filter
-        if (currentFilters.instock) {
-            activeFiltersHTML.push(`
-                <div class="filter-tag" data-filter="instock">
-                    In Stock Only
-                    <button type="button" class="filter-tag-remove" data-filter="instock">
-                        <i class="bi bi-x"></i>
-                    </button>
-                </div>
-            `);
-        }
-        
-        // Update active filters display
-        if (activeFiltersHTML.length > 0) {
-            activeFilters.innerHTML = activeFiltersHTML.join('');
-            activeFiltersContainer.classList.add('active');
-            
-            // Add event listeners to remove buttons
-            document.querySelectorAll('.filter-tag-remove').forEach(button => {
-                button.addEventListener('click', function() {
-                    const filterType = this.getAttribute('data-filter');
-                    removeFilter(filterType);
-                });
-            });
-        } else {
-            activeFiltersContainer.classList.remove('active');
-        }
-    }
-    
-    // ===== REMOVE FILTER =====
-    function removeFilter(filterType) {
-        switch(filterType) {
-            case 'search':
-                currentFilters.q = '';
-                if (mainSearchInput) mainSearchInput.value = '';
-                break;
-            case 'category':
-                currentFilters.category = 'all';
-                categoryFilter.value = 'all';
-                break;
-            case 'location':
-                currentFilters.location = 'all';
-                locationFilter.value = 'all';
-                break;
-            case 'price':
-                currentFilters.min_price = '';
-                currentFilters.max_price = '';
-                minPriceInput.value = '';
-                maxPriceInput.value = '';
-                priceFilterButtons.forEach(btn => btn.classList.remove('active'));
-                break;
-            case 'featured':
-                currentFilters.featured = false;
-                featuredFilter.checked = false;
-                break;
-            case 'recent':
-                currentFilters.recent = false;
-                recentFilter.checked = false;
-                break;
-            case 'instock':
-                currentFilters.instock = true;
-                instockFilter.checked = true;
-                break;
-        }
-        
-        applyFilters();
-    }
-    
-    // ===== APPLY FILTERS WITH AJAX =====
-    function applyFilters() {
-        // Show loading
-        loadingOverlay.classList.add('active');
-        
-        // Build URL with filters
-        const params = new URLSearchParams();
-        
-        // Add filters to params
-        Object.entries(currentFilters).forEach(([key, value]) => {
-            if (value && value !== 'all' && value !== '' && value !== false) {
-                if (key === 'instock' && value === true) {
-                    params.append(key, 'true');
-                } else if (key === 'instock' && value === false) {
-                    params.append(key, 'false');
-                } else if (typeof value === 'boolean') {
-                    params.append(key, value.toString());
-                } else {
-                    params.append(key, value);
-                }
-            }
-        });
-        
-        // Make AJAX request
-        const url = `{% url 'all-listings' %}?${params.toString()}`;
-        
-        fetch(url, {
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            // Update listings
-            updateListingsFromData(data);
-            
-            // Update pagination
-            updatePaginationFromData(data);
-            
-            // Update results count
-            if (totalResults) {
-                totalResults.textContent = data.total_count || 0;
-            }
-            
-            // Update URL without reload
-            history.pushState({ filters: currentFilters }, '', url);
-            
-            // Update active filters display
-            updateActiveFiltersDisplay();
-            
-            // Close mobile filters
-            closeMobileFilters();
-            
-            // Re-attach cart button listeners after AJAX update
-            attachCartButtonListeners();
-        })
-        .finally(() => {
-            loadingOverlay.classList.remove('active');
-        });
-    }
-    
-    // ===== ATTACH CART BUTTON LISTENERS TO NEW ELEMENTS =====
-    function attachCartButtonListeners() {
-        document.querySelectorAll('.cart-form').forEach(form => {
-            form.addEventListener('submit', handleCartFormSubmit);
-            
-            // Also update the button state for newly loaded listings
-            const listingId = form.getAttribute('data-listing-id');
-            if (listingId) {
-                const quantity = cartState.getQuantity(parseInt(listingId));
-                if (quantity > 0) {
-                    updateCartButton(parseInt(listingId), quantity);
-                }
-            }
-        });
-    }
-    
-    // ===== UPDATE LISTINGS FROM JSON DATA =====
-    function updateListingsFromData(data) {
-        if (!data.listings || data.listings.length === 0) {
-            listingsContainer.innerHTML = `
-                <div style="grid-column: 1 / -1; text-align: center; padding: 40px 20px;">
-                    <div style="font-size: 3rem; margin-bottom: 16px; opacity: 0.5; color: var(--primary);">
-                        <i class="bi bi-search"></i>
-                    </div>
-                    <h3 style="font-size: 1.25rem; margin-bottom: 8px; color: var(--text-primary); font-weight: 800;">No listings found</h3>
-                    <p style="margin-bottom: 20px; color: var(--text-secondary); max-width: 400px; margin-left: auto; margin-right: auto;">
-                        Try adjusting your filters or check back later for new listings.
-                    </p>
-                    <button id="reset-all-filters" class="filter-button filter-button-primary" style="margin: 0 auto; display: block;">
-                        <i class="bi bi-arrow-clockwise"></i> Reset All Filters
-                    </button>
-                </div>
-            `;
-            
-            // Reattach event listener to reset button
-            const resetBtn = document.getElementById('reset-all-filters');
-            if (resetBtn) {
-                resetBtn.addEventListener('click', function() {
-                    clearFiltersBtn.click();
-                });
-            }
-            return;
-        }
-        
-        // Build listings HTML
-        let listingsHTML = '';
-        data.listings.forEach(listing => {
-            const inStock = listing.stock > 0;
-            const lowStock = listing.stock > 0 && listing.stock <= 10;
-            const outOfStock = listing.stock === 0;
-            const isInCart = cartState.isInCart(listing.id);
-            const cartQuantity = cartState.getQuantity(listing.id);
-            
-            listingsHTML += `
-                <article class="listing-card" 
-                         data-listing-id="${listing.id}"
-                         data-price="${listing.price}"
-                         data-category="${listing.category}"
-                         data-location="${listing.location}"
-                         data-featured="${listing.is_featured}"
-                         data-stock="${listing.stock}">
-                    
-                    ${listing.is_featured ? `
-                    <div class="pro-logo">
-                        <i class="bi bi-star-fill"></i> PRO
-                    </div>` : ''}
-                    
-                    <div class="listing-category-badge">
-                        <i class="bi ${listing.category_icon || 'bi-tag'}"></i>
-                        ${listing.category}
-                    </div>
-                    
-                    <div class="listing-image">
-                        <img src="${listing.image_url}" 
-                             alt="${listing.title}"
-                             data-placeholder="{% static 'images/placeholder.jpg' %}"
-                             onerror="this.onerror=null; this.src='{% static 'images/placeholder.jpg' %}';"
-                             loading="lazy">
-                        
-                        <div class="listing-overlay">
-                            <h3 class="listing-title">${listing.title}</h3>
-                        </div>
-                    </div>
-                    
-                    ${listing.store ? `
-                    <div class="listing-store">
-                        <img src="${listing.store_logo}" 
-                             alt="${listing.store}" 
-                             class="store-avatar"
-                             onerror="this.onerror=null; this.src='{% static 'images/placeholder.jpg' %}';">
-                        <div class="store-info">
-                            <div class="store-name">
-                                ${listing.store}
-                            </div>
-                        </div>
-                    </div>` : ''}
-                    
-                    <div class="listing-content">
-                        <div class="listing-meta">
-                            <div class="listing-price">${parseFloat(listing.price).toLocaleString()}</div>
-                            <div class="listing-location">
-                                <i class="bi bi-geo-alt"></i>
-                                ${listing.location}
-                            </div>
-                        </div>
-                        
-                        <div class="listing-stock ${inStock && !lowStock ? 'stock-in' : lowStock ? 'stock-low' : 'stock-out'}">
-                            <i class="bi bi-${inStock && !lowStock ? 'check-circle' : lowStock ? 'exclamation-circle' : 'x-circle'}"></i>
-                            ${inStock && !lowStock ? 'In Stock' : lowStock ? 'Low Stock' : 'Out of Stock'}
-                        </div>
-                        
-                        <div class="listing-actions">
-                            <a href="${listing.url}" class="action-button action-view">
-                                <i class="bi bi-eye"></i>
-                                View
-                            </a>
-                            <div class="d-flex align-items-center gap-2">
-                                {% if user.is_authenticated %}
-                                ${!listing.is_sold && inStock ? `
-                                <form action="/cart/add/${listing.id}/" method="post" class="cart-form" data-listing-id="${listing.id}">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="${getCookie('csrftoken')}">
-                                    <button type="submit" class="action-button action-cart ${isInCart ? 'in-cart' : ''}" 
-                                            id="cart-btn-${listing.id}">
-                                        <i class="bi bi-cart-${isInCart ? 'check' : 'plus'}"></i>
-                                        Cart
-                                        ${isInCart ? `<span class="cart-quantity-indicator" style="display: ${cartQuantity > 0 ? 'flex' : 'none'}">${cartQuantity}</span>` : ''}
-                                    </button>
-                                </form>` : ''}
-                                
-                                <form action="/favorites/toggle/${listing.id}/" method="post" class="favorite-form">
-                                    <input type="hidden" name="csrfmiddlewaretoken" value="${getCookie('csrftoken')}">
-                                    <button type="submit" class="listing-like" 
-                                            data-listing-id="${listing.id}">
-                                        <i class="bi bi-heart"></i>
-                                    </button>
-                                </form>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                </article>
-            `;
-        });
-        
-        listingsContainer.innerHTML = listingsHTML;
-        
-        // Reattach event listeners
-        attachCartButtonListeners();
-    }
-    
-    // ===== UPDATE PAGINATION FROM DATA =====
-    function updatePaginationFromData(data) {
-        const paginationContainer = document.querySelector('.pagination-container');
-        
-        if (!data.has_next && !data.has_previous && data.current_page === 1) {
-            if (paginationContainer) {
-                paginationContainer.style.display = 'none';
-            }
-            return;
-        }
-        
-        if (paginationContainer) {
-            paginationContainer.style.display = 'block';
-            
-            let paginationHTML = `
-                <nav class="pagination" aria-label="Listings pagination" id="pagination-container">
-            `;
-            
-            // Previous button
-            if (data.has_previous) {
-                paginationHTML += `
-                    <a class="page-button" href="#" data-page="${data.current_page - 1}">
-                        <i class="bi bi-chevron-left"></i> Prev
-                    </a>
-                `;
-            } else {
-                paginationHTML += `
-                    <span class="page-button" aria-disabled="true">
-                        <i class="bi bi-chevron-left"></i> Prev
-                    </span>
-                `;
-            }
-            
-            // Page numbers
-            const startPage = Math.max(1, data.current_page - 2);
-            const endPage = Math.min(data.num_pages, data.current_page + 2);
-            
-            for (let i = startPage; i <= endPage; i++) {
-                if (i === data.current_page) {
-                    paginationHTML += `<span class="page-button active">${i}</span>`;
-                } else {
-                    paginationHTML += `<a class="page-button" href="#" data-page="${i}">${i}</a>`;
-                }
-            }
-            
-            // Next button
-            if (data.has_next) {
-                paginationHTML += `
-                    <a class="page-button" href="#" data-page="${data.current_page + 1}">
-                        Next <i class="bi bi-chevron-right"></i>
-                    </a>
-                `;
-            } else {
-                paginationHTML += `
-                    <span class="page-button" aria-disabled="true">
-                        Next <i class="bi bi-chevron-right"></i>
-                    </span>
-                `;
-            }
-            
-            paginationHTML += `</nav>`;
-            
-            paginationContainer.innerHTML = paginationHTML;
-            
-            // Attach pagination event listeners
-            attachPaginationListeners();
-        }
-    }
-    
-    // ===== ATTACH PAGINATION LISTENERS =====
-    function attachPaginationListeners() {
-        document.querySelectorAll('.page-button[data-page]').forEach(button => {
-            button.addEventListener('click', function(e) {
-                e.preventDefault();
-                const page = this.getAttribute('data-page');
-                if (page) {
-                    currentFilters.page = page;
-                    applyFilters();
-                }
-            });
-        });
-    }
-    
-    // ===== INITIALIZE PAGINATION =====
-    attachPaginationListeners();
-    
-    // ===== HANDLE BROWSER BACK/FORWARD =====
-    window.addEventListener('popstate', function(event) {
-        if (event.state && event.state.filters) {
-            currentFilters = event.state.filters;
-            initializeFilterUI();
-            applyFilters();
-        }
-    });
     
     // ===== HANDLE WINDOW RESIZE =====
     window.addEventListener('resize', function() {
@@ -2843,24 +2835,80 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // ===== CSRF TOKEN HELPER =====
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
+    // ===== HANDLE BROWSER BACK/FORWARD =====
+    window.addEventListener('popstate', function(event) {
+        if (event.state && event.state.filters) {
+            currentFilters = event.state.filters;
+            // Update UI elements to match state
+            categoryFilter.value = currentFilters.category;
+            locationFilter.value = currentFilters.location;
+            minPriceInput.value = currentFilters.min_price;
+            maxPriceInput.value = currentFilters.max_price;
+            featuredFilter.checked = currentFilters.featured;
+            recentFilter.checked = currentFilters.recent;
+            instockFilter.checked = currentFilters.instock;
+            sortFilter.value = currentFilters.sort;
+            if (mobileSortFilter) mobileSortFilter.value = currentFilters.sort;
+            mainSearchInput.value = currentFilters.q;
+            
+            updatePriceButtonsState();
+            applyFilters();
         }
-        return cookieValue;
+    });
+    
+    // ===== LISTEN FOR CART UPDATES FROM OTHER PAGES =====
+    document.addEventListener('cartUpdated', function(event) {
+        const { itemCount, total } = event.detail;
+        console.log('Received cart update event:', { itemCount, total });
+        updateNavbarCartTotal(total, itemCount);
+    });
+    
+    // Initial cart state from page load
+    {% if cart_total and cart_item_count %}
+    updateNavbarCartTotal({{ cart_total }}, {{ cart_item_count }});
+    {% endif %}
+    
+    // Expose functions globally
+    window.handleListingCartClick = handleListingCartClick;
+    window.handleFavoriteClick = handleFavoriteClick;
+    window.handlePaginationClick = handlePaginationClick;
+    window.handleRemoveFromCart = handleRemoveFromCart;
+    window.removeFilter = removeFilter;
+    window.clearAllFilters = clearAllFilters;
+});
+
+// Add CSS for animations
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
     
-    // Expose cart state manager globally for other scripts
-    window.cartStateManager = cartState;
-});
+    .listing-card.animated {
+        animation: slideInUp 0.5s ease both;
+    }
+    
+    .listings-grid.animated {
+        animation: fadeIn 0.6s ease;
+    }
+    
+    @keyframes results-count-updated {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); color: var(--primary); }
+        100% { transform: scale(1); }
+    }
+    
+    .results-count-updated {
+        animation: results-count-updated 0.5s ease;
+    }
+`;
+document.head.appendChild(style);
 </script>
 {% endblock %}
