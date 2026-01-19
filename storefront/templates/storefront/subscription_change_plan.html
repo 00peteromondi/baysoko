@@ -167,6 +167,29 @@
                 </div>
                 {% endfor %}
 
+                <!-- Phone Number (shown for all plan changes, required when payment needed) -->
+                <div class="plan-option">
+                    <h6 class="fw-bold mb-3">Payment Information</h6>
+                    <div class="form-group-modern">
+                        <label class="form-label-modern" for="id_phone_number">
+                            M-Pesa Phone Number 
+                            {% if subscription.status in 'canceled,past_due' %}<span class="text-danger">*</span>{% endif %}
+                        </label>
+                        <input type="tel" 
+                               name="phone_number" 
+                               class="input-modern" 
+                               id="id_phone_number" 
+                               placeholder="07XXXXXXXX"
+                               pattern="^(07|01|\+2547|\+2541)[0-9]{8}$"
+                               value="{% if subscription.mpesa_phone %}{{ subscription.mpesa_phone|slice:'4:' }}{% endif %}"
+                               data-current-plan="{{ current_plan }}"
+                               {% if subscription.status in 'canceled,past_due' %}required{% endif %}>
+                        <small class="form-text text-muted">
+                            Required for plan changes that involve payment
+                        </small>
+                    </div>
+                </div>
+
                 <!-- Change Notes -->
                 <div class="alert alert-warning mt-4">
                     <h6 class="fw-bold mb-2">
@@ -174,8 +197,12 @@
                         Important Notes
                     </h6>
                     <ul class="mb-0">
+                        {% if subscription.status in 'canceled,past_due' %}
+                        <li>Payment is required to reactivate your subscription</li>
+                        {% else %}
                         <li>Upgrades take effect immediately with prorated billing</li>
                         <li>Downgrades take effect at the end of your current billing cycle</li>
+                        {% endif %}
                         <li>Changing plans may affect your access to certain features</li>
                     </ul>
                 </div>
@@ -219,6 +246,8 @@
         
         // Form submission
         const form = document.querySelector('form');
+        const phoneField = document.getElementById('id_phone_number');
+        
         form.addEventListener('submit', function(e) {
             const selectedPlan = document.querySelector('input[name="plan"]:checked');
             const currentPlan = "{{ current_plan }}";
@@ -235,6 +264,26 @@
                 return false;
             }
             
+            // Check if payment is required
+            const isUpgrade = 
+                (selectedPlan.value === 'premium' && currentPlan === 'basic') ||
+                (selectedPlan.value === 'enterprise' && currentPlan === 'premium') ||
+                (selectedPlan.value === 'enterprise' && currentPlan === 'basic');
+            
+            const subscriptionStatus = "{{ subscription.status }}";
+            const requiresPayment = subscriptionStatus === 'canceled' || subscriptionStatus === 'past_due' || isUpgrade;
+            
+            // Make phone field required if payment is needed
+            if (requiresPayment && phoneField) {
+                phoneField.required = true;
+                if (!phoneField.value.trim()) {
+                    e.preventDefault();
+                    alert('Phone number is required for plan changes that require payment');
+                    phoneField.focus();
+                    return false;
+                }
+            }
+            
             // Confirm plan change
             const planName = selectedPlan.value.charAt(0).toUpperCase() + selectedPlan.value.slice(1);
             const isDowngrade = 
@@ -246,8 +295,10 @@
             
             if (isDowngrade) {
                 message += '\n\nNote: Downgrades take effect at the end of your current billing cycle.';
+            } else if (requiresPayment) {
+                message += '\n\nNote: This change requires payment and will take effect immediately.';
             } else {
-                message += '\n\nNote: Upgrades take effect immediately with prorated billing.';
+                message += '\n\nNote: Upgrades take effect immediately.';
             }
             
             if (!confirm(message)) {

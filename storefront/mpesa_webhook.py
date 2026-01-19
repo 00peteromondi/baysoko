@@ -42,20 +42,54 @@ def mpesa_callback(request):
             payment.result_description = 'Success'
             payment.save()
             
-            # Update subscription
+            # STRICT PAYMENT VALIDATION: Only proceed if payment amount matches subscription amount
             subscription = payment.subscription
-            subscription.status = 'active'
-            # Set next billing date (1 month from trial end or now if trial ended)
-            if subscription.trial_ends_at and subscription.trial_ends_at > timezone.now():
-                subscription.next_billing_date = subscription.trial_ends_at + timedelta(days=30)
-            else:
-                subscription.next_billing_date = timezone.now() + timedelta(days=30)
-            subscription.save()
+            if payment.amount != subscription.amount:
+                print(f"Payment amount mismatch for subscription {subscription.id}: payment={payment.amount}, subscription={subscription.amount}")
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Payment amount does not match subscription amount'
+                }, status=400)
             
-            # Ensure store is marked as premium
-            store = subscription.store
-            store.is_premium = True
-            store.save()
+            # Additional validation: Check if this payment is legitimate
+            from .subscription_service import SubscriptionService
+            is_valid_payment, validation_message = SubscriptionService.validate_payment_for_activation(payment, subscription)
+            
+            if not is_valid_payment:
+                print(f"Payment validation failed for subscription {subscription.id}: {validation_message}")
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Payment validation failed: {validation_message}'
+                }, status=400)
+            
+            # Check if this payment was for activation (subscription not yet active)
+            if subscription.status in ['canceled', 'past_due', 'trialing']:
+                # Use the safe activation method - this is the ONLY way to activate subscriptions
+                activation_success, activation_message = SubscriptionService.activate_subscription_safely(subscription, payment)
+                
+                if not activation_success:
+                    print(f"Safe activation failed for subscription {subscription.id}: {activation_message}")
+                    SubscriptionService.log_activation_attempt(subscription, 'webhook_payment_success', False, activation_message)
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': f'Safe activation failed: {activation_message}'
+                    }, status=400)
+                
+                SubscriptionService.log_activation_attempt(subscription, 'webhook_payment_success', True)
+                return JsonResponse({
+                    'status': 'success',
+                    'message': 'Subscription activated successfully after payment validation'
+                })
+                
+            else:
+                # This was a payment for an already active subscription (renewal/upgrade)
+                # Just update the billing cycle
+                subscription.current_period_end = timezone.now() + timedelta(days=30)
+                subscription.next_billing_date = timezone.now() + timedelta(days=30)
+                subscription.metadata = subscription.metadata or {}
+                subscription.metadata['last_payment_successful'] = timezone.now().isoformat()
+                subscription.metadata['payment_reference'] = checkout_request_id
+                subscription.save()
             
         else:  # Failed payment
             # Update payment status
@@ -64,16 +98,36 @@ def mpesa_callback(request):
             payment.result_description = callback_data.get('Body', {}).get('stkCallback', {}).get('ResultDesc', 'Payment failed')
             payment.save()
             
-            # If this was the first payment (during trial), we might want to handle differently
+            # Handle failed payment based on subscription state
             subscription = payment.subscription
-            if subscription.status == 'trialing':
-                # Keep trial active but mark that initial payment failed
-                # This allows user to try payment again during trial period
+            
+            # If subscription was being activated (was canceled/past_due/trialing), keep it in that state
+            # DO NOT activate subscriptions on failed payments
+            if subscription.status in ['canceled', 'past_due']:
+                # Remove any pending plan changes on failed payment
+                metadata = subscription.metadata or {}
+                if 'pending_plan_change' in metadata:
+                    metadata.pop('pending_plan_change', None)
+                    metadata.pop('pending_plan_change_at', None)
+                    metadata.pop('pending_payment_amount', None)
+                    metadata.pop('pending_change_description', None)
+                    subscription.metadata = metadata
+                    subscription.save()
+                # Subscription remains inactive - user needs to try payment again
+                pass
+            elif subscription.status == 'trialing':
+                # Trial remains active - user can try payment again during trial
                 pass
             else:
-                # For regular renewal payments, mark subscription as past_due
-                subscription.status = 'past_due'
-                subscription.save()
+                # For active subscriptions, mark as past_due if this was a renewal payment
+                # Check if payment was near billing date
+                if (subscription.current_period_end and 
+                    (subscription.current_period_end - timezone.now()).days <= 3):
+                    subscription.status = 'past_due'
+                    subscription.save()
+            
+            # Log failed payment
+            print(f"Payment failed for subscription {subscription.id}: {payment.result_description}")
         
         return JsonResponse({
             'status': 'success',

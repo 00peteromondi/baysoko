@@ -923,12 +923,13 @@ def seller_analytics(request):
     ).order_by('-created_at')[:5]
     
     for review in recent_reviews:
-        recent_activity.append({
-            'timestamp': review.date_created,
-            'store': review.seller.stores.first().name if review.seller.stores.exists() else 'Unknown Store',
-            'type': 'Review',
-            'description': f'{review.rating}★ review by {review.reviewer.username}'
-        })
+        if review.seller.stores.exists():
+            recent_activity.append({
+                'timestamp': review.created_at,
+                'store': review.seller.stores.first().name if review.seller.stores.exists() else 'Unknown Store',
+                'type': 'Review',
+                'description': f'{review.rating}★ reviewed by {review.user.username} - "{review.comment[:50]}{"..." if len(review.comment) > 50 else ""}"'
+            })
     
     # Recent listings
     recent_listings = Listing.objects.filter(
@@ -1099,9 +1100,9 @@ def store_analytics(request, slug):
     
     for review in recent_reviews:
         recent_activity.append({
-            'timestamp': review.date_created,
+            'timestamp': review.created_at,
             'type': 'Review',
-            'description': f'{review.rating}★ review by {review.reviewer.username}'
+            'description': f'{review.rating}★ review by {review.user.username}'
         })
     
     # Add recent listings

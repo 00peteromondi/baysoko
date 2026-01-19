@@ -101,7 +101,7 @@ def subscription_plan_select(request, slug):
                         )
                         return redirect('storefront:subscription_manage', slug=slug)
                 else:
-                    messages.error(request, result)
+                    messages.error(request, subscription)
                     return redirect('storefront:subscription_plan_select', slug=slug)
     
     else:
@@ -163,27 +163,38 @@ def subscription_payment_options(request, slug):
         if action == 'pay_now':
             # Process payment for trial user wanting to subscribe
             if subscription.status == 'trialing':
-                # Update to active and process payment
-                subscription.status = 'active'
-                subscription.current_period_end = timezone.now() + timedelta(days=30)
-                subscription.save()
-            
-            # Process payment
-            payment_success, payment_result = SubscriptionService.process_payment(
-                subscription=subscription,
-                phone_number=subscription.mpesa_phone.replace('+254', '')
-            )
-            
-            if payment_success:
-                messages.success(
-                    request,
-                    f"Payment initiated for {subscription.get_plan_display()} plan. "
-                    "Please complete the M-Pesa payment on your phone."
+                # Convert trial to paid - this now handles payment internally
+                success, result = SubscriptionService.convert_trial_to_paid(
+                    subscription=subscription,
+                    phone_number=subscription.mpesa_phone.replace('+254', '')
                 )
+
+                if success:
+                    messages.success(
+                        request,
+                        f"Payment initiated for {subscription.get_plan_display()} plan. "
+                        "Please complete the M-Pesa payment to activate your subscription."
+                    )
+                else:
+                    messages.error(request, f"Payment initiation failed: {result}")
+
+                return redirect('storefront:subscription_manage', slug=slug)
             else:
-                messages.error(request, f"Payment initiation failed: {payment_result}")
-            
-            return redirect('storefront:subscription_manage', slug=slug)
+                # For non-trial subscriptions, process payment
+                payment_success, payment_result = SubscriptionService.process_payment(
+                    subscription=subscription,
+                    phone_number=subscription.mpesa_phone.replace('+254', '')
+                )
+
+                if payment_success:
+                    messages.success(
+                        request,
+                        f"Payment initiated. Please complete the M-Pesa payment on your phone."
+                    )
+                else:
+                    messages.error(request, f"Payment initiation failed: {payment_result}")
+
+                return redirect('storefront:subscription_manage', slug=slug)
         
         elif action == 'continue_trial':
             messages.info(
@@ -321,13 +332,28 @@ def subscription_change_plan(request, slug):
     
     if request.method == 'POST':
         new_plan = request.POST.get('plan')
+        phone_number = request.POST.get('phone_number')
         
         if new_plan not in SubscriptionService.PLAN_DETAILS:
             messages.error(request, "Invalid plan selected.")
             return redirect('storefront:subscription_change_plan', slug=slug)
         
-        # Pass the subscription object, not the store
-        success, message = SubscriptionService.change_plan(subscription, new_plan)
+        # For plan changes that require payment, phone number is required
+        old_price = SubscriptionService.PLAN_DETAILS[subscription.plan]['price']
+        new_price = SubscriptionService.PLAN_DETAILS[new_plan]['price']
+        is_upgrade = new_price > old_price
+        
+        requires_payment = (
+            subscription.status in ['canceled', 'past_due'] or  # Always requires payment for inactive
+            (subscription.status in ['active', 'trialing'] and is_upgrade)  # Requires payment for upgrades
+        )
+        
+        if requires_payment and not phone_number:
+            messages.error(request, "Phone number is required for plan changes that require payment.")
+            return redirect('storefront:subscription_change_plan', slug=slug)
+        
+        # Pass the subscription object and phone number
+        success, message = SubscriptionService.change_plan(subscription, new_plan, phone_number)
         
         if success:
             messages.success(request, message)
@@ -341,14 +367,17 @@ def subscription_change_plan(request, slug):
         'subscription': subscription,
         'plan_details': SubscriptionService.PLAN_DETAILS,
         'current_plan': subscription.plan,
+        'requires_payment': subscription.status in ['canceled', 'past_due'],
     }
     
     return render(request, 'storefront/subscription_change_plan.html', context)
+
 @login_required
 def subscription_renew(request, slug):
     """Renew expired subscription"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
     
+    # Get the most recent expired subscription
     subscription = Subscription.objects.filter(
         store=store,
         status__in=['canceled', 'past_due']
@@ -364,32 +393,22 @@ def subscription_renew(request, slug):
         if form.is_valid():
             phone_number = form.cleaned_data['phone_number']
             
-            # Renew subscription
-            success = SubscriptionService.renew_subscription(
+            # Renew subscription - this now handles payment internally
+            success, result = SubscriptionService.renew_subscription(
                 subscription=subscription,
                 phone_number=phone_number
             )
             
             if success:
-                # Process payment
-                payment_success, payment_result = SubscriptionService.process_payment(
-                    subscription=subscription,
-                    phone_number=phone_number
+                renewed_subscription = result
+                messages.success(
+                    request,
+                    f"✅ Payment initiated! Please complete the M-Pesa payment to renew your subscription."
                 )
-                
-                if payment_success:
-                    messages.success(
-                        request,
-                        f"Subscription renewed! Please complete the M-Pesa payment."
-                    )
-                else:
-                    messages.warning(
-                        request,
-                        f"Subscription renewed but payment failed: {payment_result}. "
-                        "Please try the payment again from your subscription management page."
-                    )
-                
                 return redirect('storefront:subscription_manage', slug=slug)
+            else:
+                messages.error(request, f"❌ Failed to renew subscription: {result}")
+                return redirect('storefront:subscription_renew', slug=slug)
     
     else:
         # Pre-fill with last used phone number
@@ -405,10 +424,12 @@ def subscription_renew(request, slug):
         'subscription': subscription,
         'form': form,
         'formatted_amount': f"KSh {subscription.amount:,}",
+        'trial_count': SubscriptionService.get_user_trial_status(request.user)['trial_count'],
+        'trial_limit': SubscriptionService.get_user_trial_status(request.user)['trial_limit'],
     }
     
     return render(request, 'storefront/subscription_renew.html', context)
-
+    
 @login_required
 def subscription_cancel(request, slug):
     """Cancel subscription"""
@@ -424,19 +445,16 @@ def subscription_cancel(request, slug):
         return redirect('storefront:subscription_manage', slug=slug)
     
     if request.method == 'POST':
-        confirm = request.POST.get('confirm', False)
+        success = SubscriptionService.cancel_subscription(subscription, cancel_at_period_end=False)
         
-        if confirm:
-            success = SubscriptionService.cancel_subscription(subscription)
-            
-            if success:
-                messages.info(
-                    request,
-                    f"Your {subscription.get_plan_display()} subscription has been canceled. "
-                    f"Premium features will be available until {subscription.current_period_end.strftime('%B %d, %Y') if subscription.current_period_end else 'the end of your trial'}."
-                )
-            else:
-                messages.error(request, "Failed to cancel subscription.")
+        if success:
+            messages.info(
+                request,
+                f"Your {subscription.get_plan_display()} subscription has been canceled immediately. "
+                "Premium features have been disabled for your store."
+            )
+        else:
+            messages.error(request, "Failed to cancel subscription.")
         
         return redirect('storefront:subscription_manage', slug=slug)
     

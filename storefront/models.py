@@ -70,7 +70,6 @@ class Store(models.Model):
 
     def can_be_featured(self):
         """Check if store can be featured based on subscription status"""
-        from django.utils import timezone
         from .models import Subscription
         
         # Check for active subscription
@@ -273,7 +272,6 @@ class Store(models.Model):
                 # If user already has stores, require that they have at least one premium store
                 has_premium_store = existing.filter(is_premium=True).exists()
                 # Also allow if there's an active subscription tied to any existing store
-                from django.utils import timezone
                 has_active_subscription = Subscription.objects.filter(
                     store__owner=owner, 
                     status='active'
@@ -491,7 +489,6 @@ class Subscription(models.Model):
             self.store.save()
     def check_trial_expiry(self):
         """Check and handle trial expiration"""
-        from django.utils import timezone
         
         if self.status == 'trialing' and self.trial_ends_at:
             if timezone.now() > self.trial_ends_at:
@@ -523,7 +520,6 @@ class Subscription(models.Model):
     
     def get_remaining_trial_days(self):
         """Get remaining trial days"""
-        from django.utils import timezone
         from datetime import timedelta
         
         if self.status == 'trialing' and self.trial_ends_at:
@@ -616,7 +612,6 @@ class MpesaPayment(models.Model):
 # Add to existing models.py
 import json
 from django.db import models
-from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator
 
 class InventoryAlert(models.Model):
