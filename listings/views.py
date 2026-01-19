@@ -802,12 +802,20 @@ def all_listings(request):
                 cart_item_count = 0
     
     # Get user favorites
+
+    listings = listings.annotate(
+        total_favorites=Count('favorites', distinct=True)
+    )
     user_favorites = []
     if request.user.is_authenticated:
         user_favorites = list(Favorite.objects.filter(
             user=request.user
         ).values_list('listing_id', flat=True))
-    
+    # Get user favorites count if authenticated
+    user_favorite_count = 0
+    if request.user.is_authenticated:
+        user_favorite_count = Favorite.objects.filter(user=request.user).count()
+
     # For AJAX requests, return JSON (using the new format)
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         paginator = Paginator(listings, 12)
@@ -856,6 +864,8 @@ def all_listings(request):
                 'url': listing.get_absolute_url(),
                 'cart_quantity': cart_quantity,
                 'is_favorited': is_favorited,
+                'favorite_count': listing.total_favorites,
+                'user_favorite_count': user_favorite_count,
                 'date_created': listing.date_created.strftime('%Y-%m-%d %H:%M') if listing.date_created else '',
             }
             
@@ -873,6 +883,7 @@ def all_listings(request):
             'cart_items': cart_items,
             'cart_total': float(cart_total),
             'cart_item_count': cart_item_count,
+            'user_favorite_count': user_favorite_count,
             'pagination': {
                 'has_next': page_obj.has_next(),
                 'has_previous': page_obj.has_previous(),
@@ -903,6 +914,8 @@ def all_listings(request):
         'sort_by': sort_by,
         'total_listings_count': listings.count(),
         'user_favorites': user_favorites,
+        'user_favorite_count': user_favorite_count,
+        'total_favorites_count': Favorite.objects.count(),
         'cart_items': cart_items,
         'cart_total': cart_total,
         'cart_item_count': cart_item_count,
@@ -1073,6 +1086,8 @@ def all_listings_json(request):
             'url': listing.get_absolute_url(),
             'cart_quantity': cart_quantity,
             'is_favorited': is_favorited,
+            'favorite_count': Favorite.objects.filter(listing=listing).count(),
+            'user_favorite_count': Favorite.objects.filter(user=request.user).count() if request.user.is_authenticated else 0,
             'date_created': listing.date_created.strftime('%Y-%m-%d %H:%M') if listing.date_created else '',
             'relative_date': listing.date_created.strftime('%b %d') if listing.date_created else '',
         }
@@ -1090,6 +1105,11 @@ def all_listings_json(request):
         'success': True,
         'listings': listings_data,
         'cart_items': cart_items,
+        'favorite_count': Favorite.objects.filter(listing=listing).count() if listing else 0,
+        'user_favorite_count': Favorite.objects.filter(user=request.user).count() if request.user.is_authenticated else 0,
+        'is_authenticated': request.user.is_authenticated,
+        'user_id': request.user.id if request.user.is_authenticated else None,
+        'user_favorites': list(request.user.favorites.values_list('listing_id', flat=True)) if request.user.is_authenticated else [],
         'filters': {
             'category': category_id,
             'location': location,
@@ -1138,31 +1158,46 @@ def get_cart_items(request):
 @login_required
 @require_POST
 def toggle_favorite(request, listing_id):
-    listing = get_object_or_404(Listing, id=listing_id)
+    from .models import Favorite, Listing
+    
+    listing = Listing.objects.get(id=listing_id)
+    
+    # Check if already favorited
     favorite, created = Favorite.objects.get_or_create(
-        user=request.user, 
+        user=request.user,
         listing=listing
     )
     
     if not created:
+        # Remove favorite
         favorite.delete()
         is_favorited = False
     else:
         is_favorited = True
-        # Notify seller about favorite
-        if listing.seller != request.user:
-            notify_listing_favorited(listing.seller, request.user, listing)
     
-    # Count favorites using the Favorite model instead of ManyToMany
-    favorite_count = Favorite.objects.filter(listing=listing).count()
+    # Get updated counts
+    listing_favorite_count = Favorite.objects.filter(listing=listing).count()
+    user_favorite_count = Favorite.objects.filter(user=request.user).count()
     
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return JsonResponse({
-            'is_favorited': is_favorited,
-            'favorite_count': favorite_count
-        })
+    return JsonResponse({
+        'success': True,
+        'is_favorited': is_favorited,
+        'listing_favorite_count': listing_favorite_count,
+        'user_favorite_count': user_favorite_count,
+        'message': 'Added to favorites!' if is_favorited else 'Removed from favorites!'
+    })
+
+@login_required
+def user_favorites(request):
+    favorites = Favorite.objects.filter(user=request.user).select_related('listing')
     
-    return redirect('listing-detail', pk=listing_id)
+    context = {
+        'favorites': favorites,
+        'favorite_count': favorites.count(),
+        'page_title': 'My Favorites',
+    }
+    
+    return render(request, 'listings/favorites.html', context)
 
 @login_required
 def favorite_listings(request):

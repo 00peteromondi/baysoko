@@ -39,19 +39,37 @@ def store_context(request):
 
 
 def subscription_context(request):
+    """Add subscription information to all templates"""
+    context = {}
+    
     if request.user.is_authenticated:
-        free_limit = getattr(settings, 'STORE_FREE_LISTING_LIMIT', 5)
-        user_listing_count = Listing.objects.filter(seller=request.user).count()
-        remaining_free = max(free_limit - user_listing_count, 0)
+        # Get all stores owned by user
+        user_stores = request.user.stores.all()
         
-        return {
-            'free_listing_limit': free_limit,
-            'user_listing_count': user_listing_count,
-            'remaining_free_listings': remaining_free,
-            'has_reached_limit': user_listing_count >= free_limit,
-        }
-    return {}
-
+        # Get active subscription for each store
+        active_subscriptions = []
+        for store in user_stores:
+            subscription = Subscription.objects.filter(
+                store=store
+            ).order_by('-created_at').first()
+            
+            if subscription and subscription.is_active():
+                active_subscriptions.append({
+                    'store': store,
+                    'subscription': subscription,
+                    'is_trial': subscription.status == 'trialing',
+                    'days_remaining': (subscription.trial_ends_at - timezone.now()).days 
+                        if subscription.status == 'trialing' and subscription.trial_ends_at 
+                        else None,
+                })
+        
+        context.update({
+            'has_active_subscription': len(active_subscriptions) > 0,
+            'active_subscriptions': active_subscriptions,
+            'is_trialing': any(sub['is_trial'] for sub in active_subscriptions),
+        })
+    
+    return context
     # storefront/context_processors.py
 
 def bulk_operations_context(request):

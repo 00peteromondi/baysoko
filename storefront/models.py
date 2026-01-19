@@ -448,7 +448,88 @@ class Subscription(models.Model):
         if not self.store.is_premium:
             self.store.is_premium = True
             self.store.save()
-
+    def check_trial_expiry(self):
+        """Check and handle trial expiration"""
+        from django.utils import timezone
+        
+        if self.status == 'trialing' and self.trial_ends_at:
+            if timezone.now() > self.trial_ends_at:
+                # Trial expired
+                self.status = 'canceled'
+                self.save()
+                
+                # Remove premium features from store
+                if self.store.is_premium:
+                    self.store.is_premium = False
+                    self.store.is_featured = False
+                    self.store.save()
+                
+                return True
+        return False
+    
+    @classmethod
+    def get_store_subscription(cls, store):
+        """Get active subscription for store"""
+        subscription = cls.objects.filter(
+            store=store
+        ).order_by('-created_at').first()
+        
+        if subscription:
+            # Check trial expiry
+            subscription.check_trial_expiry()
+        
+        return subscription
+    
+    def get_remaining_trial_days(self):
+        """Get remaining trial days"""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        if self.status == 'trialing' and self.trial_ends_at:
+            remaining = self.trial_ends_at - timezone.now()
+            if remaining.days >= 0:
+                return remaining.days
+        return 0
+    
+    def can_access_feature(self, feature_name):
+        """Check if subscription can access specific feature"""
+        if not self.is_active():
+            return False
+        
+        # Feature matrix by plan
+        features = {
+            'basic': [
+                'featured_placement',
+                'basic_analytics',
+                'store_customization',
+                'up_to_5_stores',
+                'up_to_50_products',
+            ],
+            'premium': [
+                'featured_placement',
+                'advanced_analytics',
+                'bulk_operations',
+                'inventory_management',
+                'product_bundles',
+                'multiple_stores',
+                'up_to_200_products',
+            ],
+            'enterprise': [
+                'featured_placement',
+                'advanced_analytics',
+                'bulk_operations',
+                'inventory_management',
+                'product_bundles',
+                'multiple_stores',
+                'unlimited_products',
+                'api_access',
+                'custom_domain',
+                'priority_support',
+            ]
+        }
+        
+        plan_features = features.get(self.plan, [])
+        return feature_name in plan_features
 
 class MpesaPayment(models.Model):
     """M-Pesa payment records"""

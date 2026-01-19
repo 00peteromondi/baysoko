@@ -243,6 +243,7 @@ MIDDLEWARE = [
     'users.middleware.SocialAuthExceptionMiddleware',
     'delivery.middleware.SellerStoreMiddleware',
     'notifications.middleware.NotificationsMiddleware',
+    'storefront.middleware.SubscriptionMiddleware',
 ]
 
 ROOT_URLCONF = 'homabay_souq.urls'
@@ -270,6 +271,7 @@ TEMPLATES = [
                 'storefront.context_processors.store_context',
                 'storefront.context_processors.subscription_context',
                 'storefront.context_processors.bulk_operations_context',
+                'storefront.context_processors.subscription_context',
             ],
         },
     },

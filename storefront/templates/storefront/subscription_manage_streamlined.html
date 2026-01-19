@@ -1,0 +1,614 @@
+<!-- storefront/subscription_plan_select_streamlined.html -->
+{% extends 'base.html' %}
+{% load static humanize subscription_tags %}
+
+{% block title %}Choose Plan - {{ store.name }} - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    .plan-selection-container {
+        min-height: 80vh;
+        padding: var(--spacing-xl) 0;
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(255, 209, 102, 0.05) 50%, 
+            rgba(255, 107, 53, 0.05) 100%);
+    }
+
+    .plan-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-lg);
+        border: 2px solid var(--border-color);
+        transition: var(--transition);
+        height: 100%;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .plan-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-xl);
+    }
+
+    .plan-card.popular {
+        border-color: var(--primary);
+        box-shadow: 0 10px 40px rgba(255, 107, 53, 0.15);
+    }
+
+    .plan-card.popular::before {
+        content: 'Most Popular';
+        position: absolute;
+        top: 0;
+        right: 0;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        padding: 0.5rem 1.5rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        border-radius: 0 0 0 20px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .plan-radio input[type="radio"] {
+        display: none;
+    }
+
+    .plan-radio label {
+        display: block;
+        padding: 1.5rem;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: var(--transition);
+    }
+
+    .plan-radio input[type="radio"]:checked + label {
+        border-color: var(--accent);
+        background: rgba(6, 214, 160, 0.1);
+        transform: scale(1.02);
+    }
+
+    .feature-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .feature-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--border-color-light);
+    }
+
+    .feature-item:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .feature-item.enabled i {
+        color: var(--accent);
+    }
+
+    .feature-item.disabled {
+        color: var(--text-tertiary);
+    }
+
+    .feature-item.disabled i {
+        color: var(--text-tertiary);
+    }
+
+    .phone-input-group {
+        max-width: 300px;
+        margin: 0 auto;
+    }
+
+    .terms-container {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1rem;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        margin: 1.5rem 0;
+    }
+
+    .checkbox-modern {
+        width: 24px;
+        height: 24px;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: var(--transition);
+    }
+
+    .checkbox-modern.checked {
+        background: var(--accent);
+        border-color: var(--accent);
+    }
+
+    .checkbox-modern.checked i {
+        color: white;
+        font-size: 0.875rem;
+    }
+
+    .trial-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        font-weight: 700;
+        font-size: 0.875rem;
+        margin-bottom: 1rem;
+    }
+
+    .step-indicator {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--text-secondary);
+    }
+
+    .step-number {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: var(--bg-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        border: 2px solid var(--border-color);
+    }
+
+    .step.active .step-number {
+        background: var(--accent);
+        color: white;
+        border-color: var(--accent);
+    }
+
+    .step.active .step-title {
+        color: var(--text-primary);
+        font-weight: 600;
+    }
+
+    .step-title {
+        font-size: 0.875rem;
+        text-align: center;
+    }
+
+    @media (max-width: 768px) {
+        .plan-card {
+            padding: var(--spacing-md);
+        }
+        
+        .step-indicator {
+            gap: 0.5rem;
+        }
+        
+        .step-title {
+            font-size: 0.75rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="plan-selection-container">
+    <div class="container-custom">
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step active">
+                <div class="step-number">1</div>
+                <div class="step-title">Choose Plan</div>
+            </div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-title">Enter Phone</div>
+            </div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-title">Start Trial</div>
+            </div>
+        </div>
+
+        <!-- Header -->
+        <div class="text-center mb-5">
+            <div class="trial-badge mx-auto">
+                <i class="bi bi-gem"></i>
+                <span>7-Day Free Trial</span>
+            </div>
+            <h1 class="display-6 fw-bold mb-3">Choose Your Premium Plan</h1>
+            <p class="lead text-muted mb-0">
+                Start with a 7-day free trial. No credit card required. Cancel anytime.
+            </p>
+        </div>
+
+        <!-- Existing Subscription Notice -->
+        {% if active_subscription and active_subscription.is_active %}
+        <div class="card-custom mb-4" style="border-left: 4px solid var(--warning);">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-info-circle-fill text-warning fs-4 me-3"></i>
+                <div>
+                    <h6 class="fw-bold mb-1">Already Subscribed</h6>
+                    <p class="mb-0 text-muted">
+                        You already have an active {{ active_subscription.get_plan_display }} subscription.
+                        <a href="{% url 'storefront:subscription_manage' slug=store.slug %}" class="text-primary">
+                            Manage your subscription
+                        </a>
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Plan Selection Form -->
+        <form method="post" id="subscriptionForm" class="animate-scale-in">
+            {% csrf_token %}
+            
+            <!-- Plan Selection -->
+            <div class="row g-4 mb-5">
+                {% for plan_key, plan_data in plan_details.items %}
+                <div class="col-md-4">
+                    <div class="plan-card {% if plan_data.popular %}popular{% endif %}">
+                        <div class="plan-radio mb-3">
+                            <input type="radio" 
+                                   name="plan" 
+                                   value="{{ plan_key }}" 
+                                   id="plan_{{ plan_key }}"
+                                   {% if plan_key == 'premium' or forloop.first %}checked{% endif %}
+                                   onchange="updatePlanSelection('{{ plan_key }}')">
+                            <label for="plan_{{ plan_key }}">
+                                <div class="d-flex align-items-center mb-3">
+                                    <i class="bi {{ plan_data.icon }} fs-2 text-{{ plan_data.color }} me-2"></i>
+                                    <div>
+                                        <h4 class="fw-bold mb-0">{{ plan_data.name }}</h4>
+                                        <div class="plan-price">
+                                            <span class="display-6 fw-bold">KSh {{ plan_data.price|intcomma }}</span>
+                                            <small class="text-muted">/{{ plan_data.period }}</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                        
+                        <ul class="feature-list">
+                            {% for feature in plan_data.features %}
+                            <li class="feature-item enabled">
+                                <i class="bi bi-check-circle-fill"></i>
+                                <span>{{ feature }}</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Phone Number Input (Initially Hidden) -->
+            <div id="phoneSection" style="display: none;">
+                <div class="card-custom mb-4">
+                    <div class="card-header bg-gradient-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-phone me-2"></i>
+                            Enter Your M-Pesa Phone Number
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row justify-content-center">
+                            <div class="col-md-6">
+                                <!-- Phone Input -->
+                                <div class="phone-input-group mb-4">
+                                    <label class="form-label fw-bold mb-2">M-Pesa Registered Number</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light">+254</span>
+                                        <input type="tel" 
+                                               name="phone_number" 
+                                               class="form-control {% if phone_form.phone_number.errors %}is-invalid{% endif %}" 
+                                               placeholder="712345678"
+                                               pattern="[0-9]{9}"
+                                               maxlength="9"
+                                               required>
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        Enter the phone number registered with M-Pesa (without +254)
+                                    </small>
+                                    {% if phone_form.phone_number.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ phone_form.phone_number.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Terms Agreement -->
+                                <div class="terms-container" id="termsContainer">
+                                    <div class="checkbox-modern" id="termsCheckbox">
+                                        <i class="bi bi-check" style="display: none;"></i>
+                                    </div>
+                                    <div class="terms-text">
+                                        <small>
+                                            I agree to start my 7-day free trial. After the trial, I'll be automatically charged 
+                                            monthly. I can cancel anytime before the trial ends.
+                                            <span class="text-danger">*</span>
+                                        </small>
+                                    </div>
+                                    <input type="checkbox" 
+                                           name="terms" 
+                                           id="termsInput" 
+                                           style="display: none;" 
+                                           required>
+                                </div>
+
+                                <!-- Action Buttons -->
+                                <div class="d-flex gap-3 mt-4">
+                                    <button type="submit" class="btn-custom btn-primary flex-grow-1" id="submitBtn">
+                                        <i class="bi bi-rocket-takeoff me-2"></i>
+                                        Start Free Trial
+                                    </button>
+                                    <button type="button" class="btn-custom btn-ghost" onclick="showPlanSelection()">
+                                        <i class="bi bi-arrow-left me-2"></i>
+                                        Back
+                                    </button>
+                                </div>
+
+                                <!-- Security Note -->
+                                <div class="text-center mt-4 pt-3 border-top">
+                                    <small class="text-muted">
+                                        <i class="bi bi-shield-check text-success me-1"></i>
+                                        Secure payment. We never store your M-Pesa PIN.
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Initial CTA Button -->
+            <div class="text-center" id="initialCTA">
+                <button type="button" class="btn-custom btn-primary btn-lg" onclick="showPhoneSection()">
+                    <i class="bi bi-arrow-right me-2"></i>
+                    Continue with Free Trial
+                </button>
+                <p class="text-muted mt-3">
+                    <small>No payment required now. Start your 7-day free trial instantly.</small>
+                </p>
+            </div>
+        </form>
+
+        <!-- FAQ Section -->
+        <div class="row justify-content-center mt-5">
+            <div class="col-lg-8">
+                <h5 class="fw-bold mb-4 text-center">Frequently Asked Questions</h5>
+                <div class="accordion" id="subscriptionFAQ">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                                How does the free trial work?
+                            </button>
+                        </h2>
+                        <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#subscriptionFAQ">
+                            <div class="accordion-body">
+                                You get full access to all premium features for 7 days. No payment is required during the trial. 
+                                If you don't subscribe before the trial ends, premium features will be disabled automatically.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                Can I cancel during the trial?
+                            </button>
+                        </h2>
+                        <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#subscriptionFAQ">
+                            <div class="accordion-body">
+                                Yes! You can cancel anytime during the trial. Your premium features will remain active until the trial period ends.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                                What happens after the trial?
+                            </button>
+                        </h2>
+                        <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#subscriptionFAQ">
+                            <div class="accordion-body">
+                                After 7 days, if you haven't subscribed, your store will revert to the free plan. 
+                                You can subscribe anytime to re-activate premium features.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let selectedPlan = 'premium';
+    
+    function updatePlanSelection(plan) {
+        selectedPlan = plan;
+        console.log('Selected plan:', plan);
+    }
+    
+    function showPhoneSection() {
+        // Hide initial CTA
+        document.getElementById('initialCTA').style.display = 'none';
+        
+        // Show phone section
+        document.getElementById('phoneSection').style.display = 'block';
+        
+        // Update step indicator
+        updateStepIndicator(2);
+        
+        // Scroll to phone section
+        document.getElementById('phoneSection').scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start' 
+        });
+    }
+    
+    function showPlanSelection() {
+        // Show initial CTA
+        document.getElementById('initialCTA').style.display = 'block';
+        
+        // Hide phone section
+        document.getElementById('phoneSection').style.display = 'none';
+        
+        // Update step indicator
+        updateStepIndicator(1);
+        
+        // Scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    
+    function updateStepIndicator(step) {
+        // Remove active class from all steps
+        document.querySelectorAll('.step').forEach(s => {
+            s.classList.remove('active');
+        });
+        
+        // Add active class to current step and previous steps
+        document.querySelectorAll('.step').forEach((s, index) => {
+            if (index < step) {
+                s.classList.add('active');
+            }
+        });
+    }
+    
+    // Terms checkbox handling
+    document.getElementById('termsContainer').addEventListener('click', function(e) {
+        e.preventDefault();
+        const checkbox = document.getElementById('termsInput');
+        const checkboxIcon = document.getElementById('termsCheckbox');
+        
+        checkbox.checked = !checkbox.checked;
+        
+        if (checkbox.checked) {
+            checkboxIcon.classList.add('checked');
+            checkboxIcon.querySelector('i').style.display = 'block';
+        } else {
+            checkboxIcon.classList.remove('checked');
+            checkboxIcon.querySelector('i').style.display = 'none';
+        }
+        
+        validateForm();
+    });
+    
+    // Phone number validation
+    const phoneInput = document.querySelector('input[name="phone_number"]');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function() {
+            // Remove non-digits
+            this.value = this.value.replace(/\D/g, '');
+            
+            // Limit to 9 digits
+            if (this.value.length > 9) {
+                this.value = this.value.slice(0, 9);
+            }
+            
+            validateForm();
+        });
+    }
+    
+    function validateForm() {
+        const phoneInput = document.querySelector('input[name="phone_number"]');
+        const termsCheckbox = document.getElementById('termsInput');
+        const submitBtn = document.getElementById('submitBtn');
+        
+        let isValid = true;
+        
+        // Check phone number
+        if (phoneInput && (!phoneInput.value || !/^\d{9}$/.test(phoneInput.value))) {
+            isValid = false;
+            phoneInput.classList.add('is-invalid');
+        } else if (phoneInput) {
+            phoneInput.classList.remove('is-invalid');
+        }
+        
+        // Check terms
+        if (!termsCheckbox || !termsCheckbox.checked) {
+            isValid = false;
+        }
+        
+        // Update submit button
+        if (submitBtn) {
+            submitBtn.disabled = !isValid;
+        }
+        
+        return isValid;
+    }
+    
+    // Form submission
+    document.getElementById('subscriptionForm').addEventListener('submit', function(e) {
+        if (!validateForm()) {
+            e.preventDefault();
+            
+            // Show error message
+            if (!document.getElementById('termsInput').checked) {
+                showToast('Please agree to the terms to continue', 'error');
+            } else if (!/^\d{9}$/.test(phoneInput.value)) {
+                showToast('Please enter a valid 9-digit phone number', 'error');
+                phoneInput.focus();
+            }
+            
+            return false;
+        }
+        
+        // Show loading state
+        const submitBtn = document.getElementById('submitBtn');
+        if (submitBtn) {
+            const originalHTML = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Starting Trial...';
+            submitBtn.disabled = true;
+        }
+        
+        return true;
+    });
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set initial plan selection
+        updatePlanSelection('premium');
+        
+        // Validate form on load
+        validateForm();
+    });
+    
+    // Toast notification
+    function showToast(message, type = 'info') {
+        // Use existing toast function or create one
+        if (typeof window.showToast === 'function') {
+            window.showToast(message, type);
+        } else {
+            // Fallback alert
+            alert(message);
+        }
+    }
+</script>
+{% endblock %}

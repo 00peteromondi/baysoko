@@ -1,0 +1,310 @@
+<!-- storefront/subscription_payment_options.html -->
+{% extends 'base.html' %}
+{% load static humanize %}
+
+{% block title %}Payment Options - {{ store.name }} - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    .payment-options-container {
+        min-height: 80vh;
+        padding: var(--spacing-xl) 0;
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(66, 133, 244, 0.05) 100%);
+    }
+
+    .payment-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        box-shadow: var(--shadow-lg);
+        border: 2px solid var(--border-color);
+        transition: var(--transition);
+        text-align: center;
+        height: 100%;
+    }
+
+    .payment-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-xl);
+    }
+
+    .payment-card.premium {
+        border-color: var(--primary);
+    }
+
+    .payment-card.free {
+        border-color: var(--accent);
+    }
+
+    .payment-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+        font-size: 2rem;
+    }
+
+    .payment-icon.premium {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+    }
+
+    .payment-icon.free {
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+        color: white;
+    }
+
+    .trial-countdown {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem;
+        border-radius: var(--radius-md);
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+
+    .countdown-timer {
+        font-size: 2rem;
+        font-weight: 900;
+        font-family: monospace;
+        letter-spacing: 2px;
+    }
+
+    .benefit-list {
+        list-style: none;
+        padding: 0;
+        margin: 1.5rem 0;
+        text-align: left;
+    }
+
+    .benefit-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+        padding: 0.5rem;
+        border-radius: var(--radius-sm);
+        background: var(--bg-secondary);
+    }
+
+    .benefit-item i {
+        color: var(--accent);
+    }
+
+    @media (max-width: 768px) {
+        .payment-card {
+            padding: var(--spacing-md);
+        }
+        
+        .countdown-timer {
+            font-size: 1.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="payment-options-container">
+    <div class="container-custom">
+        <!-- Trial Countdown -->
+        <div class="trial-countdown">
+            <div class="d-flex align-items-center justify-content-center gap-3">
+                <i class="bi bi-clock-history fs-1"></i>
+                <div>
+                    <h4 class="fw-bold mb-1">Your Trial Has Started!</h4>
+                    <p class="mb-0">Full premium access activated for 7 days</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Header -->
+        <div class="text-center mb-5">
+            <h1 class="display-6 fw-bold mb-3">Choose Payment Option</h1>
+            <p class="lead text-muted mb-0">
+                Your {{ plan_name }} plan trial is active. Choose when to start paying.
+            </p>
+        </div>
+
+        <!-- Payment Options -->
+        <div class="row g-4">
+            <!-- Option 1: Pay Now -->
+            <div class="col-md-6">
+                <div class="payment-card premium">
+                    <div class="payment-icon premium">
+                        <i class="bi bi-lightning-charge"></i>
+                    </div>
+                    <h3 class="fw-bold mb-3">Subscribe Now</h3>
+                    <p class="text-muted mb-4">
+                        Start your subscription immediately and enjoy uninterrupted premium access.
+                    </p>
+                    
+                    <div class="benefit-list">
+                        <div class="benefit-item">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>No interruption after trial</span>
+                        </div>
+                        <div class="benefit-item">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>Early subscriber discount</span>
+                        </div>
+                        <div class="benefit-item">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>Priority support access</span>
+                        </div>
+                    </div>
+                    
+                    <div class="price-display mb-4">
+                        <div class="display-6 fw-bold">{{ formatted_amount }}</div>
+                        <small class="text-muted">per month, billed monthly</small>
+                    </div>
+                    
+                    <form method="post" class="w-100">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="pay_now">
+                        <button type="submit" class="btn-custom btn-primary btn-lg w-100">
+                            <i class="bi bi-credit-card me-2"></i>
+                            Pay Now with M-Pesa
+                        </button>
+                    </form>
+                    
+                    <p class="text-muted mt-3 small">
+                        <i class="bi bi-shield-check text-success me-1"></i>
+                        Secure payment via M-Pesa
+                    </p>
+                </div>
+            </div>
+
+            <!-- Option 2: Continue Trial -->
+            <div class="col-md-6">
+                <div class="payment-card free">
+                    <div class="payment-icon free">
+                        <i class="bi bi-gem"></i>
+                    </div>
+                    <h3 class="fw-bold mb-3">Continue Free Trial</h3>
+                    <p class="text-muted mb-4">
+                        Enjoy full premium features for 7 days. Subscribe anytime before the trial ends.
+                    </p>
+                    
+                    <div class="benefit-list">
+                        <div class="benefit-item">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>7 days of free premium access</span>
+                        </div>
+                        <div class="benefit-item">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>No payment required now</span>
+                        </div>
+                        <div class="benefit-item">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>Cancel anytime</span>
+                        </div>
+                        <div class="benefit-item">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <span>Reminder before trial ends</span>
+                        </div>
+                    </div>
+                    
+                    <div class="price-display mb-4">
+                        <div class="display-6 fw-bold">Free</div>
+                        <small class="text-muted">for 7 days</small>
+                    </div>
+                    
+                    <form method="post" class="w-100">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="continue_trial">
+                        <button type="submit" class="btn-custom btn-outline-primary btn-lg w-100">
+                            <i class="bi bi-clock me-2"></i>
+                            Continue Free Trial
+                        </button>
+                    </form>
+                    
+                    <div class="mt-4 p-3 bg-light rounded">
+                        <h6 class="fw-bold text-muted mb-2">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Trial Details
+                        </h6>
+                        <p class="small text-muted mb-0">
+                            You'll receive a reminder 2 days before your trial ends. 
+                            If you don't subscribe, premium features will be disabled automatically.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Store Info -->
+        <div class="card-custom mt-5">
+            <div class="d-flex align-items-center">
+                <div class="flex-shrink-0">
+                    <div class="store-avatar">
+                        {% if store.logo %}
+                            <img src="{{ store.logo.url }}" alt="{{ store.name }}" class="rounded-circle" width="60" height="60">
+                        {% else %}
+                            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 60px; height: 60px;">
+                                <i class="bi bi-shop fs-4"></i>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="flex-grow-1 ms-3">
+                    <h5 class="fw-bold mb-1">{{ store.name }}</h5>
+                    <p class="text-muted mb-1">Store: {{ store.slug }}</p>
+                    <p class="text-muted mb-0">
+                        <i class="bi bi-telephone me-1"></i>
+                        M-Pesa: {{ phone_number }}
+                    </p>
+                </div>
+                <div class="flex-shrink-0">
+                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-3 py-2">
+                        <i class="bi bi-award me-1"></i>
+                        {{ plan_name }} Plan
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Help Section -->
+        <div class="text-center mt-5">
+            <h6 class="fw-bold text-muted mb-3">Need Help?</h6>
+            <div class="d-flex justify-content-center gap-3">
+                <a href="#" class="btn-custom btn-ghost">
+                    <i class="bi bi-question-circle me-2"></i>
+                    FAQ
+                </a>
+                <a href="#" class="btn-custom btn-ghost">
+                    <i class="bi bi-headset me-2"></i>
+                    Contact Support
+                </a>
+                <a href="{% url 'storefront:subscription_manage' slug=store.slug %}" class="btn-custom btn-ghost">
+                    <i class="bi bi-gear me-2"></i>
+                    Manage Subscription
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add any interactive functionality here
+        console.log('Payment options page loaded');
+        
+        // Add confirmation for immediate payment
+        const payNowForm = document.querySelector('form[action*="pay_now"]');
+        if (payNowForm) {
+            payNowForm.addEventListener('submit', function(e) {
+                if (!confirm('You will receive an M-Pesa prompt on your phone to complete the payment. Continue?')) {
+                    e.preventDefault();
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

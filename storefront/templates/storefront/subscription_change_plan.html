@@ -1,0 +1,269 @@
+<!-- storefront/templates/storefront/subscription_change_plan.html -->
+{% extends 'base.html' %}
+{% load static humanize %}
+
+{% block title %}Change Plan - {{ store.name }} - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    .change-plan-container {
+        min-height: 80vh;
+        padding: var(--spacing-xl) 0;
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(66, 133, 244, 0.05) 100%);
+    }
+
+    .plan-comparison {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        box-shadow: var(--shadow-lg);
+        border: 2px solid var(--border-color);
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    .current-plan-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(6, 214, 160, 0.1);
+        color: var(--success);
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        font-weight: 700;
+        margin-bottom: 1rem;
+        border: 2px solid rgba(6, 214, 160, 0.3);
+    }
+
+    .plan-option {
+        background: var(--bg-secondary);
+        padding: 1.5rem;
+        border-radius: var(--radius-md);
+        border: 2px solid var(--border-color);
+        margin-bottom: 1rem;
+        transition: var(--transition);
+    }
+
+    .plan-option:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .plan-option.current {
+        border-color: var(--success);
+        background: rgba(6, 214, 160, 0.05);
+    }
+
+    .plan-option.recommended {
+        border-color: var(--primary);
+        background: rgba(255, 107, 53, 0.05);
+    }
+
+    .price-change {
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+
+    .price-increase {
+        color: var(--warning);
+    }
+
+    .price-decrease {
+        color: var(--success);
+    }
+
+    @media (max-width: 768px) {
+        .plan-comparison {
+            padding: var(--spacing-md);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="change-plan-container">
+    <div class="container-custom">
+        <div class="plan-comparison">
+            <!-- Header -->
+            <div class="text-center mb-4">
+                <span class="current-plan-badge">
+                    <i class="bi bi-check-circle-fill"></i>
+                    Current Plan: {{ current_plan|title }}
+                </span>
+                <h1 class="display-6 fw-bold mb-3">Change Your Plan</h1>
+                <p class="text-muted mb-0">
+                    Upgrade or downgrade your subscription plan
+                </p>
+            </div>
+
+            <!-- Plan Options -->
+            <form method="post" class="mt-4">
+                {% csrf_token %}
+                
+                {% for plan_key, plan_data in plan_details.items %}
+                <div class="plan-option {% if plan_data.current %}current{% endif %} {% if plan_key == 'premium' %}recommended{% endif %}">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="form-check">
+                                <input type="radio" 
+                                       name="plan" 
+                                       value="{{ plan_key }}" 
+                                       id="plan_{{ plan_key }}"
+                                       class="form-check-input"
+                                       {% if plan_data.current %}disabled{% endif %}
+                                       {% if not plan_data.current %}required{% endif %}>
+                                <label for="plan_{{ plan_key }}" class="form-check-label fw-bold">
+                                    {{ plan_data.name }} Plan
+                                    {% if plan_data.current %}
+                                    <span class="badge bg-success ms-2">Current</span>
+                                    {% endif %}
+                                </label>
+                            </div>
+                            <div class="mt-2">
+                                <span class="display-6 fw-bold">KSh {{ plan_data.price|intcomma }}</span>
+                                <small class="text-muted">/month</small>
+                            </div>
+                        </div>
+                        
+                        {% if not plan_data.current %}
+                        <div class="text-end">
+                            {% if plan_key == 'premium' and current_plan == 'basic' %}
+                            <div class="price-change price-increase">
+                                <i class="bi bi-arrow-up"></i>
+                                Upgrade
+                            </div>
+                            <small class="text-muted">+KSh 1,000/month</small>
+                            {% elif plan_key == 'enterprise' and current_plan == 'premium' %}
+                            <div class="price-change price-increase">
+                                <i class="bi bi-arrow-up"></i>
+                                Upgrade
+                            </div>
+                            <small class="text-muted">+KSh 3,000/month</small>
+                            {% elif plan_key == 'basic' and current_plan == 'premium' %}
+                            <div class="price-change price-decrease">
+                                <i class="bi bi-arrow-down"></i>
+                                Downgrade
+                            </div>
+                            <small class="text-muted">-KSh 1,000/month</small>
+                            {% elif plan_key == 'premium' and current_plan == 'enterprise' %}
+                            <div class="price-change price-decrease">
+                                <i class="bi bi-arrow-down"></i>
+                                Downgrade
+                            </div>
+                            <small class="text-muted">-KSh 3,000/month</small>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    {% if plan_data.current %}
+                    <div class="alert alert-info mt-3 mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        This is your current plan
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+
+                <!-- Change Notes -->
+                <div class="alert alert-warning mt-4">
+                    <h6 class="fw-bold mb-2">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Important Notes
+                    </h6>
+                    <ul class="mb-0">
+                        <li>Upgrades take effect immediately with prorated billing</li>
+                        <li>Downgrades take effect at the end of your current billing cycle</li>
+                        <li>Changing plans may affect your access to certain features</li>
+                    </ul>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="d-flex gap-3 mt-4">
+                    <button type="submit" class="btn btn-primary flex-grow-1">
+                        <i class="bi bi-arrow-left-right me-2"></i>
+                        Change Plan
+                    </button>
+                    
+                    <a href="{% url 'storefront:subscription_manage' slug=store.slug %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-x-circle me-2"></i>
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Highlight selected plan
+        const planRadios = document.querySelectorAll('input[name="plan"]');
+        planRadios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                // Remove highlight from all plans
+                document.querySelectorAll('.plan-option').forEach(option => {
+                    option.classList.remove('selected');
+                });
+                
+                // Highlight selected plan
+                if (this.checked) {
+                    this.closest('.plan-option').classList.add('selected');
+                }
+            });
+        });
+        
+        // Form submission
+        const form = document.querySelector('form');
+        form.addEventListener('submit', function(e) {
+            const selectedPlan = document.querySelector('input[name="plan"]:checked');
+            const currentPlan = "{{ current_plan }}";
+            
+            if (!selectedPlan) {
+                e.preventDefault();
+                alert('Please select a plan to change to');
+                return false;
+            }
+            
+            if (selectedPlan.value === currentPlan) {
+                e.preventDefault();
+                alert('You are already on this plan');
+                return false;
+            }
+            
+            // Confirm plan change
+            const planName = selectedPlan.value.charAt(0).toUpperCase() + selectedPlan.value.slice(1);
+            const isDowngrade = 
+                (selectedPlan.value === 'basic' && currentPlan === 'premium') ||
+                (selectedPlan.value === 'premium' && currentPlan === 'enterprise') ||
+                (selectedPlan.value === 'basic' && currentPlan === 'enterprise');
+            
+            let message = `Are you sure you want to change to the ${planName} plan?`;
+            
+            if (isDowngrade) {
+                message += '\n\nNote: Downgrades take effect at the end of your current billing cycle.';
+            } else {
+                message += '\n\nNote: Upgrades take effect immediately with prorated billing.';
+            }
+            
+            if (!confirm(message)) {
+                e.preventDefault();
+                return false;
+            }
+            
+            // Show loading state
+            const submitBtn = document.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
+                submitBtn.disabled = true;
+            }
+            
+            return true;
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,500 @@
+<!-- storefront/templates/storefront/subscription_needs_renewal.html -->
+{% extends 'base.html' %}
+{% load static humanize math_extras %}
+
+{% block title %}Subscription Renewal Required - {{ store.name }} - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    .renewal-container {
+        min-height: 80vh;
+        padding: var(--spacing-xl) 0;
+        background: linear-gradient(135deg, 
+            rgba(255, 107, 53, 0.05) 0%, 
+            rgba(239, 71, 111, 0.05) 100%);
+    }
+
+    .renewal-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        box-shadow: var(--shadow-xl);
+        border: 3px solid var(--warning);
+        max-width: 800px;
+        margin: 0 auto;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .renewal-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, 
+            var(--warning) 0%, 
+            var(--danger) 100%);
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1.5rem;
+        border-radius: 50px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        background: rgba(255, 107, 53, 0.1);
+        color: var(--warning);
+        border: 2px solid rgba(255, 107, 53, 0.3);
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+
+    .plan-display {
+        background: var(--bg-secondary);
+        padding: 2rem;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        margin: 2rem 0;
+        text-align: center;
+    }
+
+    .price-display {
+        font-size: 3.5rem;
+        font-weight: 900;
+        color: var(--primary);
+        line-height: 1;
+        margin: 1rem 0;
+    }
+
+    .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+        margin: 2rem 0;
+    }
+
+    .feature-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        text-align: center;
+        transition: var(--transition);
+    }
+
+    .feature-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-lg);
+    }
+
+    .feature-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin: 0 auto 1rem;
+    }
+
+    .impact-section {
+        background: linear-gradient(135deg, rgba(255, 107, 53, 0.1) 0%, rgba(239, 71, 111, 0.1) 100%);
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        border-left: 4px solid var(--warning);
+        margin: 2rem 0;
+    }
+
+    .impact-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .impact-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .impact-icon {
+        color: var(--warning);
+        font-size: 1.25rem;
+    }
+
+    .countdown-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        margin: 2rem 0;
+        text-align: center;
+    }
+
+    .countdown-timer {
+        font-size: 2.5rem;
+        font-weight: 900;
+        font-family: monospace;
+        letter-spacing: 3px;
+        margin: 1rem 0;
+    }
+
+    .payment-options {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin: 2rem 0;
+    }
+
+    .payment-option {
+        background: var(--card-bg);
+        padding: 2rem;
+        border-radius: var(--radius-lg);
+        border: 2px solid var(--border-color);
+        text-align: center;
+        transition: var(--transition);
+    }
+
+    .payment-option:hover {
+        border-color: var(--primary);
+        transform: translateY(-5px);
+    }
+
+    .payment-option.featured {
+        border-color: var(--primary);
+        box-shadow: 0 10px 40px rgba(255, 107, 53, 0.15);
+    }
+
+    .payment-option.featured .btn {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        border: none;
+    }
+
+    .store-info-card {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        padding: 1.5rem;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        margin: 2rem 0;
+    }
+
+    .store-avatar {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 3px solid var(--border-color);
+    }
+
+    .store-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    @media (max-width: 768px) {
+        .renewal-card {
+            padding: var(--spacing-md);
+        }
+        
+        .price-display {
+            font-size: 2.5rem;
+        }
+        
+        .payment-options {
+            grid-template-columns: 1fr;
+        }
+        
+        .countdown-timer {
+            font-size: 2rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="renewal-container">
+    <div class="container-custom">
+        <div class="renewal-card">
+            <!-- Header -->
+            <div class="text-center mb-4">
+                <div class="status-badge d-inline-flex mb-3">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <span>RENEWAL REQUIRED</span>
+                </div>
+                <h1 class="display-6 fw-bold mb-3">Renew Your Premium Plan</h1>
+                <p class="lead text-muted mb-4">
+                    Your {{ plan_name|default:subscription.get_plan_display }} subscription needs to be renewed 
+                    to restore all premium features.
+                </p>
+            </div>
+
+            <!-- Countdown (if applicable) -->
+            {% if trial_info and trial_info.is_expired %}
+            <div class="countdown-card">
+                <h4 class="fw-bold mb-3">
+                    <i class="bi bi-clock-history me-2"></i>
+                    Trial Ended {{ trial_info.remaining_days|abs }} Days Ago
+                </h4>
+                <p class="mb-0">
+                    Premium features have been disabled. Renew now to restore full access.
+                </p>
+            </div>
+            {% endif %}
+
+            <!-- Impact Section -->
+            <div class="impact-section">
+                <h5 class="fw-bold mb-3">
+                    <i class="bi bi-lightning-charge-fill me-2"></i>
+                    Currently Limited Features
+                </h5>
+                <div class="impact-item">
+                    <i class="bi bi-x-circle-fill impact-icon"></i>
+                    <div>
+                        <h6 class="fw-bold mb-1">Premium Features Disabled</h6>
+                        <p class="text-muted mb-0">
+                            Advanced analytics, bulk operations, and priority support are unavailable.
+                        </p>
+                    </div>
+                </div>
+                <div class="impact-item">
+                    <i class="bi bi-bar-chart impact-icon"></i>
+                    <div>
+                        <h6 class="fw-bold mb-1">Limited Analytics</h6>
+                        <p class="text-muted mb-0">
+                            Basic analytics only. Advanced insights are temporarily disabled.
+                        </p>
+                    </div>
+                </div>
+                <div class="impact-item">
+                    <i class="bi bi-shield-exclamation impact-icon"></i>
+                    <div>
+                        <h6 class="fw-bold mb-1">Verification Status</h6>
+                        <p class="text-muted mb-0">
+                            Your store may lose verified status if not renewed soon.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Plan Display -->
+            <div class="plan-display">
+                <div class="d-flex align-items-center justify-content-center gap-3 mb-3">
+                    <i class="bi bi-award-fill fs-1 text-primary"></i>
+                    <div>
+                        <h2 class="fw-bold mb-0">{{ subscription.get_plan_display }} Plan</h2>
+                        <p class="text-muted mb-0">Full access to all premium features</p>
+                    </div>
+                </div>
+                
+                <div class="price-display">
+                    KSh {{ subscription.amount|intcomma }}
+                    <small class="fs-6 text-muted">/month</small>
+                </div>
+                
+                <p class="text-muted">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Renew now to restore all premium features immediately
+                </p>
+            </div>
+
+            <!-- Renewal Options -->
+            <div class="payment-options">
+                <!-- Option 1: Renew Now (Featured) -->
+                <div class="payment-option featured">
+                    <div class="feature-icon mb-3">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </div>
+                    <h4 class="fw-bold mb-3">Renew Immediately</h4>
+                    <p class="text-muted mb-4">
+                        Restore all premium features instantly with one payment.
+                    </p>
+                    
+                    <form method="post" action="{% url 'storefront:subscription_renew' slug=store.slug %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-custom btn-primary btn-lg w-100">
+                            <i class="bi bi-lightning-charge me-2"></i>
+                            Renew Now - KSh {{ subscription.amount|intcomma }}
+                        </button>
+                    </form>
+                    
+                    <p class="small text-muted mt-3 mb-0">
+                        <i class="bi bi-check-circle text-success me-1"></i>
+                        Premium features restored immediately
+                    </p>
+                </div>
+
+                <!-- Option 2: Change Plan -->
+                <div class="payment-option">
+                    <div class="feature-icon mb-3" style="background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);">
+                        <i class="bi bi-arrow-left-right"></i>
+                    </div>
+                    <h4 class="fw-bold mb-3">Change Plan</h4>
+                    <p class="text-muted mb-4">
+                        Switch to a different plan that better fits your needs.
+                    </p>
+                    
+                    <a href="{% url 'storefront:subscription_change_plan' slug=store.slug %}" class="btn-custom btn-outline-primary btn-lg w-100">
+                        <i class="bi bi-arrow-right-circle me-2"></i>
+                        View All Plans
+                    </a>
+                    
+                    <div class="mt-4">
+                        <p class="small text-muted mb-2">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Available plans:
+                        </p>
+                        <div class="d-flex justify-content-between">
+                            <span>Basic: KSh 999</span>
+                            <span>Premium: KSh 1,999</span>
+                            <span>Enterprise: KSh 4,999</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Store Info -->
+            <div class="store-info-card">
+                <div class="store-avatar">
+                    {% if store.logo %}
+                        <img src="{{ store.logo.url }}" alt="{{ store.name }}" loading="lazy">
+                    {% else %}
+                        <div class="bg-primary text-white d-flex align-items-center justify-content-center w-100 h-100">
+                            <i class="bi bi-shop fs-3"></i>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="flex-grow-1">
+                    <h5 class="fw-bold mb-1">{{ store.name }}</h5>
+                    <p class="text-muted mb-2">Store: {{ store.slug }}</p>
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 px-3 py-2">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            Needs Renewal
+                        </span>
+                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-3 py-2">
+                            <i class="bi bi-award me-1"></i>
+                            {{ subscription.get_plan_display }} Plan
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Features Overview -->
+            <div class="mt-5">
+                <h5 class="fw-bold mb-4">
+                    <i class="bi bi-stars me-2"></i>
+                    What You'll Get Back
+                </h5>
+                <div class="feature-grid">
+                    {% for feature in features %}
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="bi {{ feature.icon }}"></i>
+                        </div>
+                        <h6 class="fw-bold mb-2">{{ feature.name }}</h6>
+                        <p class="small text-muted mb-0">
+                            {% if feature.enabled %}
+                                <span class="text-success">
+                                    <i class="bi bi-check-circle-fill me-1"></i>
+                                    Available after renewal
+                                </span>
+                            {% else %}
+                                <span class="text-muted">
+                                    <i class="bi bi-dash-circle me-1"></i>
+                                    Not in current plan
+                                </span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Help Section -->
+            <div class="text-center mt-5 pt-4 border-top">
+                <h6 class="fw-bold text-muted mb-3">Need Help With Renewal?</h6>
+                <div class="d-flex justify-content-center gap-3 flex-wrap">
+                    <a href="#" class="btn-custom btn-ghost">
+                        <i class="bi bi-question-circle me-2"></i>
+                        FAQ
+                    </a>
+                    <a href="#" class="btn-custom btn-ghost">
+                        <i class="bi bi-headset me-2"></i>
+                        Contact Support
+                    </a>
+                    <a href="{% url 'storefront:subscription_plan_select' slug=store.slug %}" class="btn-custom btn-outline-primary">
+                        <i class="bi bi-arrow-left-right me-2"></i>
+                        Explore All Plans
+                    </a>
+                </div>
+                <p class="small text-muted mt-3">
+                    <i class="bi bi-shield-check text-success me-1"></i>
+                    100% secure payment via M-Pesa. Your premium features will be restored instantly.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Subscription renewal page loaded');
+        
+        // Add confirmation for immediate renewal
+        const renewForm = document.querySelector('form[action*="renew"]');
+        if (renewForm) {
+            renewForm.addEventListener('submit', function(e) {
+                if (!confirm('You will receive an M-Pesa prompt on your phone to complete the payment. Continue?')) {
+                    e.preventDefault();
+                } else {
+                    // Show loading state
+                    const submitBtn = renewForm.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        const originalHTML = submitBtn.innerHTML;
+                        submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
+                        submitBtn.disabled = true;
+                    }
+                }
+            });
+        }
+        
+        // Add animation for status badge
+        const statusBadge = document.querySelector('.status-badge');
+        if (statusBadge) {
+            let pulseCount = 0;
+            const maxPulses = 3;
+            
+            function triggerPulse() {
+                if (pulseCount < maxPulses) {
+                    statusBadge.style.animation = 'none';
+                    void statusBadge.offsetWidth; // Trigger reflow
+                    statusBadge.style.animation = 'pulse 2s infinite';
+                    pulseCount++;
+                    setTimeout(triggerPulse, 4000);
+                }
+            }
+            
+            // Start pulsing after initial load
+            setTimeout(triggerPulse, 1000);
+        }
+    });
+</script>
+{% endblock %}
