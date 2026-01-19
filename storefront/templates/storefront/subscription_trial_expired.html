@@ -1,0 +1,330 @@
+<!-- storefront/templates/storefront/subscription_trial_expired.html -->
+{% extends 'base.html' %}
+{% load static humanize %}
+
+{% block title %}Trial Expired - {{ store.name }} - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Reuse the subscription management styles */
+    .subscription-container {
+        min-height: 80vh;
+        padding: var(--spacing-xl) 0;
+        background: linear-gradient(135deg, 
+            rgba(255, 107, 53, 0.05) 0%, 
+            rgba(239, 71, 111, 0.05) 100%);
+    }
+
+    .subscription-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        box-shadow: var(--shadow-lg);
+        border: 2px solid var(--warning);
+        margin-bottom: var(--spacing-lg);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .subscription-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, 
+            var(--warning) 0%, 
+            var(--danger) 100%);
+    }
+
+    .expired-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(255, 107, 53, 0.1);
+        color: var(--warning);
+        padding: 0.75rem 1.5rem;
+        border-radius: 50px;
+        font-weight: 700;
+        font-size: 1rem;
+        border: 2px solid rgba(255, 107, 53, 0.3);
+        margin-bottom: 1.5rem;
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+
+    .impact-section {
+        background: linear-gradient(135deg, rgba(255, 107, 53, 0.1) 0%, rgba(239, 71, 111, 0.1) 100%);
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        border-left: 4px solid var(--warning);
+        margin: 1.5rem 0;
+    }
+
+    .history-table {
+        background: var(--card-bg);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .history-table thead th {
+        background: var(--bg-secondary);
+        padding: 1rem;
+        font-weight: 700;
+        color: var(--text-secondary);
+        border-bottom: 2px solid var(--border-color);
+        font-size: 0.85rem;
+    }
+
+    .history-table tbody td {
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .history-table tbody tr.expired {
+        background: rgba(255, 107, 53, 0.05);
+        border-left: 4px solid var(--warning);
+    }
+
+    .status-badge-modern {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        border: 2px solid;
+    }
+
+    .status-canceled {
+        background: rgba(108, 117, 125, 0.1);
+        color: var(--text-secondary);
+        border-color: rgba(108, 117, 125, 0.3);
+    }
+
+    @media (max-width: 768px) {
+        .subscription-card {
+            padding: var(--spacing-md);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="subscription-container">
+    <div class="container-custom">
+        <!-- Header -->
+        <div class="subscription-header animate-slide-up">
+            <div class="expired-badge">
+                <i class="bi bi-clock-history"></i>
+                <span>TRIAL PERIOD ENDED</span>
+            </div>
+            <h1 class="display-6 fw-bold mb-3">Your Free Trial Has Expired</h1>
+            <p class="lead text-muted mb-0">
+                Your 7-day free trial for {{ store.name }} has ended. Subscribe now to restore premium features.
+            </p>
+        </div>
+
+        <!-- Main Card -->
+        <div class="subscription-card animate-scale-in">
+            <!-- Impact Warning -->
+            <div class="impact-section">
+                <h5 class="fw-bold mb-3">
+                    <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                    Premium Features Disabled
+                </h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <ul class="mb-0">
+                            <li>Advanced analytics and reporting</li>
+                            <li>Bulk product uploads</li>
+                            <li>Inventory management tools</li>
+                            <li>Product bundles and promotions</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <ul class="mb-0">
+                            <li>Priority customer support</li>
+                            <li>Multiple storefronts</li>
+                            <li>Featured placement</li>
+                            <li>Custom domain support</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Status -->
+            <div class="detail-grid-modern mb-4">
+                <div class="detail-item-modern">
+                    <span class="detail-label-modern">Original Plan</span>
+                    <div class="detail-value-modern">{{ subscription.get_plan_display }}</div>
+                    <div class="detail-subtext">
+                        Trial started {{ subscription.created_at|date:"M d, Y" }}
+                    </div>
+                </div>
+
+                <div class="detail-item-modern">
+                    <span class="detail-label-modern">Trial Ended</span>
+                    <div class="detail-value-modern">{{ subscription.trial_ends_at|date:"M d, Y" }}</div>
+                    <div class="detail-subtext">
+                        <i class="bi bi-calendar-x text-warning me-1"></i>
+                        {{ trial_info.remaining_days|abs }} days ago
+                    </div>
+                </div>
+
+                <div class="detail-item-modern">
+                    <span class="detail-label-modern">Current Status</span>
+                    <div class="detail-value-modern">
+                        <span class="status-badge-modern status-canceled">
+                            {{ subscription.get_status_display }}
+                        </span>
+                    </div>
+                    <div class="detail-subtext">
+                        Premium features have been disabled
+                    </div>
+                </div>
+
+                <div class="detail-item-modern">
+                    <span class="detail-label-modern">Monthly Cost</span>
+                    <div class="detail-value-modern">KSh {{ subscription.amount|intcomma }}</div>
+                    <div class="detail-subtext">
+                        Restore all features immediately
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trial Usage Summary -->
+            <h5 class="fw-bold mb-3">Trial Usage History</h5>
+            <div class="table-responsive mb-5">
+                {% if subscription_history %}
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Start Date</th>
+                                <th>Plan</th>
+                                <th>Status</th>
+                                <th>Amount</th>
+                                <th>Trial End</th>
+                                <th>Days Used</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sub in subscription_history %}
+                            <tr class="{% if sub.trial_ends_at and sub.trial_ends_at < now %}expired{% endif %}">
+                                <td>{{ sub.created_at|date:"M d, Y" }}</td>
+                                <td>
+                                    <strong>{{ sub.plan }}</strong>
+                                    {% if sub.is_current %}
+                                        <span class="badge bg-warning ms-1">Expired</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="status-badge-modern status-{{ sub.status_class }}">
+                                        {{ sub.status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <strong>KSh {{ sub.amount|intcomma }}</strong>
+                                </td>
+                                <td>
+                                    {% if sub.trial_ends_at %}
+                                        {{ sub.trial_ends_at|date:"M d, Y" }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if sub.trial_ends_at %}
+                                        {% with days=sub.trial_ends_at|timeuntil:sub.created_at %}
+                                            {% if 'day' in days %}
+                                                7 days
+                                            {% else %}
+                                                {{ days }}
+                                            {% endif %}
+                                        {% endwith %}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-clock-history fs-1 text-muted mb-3"></i>
+                        <h6 class="fw-bold mb-2">No Trial History</h6>
+                        <p class="text-muted mb-0">Your trial history will appear here</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons-modern">
+                <a href="{% url 'storefront:subscription_renew' store.slug %}" class="btn-gradient-warning">
+                    <i class="bi bi-arrow-clockwise me-2"></i>
+                    Renew {{ subscription.get_plan_display }} Plan
+                </a>
+                
+                <a href="{% url 'storefront:subscription_plan_select' store.slug %}" class="btn-gradient-success">
+                    <i class="bi bi-arrow-left-right me-2"></i>
+                    Choose Different Plan
+                </a>
+                
+                <a href="{% url 'storefront:seller_dashboard' %}" class="btn-ghost-modern ms-auto">
+                    <i class="bi bi-arrow-left me-2"></i>
+                    Back to Dashboard
+                </a>
+            </div>
+        </div>
+
+        <!-- Trial Policy Reminder -->
+        <div class="subscription-card">
+            <h5 class="fw-bold mb-3">Trial Policy</h5>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <div class="card-custom h-100">
+                        <div class="card-body">
+                            <h6 class="text-muted mb-2">One Trial Per User</h6>
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-1-circle-fill text-primary fs-1 me-3"></i>
+                                <div>
+                                    <p class="mb-0">
+                                        Each user is limited to <strong>one 7-day free trial</strong>.
+                                        This trial has been used and cannot be restarted.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <div class="card-custom h-100">
+                        <div class="card-body">
+                            <h6 class="text-muted mb-2">Immediate Downgrade</h6>
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-arrow-down-circle-fill text-warning fs-1 me-3"></i>
+                                <div>
+                                    <p class="mb-0">
+                                        When trials expire, premium features are <strong>immediately disabled</strong>
+                                        to prevent revenue leaks.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

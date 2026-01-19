@@ -217,3 +217,76 @@ class MpesaPaymentAdmin(admin.ModelAdmin):
         updated = queryset.update(status='failed')
         self.message_user(request, f'{updated} payment(s) marked as failed.')
     mark_as_failed.short_description = "Mark selected payments as failed"
+
+
+# storefront/admin.py
+from .models_trial import UserTrial
+
+@admin.register(UserTrial)
+class UserTrialAdmin(admin.ModelAdmin):
+    list_display = ['user', 'trial_number', 'store', 'status', 'started_at', 'ended_at', 'days_used']
+    list_filter = ['status', 'trial_number', 'started_at']
+    search_fields = ['user__email', 'store__name', 'store__slug']
+    readonly_fields = ['created_at', 'updated_at']
+    actions = ['export_trial_data', 'flag_for_review']
+    
+    fieldsets = (
+        ('Trial Information', {
+            'fields': ('user', 'store', 'subscription', 'trial_number', 'status')
+        }),
+        ('Dates', {
+            'fields': ('started_at', 'ended_at', 'days_used')
+        }),
+        ('Usage Metrics', {
+            'fields': ('features_accessed', 'conversion_attempts')
+        }),
+        ('Audit Trail', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def export_trial_data(self, request, queryset):
+        """Export trial data as CSV"""
+        import csv
+        from django.http import HttpResponse
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="trial_data.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow([
+            'User Email', 'Trial Number', 'Store', 'Status', 
+            'Started At', 'Ended At', 'Days Used', 'Features Accessed'
+        ])
+        
+        for trial in queryset:
+            writer.writerow([
+                trial.user.email,
+                trial.trial_number,
+                trial.store.name,
+                trial.status,
+                trial.started_at.strftime('%Y-%m-%d %H:%M:%S'),
+                trial.ended_at.strftime('%Y-%m-%d %H:%M:%S') if trial.ended_at else '',
+                trial.days_used,
+                ', '.join(trial.features_accessed) if trial.features_accessed else ''
+            ])
+        
+        return response
+    
+    export_trial_data.short_description = "Export selected trials as CSV"
+    
+    def flag_for_review(self, request, queryset):
+        """Flag trials for manual review"""
+        for trial in queryset:
+            trial.metadata = trial.metadata or {}
+            trial.metadata['flagged_for_review'] = {
+                'by_admin': request.user.email,
+                'at': timezone.now().isoformat(),
+                'reason': 'manual_flag',
+            }
+            trial.save()
+        
+        self.message_user(request, f"{queryset.count()} trials flagged for review.")
+    
+    flag_for_review.short_description = "Flag selected trials for review"

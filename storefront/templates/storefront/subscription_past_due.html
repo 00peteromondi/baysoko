@@ -1,0 +1,341 @@
+<!-- storefront/templates/storefront/subscription_past_due.html -->
+{% extends 'base.html' %}
+{% load static humanize %}
+
+{% block title %}Payment Past Due - {{ store.name }} - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    .subscription-container {
+        min-height: 80vh;
+        padding: var(--spacing-xl) 0;
+        background: linear-gradient(135deg, 
+            rgba(255, 158, 31, 0.05) 0%, 
+            rgba(239, 71, 111, 0.05) 100%);
+    }
+
+    .subscription-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        box-shadow: var(--shadow-lg);
+        border: 2px solid var(--danger);
+        margin-bottom: var(--spacing-lg);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .subscription-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, 
+            var(--warning) 0%, 
+            var(--danger) 100%);
+    }
+
+    .past-due-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(239, 71, 111, 0.1);
+        color: var(--danger);
+        padding: 0.75rem 1.5rem;
+        border-radius: 50px;
+        font-weight: 700;
+        font-size: 1rem;
+        border: 2px solid rgba(239, 71, 111, 0.3);
+        margin-bottom: 1.5rem;
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.7; }
+        100% { opacity: 1; }
+    }
+
+    .payment-card {
+        background: linear-gradient(135deg, rgba(239, 71, 111, 0.1) 0%, rgba(255, 158, 31, 0.1) 100%);
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        border-left: 4px solid var(--danger);
+        margin: 1.5rem 0;
+    }
+
+    .history-table {
+        background: var(--card-bg);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .history-table thead th {
+        background: var(--bg-secondary);
+        padding: 1rem;
+        font-weight: 700;
+        color: var(--text-secondary);
+        border-bottom: 2px solid var(--border-color);
+        font-size: 0.85rem;
+    }
+
+    .history-table tbody td {
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .history-table tbody tr.past-due {
+        background: rgba(239, 71, 111, 0.05);
+        border-left: 4px solid var(--danger);
+    }
+
+    .status-badge-modern {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        border: 2px solid;
+    }
+
+    .status-past_due {
+        background: rgba(255, 158, 31, 0.1);
+        color: var(--warning);
+        border-color: rgba(255, 158, 31, 0.3);
+    }
+
+    @media (max-width: 768px) {
+        .subscription-card {
+            padding: var(--spacing-md);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="subscription-container">
+    <div class="container-custom">
+        <!-- Header -->
+        <div class="subscription-header animate-slide-up">
+            <div class="past-due-badge">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <span>PAYMENT PAST DUE</span>
+            </div>
+            <h1 class="display-6 fw-bold mb-3">Payment Required</h1>
+            <p class="lead text-muted mb-0">
+                Your {{ subscription.get_plan_display }} subscription payment is past due.
+                Please update your payment to restore premium features.
+            </p>
+        </div>
+
+        <!-- Main Card -->
+        <div class="subscription-card animate-scale-in">
+            <!-- Payment Warning -->
+            <div class="payment-card">
+                <h5 class="fw-bold mb-3">
+                    <i class="bi bi-credit-card text-danger me-2"></i>
+                    Immediate Action Required
+                </h5>
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <p class="mb-2"><strong>Amount Due:</strong></p>
+                        <div class="display-4 fw-bold text-danger">KSh {{ subscription.amount|intcomma }}</div>
+                        <small class="text-muted">Monthly subscription fee</small>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="text-end">
+                            <p class="mb-2"><strong>Last Payment Attempt:</strong></p>
+                            <p class="mb-0">
+                                {% if recent_payments %}
+                                    {{ recent_payments.0.transaction_date|date:"M d, Y" }}
+                                    <br>
+                                    <span class="badge bg-danger">{{ recent_payments.0.status|title }}</span>
+                                {% else %}
+                                    <span class="text-muted">No recent payment attempts</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Status -->
+            <div class="detail-grid-modern mb-4">
+                <div class="detail-item-modern">
+                    <span class="detail-label-modern">Current Plan</span>
+                    <div class="detail-value-modern">{{ subscription.get_plan_display }}</div>
+                    <div class="detail-subtext">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Premium features are currently disabled
+                    </div>
+                </div>
+
+                <div class="detail-item-modern">
+                    <span class="detail-label-modern">Store Status</span>
+                    <div class="detail-value-modern">
+                        {% if store.is_premium %}
+                            <span class="text-success">Premium</span>
+                        {% else %}
+                            <span class="text-secondary">Basic</span>
+                        {% endif %}
+                    </div>
+                    <div class="detail-subtext">
+                        {% if store.is_premium %}
+                            Premium features active until payment deadline
+                        {% else %}
+                            Premium features disabled due to unpaid invoice
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="detail-item-modern">
+                    <span class="detail-label-modern">Payment Status</span>
+                    <div class="detail-value-modern">
+                        <span class="status-badge-modern status-past_due">
+                            {{ subscription.get_status_display }}
+                        </span>
+                    </div>
+                    <div class="detail-subtext">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+                        Payment overdue
+                    </div>
+                </div>
+
+                <div class="detail-item-modern">
+                    <span class="detail-label-modern">Next Action</span>
+                    <div class="detail-value-modern">Renew Subscription</div>
+                    <div class="detail-subtext">
+                        Restore access immediately with payment
+                    </div>
+                </div>
+            </div>
+
+            <!-- Subscription History -->
+            <h5 class="fw-bold mb-3">Subscription History</h5>
+            <div class="table-responsive mb-5">
+                {% if subscription_history %}
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Start Date</th>
+                                <th>Plan</th>
+                                <th>Status</th>
+                                <th>Amount</th>
+                                <th>Period End</th>
+                                <th>Payment Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sub in subscription_history %}
+                            <tr class="{% if sub.status_class == 'past_due' or sub.is_current %}past-due{% endif %}">
+                                <td>{{ sub.created_at|date:"M d, Y" }}</td>
+                                <td>
+                                    <strong>{{ sub.plan }}</strong>
+                                    {% if sub.is_current %}
+                                        <span class="badge bg-danger ms-1">Past Due</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="status-badge-modern status-{{ sub.status_class }}">
+                                        {{ sub.status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <strong>KSh {{ sub.amount|intcomma }}</strong>
+                                </td>
+                                <td>
+                                    {% if sub.current_period_end %}
+                                        {{ sub.current_period_end|date:"M d, Y" }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if sub.status_class == 'active' %}
+                                        <span class="text-success">Paid</span>
+                                    {% elif sub.status_class == 'past_due' %}
+                                        <span class="text-danger">Overdue</span>
+                                    {% elif sub.status_class == 'canceled' %}
+                                        <span class="text-secondary">Canceled</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-clock-history fs-1 text-muted mb-3"></i>
+                        <h6 class="fw-bold mb-2">No Subscription History</h6>
+                        <p class="text-muted mb-0">Your subscription history will appear here</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Payment Options -->
+            <div class="action-buttons-modern">
+                <form method="post" action="{% url 'storefront:retry_payment' store.slug %}" class="d-flex w-100">
+                    {% csrf_token %}
+                    <button type="submit" class="btn-gradient-danger flex-grow-1 me-2">
+                        <i class="bi bi-arrow-repeat me-2"></i>
+                        Retry Payment
+                    </button>
+                </form>
+                
+                <a href="{% url 'storefront:subscription_renew' store.slug %}" class="btn-gradient-warning flex-grow-1 me-2">
+                    <i class="bi bi-credit-card me-2"></i>
+                    Update & Pay
+                </a>
+                
+                <a href="{% url 'storefront:subscription_plan_select' store.slug %}" class="btn-ghost-modern">
+                    <i class="bi bi-arrow-left-right me-2"></i>
+                    Change Plan
+                </a>
+            </div>
+        </div>
+
+        <!-- Revenue Protection Notice -->
+        <div class="subscription-card">
+            <h5 class="fw-bold mb-3">Revenue Protection</h5>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <div class="card-custom h-100">
+                        <div class="card-body">
+                            <h6 class="text-muted mb-2">Immediate Downgrade</h6>
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-shield-exclamation text-danger fs-1 me-3"></i>
+                                <div>
+                                    <p class="mb-0">
+                                        Premium features are <strong>immediately disabled</strong> when payments are past due to prevent revenue leaks.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <div class="card-custom h-100">
+                        <div class="card-body">
+                            <h6 class="text-muted mb-2">One Trial Policy</h6>
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-1-circle-fill text-primary fs-1 me-3"></i>
+                                <div>
+                                    <p class="mb-0">
+                                        Each user is limited to <strong>one 7-day free trial</strong> to prevent trial abuse and ensure revenue.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -37,12 +37,13 @@ urlpatterns = [
     path('store/<slug:slug>/review/<int:review_id>/delete/', views.store_review_delete, name='store_review_delete'),
     path('store/<slug:slug>/review/<int:review_id>/helpful/', views.mark_review_helpful, name='mark_review_helpful'),
     
-    # Enhanced Subscription Management
+   # Enhanced Subscription Management
     path('dashboard/store/<slug:slug>/subscription/plans/', views_subscription.subscription_plan_select, name='subscription_plan_select'),
     path('dashboard/store/<slug:slug>/subscription/payment-options/', views_subscription.subscription_payment_options, name='subscription_payment_options'),
-    path('dashboard/store/<slug:slug>/subscription/manage/', views_subscription.subscription_manage_streamlined, name='subscription_manage'),
+    path('dashboard/store/<slug:slug>/subscription/manage/', views_subscription.subscription_manage, name='subscription_manage'),
     path('dashboard/store/<slug:slug>/subscription/change-plan/', views_subscription.subscription_change_plan, name='subscription_change_plan'),
     path('dashboard/store/<slug:slug>/subscription/renew/', views_subscription.subscription_renew, name='subscription_renew'),
+    path('dashboard/store/<slug:slug>/subscription/cancel/', views_subscription.subscription_cancel, name='cancel_subscription'),
     
     # Legacy subscription URLs for backward compatibility
     path('dashboard/store/<slug:slug>/subscription/cancel/', views.subscription_cancel, name='cancel_subscription'),

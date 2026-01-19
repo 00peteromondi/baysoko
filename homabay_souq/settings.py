@@ -768,3 +768,18 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
 }
+
+CRONJOBS = [
+    ('0 0 * * *', 'storefront.management.commands.check_subscriptions'),  # Run daily at midnight
+]
+
+TRIAL_SETTINGS = {
+    'TRIAL_LIMIT_PER_USER': 1,
+    'TRIAL_DAYS': 7,
+    'ENABLE_TRIAL_TRACKING': True,
+    'AUTO_DISABLE_ON_EXPIRY': True,
+    'ALLOW_TRIAL_EXTENSIONS': False,
+    'MAX_TRIAL_EXTENSION_DAYS': 0,
+    'TRIAL_CONVERSION_TARGET': 0.3,  # 30% conversion target
+}
+TRIAL_LIMIT_PER_USER = 1

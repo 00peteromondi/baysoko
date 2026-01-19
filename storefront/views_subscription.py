@@ -7,83 +7,33 @@ from django.db import transaction
 from datetime import timedelta
 from .models import Store, Subscription, MpesaPayment
 from .forms import SubscriptionPlanForm, UpgradeForm
-from .mpesa import MpesaGateway
+from .subscription_service import SubscriptionService
 from .utils.subscription_states import SubscriptionStateManager
-
-
 import logging
 
 logger = logging.getLogger(__name__)
 
+# storefront/views_subscription.py (updated)
 @login_required
 def subscription_plan_select(request, slug):
-    """
-    Handle all subscription states: new, trial, active, expired, cancelled
-    """
+    """Main entry point with trial tracking"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
     
-    # Get comprehensive subscription state
-    state = SubscriptionStateManager.get_user_subscription_state(request.user, store)
+    # Get detailed trial status
+    trial_status = SubscriptionService.get_user_trial_status(request.user)
+    eligibility = SubscriptionService.get_user_eligibility(request.user, store)
     
-    # Plan details
-    plan_details = {
-        'basic': {
-            'name': 'Basic',
-            'price': 999,
-            'period': 'month',
-            'features': [
-                'Priority listing',
-                'Basic analytics',
-                'Store customization',
-                'Verified badge',
-                'Up to 50 products',
-                '1 storefront',
-                'Email support',
-            ],
-            'icon': 'bi-star',
-            'color': 'primary',
-        },
-        'premium': {
-            'name': 'Premium',
-            'price': 1999,
-            'period': 'month',
-            'features': [
-                'Everything in Basic',
-                'Advanced analytics',
-                'Bulk product upload',
-                'Inventory management',
-                'Product bundles',
-                'Up to 200 products',
-                '3 storefronts',
-                'Priority support',
-            ],
-            'icon': 'bi-award',
-            'color': 'warning',
-            'popular': True,
-        },
-        'enterprise': {
-            'name': 'Enterprise',
-            'price': 4999,
-            'period': 'month',
-            'features': [
-                'Everything in Premium',
-                'Custom integrations',
-                'API access',
-                'Unlimited products',
-                'Unlimited storefronts',
-                'Custom domain',
-                'Dedicated support',
-                'White-label options',
-            ],
-            'icon': 'bi-building',
-            'color': 'danger',
-        }
+    # Combine data
+    context_data = {
+        'store': store,
+        'trial_status': trial_status,
+        'eligibility': eligibility,
+        'can_start_trial': trial_status['can_start_trial'],
+        'trial_count': trial_status['trial_count'],
+        'trial_limit': trial_status['trial_limit'],
+        'remaining_trials': trial_status['summary']['remaining_trials'],
+        'has_exceeded_limit': trial_status['summary']['has_exceeded_limit'],
     }
-    
-    # Handle different states
-    if state['has_active_subscription']:
-        messages.info(request, f"You already have an active {state['subscription'].get_plan_display()} subscription.")
-        return redirect('storefront:subscription_manage', slug=slug)
     
     if request.method == 'POST':
         plan_form = SubscriptionPlanForm(request.POST)
@@ -92,369 +42,274 @@ def subscription_plan_select(request, slug):
         if plan_form.is_valid() and upgrade_form.is_valid():
             plan = plan_form.cleaned_data['plan']
             phone_number = upgrade_form.cleaned_data['phone_number']
-            start_trial = 'start_trial' in request.POST
+            start_trial = request.POST.get('start_trial', False)
             
-            # Check if user wants to start trial
             if start_trial:
-                if not state['can_start_trial']:
-                    messages.error(request, "You are not eligible for a free trial.")
+                if not trial_status['can_start_trial']:
+                    messages.error(request, 
+                        f"❌ Trial Not Available: You have already used {trial_status['trial_count']} "
+                        f"out of {trial_status['trial_limit']} allowed trials."
+                    )
                     return redirect('storefront:subscription_plan_select', slug=slug)
                 
-                # Start trial
-                return _start_trial(request, store, plan, phone_number, plan_details[plan]['price'])
+                # Start trial with tracking
+                success, result = SubscriptionService.start_trial_with_tracking(
+                    store=store,
+                    plan=plan,
+                    phone_number=phone_number,
+                    user=request.user
+                )
+                
+                if success:
+                    trial_data = result
+                    messages.success(
+                        request,
+                        f"✅ {plan.capitalize()} trial #{trial_data['trial_number']} started! "
+                        f"This is trial {trial_data['trial_number']} of {trial_status['trial_limit']}. "
+                        f"You have {trial_data['remaining_trials']} trial(s) remaining."
+                    )
+                    return redirect('storefront:subscription_payment_options', slug=slug)
+                else:
+                    messages.error(request, result)
+                    return redirect('storefront:subscription_plan_select', slug=slug)
             else:
-                # Skip trial and subscribe immediately
-                return _subscribe_immediately(request, store, plan, phone_number, plan_details[plan]['price'])
-        
-        else:
-            messages.error(request, "Please correct the errors below.")
+                # Subscribe immediately
+                success, subscription = SubscriptionService.subscribe_immediately(
+                    store=store,
+                    plan=plan,
+                    phone_number=phone_number
+                )
+                
+                if success:
+                    payment_success, payment_result = SubscriptionService.process_payment(
+                        subscription=subscription,
+                        phone_number=phone_number
+                    )
+                    
+                    if payment_success:
+                        messages.success(
+                            request,
+                            f"✅ {plan.capitalize()} subscription started! "
+                            "Please complete the M-Pesa payment on your phone."
+                        )
+                        return redirect('storefront:subscription_manage', slug=slug)
+                    else:
+                        messages.warning(
+                            request,
+                            f"Subscription created but payment failed: {payment_result}. "
+                            "Please try the payment again from your subscription management page."
+                        )
+                        return redirect('storefront:subscription_manage', slug=slug)
+                else:
+                    messages.error(request, result)
+                    return redirect('storefront:subscription_plan_select', slug=slug)
     
     else:
-        # GET request - pre-fill forms
         plan_form = SubscriptionPlanForm()
         upgrade_form = UpgradeForm()
         
-        # Pre-fill with last used phone if available
-        if state['subscription'] and state['subscription'].mpesa_phone:
-            last_phone = state['subscription'].mpesa_phone.replace('+254', '')
+        # Pre-fill phone if available
+        if eligibility['active_subscription'] and eligibility['active_subscription'].mpesa_phone:
+            last_phone = eligibility['active_subscription'].mpesa_phone.replace('+254', '')
             upgrade_form = UpgradeForm(initial={'phone_number': last_phone})
-        
-        # Pre-select current plan if exists
-        if state['subscription']:
-            plan_form = SubscriptionPlanForm(initial={'plan': state['subscription'].plan})
     
-    # Determine what action buttons to show
-    show_trial_button = state['can_start_trial']
-    show_subscribe_button = True
-    
-    # If user has expired trial, show different message
-    if state['has_expired_trial']:
-        show_trial_button = False
-        messages.info(request, "Your free trial has ended. Please subscribe to continue using premium features.")
-    
-    # If user has past due, show renewal message
-    if state['has_past_due']:
-        messages.warning(request, "Your subscription is past due. Please renew to restore premium features.")
-    
-    context = {
-        'store': store,
+    context_data.update({
         'plan_form': plan_form,
         'phone_form': upgrade_form,
-        'plan_details': plan_details,
-        'subscription_state': state,
-        'show_trial_button': show_trial_button,
-        'show_subscribe_button': show_subscribe_button,
-        'action_required': SubscriptionStateManager.get_subscription_action_required(state['subscription']),
+        'plan_details': SubscriptionService.PLAN_DETAILS,
+    })
+    
+    return render(request, 'storefront/subscription_plan_select.html', context_data)
+
+@login_required
+def subscription_trial_dashboard(request):
+    """Dashboard showing trial usage and limits"""
+    trial_status = SubscriptionService.get_user_trial_status(request.user)
+    analytics = SubscriptionService.get_trial_usage_analytics(request.user)
+    
+    context = {
+        'trial_status': trial_status,
+        'analytics': analytics,
+        'trial_history': trial_status['trial_subscriptions'],
+        'active_trial': trial_status['active_trial'],
+        'can_start_new_trial': trial_status['can_start_trial'],
+        'trial_progress': {
+            'used': trial_status['trial_count'],
+            'total': trial_status['trial_limit'],
+            'percentage': (trial_status['trial_count'] / trial_status['trial_limit']) * 100 if trial_status['trial_limit'] > 0 else 0,
+        }
     }
     
-    # Use different template based on state
-    template = 'storefront/subscription_plan_select_streamlined.html'
-    
-    # If user has specific state, use specialized template
-    if state['has_expired_trial'] or state['needs_renewal']:
-        template = 'storefront/subscription_renew.html'
-    elif not state['can_start_trial'] and state['subscription']:
-        template = 'storefront/subscription_change_plan.html'
-    
-    return render(request, template, context)
-
-def _start_trial(request, store, plan, phone_number, amount):
-    """Start a free trial"""
-    with transaction.atomic():
-        # Create or update subscription
-        subscription, created = Subscription.objects.get_or_create(
-            store=store,
-            defaults={
-                'plan': plan,
-                'status': 'trialing',
-                'amount': amount,
-                'trial_ends_at': timezone.now() + timedelta(days=7),
-                'mpesa_phone': f"+254{phone_number}",
-                'metadata': {
-                    'trial_started': timezone.now().isoformat(),
-                    'plan_selected': plan,
-                    'via_trial': True,
-                }
-            }
-        )
-        
-        if not created:
-            subscription.plan = plan
-            subscription.status = 'trialing'
-            subscription.trial_ends_at = timezone.now() + timedelta(days=7)
-            subscription.mpesa_phone = f"+254{phone_number}"
-            subscription.metadata.update({
-                'trial_started': timezone.now().isoformat(),
-                'plan_selected': plan,
-                'via_trial': True,
-            })
-            subscription.save()
-        
-        # Enable premium features for trial
-        store.is_premium = True
-        store.save()
-        
-        # Store in session for payment flow
-        request.session['subscription_data'] = {
-            'store_slug': store.slug,
-            'plan': plan,
-            'phone_number': phone_number,
-            'amount': amount,
-            'via_trial': True,
-        }
-        
-        messages.success(
-            request,
-            f"✅ {plan.capitalize()} trial started! "
-            f"You have 7 days to experience all premium features."
-        )
-        
-        # Redirect to payment options (with option to pay now or continue trial)
-        return redirect('storefront:subscription_payment_options', slug=store.slug)
-
-def _subscribe_immediately(request, store, plan, phone_number, amount):
-    """Subscribe immediately (skip trial)"""
-    with transaction.atomic():
-        # Create subscription
-        subscription = Subscription.objects.create(
-            store=store,
-            plan=plan,
-            status='active',
-            amount=amount,
-            current_period_end=timezone.now() + timedelta(days=30),
-            mpesa_phone=f"+254{phone_number}",
-            metadata={
-                'subscribed_at': timezone.now().isoformat(),
-                'plan_selected': plan,
-                'via_immediate': True,
-                'skipped_trial': True,
-            }
-        )
-        
-        # Enable premium features
-        store.is_premium = True
-        store.save()
-        
-        # Initiate payment
-        try:
-            mpesa = MpesaGateway()
-            
-            response = mpesa.initiate_stk_push(
-                phone=f"+254{phone_number}",
-                amount=float(amount),
-                account_reference=f"SUB-{store.id}-{plan.upper()}"
-            )
-            
-            # Create payment record
-            MpesaPayment.objects.create(
-                subscription=subscription,
-                checkout_request_id=response['CheckoutRequestID'],
-                merchant_request_id=response['MerchantRequestID'],
-                phone_number=f"+254{phone_number}",
-                amount=amount,
-                status='pending'
-            )
-            
-            messages.success(
-                request,
-                f"✅ {plan.capitalize()} subscription started! "
-                "Please complete the M-Pesa payment on your phone."
-            )
-            
-            return redirect('storefront:subscription_manage', slug=store.slug)
-            
-        except Exception as e:
-            logger.error(f"Payment initiation failed: {str(e)}")
-            
-            # Subscription created but payment failed
-            subscription.status = 'past_due'
-            subscription.save()
-            
-            messages.warning(
-                request,
-                f"Subscription created but payment failed: {str(e)}. "
-                "Please try the payment again from your subscription management page."
-            )
-            
-            return redirect('storefront:subscription_manage', slug=store.slug)
+    return render(request, 'storefront/subscription_trial_dashboard.html', context)
 
 @login_required
 def subscription_payment_options(request, slug):
-    """
-    Payment options after selecting a plan or starting trial
-    """
+    """Show payment options after plan selection"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
     
-    # Get subscription data from session
-    sub_data = request.session.get('subscription_data', {})
+    # Get active trial or subscription
+    subscription = Subscription.objects.filter(
+        store=store,
+        status__in=['trialing', 'active']
+    ).order_by('-created_at').first()
     
-    # If no session data, check if user has active trial
-    if not sub_data or sub_data.get('store_slug') != slug:
-        subscription = Subscription.objects.filter(
-            store=store,
-            status='trialing'
-        ).order_by('-created_at').first()
-        
-        if subscription and subscription.trial_ends_at and timezone.now() < subscription.trial_ends_at:
-            # User is in active trial
-            sub_data = {
-                'store_slug': slug,
-                'plan': subscription.plan,
-                'phone_number': subscription.mpesa_phone.replace('+254', ''),
-                'amount': float(subscription.amount),
-                'via_trial': True,
-                'subscription_id': subscription.id,
-            }
-            request.session['subscription_data'] = sub_data
-        else:
-            messages.error(request, "Please select a plan first.")
-            return redirect('storefront:subscription_plan_select', slug=slug)
-    
-    plan = sub_data['plan']
-    phone_number = sub_data['phone_number']
-    amount = sub_data['amount']
-    via_trial = sub_data.get('via_trial', False)
-    subscription_id = sub_data.get('subscription_id')
-    
-    # Get subscription if exists
-    subscription = None
-    if subscription_id:
-        subscription = Subscription.objects.filter(id=subscription_id, store=store).first()
-    elif via_trial:
-        subscription = Subscription.objects.filter(
-            store=store,
-            status='trialing'
-        ).order_by('-created_at').first()
-    
-    # Get plan details
-    plan_names = {
-        'basic': 'Basic',
-        'premium': 'Premium',
-        'enterprise': 'Enterprise',
-    }
-    
-    # Calculate trial info if applicable
-    trial_info = None
-    if subscription and subscription.status == 'trialing' and subscription.trial_ends_at:
-        remaining_days = (subscription.trial_ends_at - timezone.now()).days
-        trial_info = {
-            'remaining_days': max(0, remaining_days),
-            'ends_at': subscription.trial_ends_at,
-            'progress_percentage': min(100, ((7 - remaining_days) / 7) * 100) if remaining_days >= 0 else 100,
-        }
+    if not subscription:
+        messages.error(request, "No active subscription found. Please select a plan first.")
+        return redirect('storefront:subscription_plan_select', slug=slug)
     
     if request.method == 'POST':
         action = request.POST.get('action')
         
         if action == 'pay_now':
-            # Initiate immediate payment
-            try:
-                mpesa = MpesaGateway()
-                
-                # Get or create subscription
-                if not subscription:
-                    subscription = Subscription.objects.create(
-                        store=store,
-                        plan=plan,
-                        status='trialing',
-                        amount=amount,
-                        trial_ends_at=timezone.now() + timedelta(days=7),
-                        mpesa_phone=f"+254{phone_number}",
-                        metadata={'plan_selected': plan}
-                    )
-                
-                response = mpesa.initiate_stk_push(
-                    phone=f"+254{phone_number}",
-                    amount=float(amount),
-                    account_reference=f"SUB-{store.id}-{plan.upper()}"
-                )
-                
-                # Create payment record
-                MpesaPayment.objects.create(
-                    subscription=subscription,
-                    checkout_request_id=response['CheckoutRequestID'],
-                    merchant_request_id=response['MerchantRequestID'],
-                    phone_number=f"+254{phone_number}",
-                    amount=amount,
-                    status='pending'
-                )
-                
-                # Update subscription to active (payment pending)
-                subscription.status = 'active' if not via_trial else 'trialing'
+            # Process payment for trial user wanting to subscribe
+            if subscription.status == 'trialing':
+                # Update to active and process payment
+                subscription.status = 'active'
+                subscription.current_period_end = timezone.now() + timedelta(days=30)
                 subscription.save()
-                
-                # Clear session data
-                if 'subscription_data' in request.session:
-                    del request.session['subscription_data']
-                
-                messages.success(
-                    request,
-                    f"Payment initiated for {plan_names.get(plan, 'Premium')} plan. "
-                    "Please complete the M-Pesa payment on your phone."
-                )
-                
-                return redirect('storefront:subscription_manage', slug=slug)
-                
-            except Exception as e:
-                logger.error(f"Payment initiation failed: {str(e)}")
-                messages.error(request, f"Payment initiation failed: {str(e)}")
-        
-        elif action == 'continue_trial':
-            # Clear session and continue with trial
-            if 'subscription_data' in request.session:
-                del request.session['subscription_data']
             
-            messages.info(
-                request,
-                f"Enjoy your {plan_names.get(plan, 'Premium')} trial! "
-                "You can subscribe anytime before the trial ends."
+            # Process payment
+            payment_success, payment_result = SubscriptionService.process_payment(
+                subscription=subscription,
+                phone_number=subscription.mpesa_phone.replace('+254', '')
             )
             
-            return redirect('storefront:seller_dashboard')
-        
-        elif action == 'skip_for_now':
-            # User wants to skip payment for now (continue trial if exists)
-            if 'subscription_data' in request.session:
-                del request.session['subscription_data']
-            
-            if via_trial and subscription:
-                messages.info(
+            if payment_success:
+                messages.success(
                     request,
-                    f"Your {plan_names.get(plan, 'Premium')} trial is active. "
-                    "You have {trial_info['remaining_days']} days remaining."
+                    f"Payment initiated for {subscription.get_plan_display()} plan. "
+                    "Please complete the M-Pesa payment on your phone."
                 )
             else:
-                messages.info(request, "You can subscribe anytime from your dashboard.")
+                messages.error(request, f"Payment initiation failed: {payment_result}")
             
+            return redirect('storefront:subscription_manage', slug=slug)
+        
+        elif action == 'continue_trial':
+            messages.info(
+                request,
+                f"Enjoy your {subscription.get_plan_display()} trial! "
+                "You can subscribe anytime before the trial ends."
+            )
             return redirect('storefront:seller_dashboard')
+    
+    # Calculate trial info
+    trial_info = None
+    if subscription.status == 'trialing' and subscription.trial_ends_at:
+        remaining_days = (subscription.trial_ends_at - timezone.now()).days
+        trial_info = {
+            'remaining_days': max(0, remaining_days),
+            'ends_at': subscription.trial_ends_at,
+            'is_expired': remaining_days < 0,
+        }
     
     context = {
         'store': store,
-        'plan': plan,
-        'plan_name': plan_names.get(plan, 'Premium'),
-        'phone_number': phone_number,
-        'amount': amount,
-        'formatted_amount': f"KSh {amount:,}",
-        'via_trial': via_trial,
         'subscription': subscription,
         'trial_info': trial_info,
-        'is_in_trial': via_trial and subscription and subscription.status == 'trialing',
+        'formatted_amount': f"KSh {subscription.amount:,}",
     }
     
-    # Use different template based on trial status
-    if via_trial:
-        template = 'storefront/subscription_trial_payment_options.html'
-    else:
-        template = 'storefront/subscription_immediate_payment.html'
+    return render(request, 'storefront/subscription_payment_options.html', context)
+
+# In the subscription_manage function in views_subscription.py
+@login_required
+def subscription_manage(request, slug):
+    """Manage subscription"""
+    store = get_object_or_404(Store, slug=slug, owner=request.user)
     
-    return render(request, template, context)
+    # Get all subscriptions for history
+    subscription_history = Subscription.objects.filter(
+        store=store
+    ).order_by('-created_at')
+    
+    # Get active subscription
+    current_subscription = subscription_history.first()
+    
+    if not current_subscription:
+        messages.info(request, "No subscription found. Upgrade to unlock premium features.")
+        return redirect('storefront:subscription_plan_select', slug=slug)
+    
+    # Get recent payments for current subscription
+    recent_payments = current_subscription.payments.order_by('-created_at')[:5]
+    
+    # Determine required action
+    action_required = None
+    now = timezone.now()
+    
+    if current_subscription.status == 'trialing':
+        if current_subscription.trial_ends_at and now > current_subscription.trial_ends_at:
+            action_required = 'trial_expired'
+        elif current_subscription.trial_ends_at and (current_subscription.trial_ends_at - now).days <= 2:
+            action_required = 'trial_ending'
+    
+    elif current_subscription.status == 'past_due':
+        action_required = 'past_due'
+    
+    elif current_subscription.status == 'canceled':
+        action_required = 'renew'
+    
+    # Calculate trial info
+    trial_info = None
+    if current_subscription.status == 'trialing' and current_subscription.trial_ends_at:
+        remaining_days = (current_subscription.trial_ends_at - now).days
+        trial_info = {
+            'remaining_days': max(0, remaining_days),
+            'ends_at': current_subscription.trial_ends_at,
+            'is_expired': remaining_days < 0,
+        }
+    
+    # Format subscription history for display
+    formatted_history = []
+    for sub in subscription_history:
+        formatted_history.append({
+            'id': sub.id,
+            'plan': sub.get_plan_display(),
+            'status': sub.get_status_display(),
+            'status_class': sub.status,
+            'amount': sub.amount,
+            'started_at': sub.started_at,
+            'current_period_end': sub.current_period_end,
+            'trial_ends_at': sub.trial_ends_at,
+            'cancelled_at': sub.canceled_at,
+            'created_at': sub.created_at,
+            'is_current': sub.id == current_subscription.id,
+        })
+    
+    context = {
+        'store': store,
+        'subscription': current_subscription,
+        'subscription_history': formatted_history,
+        'recent_payments': recent_payments,
+        'trial_info': trial_info,
+        'action_required': action_required,
+        'plan_details': SubscriptionService.PLAN_DETAILS.get(current_subscription.plan, {}),
+        'is_active': current_subscription.status == 'active',
+        'is_trialing': current_subscription.status == 'trialing',
+        'is_expired': current_subscription.status in ['past_due', 'canceled'],
+        'trial_count': SubscriptionService.get_user_trial_status(request.user)['trial_count'],
+        'remaining_trials': SubscriptionService.get_user_trial_status(request.user)['summary']['remaining_trials'],
+        'trial_limit': SubscriptionService.get_user_trial_status(request.user)['trial_limit'],
+        'trial_available': SubscriptionService.get_user_trial_status(request.user)['can_start_trial'],
+        'can_change_plan': current_subscription.status in ['active', 'trialing'],
+    }
+    
+    # Use different template based on state
+    if action_required == 'trial_expired':
+        return render(request, 'storefront/subscription_trial_expired.html', context)
+    elif action_required == 'past_due':
+        return render(request, 'storefront/subscription_past_due.html', context)
+    elif action_required == 'renew':
+        return render(request, 'storefront/subscription_needs_renewal.html', context)
+    
+    return render(request, 'storefront/subscription_manage.html', context)
 
 @login_required
 def subscription_change_plan(request, slug):
-    """
-    Change subscription plan (upgrade/downgrade)
-    """
+    """Change subscription plan"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
+    
+    # Get current subscription
     subscription = Subscription.objects.filter(
         store=store,
         status__in=['active', 'trialing']
@@ -464,169 +319,77 @@ def subscription_change_plan(request, slug):
         messages.error(request, "No active subscription found.")
         return redirect('storefront:subscription_plan_select', slug=slug)
     
-    # Plan details
-    plan_details = {
-        'basic': {
-            'name': 'Basic',
-            'price': 999,
-            'current': subscription.plan == 'basic',
-            'can_change': subscription.plan != 'basic',
-        },
-        'premium': {
-            'name': 'Premium',
-            'price': 1999,
-            'current': subscription.plan == 'premium',
-            'can_change': subscription.plan != 'premium',
-        },
-        'enterprise': {
-            'name': 'Enterprise',
-            'price': 4999,
-            'current': subscription.plan == 'enterprise',
-            'can_change': subscription.plan != 'enterprise',
-        }
-    }
-    
     if request.method == 'POST':
-        plan = request.POST.get('plan')
+        new_plan = request.POST.get('plan')
         
-        if not plan or plan not in plan_details:
+        if new_plan not in SubscriptionService.PLAN_DETAILS:
             messages.error(request, "Invalid plan selected.")
             return redirect('storefront:subscription_change_plan', slug=slug)
         
-        if plan == subscription.plan:
-            messages.info(request, f"You are already on the {plan.capitalize()} plan.")
-            return redirect('storefront:subscription_manage', slug=slug)
+        # Pass the subscription object, not the store
+        success, message = SubscriptionService.change_plan(subscription, new_plan)
         
-        # Check if this is a downgrade
-        is_downgrade = False
-        plan_order = ['basic', 'premium', 'enterprise']
-        if plan_order.index(plan) < plan_order.index(subscription.plan):
-            is_downgrade = True
-        
-        # Handle plan change
-        if is_downgrade:
-            # Downgrade takes effect at next billing cycle
-            subscription.metadata['pending_downgrade'] = {
-                'new_plan': plan,
-                'requested_at': timezone.now().isoformat(),
-                'effective_date': subscription.current_period_end.isoformat() if subscription.current_period_end else None,
-            }
-            messages.info(
-                request,
-                f"Your plan will be downgraded to {plan.capitalize()} "
-                f"at the end of your current billing period."
-            )
+        if success:
+            messages.success(request, message)
         else:
-            # Upgrade takes effect immediately
-            old_plan = subscription.plan
-            subscription.plan = plan
-            subscription.amount = plan_details[plan]['price']
-            
-            # Calculate prorated amount if needed
-            if subscription.status == 'active' and subscription.current_period_end:
-                days_used = (timezone.now() - subscription.started_at).days
-                total_days = (subscription.current_period_end - subscription.started_at).days
-                if total_days > 0:
-                    prorated_amount = (plan_details[plan]['price'] - plan_details[old_plan]['price']) * (days_used / total_days)
-                    subscription.metadata['upgrade_fee'] = {
-                        'prorated_amount': prorated_amount,
-                        'old_plan': old_plan,
-                        'new_plan': plan,
-                        'upgraded_at': timezone.now().isoformat(),
-                    }
-            
-            messages.success(
-                request,
-                f"Your plan has been upgraded to {plan.capitalize()}! "
-                f"The new rate will apply immediately."
-            )
+            messages.error(request, message)
         
-        subscription.save()
         return redirect('storefront:subscription_manage', slug=slug)
     
     context = {
         'store': store,
         'subscription': subscription,
-        'plan_details': plan_details,
+        'plan_details': SubscriptionService.PLAN_DETAILS,
         'current_plan': subscription.plan,
     }
     
     return render(request, 'storefront/subscription_change_plan.html', context)
-
 @login_required
 def subscription_renew(request, slug):
-    """
-    Renew expired or canceled subscription
-    """
+    """Renew expired subscription"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
     
-    # Get expired/canceled subscription
     subscription = Subscription.objects.filter(
         store=store,
         status__in=['canceled', 'past_due']
     ).order_by('-created_at').first()
     
     if not subscription:
-        messages.error(request, "No subscription found to renew.")
+        messages.error(request, "No expired subscription found.")
         return redirect('storefront:subscription_plan_select', slug=slug)
     
-    # Plan details
-    plan_details = {
-        'basic': {'price': 999, 'name': 'Basic'},
-        'premium': {'price': 1999, 'name': 'Premium'},
-        'enterprise': {'price': 4999, 'name': 'Enterprise'},
-    }
-    
     if request.method == 'POST':
-        upgrade_form = UpgradeForm(request.POST)
+        form = UpgradeForm(request.POST)
         
-        if upgrade_form.is_valid():
-            phone_number = upgrade_form.cleaned_data['phone_number']
+        if form.is_valid():
+            phone_number = form.cleaned_data['phone_number']
             
-            # Update subscription
-            subscription.status = 'active'
-            subscription.current_period_end = timezone.now() + timedelta(days=30)
-            subscription.mpesa_phone = f"+254{phone_number}"
-            subscription.metadata['renewed_at'] = timezone.now().isoformat()
-            subscription.save()
+            # Renew subscription
+            success = SubscriptionService.renew_subscription(
+                subscription=subscription,
+                phone_number=phone_number
+            )
             
-            # Enable premium features
-            store.is_premium = True
-            store.save()
-            
-            # Initiate payment
-            try:
-                mpesa = MpesaGateway()
-                
-                response = mpesa.initiate_stk_push(
-                    phone=f"+254{phone_number}",
-                    amount=float(subscription.amount),
-                    account_reference=f"RENEW-{store.id}-{subscription.plan.upper()}"
-                )
-                
-                # Create payment record
-                MpesaPayment.objects.create(
+            if success:
+                # Process payment
+                payment_success, payment_result = SubscriptionService.process_payment(
                     subscription=subscription,
-                    checkout_request_id=response['CheckoutRequestID'],
-                    merchant_request_id=response['MerchantRequestID'],
-                    phone_number=f"+254{phone_number}",
-                    amount=subscription.amount,
-                    status='pending'
+                    phone_number=phone_number
                 )
                 
-                messages.success(
-                    request,
-                    f"Subscription renewed! Please complete the M-Pesa payment."
-                )
+                if payment_success:
+                    messages.success(
+                        request,
+                        f"Subscription renewed! Please complete the M-Pesa payment."
+                    )
+                else:
+                    messages.warning(
+                        request,
+                        f"Subscription renewed but payment failed: {payment_result}. "
+                        "Please try the payment again from your subscription management page."
+                    )
                 
                 return redirect('storefront:subscription_manage', slug=slug)
-                
-            except Exception as e:
-                logger.error(f"Payment initiation failed: {str(e)}")
-                messages.error(request, f"Payment initiation failed: {str(e)}")
-        
-        else:
-            messages.error(request, "Please correct the errors below.")
     
     else:
         # Pre-fill with last used phone number
@@ -635,136 +398,51 @@ def subscription_renew(request, slug):
             phone = subscription.mpesa_phone.replace('+254', '')
             initial['phone_number'] = phone
         
-        upgrade_form = UpgradeForm(initial=initial)
+        form = UpgradeForm(initial=initial)
     
     context = {
         'store': store,
         'subscription': subscription,
-        'plan_name': plan_details.get(subscription.plan, {}).get('name', subscription.plan.capitalize()),
-        'amount': subscription.amount,
-        'form': upgrade_form,
+        'form': form,
         'formatted_amount': f"KSh {subscription.amount:,}",
     }
     
     return render(request, 'storefront/subscription_renew.html', context)
 
-# Add to views_subscription.py
 @login_required
-def subscription_manage_streamlined(request, slug):
-    """
-    Enhanced subscription management view showing all states
-    """
+def subscription_cancel(request, slug):
+    """Cancel subscription"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
     
-    # Get comprehensive subscription state
-    state = SubscriptionStateManager.get_user_subscription_state(request.user, store)
-    subscription = state['subscription']
+    subscription = Subscription.objects.filter(
+        store=store,
+        status__in=['active', 'trialing']
+    ).order_by('-created_at').first()
     
     if not subscription:
-        messages.info(request, "No subscription found. Upgrade to unlock premium features.")
-        return redirect('storefront:subscription_plan_select', slug=slug)
+        messages.error(request, "No active subscription found.")
+        return redirect('storefront:subscription_manage', slug=slug)
     
-    # Get action required
-    action_required = SubscriptionStateManager.get_subscription_action_required(subscription)
-    
-    # Get recent payments
-    recent_payments = subscription.payments.order_by('-created_at')[:5]
-    
-    # Calculate trial info if applicable
-    trial_info = None
-    if subscription.status == 'trialing' and subscription.trial_ends_at:
-        remaining_days = (subscription.trial_ends_at - timezone.now()).days
-        trial_info = {
-            'remaining_days': max(0, remaining_days),
-            'ends_at': subscription.trial_ends_at,
-            'progress_percentage': min(100, ((7 - remaining_days) / 7) * 100) if remaining_days >= 0 else 100,
-            'is_expired': remaining_days < 0,
-        }
-    
-    # Get feature access based on plan
-    features = {
-        'basic': [
-            {'name': 'Featured Placement', 'enabled': True, 'icon': 'bi-star'},
-            {'name': 'Basic Analytics', 'enabled': True, 'icon': 'bi-graph-up'},
-            {'name': 'Store Customization', 'enabled': True, 'icon': 'bi-palette'},
-            {'name': 'Up to 50 Products', 'enabled': True, 'icon': 'bi-box'},
-            {'name': 'Email Support', 'enabled': True, 'icon': 'bi-envelope'},
-            {'name': 'Bulk Operations', 'enabled': False, 'icon': 'bi-upload'},
-            {'name': 'Advanced Analytics', 'enabled': False, 'icon': 'bi-graph-up-arrow'},
-            {'name': 'Product Bundles', 'enabled': False, 'icon': 'bi-boxes'},
-        ],
-        'premium': [
-            {'name': 'Featured Placement', 'enabled': True, 'icon': 'bi-star'},
-            {'name': 'Advanced Analytics', 'enabled': True, 'icon': 'bi-graph-up-arrow'},
-            {'name': 'Bulk Operations', 'enabled': True, 'icon': 'bi-upload'},
-            {'name': 'Inventory Management', 'enabled': True, 'icon': 'bi-clipboard-check'},
-            {'name': 'Product Bundles', 'enabled': True, 'icon': 'bi-boxes'},
-            {'name': 'Up to 200 Products', 'enabled': True, 'icon': 'bi-box'},
-            {'name': 'Priority Support', 'enabled': True, 'icon': 'bi-headset'},
-            {'name': 'API Access', 'enabled': False, 'icon': 'bi-plug'},
-        ],
-        'enterprise': [
-            {'name': 'All Premium Features', 'enabled': True, 'icon': 'bi-check-all'},
-            {'name': 'API Access', 'enabled': True, 'icon': 'bi-plug'},
-            {'name': 'Custom Domain', 'enabled': True, 'icon': 'bi-globe'},
-            {'name': 'Unlimited Products', 'enabled': True, 'icon': 'bi-infinity'},
-            {'name': 'Custom Integrations', 'enabled': True, 'icon': 'bi-puzzle'},
-            {'name': 'White-label Options', 'enabled': True, 'icon': 'bi-badge-ad'},
-            {'name': 'Dedicated Support', 'enabled': True, 'icon': 'bi-person-badge'},
-            {'name': 'SLA Guarantee', 'enabled': True, 'icon': 'bi-shield-check'},
-        ]
-    }
-    
-    # Determine available actions
-    available_actions = []
-    
-    if subscription.status == 'active':
-        available_actions.extend([
-            {'name': 'change_plan', 'label': 'Change Plan', 'url': f'/dashboard/store/{slug}/subscription/change-plan/', 'class': 'btn-primary'},
-            {'name': 'cancel', 'label': 'Cancel', 'url': f'/dashboard/store/{slug}/subscription/cancel/', 'class': 'btn-outline-danger'},
-        ])
-    
-    elif subscription.status == 'trialing':
-        if trial_info and not trial_info['is_expired']:
-            available_actions.extend([
-                {'name': 'subscribe_now', 'label': 'Subscribe Now', 'url': f'/dashboard/store/{slug}/subscription/payment-options/', 'class': 'btn-primary'},
-                {'name': 'change_plan', 'label': 'Change Plan', 'url': f'/dashboard/store/{slug}/subscription/change-plan/', 'class': 'btn-outline-primary'},
-            ])
-        else:
-            available_actions.extend([
-                {'name': 'renew', 'label': 'Renew Subscription', 'url': f'/dashboard/store/{slug}/subscription/renew/', 'class': 'btn-warning'},
-            ])
-    
-    elif subscription.status in ['past_due', 'canceled']:
-        available_actions.extend([
-            {'name': 'renew', 'label': 'Renew Now', 'url': f'/dashboard/store/{slug}/subscription/renew/', 'class': 'btn-warning'},
-            {'name': 'new_subscription', 'label': 'New Subscription', 'url': f'/dashboard/store/{slug}/subscription/plans/', 'class': 'btn-primary'},
-        ])
+    if request.method == 'POST':
+        confirm = request.POST.get('confirm', False)
+        
+        if confirm:
+            success = SubscriptionService.cancel_subscription(subscription)
+            
+            if success:
+                messages.info(
+                    request,
+                    f"Your {subscription.get_plan_display()} subscription has been canceled. "
+                    f"Premium features will be available until {subscription.current_period_end.strftime('%B %d, %Y') if subscription.current_period_end else 'the end of your trial'}."
+                )
+            else:
+                messages.error(request, "Failed to cancel subscription.")
+        
+        return redirect('storefront:subscription_manage', slug=slug)
     
     context = {
         'store': store,
         'subscription': subscription,
-        'recent_payments': recent_payments,
-        'trial_info': trial_info,
-        'features': features.get(subscription.plan, []),
-        'is_trialing': subscription.status == 'trialing',
-        'is_active': subscription.status == 'active',
-        'is_expired': subscription.status in ['past_due', 'canceled'],
-        'can_upgrade': subscription.plan != 'enterprise',
-        'can_downgrade': subscription.plan != 'basic',
-        'available_actions': available_actions,
-        'action_required': action_required,
-        'subscription_state': state,
     }
     
-    # Use different template based on state
-    if action_required == 'trial_expired':
-        template = 'storefront/subscription_trial_expired.html'
-    elif action_required == 'past_due':
-        template = 'storefront/subscription_past_due.html'
-    elif action_required == 'renew':
-        template = 'storefront/subscription_needs_renewal.html'
-    else:
-        template = 'storefront/subscription_manage_streamlined.html'
-    
-    return render(request, template, context)
+    return render(request, 'storefront/subscription_cancel.html', context)

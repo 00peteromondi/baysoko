@@ -1,3 +1,4 @@
+<!-- storefront/templates/storefront/subscription_manage.html -->
 {% extends 'base.html' %}
 {% load static humanize %}
 
@@ -5,7 +6,7 @@
 
 {% block extra_css %}
 <style>
-    /* Modern Subscription Management Styling */
+    /* ===== SUBSCRIPTION MANAGEMENT STYLES ===== */
     .subscription-container {
         min-height: 80vh;
         padding: var(--spacing-xl) 0;
@@ -51,7 +52,7 @@
         border-color: rgba(255, 158, 31, 0.3);
     }
 
-    .status-inactive {
+    .status-canceled {
         background: rgba(108, 117, 125, 0.1);
         color: var(--text-secondary);
         border-color: rgba(108, 117, 125, 0.3);
@@ -119,52 +120,6 @@
         margin-bottom: 1rem;
     }
 
-    .feature-card {
-        background: var(--bg-primary);
-        padding: 1.5rem;
-        border-radius: var(--radius-md);
-        border: 1px solid var(--border-color);
-        transition: var(--transition);
-        height: 100%;
-    }
-
-    .feature-card:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--shadow-lg);
-        border-color: var(--accent);
-    }
-
-    .feature-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 1rem;
-        font-size: 1.5rem;
-    }
-
-    .feature-icon-primary {
-        background: rgba(6, 214, 160, 0.1);
-        color: var(--success);
-    }
-
-    .feature-icon-success {
-        background: rgba(66, 133, 244, 0.1);
-        color: var(--info);
-    }
-
-    .feature-icon-warning {
-        background: rgba(255, 158, 31, 0.1);
-        color: var(--warning);
-    }
-
-    .feature-icon-info {
-        background: rgba(239, 71, 111, 0.1);
-        color: var(--danger);
-    }
-
     .payment-table {
         width: 100%;
         border-collapse: separate;
@@ -196,12 +151,59 @@
         background: var(--bg-secondary);
     }
 
+    .history-table {
+        background: var(--card-bg);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .history-table thead th {
+        background: var(--bg-secondary);
+        padding: 1rem;
+        font-weight: 700;
+        color: var(--text-secondary);
+        border-bottom: 2px solid var(--border-color);
+        font-size: 0.85rem;
+    }
+
+    .history-table tbody td {
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .history-table tbody tr.current {
+        background: rgba(6, 214, 160, 0.05);
+        border-left: 4px solid var(--accent);
+    }
+
+    .current-badge {
+        background: var(--accent);
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        margin-left: 0.5rem;
+    }
+
+    .trial-warning {
+        background: linear-gradient(135deg, rgba(255, 158, 31, 0.1) 0%, rgba(239, 71, 111, 0.1) 100%);
+        padding: 1.5rem;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(255, 158, 31, 0.2);
+        border-left: 4px solid var(--warning);
+        margin-bottom: var(--spacing-lg);
+    }
+
     .action-buttons-modern {
         display: flex;
         gap: 1rem;
         margin-top: var(--spacing-xl);
         padding-top: var(--spacing-lg);
         border-top: 1px solid var(--border-color);
+        flex-wrap: wrap;
     }
 
     .btn-gradient-success {
@@ -297,22 +299,6 @@
         transform: translateY(-2px);
     }
 
-    .empty-state {
-        text-align: center;
-        padding: 3rem;
-        background: var(--bg-secondary);
-        border-radius: var(--radius-md);
-        border: 2px dashed var(--border-color);
-    }
-
-    .empty-state-icon {
-        font-size: 3rem;
-        color: var(--text-secondary);
-        margin-bottom: 1rem;
-        opacity: 0.5;
-    }
-
-    /* Responsive Design */
     @media (max-width: 768px) {
         .subscription-card {
             padding: var(--spacing-md);
@@ -326,57 +312,10 @@
             flex-direction: column;
         }
         
-        .payment-table {
+        .payment-table, .history-table {
             display: block;
             overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
         }
-        
-        .btn-gradient-success,
-        .btn-gradient-warning,
-        .btn-gradient-danger,
-        .btn-ghost-modern {
-            width: 100%;
-        }
-    }
-
-    /* Animations */
-    @keyframes slideUp {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    @keyframes scaleIn {
-        from {
-            opacity: 0;
-            transform: scale(0.95);
-        }
-        to {
-            opacity: 1;
-            transform: scale(1);
-        }
-    }
-
-    .animate-slide-up {
-        animation: slideUp 0.5s ease-out;
-    }
-
-    .animate-scale-in {
-        animation: scaleIn 0.4s ease-out;
-    }
-
-    .animate-delay-1 {
-        animation-delay: 0.1s;
-    }
-
-    .animate-delay-2 {
-        animation-delay: 0.2s;
     }
 </style>
 {% endblock %}
@@ -388,7 +327,13 @@
         <div class="subscription-header animate-slide-up">
             <div class="premium-badge">
                 <i class="bi bi-star-fill"></i>
-                <span>Premium Subscription</span>
+                <span>
+                    {% if store.is_premium %}
+                        Premium Store
+                    {% else %}
+                        Basic Store
+                    {% endif %}
+                </span>
             </div>
             <h1 class="display-6 fw-bold mb-3">Manage Your Subscription</h1>
             <p class="lead text-muted mb-0">
@@ -396,278 +341,325 @@
             </p>
         </div>
 
-        <div class="row g-4">
-            <!-- Left Column: Subscription Details -->
-            <div class="col-lg-8">
-                <!-- Subscription Status Card -->
-                <div class="subscription-card animate-scale-in">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h3 class="fw-bold mb-0">Subscription Overview</h3>
-                        <span class="status-badge-modern status-{{ subscription.status }}">
-                            {{ subscription.get_status_display }}
-                        </span>
+        <!-- Trial Usage Warning -->
+        {% if subscription.trial_ends_at and subscription.trial_ends_at < now %}
+        <div class="trial-warning">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-exclamation-triangle-fill text-warning fs-4 me-3"></i>
+                <div>
+                    <h5 class="fw-bold mb-1">Trial Period Ended</h5>
+                    <p class="mb-0">
+                        Your 7-day free trial ended on {{ subscription.trial_ends_at|date:"M d, Y" }}. 
+                        Premium features have been disabled. Subscribe now to restore access.
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Current Subscription Card -->
+        <div class="subscription-card animate-scale-in">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="fw-bold mb-0">Current Subscription</h3>
+                <span class="status-badge-modern status-{{ subscription.status }}">
+                    <i class="bi 
+                        {% if subscription.status == 'active' %}bi-check-circle-fill
+                        {% elif subscription.status == 'trialing' %}bi-clock-fill
+                        {% elif subscription.status == 'past_due' %}bi-exclamation-triangle-fill
+                        {% else %}bi-x-circle-fill{% endif %}">
+                    </i>
+                    {{ subscription.get_status_display }}
+                </span>
+            </div>
+
+            <!-- Subscription Details Grid -->
+            <div class="detail-grid-modern">
+                <div class="detail-item-modern">
+                    <span class="detail-label-modern">Current Plan</span>
+                    <div class="detail-value-modern">{{ subscription.plan|title }}</div>
+                    <div class="detail-subtext">
+                        {% if subscription.status == 'active' %}
+                            Active since {{ subscription.started_at|date:"M d, Y" }}
+                        {% elif subscription.status == 'trialing' %}
+                            Trial started {{ subscription.created_at|date:"M d, Y" }}
+                        {% else %}
+                            Ended on {{ subscription.cancelled_at|date:"M d, Y"|default:"N/A" }}
+                        {% endif %}
                     </div>
+                </div>
 
-                    <!-- Subscription Details Grid -->
-                    <div class="detail-grid-modern">
-                        <div class="detail-item-modern">
-                            <span class="detail-label-modern">Current Plan</span>
-                            <div class="detail-value-modern">{{ subscription.plan|title }}</div>
-                            <div class="detail-subtext">
-                                {% if subscription.is_active %}
-                                    Active since {{ subscription.started_at|date:"M d, Y" }}
-                                {% else %}
-                                    Expired on {{ subscription.cancelled_at|date:"M d, Y" }}
-                                {% endif %}
-                            </div>
-                        </div>
-
-                        <div class="detail-item-modern">
-                            <span class="detail-label-modern">Billing Period</span>
-                            <div class="detail-value-modern">
-                                {% if subscription.trial_ends_at %}
-                                    Trial ends {{ subscription.trial_ends_at|date:"M d, Y" }}
-                                {% elif subscription.next_billing_date %}
-                                    Next billing {{ subscription.next_billing_date|date:"M d, Y" }}
-                                {% else %}
-                                    No active billing
-                                {% endif %}
-                            </div>
-                            <div class="detail-subtext">
-                                {% if subscription.status == 'past_due' %}
-                                    <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
-                                    Payment overdue
-                                {% endif %}
-                            </div>
-                        </div>
-
-                        <div class="detail-item-modern">
-                            <span class="detail-label-modern">Store Status</span>
-                            <div class="detail-value-modern">
-                                {% if store.is_premium %}
-                                    Premium Store
-                                {% else %}
-                                    Basic Store
-                                {% endif %}
-                            </div>
-                            <div class="detail-subtext">
-                                {% if store.is_premium %}
-                                    <i class="bi bi-check-circle-fill text-success me-1"></i>
-                                    All features active
-                                {% else %}
-                                    <i class="bi bi-info-circle-fill text-secondary me-1"></i>
-                                    Limited features
-                                {% endif %}
-                            </div>
-                        </div>
-
-                        <div class="detail-item-modern">
-                            <span class="detail-label-modern">Payment Method</span>
-                            <div class="detail-value-modern">M-Pesa</div>
-                            <div class="detail-subtext">
-                                {% if subscription.status == 'past_due' %}
-                                    <i class="bi bi-exclamation-circle-fill text-danger me-1"></i>
-                                    Update required
-                                {% else %}
-                                    <i class="bi bi-check-circle-fill text-success me-1"></i>
-                                    Active
-                                {% endif %}
-                            </div>
-                        </div>
+                <div class="detail-item-modern">
+                    <span class="detail-label-modern">Billing Period</span>
+                    <div class="detail-value-modern">
+                        {% if subscription.trial_ends_at %}
+                            Trial ends {{ subscription.trial_ends_at|date:"M d, Y" }}
+                        {% elif subscription.current_period_end %}
+                            Next billing {{ subscription.current_period_end|date:"M d, Y" }}
+                        {% else %}
+                            No active billing
+                        {% endif %}
                     </div>
-
-                    <!-- Recent Payments -->
-                    <h5 class="fw-bold mb-3 mt-4">Recent Payments</h5>
-                    <div class="table-responsive mb-4">
-                        <table class="payment-table">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Amount</th>
-                                    <th>Status</th>
-                                    <th>Phone Number</th>
-                                    <th>Reference</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for payment in recent_payments %}
-                                <tr>
-                                    <td>
-                                        <div class="fw-bold">{{ payment.transaction_date|date:"M d, Y" }}</div>
-                                        <small class="text-muted">{{ payment.transaction_date|time:"h:i A" }}</small>
-                                    </td>
-                                    <td>
-                                        <span class="fw-bold">KSh {{ payment.amount|intcomma }}</span>
-                                    </td>
-                                    <td>
-                                        {% if payment.status == 'completed' %}
-                                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">
-                                                <i class="bi bi-check-circle me-1"></i>Completed
-                                            </span>
-                                        {% elif payment.status == 'pending' %}
-                                            <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">
-                                                <i class="bi bi-clock me-1"></i>Pending
-                                            </span>
-                                        {% else %}
-                                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25">
-                                                <i class="bi bi-x-circle me-1"></i>Failed
-                                            </span>
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ payment.phone_number }}</td>
-                                    <td>
-                                        <code class="text-muted">{{ payment.transaction_id|truncatechars:10 }}</code>
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="5" class="text-center py-4">
-                                        <div class="empty-state">
-                                            <i class="bi bi-receipt empty-state-icon"></i>
-                                            <h6 class="fw-bold mb-2">No Payment History</h6>
-                                            <p class="text-muted mb-0 small">Your payment history will appear here</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- Action Buttons -->
-                    <div class="action-buttons-modern">
+                    <div class="detail-subtext">
                         {% if subscription.status == 'past_due' %}
-                        <form method="post" action="{% url 'storefront:retry_payment' store.slug %}" class="w-100">
-                            {% csrf_token %}
-                            <button type="submit" class="btn-gradient-warning w-100">
-                                <i class="bi bi-arrow-repeat me-2"></i>
-                                Retry Payment
-                            </button>
-                        </form>
+                            <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+                            Payment overdue
                         {% endif %}
+                    </div>
+                </div>
 
-                        {% if subscription.is_active and not subscription.cancelled_at %}
-                        <a href="{% url 'storefront:cancel_subscription' store.slug %}" class="btn-gradient-danger w-100">
-                            <i class="bi bi-x-circle me-2"></i>
-                            Cancel Subscription
-                        </a>
+                <div class="detail-item-modern">
+                    <span class="detail-label-modern">Store Status</span>
+                    <div class="detail-value-modern">
+                        {% if store.is_premium %}
+                            <span class="text-success">Premium Store</span>
+                        {% else %}
+                            <span class="text-secondary">Basic Store</span>
                         {% endif %}
-
-                        {% if not subscription.is_active and not subscription.is_in_trial %}
-                        <a href="{% url 'storefront:store_upgrade' store.slug %}" class="btn-gradient-success w-100">
-                            <i class="bi bi-arrow-up-circle me-2"></i>
-                            Reactivate Subscription
-                        </a>
+                    </div>
+                    <div class="detail-subtext">
+                        {% if store.is_premium %}
+                            <i class="bi bi-check-circle-fill text-success me-1"></i>
+                            All features active
+                        {% else %}
+                            <i class="bi bi-info-circle-fill text-secondary me-1"></i>
+                            Limited features
                         {% endif %}
+                    </div>
+                </div>
 
-                        <a href="{% url 'storefront:seller_dashboard' %}" class="btn-ghost-modern w-100">
-                            <i class="bi bi-arrow-left me-2"></i>
-                            Back to Dashboard
-                        </a>
+                <div class="detail-item-modern">
+                    <span class="detail-label-modern">Monthly Amount</span>
+                    <div class="detail-value-modern">KSh {{ subscription.amount|intcomma }}</div>
+                    <div class="detail-subtext">
+                        {% if subscription.trial_ends_at and subscription.trial_ends_at > now %}
+                            <i class="bi bi-gem text-info me-1"></i>
+                            Free during trial
+                        {% endif %}
                     </div>
                 </div>
             </div>
 
-            <!-- Right Column: Premium Features -->
-            <div class="col-lg-4">
-                <!-- Premium Features Card -->
-                <div class="subscription-card animate-scale-in animate-delay-1">
-                    <div class="d-flex align-items-center mb-4">
-                        <div class="feature-icon feature-icon-primary">
-                            <i class="bi bi-stars"></i>
-                        </div>
-                        <div>
-                            <h4 class="fw-bold mb-1">Premium Features</h4>
-                            <p class="text-muted mb-0">Unlock your store's full potential</p>
-                        </div>
+            <!-- Recent Payments -->
+            <h5 class="fw-bold mb-3 mt-5">Recent Payments</h5>
+            <div class="table-responsive mb-5">
+                {% if recent_payments %}
+                    <table class="payment-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Phone Number</th>
+                                <th>Reference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for payment in recent_payments %}
+                            <tr>
+                                <td>
+                                    <div class="fw-bold">{{ payment.transaction_date|date:"M d, Y" }}</div>
+                                    <small class="text-muted">{{ payment.transaction_date|time:"h:i A" }}</small>
+                                </td>
+                                <td>
+                                    <span class="fw-bold">KSh {{ payment.amount|intcomma }}</span>
+                                </td>
+                                <td>
+                                    {% if payment.status == 'completed' %}
+                                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">
+                                            <i class="bi bi-check-circle me-1"></i>Completed
+                                        </span>
+                                    {% elif payment.status == 'pending' %}
+                                        <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">
+                                            <i class="bi bi-clock me-1"></i>Pending
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25">
+                                            <i class="bi bi-x-circle me-1"></i>Failed
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ payment.phone_number }}</td>
+                                <td>
+                                    <code class="text-muted">{{ payment.transaction_id|truncatechars:10 }}</code>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-receipt fs-1 text-muted mb-3"></i>
+                        <h6 class="fw-bold mb-2">No Payment History</h6>
+                        <p class="text-muted mb-0">Your payment history will appear here</p>
                     </div>
+                {% endif %}
+            </div>
 
-                    <div class="row g-3">
-                        <div class="col-12">
-                            <div class="feature-card">
-                                <div class="feature-icon feature-icon-success">
-                                    <i class="bi bi-shop-window"></i>
-                                </div>
-                                <h6 class="fw-bold mb-2">Multiple Stores</h6>
-                                <p class="small text-muted mb-0">Create and manage multiple storefronts under one account</p>
-                            </div>
-                        </div>
-
-                        <div class="col-12">
-                            <div class="feature-card">
-                                <div class="feature-icon feature-icon-warning">
-                                    <i class="bi bi-graph-up-arrow"></i>
-                                </div>
-                                <h6 class="fw-bold mb-2">Advanced Analytics</h6>
-                                <p class="small text-muted mb-0">Detailed insights and performance reports</p>
-                            </div>
-                        </div>
-
-                        <div class="col-12">
-                            <div class="feature-card">
-                                <div class="feature-icon feature-icon-info">
-                                    <i class="bi bi-megaphone"></i>
-                                </div>
-                                <h6 class="fw-bold mb-2">Featured Placement</h6>
-                                <p class="small text-muted mb-0">Priority visibility in search results</p>
-                            </div>
-                        </div>
-
-                        <div class="col-12">
-                            <div class="feature-card">
-                                <div class="feature-icon feature-icon-primary">
-                                    <i class="bi bi-infinity"></i>
-                                </div>
-                                <h6 class="fw-bold mb-2">Unlimited Listings</h6>
-                                <p class="small text-muted mb-0">No restrictions on product listings</p>
-                            </div>
-                        </div>
+            <!-- Subscription History -->
+            <h5 class="fw-bold mb-3 mt-5">Subscription History</h5>
+            <div class="table-responsive mb-5">
+                {% if subscription_history %}
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Start Date</th>
+                                <th>Plan</th>
+                                <th>Status</th>
+                                <th>Amount</th>
+                                <th>Trial End</th>
+                                <th>Period End</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sub in subscription_history %}
+                            <tr class="{% if sub.is_current %}current{% endif %}">
+                                <td>
+                                    {{ sub.created_at|date:"M d, Y" }}
+                                    {% if sub.is_current %}
+                                        <span class="current-badge">Current</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <strong>{{ sub.plan }}</strong>
+                                </td>
+                                <td>
+                                    <span class="status-badge-modern status-{{ sub.status_class }}">
+                                        {{ sub.status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <strong>KSh {{ sub.amount|intcomma }}</strong>
+                                </td>
+                                <td>
+                                    {% if sub.trial_ends_at %}
+                                        {{ sub.trial_ends_at|date:"M d, Y" }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if sub.current_period_end %}
+                                        {{ sub.current_period_end|date:"M d, Y" }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if sub.trial_ends_at and sub.trial_ends_at < now %}
+                                        <small class="text-warning">Trial ended</small>
+                                    {% elif sub.status_class == 'past_due' %}
+                                        <small class="text-danger">Payment overdue</small>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-clock-history fs-1 text-muted mb-3"></i>
+                        <h6 class="fw-bold mb-2">No Subscription History</h6>
+                        <p class="text-muted mb-0">Your subscription history will appear here</p>
                     </div>
+                {% endif %}
+            </div>
 
-                    <hr class="my-4">
+            <!-- Action Buttons -->
+            <div class="action-buttons-modern">
+                {% if subscription.status == 'active' %}
+                    <a href="{% url 'storefront:subscription_change_plan' store.slug %}" class="btn-gradient-warning">
+                        <i class="bi bi-arrow-left-right me-2"></i>
+                        Change Plan
+                    </a>
+                    <a href="{% url 'storefront:cancel_subscription' store.slug %}" class="btn-gradient-danger">
+                        <i class="bi bi-x-circle me-2"></i>
+                        Cancel Subscription
+                    </a>
+                {% elif subscription.status == 'trialing' %}
+                    <a href="{% url 'storefront:subscription_payment_options' store.slug %}" class="btn-gradient-success">
+                        <i class="bi bi-credit-card me-2"></i>
+                        Subscribe Now
+                    </a>
+                    <a href="{% url 'storefront:subscription_change_plan' store.slug %}" class="btn-ghost-modern">
+                        <i class="bi bi-arrow-left-right me-2"></i>
+                        Change Plan
+                    </a>
+                {% elif subscription.status == 'past_due' or subscription.status == 'canceled' %}
+                    <a href="{% url 'storefront:subscription_renew' store.slug %}" class="btn-gradient-warning">
+                        <i class="bi bi-arrow-clockwise me-2"></i>
+                        Renew Subscription
+                    </a>
+                    <a href="{% url 'storefront:subscription_plan_select' store.slug %}" class="btn-gradient-success">
+                        <i class="bi bi-plus-circle me-2"></i>
+                        New Subscription
+                    </a>
+                {% endif %}
+                
+                <a href="{% url 'storefront:seller_dashboard' %}" class="btn-ghost-modern ms-auto">
+                    <i class="bi bi-arrow-left me-2"></i>
+                    Back to Dashboard
+                </a>
+            </div>
+        </div>
 
-                    <!-- Upgrade/Downgrade Section -->
-                    <div class="text-center">
-                        {% if not subscription.is_active or not store.is_premium %}
-                        <div class="p-4 bg-warning bg-opacity-10 rounded border border-warning border-opacity-25 mb-3">
-                            <i class="bi bi-rocket-takeoff text-warning fs-2 mb-2"></i>
-                            <h6 class="fw-bold text-warning mb-2">Ready to Grow?</h6>
-                            <p class="small text-muted mb-3">Upgrade to Premium and unlock advanced features for your business</p>
-                            <a href="{% url 'storefront:store_upgrade' slug=store.slug %}" class="btn-gradient-warning w-100">
-                                <i class="bi bi-lightning-charge me-1"></i>
-                                Upgrade to Premium
-                            </a>
+        <!-- Trial Usage Summary -->
+        <div class="subscription-card">
+            <h5 class="fw-bold mb-3">Trial Usage Summary</h5>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <div class="card-custom h-100">
+                        <div class="card-body">
+                            <h6 class="text-muted mb-2">Trial Eligibility</h6>
+                            <div class="d-flex align-items-center">
+                                <div class="me-3">
+                                    <i class="bi bi-{% if trial_available %}check-circle-fill text-success{% else %}x-circle-fill text-danger{% endif %} fs-1"></i>
+                                </div>
+                                <div>
+                                    <h4 class="fw-bold mb-1">
+                                        {% if trial_available %}
+                                            Eligible
+                                        {% else %}
+                                            Not Eligible
+                                        {% endif %}
+                                    </h4>
+                                    <p class="text-muted mb-0">
+                                        {% if trial_available %}
+                                            You can start a 7-day free trial
+                                        {% else %}
+                                            You have already used your free trial
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
-                        {% else %}
-                        <div class="p-4 bg-success bg-opacity-10 rounded border border-success border-opacity-25">
-                            <i class="bi bi-check-circle-fill text-success fs-2 mb-2"></i>
-                            <h6 class="fw-bold text-success mb-2">Premium Active</h6>
-                            <p class="small text-success mb-0">You're enjoying all premium features!</p>
-                        </div>
-                        {% endif %}
                     </div>
                 </div>
-
-                <!-- Quick Actions Card -->
-                <div class="subscription-card animate-scale-in animate-delay-2">
-                    <h5 class="fw-bold mb-3">Quick Actions</h5>
-                    <div class="d-grid gap-2">
-                        <a href="{% url 'storefront:subscription_settings' slug=store.slug %}" class="btn-ghost-modern text-start">
-                            <i class="bi bi-credit-card me-2"></i>
-                            Update Payment Method
-                        </a>
-                        <a href="{% url 'storefront:subscription_plan_select' slug=store.slug %}" class="btn-ghost-modern text-start">
-                            <i class="bi bi-arrow-down-up me-2"></i>
-                            Change Plan
-                        </a>
-                        <a href="#" class="btn-ghost-modern text-start">
-                            <i class="bi bi-download me-2"></i>
-                            Download Invoices
-                        </a>
-                        <a href="#" class="btn-ghost-modern text-start">
-                            <i class="bi bi-headset me-2"></i>
-                            Contact Support
-                        </a>
+                <div class="col-md-6 mb-3">
+                    <!-- In all subscription templates, add trial count display -->
+                    <div class="trial-usage-display">
+                        <div class="card-custom">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-2">Trial Usage</h6>
+                                <div class="d-flex align-items-center">
+                                    <div class="me-3">
+                                        <i class="bi bi-gem fs-1 text-info"></i>
+                                    </div>
+                                    <div>
+                                        <div class="display-6 fw-bold">{{ trial_count }} / {{ trial_limit }}</div>
+                                        <p class="text-muted mb-0">
+                                            {% if trial_count == 0 %}
+                                                <span class="text-success">No trials used yet</span>
+                                            {% elif trial_count == trial_limit %}
+                                                <span class="text-danger">Trial limit reached</span>
+                                            {% else %}
+                                                <span class="text-warning">{{ remaining_trials }} trial(s) remaining</span>
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -679,30 +671,41 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Add any interactive functionality here
         console.log('Subscription management page loaded');
         
-        // Add smooth hover animations to feature cards
-        const featureCards = document.querySelectorAll('.feature-card');
-        featureCards.forEach(card => {
-            card.addEventListener('mouseenter', function() {
-                this.style.transform = 'translateY(-4px)';
-            });
-            
-            card.addEventListener('mouseleave', function() {
-                this.style.transform = 'translateY(0)';
-            });
-        });
-        
-        // Add confirmation for cancellation button if it exists
-        const cancelButton = document.querySelector('.btn-gradient-danger');
-        if (cancelButton && !cancelButton.hasAttribute('type')) {
-            cancelButton.addEventListener('click', function(e) {
+        // Add confirmation for cancellation
+        const cancelBtn = document.querySelector('a[href*="cancel_subscription"]');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', function(e) {
                 if (!confirm('Are you sure you want to cancel your subscription? This will disable premium features at the end of your current billing period.')) {
                     e.preventDefault();
                 }
             });
         }
+        
+        // Add trial warning if applicable
+        const trialWarning = document.querySelector('.trial-warning');
+        if (trialWarning) {
+            // Make it more noticeable
+            trialWarning.style.animation = 'pulse 2s infinite';
+        }
+        
+        // Add hover effects to history table rows
+        const historyRows = document.querySelectorAll('.history-table tbody tr');
+        historyRows.forEach(row => {
+            row.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = 'var(--bg-secondary)';
+                this.style.transform = 'translateX(5px)';
+                this.style.transition = 'all 0.3s ease';
+            });
+            
+            row.addEventListener('mouseleave', function() {
+                if (!this.classList.contains('current')) {
+                    this.style.backgroundColor = '';
+                }
+                this.style.transform = 'translateX(0)';
+            });
+        });
     });
 </script>
 {% endblock %}

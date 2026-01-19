@@ -388,6 +388,15 @@ class Subscription(models.Model):
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Trial tracking
+    trial_number = models.PositiveIntegerField(default=0, help_text="Which trial number this is for the user")
+    trial_started_at = models.DateTimeField(null=True, blank=True)
+    trial_ended_at = models.DateTimeField(null=True, blank=True)
+    
+    # Additional metadata for trial tracking
+    metadata = models.JSONField(default=dict, blank=True)
+    
+    
     
     class Meta:
         ordering = ['-created_at']
@@ -404,6 +413,38 @@ class Subscription(models.Model):
             return True
         return False
     
+    @property
+    def is_first_trial(self):
+        """Check if this is the user's first trial"""
+        return self.trial_number == 1
+    
+    @property
+    def has_exceeded_trial_limit(self):
+        """Check if user has exceeded trial limit"""
+        user_trial_count = Subscription.objects.filter(
+            store__owner=self.store.owner,
+            trial_ends_at__isnull=False
+        ).count()
+        return user_trial_count > settings.TRIAL_LIMIT_PER_USER
+    
+    def save(self, *args, **kwargs):
+        # Auto-set trial number if this is a trial
+        if self.status == 'trialing' and not self.trial_number:
+            # Count user's previous trials
+            previous_trials = Subscription.objects.filter(
+                store__owner=self.store.owner,
+                trial_ends_at__isnull=False
+            ).count()
+            self.trial_number = previous_trials + 1
+        
+        # Record trial start/end times
+        if self.status == 'trialing' and not self.trial_started_at:
+            self.trial_started_at = timezone.now()
+        elif self.status != 'trialing' and self.trial_ended_at is None:
+            self.trial_ended_at = timezone.now()
+        
+        super().save(*args, **kwargs)
+
     @property
     def expires_at(self):
         """Property to get expiration date for admin display"""
