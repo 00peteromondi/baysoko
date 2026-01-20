@@ -18,7 +18,7 @@ urlpatterns = [
     path('dashboard/store/<slug:slug>/edit/', views.store_edit, name='store_edit'),
     
     # Legacy/alternate name kept for backwards compatibility
-    path('dashboard/store/<slug:slug>/upgrade/', views.store_upgrade, name='store_upgrade'),
+    path('dashboard/store/<slug:slug>/upgrade/', views_subscription.subscription_manage, name='store_upgrade'),
     
     # Product management
     path('dashboard/store/<slug:store_slug>/product/create/', views.product_create, name='product_create'),
