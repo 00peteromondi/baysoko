@@ -1671,6 +1671,7 @@
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
 
     <!-- Modern JavaScript -->
     <script>
@@ -2298,6 +2299,770 @@
         });
     </script>
     
-    {% block extra_js %}{% endblock %}
+    {% block extra_js %}
+    <!-- ============================================
+    GLOBAL CART & FAVORITE MANAGEMENT SCRIPT
+    This script handles cart and favorite buttons consistently across all pages
+    ============================================ -->
+
+    <script>
+    // ============================================
+    // GLOBAL STATE MANAGEMENT
+    // ============================================
+
+    // Cart state
+    window.cartState = {
+        itemCount: {% if cart_item_count %}{{ cart_item_count }}{% else %}0{% endif %},
+        total: {% if cart_total %}{{ cart_total }}{% else %}0{% endif %},
+        isUpdating: false
+    };
+
+    // Favorite state management
+    window.favoriteStates = new Map();
+    let pendingFavoriteUpdates = new Set();
+
+    // User authentication state
+    window.userAuthenticated = {% if user.is_authenticated %}true{% else %}false{% endif %};
+
+    // ============================================
+    // UTILITY FUNCTIONS
+    // ============================================
+
+    // Get CSRF token
+    window.getCookie = function(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    };
+
+    // Show toast notification
+    window.showToast = function(message, type = 'success', duration = 3000) {
+        // Use existing toast system if available
+        if (window.bootstrap && window.bootstrap.Toast) {
+            const toastContainer = document.getElementById('toastContainer');
+            if (!toastContainer) return;
+            
+            const toastId = 'toast-' + Date.now();
+            const toast = document.createElement('div');
+            toast.className = `custom-toast toast-${type}`;
+            toast.id = toastId;
+            toast.innerHTML = `
+                <div class="d-flex align-items-center p-3">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}-fill me-3"></i>
+                    <div class="flex-grow-1">${message}</div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+                </div>
+            `;
+            
+            toastContainer.appendChild(toast);
+            const bsToast = new bootstrap.Toast(toast, { delay: duration });
+            bsToast.show();
+            
+            toast.addEventListener('hidden.bs.toast', () => {
+                toast.remove();
+            });
+        } else {
+            // Fallback simple toast
+            const toast = document.createElement('div');
+            toast.className = `global-cart-message ${type}`;
+            toast.textContent = message;
+            toast.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                padding: 12px 20px;
+                border-radius: 8px;
+                background: ${type === 'success' ? '#06D6A0' : '#EF476F'};
+                color: white;
+                z-index: 9999;
+                animation: slideInRight 0.3s ease;
+            `;
+            
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+    };
+
+    // ============================================
+    // CART MANAGEMENT FUNCTIONS
+    // ============================================
+
+    // Update global cart display
+    window.updateGlobalCartDisplay = function(itemCount, total) {
+        console.log('Updating global cart display:', { itemCount, total });
+        
+        // Update cart state
+        window.cartState.itemCount = itemCount;
+        window.cartState.total = total;
+        
+        // Update all cart badges
+        document.querySelectorAll('.cart-count-badge, .mobile-cart-badge').forEach(badge => {
+            if (itemCount > 0) {
+                badge.textContent = itemCount;
+                badge.style.display = 'inline-flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        });
+        
+        // Update cart totals in header
+        const cartTotalElements = document.querySelectorAll('.cart-total');
+        cartTotalElements.forEach(element => {
+            if (itemCount > 0) {
+                element.textContent = `KSh ${parseFloat(total).toFixed(2)}`;
+                element.style.display = 'inline';
+            } else {
+                element.style.display = 'none';
+            }
+        });
+        
+        // Update empty cart text
+        const cartEmptyElements = document.querySelectorAll('.cart-empty-text');
+        cartEmptyElements.forEach(element => {
+            element.style.display = itemCount > 0 ? 'none' : 'inline';
+        });
+        
+        // Update desktop cart badge
+        const desktopBadge = document.getElementById('desktopCartBadge');
+        if (desktopBadge) {
+            if (itemCount > 0) {
+                desktopBadge.textContent = itemCount;
+                desktopBadge.style.display = 'inline-flex';
+            } else {
+                desktopBadge.style.display = 'none';
+            }
+        }
+        
+        // Dispatch event for other components
+        document.dispatchEvent(new CustomEvent('cartUpdated', {
+            detail: { itemCount, total }
+        }));
+        
+        // Save to localStorage for persistence
+        localStorage.setItem('cartState', JSON.stringify({ itemCount, total }));
+    };
+
+    // Add to cart function
+    window.addToCart = async function(listingId, quantity = 1) {
+        if (!window.userAuthenticated) {
+            showToast('Please login to add items to cart', 'error');
+            return { success: false, error: 'Authentication required' };
+        }
+        
+        if (window.cartState.isUpdating) {
+            return { success: false, error: 'Cart is already updating' };
+        }
+        
+        window.cartState.isUpdating = true;
+        
+        try {
+            const response = await fetch(`/cart/add/${listingId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ quantity: quantity })
+            });
+            
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Update global cart display
+                updateGlobalCartDisplay(
+                    data.cart_item_count || data.item_count || window.cartState.itemCount + 1,
+                    data.cart_total || window.cartState.total
+                );
+                
+                showToast(data.message || 'Added to cart!', 'success');
+                return { success: true, data: data };
+            } else {
+                showToast(data.error || 'Failed to add to cart', 'error');
+                return { success: false, error: data.error };
+            }
+        } catch (error) {
+            console.error('Add to cart error:', error);
+            showToast('Error adding to cart. Please try again.', 'error');
+            return { success: false, error: error.message };
+        } finally {
+            window.cartState.isUpdating = false;
+        }
+    };
+
+    // Remove from cart function
+    window.removeFromCart = async function(listingId) {
+        if (!window.userAuthenticated) {
+            showToast('Please login to manage cart', 'error');
+            return { success: false, error: 'Authentication required' };
+        }
+        
+        if (window.cartState.isUpdating) {
+            return { success: false, error: 'Cart is already updating' };
+        }
+        
+        window.cartState.isUpdating = true;
+        
+        try {
+            const response = await fetch(`/cart/remove/${listingId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                updateGlobalCartDisplay(
+                    data.cart_item_count || 0,
+                    data.cart_total || 0
+                );
+                
+                showToast(data.message || 'Removed from cart', 'success');
+                return { success: true, data: data };
+            } else {
+                showToast(data.error || 'Failed to remove from cart', 'error');
+                return { success: false, error: data.error };
+            }
+        } catch (error) {
+            console.error('Remove from cart error:', error);
+            showToast('Error removing from cart. Please try again.', 'error');
+            return { success: false, error: error.message };
+        } finally {
+            window.cartState.isUpdating = false;
+        }
+    };
+
+    // Update cart quantity function
+    window.updateCartQuantity = async function(listingId, quantity) {
+        if (!window.userAuthenticated) {
+            showToast('Please login to update cart', 'error');
+            return { success: false, error: 'Authentication required' };
+        }
+        
+        if (window.cartState.isUpdating) {
+            return { success: false, error: 'Cart is already updating' };
+        }
+        
+        window.cartState.isUpdating = true;
+        
+        try {
+            const response = await fetch(`/cart/update/${listingId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ quantity: quantity })
+            });
+            
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                updateGlobalCartDisplay(
+                    data.cart_item_count || window.cartState.itemCount,
+                    data.cart_total || window.cartState.total
+                );
+                
+                showToast(data.message || 'Cart updated', 'success');
+                return { success: true, data: data };
+            } else {
+                showToast(data.error || 'Failed to update cart', 'error');
+                return { success: false, error: data.error };
+            }
+        } catch (error) {
+            console.error('Update cart error:', error);
+            showToast('Error updating cart. Please try again.', 'error');
+            return { success: false, error: error.message };
+        } finally {
+            window.cartState.isUpdating = false;
+        }
+    };
+
+    // ============================================
+    // FAVORITE MANAGEMENT FUNCTIONS
+    // ============================================
+
+    // Toggle favorite status
+    window.toggleFavorite = async function(listingId, buttonElement = null) {
+        if (!window.userAuthenticated) {
+            showToast('Please login to add favorites', 'error');
+            return { success: false, error: 'Authentication required' };
+        }
+        
+        // Prevent duplicate requests
+        if (pendingFavoriteUpdates.has(listingId)) {
+            return { success: false, error: 'Request already in progress' };
+        }
+        
+        pendingFavoriteUpdates.add(listingId);
+        
+        // Get current state
+        const currentState = window.favoriteStates.get(listingId) || { liked: false, count: 0 };
+        const isCurrentlyLiked = currentState.liked;
+        const currentCount = currentState.count;
+        
+        // Optimistic UI update
+        if (buttonElement) {
+            updateFavoriteButtonUI(buttonElement, !isCurrentlyLiked, currentCount);
+        }
+        
+        try {
+            const response = await fetch(`/favorites/toggle/${listingId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Update state
+                window.favoriteStates.set(listingId, {
+                    liked: data.is_favorited,
+                    count: data.listing_favorite_count || (data.is_favorited ? currentCount + 1 : Math.max(0, currentCount - 1))
+                });
+                
+                // Update all buttons for this listing
+                updateAllFavoriteButtons(listingId, data.is_favorited, data.listing_favorite_count);
+                
+                // Show success message
+                showToast(data.is_favorited ? 'Added to favorites!' : 'Removed from favorites!', 'success');
+                
+                // Update user favorite count if provided
+                if (data.user_favorite_count !== undefined) {
+                    updateUserFavoriteCount(data.user_favorite_count);
+                }
+                
+                return { success: true, data: data };
+            } else {
+                // Revert optimistic update on error
+                if (buttonElement) {
+                    updateFavoriteButtonUI(buttonElement, isCurrentlyLiked, currentCount);
+                }
+                
+                showToast(data.error || 'Failed to update favorite', 'error');
+                return { success: false, error: data.error };
+            }
+        } catch (error) {
+            console.error('Favorite toggle error:', error);
+            
+            // Revert optimistic update on error
+            if (buttonElement) {
+                updateFavoriteButtonUI(buttonElement, isCurrentlyLiked, currentCount);
+            }
+            
+            showToast('Error updating favorite. Please try again.', 'error');
+            return { success: false, error: error.message };
+        } finally {
+            pendingFavoriteUpdates.delete(listingId);
+        }
+    };
+
+    // Update favorite button UI
+    function updateFavoriteButtonUI(button, isLiked, count) {
+        // Update button classes and icon
+        if (isLiked) {
+            button.classList.add('liked');
+            button.classList.remove('not-liked');
+            const icon = button.querySelector('i');
+            if (icon) icon.className = 'bi bi-heart-fill';
+            
+            // Add animation
+            button.style.animation = 'heartBeat 0.5s ease';
+            setTimeout(() => button.style.animation = '', 500);
+        } else {
+            button.classList.remove('liked');
+            button.classList.add('not-liked');
+            const icon = button.querySelector('i');
+            if (icon) icon.className = 'bi bi-heart';
+        }
+        
+        // Update count badge if present
+        const wrapper = button.closest('.favorite-button-wrapper');
+        if (wrapper) {
+            const countBadge = wrapper.querySelector('.listing-favorite-count');
+            if (countBadge) {
+                countBadge.textContent = count;
+                if (count > 0) {
+                    countBadge.style.display = 'flex';
+                    countBadge.style.opacity = '1';
+                    
+                    // Add count change animation
+                    countBadge.classList.add('count-changing');
+                    setTimeout(() => countBadge.classList.remove('count-changing'), 300);
+                } else {
+                    countBadge.style.display = 'none';
+                    countBadge.style.opacity = '0';
+                }
+            }
+        }
+    }
+
+    // Update all favorite buttons for a listing
+    function updateAllFavoriteButtons(listingId, isLiked, count) {
+        const buttons = document.querySelectorAll(`.listing-like[data-listing-id="${listingId}"]`);
+        buttons.forEach(button => {
+            updateFavoriteButtonUI(button, isLiked, count);
+        });
+    }
+
+    // Update user favorite count display
+    function updateUserFavoriteCount(count) {
+        const elements = document.querySelectorAll('.user-favorite-count, .favorites-count-badge');
+        elements.forEach(element => {
+            element.textContent = count;
+            if (count > 0) {
+                element.style.display = 'inline-flex';
+            } else {
+                element.style.display = 'none';
+            }
+        });
+        
+        localStorage.setItem('user_favorite_count', count);
+    }
+
+    // ============================================
+    // EVENT HANDLERS
+    // ============================================
+
+    // Cart button click handler
+    function handleCartButtonClick(event) {
+        const button = event.currentTarget;
+        const listingId = button.getAttribute('data-listing-id');
+        const action = button.getAttribute('data-cart-action') || 'add';
+        
+        if (!listingId) {
+            console.error('No listing ID found on cart button');
+            return;
+        }
+        
+        // Prevent multiple clicks
+        if (button.classList.contains('loading')) return;
+        
+        // Show loading state
+        button.classList.add('loading');
+        const originalHTML = button.innerHTML;
+        button.innerHTML = '<i class="bi bi-hourglass"></i>';
+        
+        switch(action) {
+            case 'add':
+                window.addToCart(listingId, 1).finally(() => {
+                    button.classList.remove('loading');
+                    button.innerHTML = originalHTML;
+                });
+                break;
+                
+            case 'remove':
+                window.removeFromCart(listingId).finally(() => {
+                    button.classList.remove('loading');
+                    button.innerHTML = originalHTML;
+                });
+                break;
+                
+            case 'update':
+                const quantity = parseInt(button.getAttribute('data-quantity')) || 1;
+                window.updateCartQuantity(listingId, quantity).finally(() => {
+                    button.classList.remove('loading');
+                    button.innerHTML = originalHTML;
+                });
+                break;
+        }
+    }
+
+    // Favorite button click handler
+    function handleFavoriteButtonClick(event) {
+        const button = event.currentTarget;
+        const listingId = button.getAttribute('data-listing-id');
+        
+        if (!listingId) {
+            console.error('No listing ID found on favorite button');
+            return;
+        }
+        
+        // Prevent multiple clicks
+        if (button.classList.contains('loading') || pendingFavoriteUpdates.has(listingId)) {
+            return;
+        }
+        
+        // Show loading state
+        button.classList.add('loading');
+        const originalHTML = button.innerHTML;
+        button.innerHTML = '<i class="bi bi-hourglass"></i>';
+        
+        window.toggleFavorite(listingId, button).finally(() => {
+            button.classList.remove('loading');
+            button.innerHTML = originalHTML;
+        });
+    }
+
+    // Quantity input change handler
+    function handleQuantityChange(event) {
+        const input = event.target;
+        const listingId = input.getAttribute('data-listing-id');
+        const quantity = parseInt(input.value) || 1;
+        
+        if (!listingId || quantity < 1) return;
+        
+        // Update cart immediately
+        window.updateCartQuantity(listingId, quantity);
+    }
+
+    // ============================================
+    // INITIALIZATION
+    // ============================================
+
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Initializing global cart and favorite handlers');
+        
+        // Initialize favorite states from page data
+        {% if user.is_authenticated and user_favorites %}
+        {% for fav in user_favorites %}
+        window.favoriteStates.set({{ fav.listing.id }}, {
+            liked: true,
+            count: {{ fav.listing.total_favorites|default:0 }}
+        });
+        {% endfor %}
+        {% endif %}
+        
+        // Event delegation for dynamic content
+        document.addEventListener('click', function(event) {
+            // Cart buttons
+            if (event.target.closest('.action-cart, .add-to-cart-btn, .remove-from-cart-btn, .update-cart-btn')) {
+                const button = event.target.closest('.action-cart, .add-to-cart-btn, .remove-from-cart-btn, .update-cart-btn');
+                if (button) handleCartButtonClick({ currentTarget: button });
+            }
+            
+            // Favorite buttons
+            if (event.target.closest('.listing-like, .favorite-btn, .like-btn')) {
+                const button = event.target.closest('.listing-like, .favorite-btn, .like-btn');
+                if (button) handleFavoriteButtonClick({ currentTarget: button });
+            }
+        });
+        
+        // Quantity input changes
+        document.addEventListener('change', function(event) {
+            if (event.target.matches('.cart-quantity-input, [data-listing-id][type="number"]')) {
+                handleQuantityChange(event);
+            }
+        });
+        
+        // Load saved cart state
+        const savedCartState = localStorage.getItem('cartState');
+        if (savedCartState) {
+            try {
+                const { itemCount, total } = JSON.parse(savedCartState);
+                if (itemCount !== window.cartState.itemCount) {
+                    // Update display with saved state
+                    updateGlobalCartDisplay(itemCount, total);
+                }
+            } catch (e) {
+                console.error('Error loading saved cart state:', e);
+            }
+        }
+        
+        // Load saved favorite count
+        const savedFavoriteCount = localStorage.getItem('user_favorite_count');
+        if (savedFavoriteCount !== null) {
+            updateUserFavoriteCount(parseInt(savedFavoriteCount));
+        }
+        
+        // Initialize all existing cart buttons
+        document.querySelectorAll('.action-cart, .add-to-cart-btn').forEach(button => {
+            const listingId = button.getAttribute('data-listing-id');
+            if (listingId) {
+                // Check if item is already in cart (for initial state)
+                const cartQuantity = button.getAttribute('data-cart-quantity');
+                if (cartQuantity && parseInt(cartQuantity) > 0) {
+                    button.classList.add('in-cart');
+                    button.innerHTML = `<i class="bi bi-cart-check"></i> ${cartQuantity} in cart`;
+                }
+            }
+        });
+        
+        // Initialize all existing favorite buttons
+        document.querySelectorAll('.listing-like, .favorite-btn').forEach(button => {
+            const listingId = button.getAttribute('data-listing-id');
+            if (listingId) {
+                const isLiked = button.classList.contains('liked') || 
+                            button.querySelector('i.bi-heart-fill') !== null;
+                const count = button.getAttribute('data-favorite-count') || 0;
+                
+                // Store initial state
+                window.favoriteStates.set(listingId, {
+                    liked: isLiked,
+                    count: parseInt(count)
+                });
+                
+                // Initialize count badge
+                const wrapper = button.closest('.favorite-button-wrapper');
+                if (wrapper) {
+                    const countBadge = wrapper.querySelector('.listing-favorite-count');
+                    if (countBadge) {
+                        countBadge.textContent = count;
+                        if (count > 0) {
+                            countBadge.style.display = 'flex';
+                            countBadge.style.opacity = '1';
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Add CSS animations for cart and favorite buttons
+        const style = document.createElement('style');
+        style.textContent = `
+            /* Cart button animations */
+            @keyframes cartBounce {
+                0% { transform: scale(1); }
+                30% { transform: scale(1.1); }
+                50% { transform: scale(0.95); }
+                70% { transform: scale(1.05); }
+                100% { transform: scale(1); }
+            }
+            
+            .action-cart.in-cart {
+                background: var(--success) !important;
+                color: white !important;
+                border-color: var(--success) !important;
+            }
+            
+            .action-cart.loading {
+                opacity: 0.7;
+                cursor: not-allowed;
+            }
+            
+            .action-cart.loading::after {
+                content: '';
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 16px;
+                height: 16px;
+                margin: -8px 0 0 -8px;
+                border: 2px solid transparent;
+                border-top-color: currentColor;
+                border-radius: 50%;
+                animation: spin 0.8s linear infinite;
+            }
+            
+            .action-cart.loading span {
+                visibility: hidden;
+            }
+            
+            /* Favorite button animations */
+            @keyframes heartBeat {
+                0% { transform: scale(1); }
+                5% { transform: scale(1.1); }
+                10% { transform: scale(1); }
+                15% { transform: scale(1.1); }
+                20% { transform: scale(1); }
+                100% { transform: scale(1); }
+            }
+            
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+            
+            .listing-like.liked {
+                background: var(--danger) !important;
+                color: white !important;
+                border-color: var(--danger) !important;
+                animation: heartBeat 2s infinite !important;
+            }
+            
+            .listing-like.loading {
+                opacity: 0.7;
+                cursor: wait;
+            }
+            
+            .listing-like.loading i {
+                animation: spin 0.8s linear infinite;
+            }
+            
+            /* Count badge animations */
+            @keyframes countChange {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.3); }
+                100% { transform: scale(1); }
+            }
+            
+            .listing-favorite-count.changing {
+                animation: countChange 0.5s ease;
+            }
+            
+            /* Toast animations */
+            @keyframes slideInRight {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            
+            @keyframes slideOutRight {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+    });
+
+    // ============================================
+    // PUBLIC API FOR OTHER SCRIPTS
+    // ============================================
+
+    // Make functions globally available
+    window.GlobalCart = {
+        add: window.addToCart,
+        remove: window.removeFromCart,
+        update: window.updateCartQuantity,
+        getState: () => ({ ...window.cartState }),
+        updateDisplay: window.updateGlobalCartDisplay
+    };
+
+    window.GlobalFavorites = {
+        toggle: window.toggleFavorite,
+        getState: (listingId) => window.favoriteStates.get(listingId),
+        getAllStates: () => new Map(window.favoriteStates)
+    };
+
+    // Legacy compatibility
+    window.handleListingCartClick = function(button, listingId) {
+        const event = { currentTarget: button };
+        handleCartButtonClick(event);
+    };
+
+    window.handleFavoriteClick = function(button, listingId) {
+        const event = { currentTarget: button };
+        handleFavoriteButtonClick(event);
+    };
+
+    console.log('Global cart and favorite handlers loaded');
+    </script>
+    {% endblock %}
 </body>
 </html>

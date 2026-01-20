@@ -6,7 +6,7 @@ from django.conf import settings
 from .models import Store, Subscription, MpesaPayment
 from django.urls import reverse
 from django.core.exceptions import ValidationError
-from listings.models import Listing, Category
+from listings.models import Listing, Category, Favorite
 from listings.forms import ListingForm
 from .forms import StoreForm
 from listings.models import ListingImage
@@ -22,6 +22,8 @@ from .monitoring import PaymentMonitor
 from reviews.models import Review
 from listings.models import OrderItem
 from .utils import dumps_with_decimals
+from django.http import JsonResponse, HttpResponseForbidden, HttpResponseRedirect
+
 
 
 
@@ -54,10 +56,18 @@ def store_detail(request, slug):
 
 
 def product_detail(request, store_slug, slug):
+
     store = get_object_or_404(Store, slug=store_slug)
     # Only show products associated with this specific store
     product = get_object_or_404(Listing, store=store, slug=slug, is_active=True)
-    return render(request, 'storefront/product_detail.html', {'store': store, 'product': product})
+    user_favorites = []
+    if request.user.is_authenticated:
+        user_favorites = Favorite.objects.filter(
+            user=request.user, 
+            listing__in=store.listings.all()
+        ).values_list('listing_id', flat=True)
+
+    return render(request, 'storefront/product_detail.html', {'store': store, 'product': product, 'user_favorites': user_favorites})
 
 @login_required
 @store_owner_required
