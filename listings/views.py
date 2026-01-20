@@ -423,6 +423,16 @@ class ListingDetailView(DetailView):
         # Get price history
         context['price_history'] = listing.price_history.all()[:10]
 
+        # Calculate price change and percentage for template
+        if listing.original_price and listing.original_price != listing.price:
+            price_change = listing.price - listing.original_price
+            percentage = abs(price_change * 100 / listing.original_price)
+            context['price_change'] = price_change
+            context['price_change_percentage'] = round(percentage, 1)
+        else:
+            context['price_change'] = 0
+            context['price_change_percentage'] = 0
+
         return context
 
     
