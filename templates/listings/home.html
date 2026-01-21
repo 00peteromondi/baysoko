@@ -1,7 +1,9 @@
 {% extends 'base.html' %}
-{% load static custom_filters %}
+{% load static %}
 {% load crispy_forms_tags %}
 {% load humanize %}
+{% load cart_filters %}
+
 
 {% block title %}Home - Baysoko Marketplace{% endblock %}
 
@@ -1346,6 +1348,229 @@
             min-height: 350px;
         }
     }
+    /* ============================================
+    CART BUTTON STYLES (from all_listings.html)
+    ============================================ */
+    .action-cart {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .action-cart:hover {
+        background: var(--success);
+        border-color: var(--primary);
+        color: white;
+    }
+
+    /* Cart button when item is in cart - GREEN BACKGROUND */
+    .action-cart.in-cart {
+        background: var(--success) !important;
+        color: white !important;
+        border-color: var(--success) !important;
+        animation: cartBounce 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .action-cart.in-cart:hover {
+        background: var(--success) !important;
+        border-color: var(--success) !important;
+        transform: translateY(-1px);
+    }
+
+    /* Cart button loading state */
+    .action-cart.loading {
+        opacity: 0.8;
+        cursor: not-allowed;
+    }
+
+    .action-cart.loading::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 16px;
+        height: 16px;
+        margin: -8px 0 0 -8px;
+        border: 2px solid transparent;
+        border-top-color: currentColor;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    .action-cart.loading span {
+        visibility: hidden;
+    }
+
+    @keyframes cartBounce {
+        0% { transform: scale(1); }
+        30% { transform: scale(1.1); }
+        50% { transform: scale(0.95); }
+        70% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* ============================================
+    FAVORITE BUTTON & COUNT BADGE STYLING
+    ============================================ */
+
+    /* Heart beat animation */
+    @keyframes heartBeat {
+        0% { transform: scale(1); }
+        5% { transform: scale(1.1); }
+        10% { transform: scale(1); }
+        15% { transform: scale(1.1); }
+        20% { transform: scale(1); }
+        100% { transform: scale(1); }
+    }
+
+    /* Pulse effect for count badges */
+    @keyframes pulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(239, 71, 111, 0.7);
+        }
+        70% {
+            box-shadow: 0 0 0 10px rgba(239, 71, 111, 0);
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(239, 71, 111, 0);
+        }
+    }
+
+    /* Favorite button wrapper */
+    .favorite-button-wrapper {
+        position: relative;
+        display: inline-block;
+        width: 36px;
+        height: 36px;
+    }
+
+    /* Favorite button styling */
+    .listing-like {
+        position: relative;
+        width: 36px;
+        height: 36px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        color: var(--text-secondary);
+        font-size: 16px;
+        padding: 0;
+        margin: 0;
+        z-index: 2;
+        outline: none;
+    }
+
+    .listing-like:hover {
+        background: rgba(239, 71, 111, 0.1);
+        color: var(--danger);
+        border-color: var(--danger);
+        transform: scale(1.1);
+    }
+
+    /* Liked state - IMMEDIATE visual feedback */
+    .listing-like.liked {
+        background: var(--danger) !important;
+        color: white !important;
+        border-color: var(--danger) !important;
+        animation: heartBeat 2s infinite !important;
+        box-shadow: 0 4px 12px rgba(239, 71, 111, 0.3) !important;
+    }
+
+    .listing-like.liked:hover {
+        background: #e63946 !important;
+        transform: scale(1.1) !important;
+        box-shadow: 0 6px 16px rgba(239, 71, 111, 0.4) !important;
+    }
+
+    /* Heart icon styling */
+    .listing-like i {
+        font-size: 16px;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Count badge - ABSOLUTE POSITIONING */
+    .listing-favorite-count {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        background: linear-gradient(135deg, var(--danger) 0%, #e63946 100%);
+        color: white;
+        font-size: 10px;
+        font-weight: 800;
+        min-width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 5px;
+        z-index: 3;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        border: 2px solid var(--card-bg);
+        animation: pulse 2s infinite;
+        pointer-events: none;
+        white-space: nowrap;
+    }
+
+    /* When count is 0, hide it completely */
+    .listing-favorite-count[style*="display: none"] {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        animation: none !important;
+    }
+
+    /* When count is displayed, show with animation */
+    .listing-favorite-count[style*="display: flex"],
+    .listing-favorite-count:not([style*="display: none"]) {
+        opacity: 1 !important;
+        visibility: visible !important;
+        animation: pulse 2s infinite !important;
+    }
+
+    /* Loading state for button */
+    .listing-like.loading {
+        opacity: 0.7;
+        cursor: wait;
+    }
+
+    .listing-like.loading i {
+        animation: spin 0.8s linear infinite;
+    }
+
+    /* For non-authenticated users */
+    .favorite-stats {
+        font-size: 14px;
+        color: var(--primary);
+        margin-top: 8px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .stat-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .stat-count {
+        font-weight: 600;
+    }
 </style>
 {% endblock %}
 
@@ -1855,12 +2080,23 @@
                             {% if listing.is_sold %}
                             <span class="listing-sold">Sold</span>
                             {% endif %}
-                            <form action="{% url 'toggle_favorite' listing.id %}" method="post" class="favorite-form">
-                                {% csrf_token %}
-                                <button type="submit" class="listing-favorite {% if listing.id in user_favorites %}favorited{% endif %}">
-                                    <i class="bi bi-heart{% if listing.id in user_favorites %}-fill{% endif %}"></i>
+                            {% if user.is_authenticated %}
+                            <div class="favorite-button-wrapper">
+                                <button type="button" 
+                                        class="listing-like {% if listing.id in user_favorites %}liked{% endif %}" 
+                                        data-listing-id="{{ listing.id }}"
+                                        onclick="handleFavoriteClick(this, {{ listing.id }})">
+                                    <i class="bi {% if listing.id in user_favorites %}bi-heart-fill{% else %}bi-heart{% endif %}"></i>
                                 </button>
-                            </form>
+                                
+                                <!-- Favorite count badge -->
+                                <span class="listing-favorite-count" 
+                                    data-listing-id="{{ listing.id }}"
+                                    style="{% if listing.total_favorites > 0 %}display: flex; opacity: 1; visibility: visible;{% else %}display: none; opacity: 0; visibility: hidden;{% endif %}">
+                                    {{ listing.total_favorites|default:0 }}
+                                </span>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -1891,20 +2127,45 @@
                         {% endif %}
                     </div>
                     
+                    {% if not user.is_authenticated %}
+                        <div class="favorite-stats">
+                            <div class="stat-item">
+                                <i class="bi bi-heart"></i>
+                                <span class="stat-count listing-favorite-stats" 
+                                    data-listing-id="{{ listing.id }}">
+                                    {{ listing.total_favorites|default:0 }} Like{{ listing.total_favorites|default:0|pluralize }}
+                                </span>
+                            </div>
+                        </div>
+                    {% endif %}
+                    
                     <div class="listing-actions">
                         <a href="{% url 'listing-detail' listing.pk %}" class="action-button action-view">
                             <i class="bi bi-eye"></i>
                             View
                         </a>
-                        {% if user.is_authenticated and not listing.is_sold and listing.stock > 0 and listing.seller != user %}
-                        <form action="{% url 'add_to_cart' listing.id %}" method="post" class="d-flex flex-1">
-                            {% csrf_token %}
-                            <button type="submit" class="action-button action-cart w-100">
-                                <i class="bi bi-cart-plus"></i>
-                                Cart
+                        <div class="d-flex align-items-center gap-2">
+                            <!-- Cart Button -->
+                            {% if user.is_authenticated and not listing.is_sold and listing.stock > 0 and listing.seller != user %}
+                            {% with cart_item=cart_items|get_item:listing.id %}
+                            <button type="button" 
+                                    class="action-button action-cart {% if cart_item %}in-cart{% endif %}" 
+                                    id="cart-btn-{{ listing.id }}"
+                                    data-listing-id="{{ listing.id }}"
+                                    data-cart-quantity="{{ cart_item|default:0 }}"
+                                    onclick="handleListingCartClick(this, {{ listing.id }})">
+                                <i class="bi {% if cart_item %}bi-cart-check{% else %}bi-cart-plus{% endif %}"></i>
+                                <span class="cart-btn-text">
+                                    {% if cart_item %}
+                                        {{ cart_item }} in cart
+                                    {% else %}
+                                        Cart
+                                    {% endif %}
+                                </span>
                             </button>
-                        </form>
-                        {% endif %}
+                            {% endwith %}
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </article>
@@ -1922,7 +2183,6 @@
     </div>
 </section>
 {% endif %}
-
 <!-- Featured Listings Section -->
 <section class="featured-section scroll-animate">
     <div class="container-custom">
@@ -1955,12 +2215,23 @@
                             {% if listing.is_sold %}
                             <span class="listing-sold">Sold</span>
                             {% endif %}
-                            <form action="{% url 'toggle_favorite' listing.id %}" method="post" class="favorite-form">
-                                {% csrf_token %}
-                                <button type="submit" class="listing-favorite {% if listing.id in user_favorites %}favorited{% endif %}">
-                                    <i class="bi bi-heart{% if listing.id in user_favorites %}-fill{% endif %}"></i>
+                            {% if user.is_authenticated %}
+                            <div class="favorite-button-wrapper">
+                                <button type="button" 
+                                        class="listing-like {% if listing.id in user_favorites %}liked{% endif %}" 
+                                        data-listing-id="{{ listing.id }}"
+                                        onclick="handleFavoriteClick(this, {{ listing.id }})">
+                                    <i class="bi {% if listing.id in user_favorites %}bi-heart-fill{% else %}bi-heart{% endif %}"></i>
                                 </button>
-                            </form>
+                                
+                                <!-- Favorite count badge -->
+                                <span class="listing-favorite-count" 
+                                    data-listing-id="{{ listing.id }}"
+                                    style="{% if listing.total_favorites > 0 %}display: flex; opacity: 1; visibility: visible;{% else %}display: none; opacity: 0; visibility: hidden;{% endif %}">
+                                    {{ listing.total_favorites|default:0 }}
+                                </span>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -1991,20 +2262,45 @@
                         {% endif %}
                     </div>
                     
+                    {% if not user.is_authenticated %}
+                        <div class="favorite-stats">
+                            <div class="stat-item">
+                                <i class="bi bi-heart"></i>
+                                <span class="stat-count listing-favorite-stats" 
+                                    data-listing-id="{{ listing.id }}">
+                                    {{ listing.total_favorites|default:0 }} Like{{ listing.total_favorites|default:0|pluralize }}
+                                </span>
+                            </div>
+                        </div>
+                    {% endif %}
+                    
                     <div class="listing-actions">
                         <a href="{% url 'listing-detail' listing.pk %}" class="action-button action-view">
                             <i class="bi bi-eye"></i>
                             View
                         </a>
-                        {% if user.is_authenticated and not listing.is_sold and listing.stock > 0 and listing.seller != user %}
-                        <form action="{% url 'add_to_cart' listing.id %}" method="post" class="d-flex flex-1">
-                            {% csrf_token %}
-                            <button type="submit" class="action-button action-cart w-100">
-                                <i class="bi bi-cart-plus"></i>
-                                Cart
+                        <div class="d-flex align-items-center gap-2">
+                            <!-- Cart Button -->
+                            {% if user.is_authenticated and not listing.is_sold and listing.stock > 0 and listing.seller != user %}
+                            {% with cart_item=cart_items|get_item:listing.id %}
+                            <button type="button" 
+                                    class="action-button action-cart {% if cart_item %}in-cart{% endif %}" 
+                                    id="cart-btn-{{ listing.id }}"
+                                    data-listing-id="{{ listing.id }}"
+                                    data-cart-quantity="{{ cart_item|default:0 }}"
+                                    onclick="handleListingCartClick(this, {{ listing.id }})">
+                                <i class="bi {% if cart_item %}bi-cart-check{% else %}bi-cart-plus{% endif %}"></i>
+                                <span class="cart-btn-text">
+                                    {% if cart_item %}
+                                        {{ cart_item }} in cart
+                                    {% else %}
+                                        Cart
+                                    {% endif %}
+                                </span>
                             </button>
-                        </form>
-                        {% endif %}
+                            {% endwith %}
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </article>
@@ -2126,12 +2422,23 @@
                             {% if listing.is_sold %}
                             <span class="listing-sold">Sold</span>
                             {% endif %}
-                            <form action="{% url 'toggle_favorite' listing.id %}" method="post" class="favorite-form">
-                                {% csrf_token %}
-                                <button type="submit" class="listing-favorite {% if listing.id in user_favorites %}favorited{% endif %}">
-                                    <i class="bi bi-heart{% if listing.id in user_favorites %}-fill{% endif %}"></i>
+                            {% if user.is_authenticated %}
+                            <div class="favorite-button-wrapper">
+                                <button type="button" 
+                                        class="listing-like {% if listing.id in user_favorites %}liked{% endif %}" 
+                                        data-listing-id="{{ listing.id }}"
+                                        onclick="handleFavoriteClick(this, {{ listing.id }})">
+                                    <i class="bi {% if listing.id in user_favorites %}bi-heart-fill{% else %}bi-heart{% endif %}"></i>
                                 </button>
-                            </form>
+                                
+                                <!-- Favorite count badge -->
+                                <span class="listing-favorite-count" 
+                                    data-listing-id="{{ listing.id }}"
+                                    style="{% if listing.total_favorites > 0 %}display: flex; opacity: 1; visibility: visible;{% else %}display: none; opacity: 0; visibility: hidden;{% endif %}">
+                                    {{ listing.total_favorites|default:0 }}
+                                </span>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -2167,15 +2474,28 @@
                             <i class="bi bi-eye"></i>
                             View Again
                         </a>
-                        {% if user.is_authenticated and not listing.is_sold and listing.stock > 0 and listing.seller != user %}
-                        <form action="{% url 'add_to_cart' listing.id %}" method="post" class="d-flex flex-1">
-                            {% csrf_token %}
-                            <button type="submit" class="action-button action-cart w-100">
-                                <i class="bi bi-cart-plus"></i>
-                                Cart
+                        <div class="d-flex align-items-center gap-2">
+                            <!-- Cart Button -->
+                            {% if user.is_authenticated and not listing.is_sold and listing.stock > 0 and listing.seller != user %}
+                            {% with cart_item=cart_items|get_item:listing.id %}
+                            <button type="button" 
+                                    class="action-button action-cart {% if cart_item %}in-cart{% endif %}" 
+                                    id="cart-btn-{{ listing.id }}"
+                                    data-listing-id="{{ listing.id }}"
+                                    data-cart-quantity="{{ cart_item|default:0 }}"
+                                    onclick="handleListingCartClick(this, {{ listing.id }})">
+                                <i class="bi {% if cart_item %}bi-cart-check{% else %}bi-cart-plus{% endif %}"></i>
+                                <span class="cart-btn-text">
+                                    {% if cart_item %}
+                                        {{ cart_item }} in cart
+                                    {% else %}
+                                        Cart
+                                    {% endif %}
+                                </span>
                             </button>
-                        </form>
-                        {% endif %}
+                            {% endwith %}
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </article>
@@ -2617,8 +2937,420 @@
 
 {% block extra_js %}
 <script>
+    // ============================================
+    // GLOBAL STATE VARIABLES
+    // ============================================
+    
+    let userAuthenticated = {% if user.is_authenticated %}true{% else %}false{% endif %};
+    let userId = {% if user.is_authenticated %}{{ user.id }}{% else %}0{% endif %};
+    let isCartRequestInProgress = false;
+    
+    // Favorite state management
+    let favoriteStates = new Map();
+    {% if user.is_authenticated %}
+        {% for listing in featured_listings %}
+            favoriteStates.set({{ listing.id }}, {
+                liked: {% if listing.id in user_favorites %}true{% else %}false{% endif %},
+                count: {{ listing.total_favorites|default:0 }}
+            });
+        {% endfor %}
+        {% for listing in trending_listings %}
+            favoriteStates.set({{ listing.id }}, {
+                liked: {% if listing.id in user_favorites %}true{% else %}false{% endif %},
+                count: {{ listing.total_favorites|default:0 }}
+            });
+        {% endfor %}
+    {% endif %}
+    
+    // Store pending favorite updates to prevent race conditions
+    let pendingFavoriteUpdates = new Set();
+    
+    // ============================================
+    // CSRF TOKEN HELPER
+    // ============================================
+    
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    // ============================================
+    // CART FUNCTIONS
+    // ============================================
+    
+    function handleListingCartClick(button, listingId) {
+        if (button.classList.contains('loading') || isCartRequestInProgress) {
+            return;
+        }
+        
+        isCartRequestInProgress = true;
+        const currentQuantity = parseInt(button.getAttribute('data-cart-quantity') || 0);
+        const url = `/cart/add/${listingId}/`;
+        
+        button.classList.add('loading');
+        button.disabled = true;
+        const originalHTML = button.innerHTML;
+        
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({action: 'add'})
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                const newQuantity = data.item_quantity || (currentQuantity + 1);
+                
+                button.classList.add('in-cart');
+                button.innerHTML = `<i class="bi bi-cart-check"></i> <span class="cart-btn-text">${newQuantity} in cart</span>`;
+                button.setAttribute('data-cart-quantity', newQuantity);
+                
+                button.style.animation = 'cartBounce 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                setTimeout(() => {
+                    button.style.animation = '';
+                }, 500);
+                
+                showToast(data.message || 'Added to cart!', 'success');
+                
+                if (data.cart_total !== undefined && data.cart_item_count !== undefined) {
+                    updateNavbarCart(data.cart_total, data.cart_item_count);
+                }
+                
+            } else {
+                showToast(data.error || 'Failed to add to cart', 'error');
+                button.innerHTML = originalHTML;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error adding to cart', 'error');
+            button.innerHTML = originalHTML;
+        })
+        .finally(() => {
+            button.classList.remove('loading');
+            button.disabled = false;
+            isCartRequestInProgress = false;
+        });
+    }
+    
+    function updateNavbarCart(total, count) {
+        // Update cart count badges
+        document.querySelectorAll('.cart-count-badge, .mobile-cart-badge').forEach(badge => {
+            if (count > 0) {
+                badge.textContent = count;
+                badge.style.display = 'flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        });
+        
+        // Update cart total
+        const cartTotalElements = document.querySelectorAll('.cart-total');
+        cartTotalElements.forEach(element => {
+            if (count > 0) {
+                element.textContent = `KSh ${parseFloat(total).toFixed(2)}`;
+                element.style.display = 'inline';
+            } else {
+                element.style.display = 'none';
+            }
+        });
+        
+        // Update cart empty text
+        const cartEmptyTextElements = document.querySelectorAll('.cart-empty-text');
+        cartEmptyTextElements.forEach(element => {
+            if (count > 0) {
+                element.style.display = 'none';
+            } else {
+                element.style.display = 'inline';
+            }
+        });
+    }
+    
+    // ============================================
+    // FAVORITE FUNCTIONS
+    // ============================================
+    
+    function handleFavoriteClick(button, listingId) {
+        // Prevent multiple clicks and check authentication
+        if (button.classList.contains('processing') || pendingFavoriteUpdates.has(listingId)) {
+            return;
+        }
+        
+        if (!userAuthenticated) {
+            showToast('Please login to add favorites', 'error');
+            return;
+        }
+        
+        // Mark as pending to prevent duplicate requests
+        pendingFavoriteUpdates.add(listingId);
+        
+        // Get current state from our state manager
+        const currentState = favoriteStates.get(listingId) || { liked: false, count: 0 };
+        const isCurrentlyLiked = currentState.liked;
+        const currentCount = currentState.count;
+        
+        // Calculate optimistic update
+        const newLikedState = !isCurrentlyLiked;
+        const newCount = newLikedState ? currentCount + 1 : Math.max(0, currentCount - 1);
+        
+        // IMMEDIATELY update our state manager
+        favoriteStates.set(listingId, { liked: newLikedState, count: newCount });
+        
+        // Show processing state
+        button.classList.add('processing');
+        
+        // Find the count badge
+        const wrapper = button.closest('.favorite-button-wrapper');
+        const countBadge = wrapper ? wrapper.querySelector('.listing-favorite-count') : null;
+        
+        // IMMEDIATELY update UI
+        updateFavoriteButtonImmediately(button, newLikedState);
+        if (countBadge) {
+            updateFavoriteCountImmediately(countBadge, newCount);
+        }
+        
+        // Make API call
+        fetch(`/favorites/toggle/${listingId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
+            },
+            credentials: 'same-origin'
+        })
+        .then(response => {
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Server returned non-JSON response');
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Favorite toggle response:', data);
+            
+            if (data.success) {
+                // Update state with server data
+                favoriteStates.set(listingId, { 
+                    liked: data.is_favorited, 
+                    count: data.listing_favorite_count || newCount 
+                });
+                
+                // Update UI with server data
+                updateFavoriteButtonImmediately(button, data.is_favorited);
+                if (countBadge) {
+                    updateFavoriteCountImmediately(countBadge, data.listing_favorite_count || newCount);
+                }
+                
+                // Show success message
+                showToast(data.is_favorited ? 'Added to favorites!' : 'Removed from favorites!', 'success');
+                
+                // Update global user favorite count if provided
+                if (data.user_favorite_count !== undefined) {
+                    updateUserFavoriteCount(data.user_favorite_count);
+                }
+                
+            } else {
+                // Server error - revert to original state
+                favoriteStates.set(listingId, { liked: isCurrentlyLiked, count: currentCount });
+                updateFavoriteButtonImmediately(button, isCurrentlyLiked);
+                if (countBadge) {
+                    updateFavoriteCountImmediately(countBadge, currentCount);
+                }
+                
+                if (data.error) {
+                    showToast(data.error, 'error');
+                } else {
+                    showToast('Failed to update favorite', 'error');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Favorite API error:', error);
+            
+            // Network error - revert to original state
+            favoriteStates.set(listingId, { liked: isCurrentlyLiked, count: currentCount });
+            updateFavoriteButtonImmediately(button, isCurrentlyLiked);
+            if (countBadge) {
+                updateFavoriteCountImmediately(countBadge, currentCount);
+            }
+            
+            let errorMessage = 'Network error. Please check your connection.';
+            if (error.message.includes('non-JSON')) {
+                errorMessage = 'Server error. Please try again.';
+            }
+            showToast(errorMessage, 'error');
+        })
+        .finally(() => {
+            // Remove processing state and pending marker
+            setTimeout(() => {
+                button.classList.remove('processing');
+                pendingFavoriteUpdates.delete(listingId);
+            }, 300);
+        });
+    }
+    
+    function updateFavoriteButtonImmediately(button, isLiked) {
+        // Update button class
+        if (isLiked) {
+            button.classList.add('liked');
+        } else {
+            button.classList.remove('liked');
+        }
+        
+        // Update icon
+        const icon = button.querySelector('i');
+        if (icon) {
+            icon.className = isLiked ? 'bi bi-heart-fill' : 'bi bi-heart';
+        }
+        
+        // Add visual feedback
+        button.style.transform = 'scale(1.2)';
+        setTimeout(() => {
+            button.style.transform = 'scale(1)';
+        }, 200);
+        
+        // Add/remove animation
+        if (isLiked) {
+            button.style.animation = 'heartBeat 2s infinite';
+        } else {
+            button.style.animation = '';
+        }
+    }
+    
+    function updateFavoriteCountImmediately(countBadge, newCount) {
+        if (!countBadge) return;
+        
+        // Update the count text
+        countBadge.textContent = newCount;
+        
+        // Show/hide based on count
+        if (newCount > 0) {
+            countBadge.style.display = 'flex';
+            countBadge.style.opacity = '1';
+            countBadge.style.visibility = 'visible';
+            
+            // Add count change animation
+            countBadge.classList.add('count-changing');
+            setTimeout(() => {
+                countBadge.classList.remove('count-changing');
+            }, 300);
+        } else {
+            // Hide if count is 0
+            setTimeout(() => {
+                countBadge.style.display = 'none';
+                countBadge.style.opacity = '0';
+                countBadge.style.visibility = 'hidden';
+            }, 300);
+        }
+    }
+    
+    function updateUserFavoriteCount(newCount) {
+        const userFavoriteElements = document.querySelectorAll('.user-favorite-count, .favorites-count-badge');
+        userFavoriteElements.forEach(element => {
+            element.textContent = newCount;
+            if (newCount > 0) {
+                element.style.display = 'inline-flex';
+            } else {
+                element.style.display = 'none';
+            }
+            
+            element.classList.add('count-updated');
+            setTimeout(() => {
+                element.classList.remove('count-updated');
+            }, 300);
+        });
+        
+        localStorage.setItem('user_favorite_count', newCount);
+    }
+    
+    // ============================================
+    // TOAST NOTIFICATION
+    // ============================================
+    
+    function showToast(message, type = 'success') {
+        if (window.showToast && typeof window.showToast === 'function') {
+            window.showToast(message, type);
+            return;
+        }
+        
+        const toast = document.createElement('div');
+        toast.className = `custom-toast toast-${type}`;
+        toast.textContent = message;
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${type === 'success' ? '#06D6A0' : '#EF476F'};
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+        `;
+        
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => {
+                document.body.removeChild(toast);
+            }, 300);
+        }, 3000);
+    }
+    
+    // ============================================
+    // INITIALIZATION
+    // ============================================
+    
     document.addEventListener('DOMContentLoaded', function() {
-        // Horizontal Scroll Functionality
+        console.log('Home page loaded - initializing cart and favorite functionality');
+        
+        // Initialize favorite button animations
+        initializeFavoriteButtonAnimations();
+        
+        // Update navbar cart on page load
+        {% if cart_total and cart_item_count %}
+        updateNavbarCart({{ cart_total }}, {{ cart_item_count }});
+        {% endif %}
+        
+        // Load user favorite count from localStorage
+        const savedCount = localStorage.getItem('user_favorite_count');
+        if (savedCount !== null) {
+            updateUserFavoriteCount(parseInt(savedCount));
+        }
+        
+        // Make functions globally available
+        window.handleListingCartClick = handleListingCartClick;
+        window.handleFavoriteClick = handleFavoriteClick;
+        
+        // Event listener for cart updates from other pages
+        document.addEventListener('cartUpdated', function(event) {
+            const { itemCount, total } = event.detail;
+            updateNavbarCart(total, itemCount);
+        });
+        
+        // Initialize horizontal scroll functionality (existing code)
         function setupHorizontalScroll(scrollContainerId, leftButtonId, rightButtonId) {
             const scrollContainer = document.getElementById(scrollContainerId);
             const scrollLeftBtn = document.getElementById(leftButtonId);
@@ -2651,7 +3383,7 @@
             
             scrollContainer.addEventListener('scroll', updateScrollButtons);
             window.addEventListener('resize', updateScrollButtons);
-            updateScrollButtons(); // Initial check
+            updateScrollButtons();
         }
         
         // Initialize horizontal scrolling for all sections
@@ -2674,42 +3406,9 @@
             el.style.animationDelay = `${index * 0.5}s`;
         });
 
-        // Favorite button functionality
-        document.querySelectorAll('.listing-favorite').forEach(button => {
-            button.addEventListener('click', function(e) {
-                e.preventDefault();
-                const form = this.closest('form');
-                if (!form) return;
-                
-                // Submit the form via AJAX
-                fetch(form.action, {
-                    method: 'POST',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value
-                    },
-                    body: new FormData(form)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.is_favorited) {
-                        this.classList.add('favorited');
-                        this.querySelector('i').className = 'bi bi-heart-fill';
-                    } else {
-                        this.classList.remove('favorited');
-                        this.querySelector('i').className = 'bi bi-heart';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                });
-            });
-        });
-        
         // Initialize carousel with custom settings
         const heroCarousel = document.getElementById('heroCarousel');
         if (heroCarousel) {
-            // Auto-advance carousel every 5 seconds
             const carousel = new bootstrap.Carousel(heroCarousel, {
                 interval: 5000,
                 wrap: true
@@ -2733,5 +3432,96 @@
 
         scrollAnimateElements.forEach(el => observer.observe(el));
     });
+    
+    function initializeFavoriteButtonAnimations() {
+        const favoriteButtons = document.querySelectorAll('.listing-like');
+        
+        favoriteButtons.forEach(button => {
+            if (button.classList.contains('liked')) {
+                button.style.animation = 'heartBeat 2s infinite';
+                button.style.boxShadow = '0 4px 12px rgba(239, 71, 111, 0.3)';
+            }
+            
+            button.addEventListener('mouseenter', () => {
+                if (!button.classList.contains('liked')) {
+                    button.style.transform = 'scale(1.1)';
+                    button.style.color = 'var(--danger)';
+                    button.style.borderColor = 'var(--danger)';
+                }
+            });
+            
+            button.addEventListener('mouseleave', () => {
+                if (!button.classList.contains('liked')) {
+                    button.style.transform = 'scale(1)';
+                    button.style.color = '';
+                    button.style.borderColor = '';
+                }
+            });
+        });
+    }
+    
+    // Add CSS for animations
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        @keyframes slideOut {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+        }
+        
+        @keyframes countChange {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+            100% { transform: scale(1); }
+        }
+        
+        .listing-favorite-count.changing {
+            animation: countChange 0.5s ease;
+        }
+        
+        .listing-favorite-count.count-updated {
+            animation: countChange 0.5s ease;
+        }
+        
+        .count-changing {
+            animation: countChange 0.3s ease;
+        }
+        
+        .count-updated {
+            animation: countChange 0.3s ease;
+        }
+        
+        .listing-card.animated {
+            animation: fadeInUp 0.5s ease both;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    `;
+    document.head.appendChild(style);
 </script>
 {% endblock %}

@@ -17,22 +17,14 @@ def get_location_name(locations, location_value):
             return name
     return "Unknown Location"
 
-
-@register.filter
-def get_item(value, key):
-    """
-    Safely get item from dictionary, list, or object
-    """
-    try:
-        if isinstance(value, dict):
-            return value.get(key, 0)
-        elif hasattr(value, '__getitem__'):
-            return value[key]
-        elif hasattr(value, str(key)):
-            return getattr(value, str(key), 0)
-        return 0
-    except (KeyError, IndexError, AttributeError, TypeError):
-        return 0
+@register.filter(name='get_item')
+def get_item(dictionary, key):
+    """Get an item from a dictionary using a key."""
+    if not dictionary:
+        return None
+    # Try to convert key to string (since cart_items keys are strings)
+    key_str = str(key)
+    return dictionary.get(key_str)
 
 @register.filter
 def user_is_seller(order_items, user):

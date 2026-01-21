@@ -188,6 +188,71 @@ class ListingListView(ListView):
         ).order_by('-date_created')[:4]
 
         context['my_orders']= Order.objects.filter(user=self.request.user) if self.request.user.is_authenticated else None
+        cart_items = {}
+        cart_total = 0
+        cart_item_count = 0
+        if self.request.user.is_authenticated:
+            try:
+                cart, created = Cart.objects.get_or_create(user=self.request.user)
+                cart_items = {str(item.listing.id): item.quantity for item in cart.items.all()}
+                cart_total = cart.get_total_price()
+                cart_item_count = cart.items.count()
+            except Exception as e:
+                print(f"Cart error in home view: {str(e)}")
+                cart_total = 0
+                cart_item_count = 0
+        
+        context['cart_items'] = cart_items
+        context['cart_total'] = cart_total
+        context['cart_item_count'] = cart_item_count
+        
+        # Add favorite count annotation to listings - NEW
+        featured_listings_with_favorites = Listing.objects.filter(
+            is_featured=True, 
+            is_active=True,
+            is_sold=False
+        ).annotate(
+            total_favorites=Count('favorites', distinct=True)
+        ).order_by('-date_created')[:8]
+        
+        trending_listings_with_favorites = Listing.objects.filter(
+            is_active=True,
+            is_sold=False
+        ).annotate(
+            favorite_count=Count('favorites'),
+            total_favorites=Count('favorites', distinct=True)
+        ).order_by('-favorite_count', '-date_created')[:8]
+        
+        context['featured_listings'] = featured_listings_with_favorites
+        context['trending_listings'] = trending_listings_with_favorites
+        
+        # New arrivals with favorites
+        context['new_arrivals'] = Listing.objects.filter(
+            is_active=True,
+            is_sold=False
+        ).annotate(
+            total_favorites=Count('favorites', distinct=True)
+        ).order_by('-date_created')[:8]
+        
+        # Get user favorites
+        user_favorites = set()
+        if self.request.user.is_authenticated:
+            try:
+                user_favorites = set(Favorite.objects.filter(
+                    user=self.request.user
+                ).values_list('listing_id', flat=True))
+            except Exception as e:
+                print(f"Favorites error: {str(e)}")
+                user_favorites = set()
+        
+        context['user_favorites'] = user_favorites
+        
+        # Get user favorite count if authenticated
+        user_favorite_count = 0
+        if self.request.user.is_authenticated:
+            user_favorite_count = Favorite.objects.filter(user=self.request.user).count()
+        
+        context['user_favorite_count'] = user_favorite_count
         
        # Replace this section in the ListingListView.get_context_data method:
         user_favorites = set()

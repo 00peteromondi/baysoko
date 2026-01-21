@@ -786,6 +786,136 @@
             height: 200px;
         }
     }
+    /* Favorite button styling */
+    .listing-like {
+        position: relative;
+        width: 36px;
+        height: 36px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        color: var(--text-secondary);
+        font-size: 16px;
+        padding: 0;
+        margin: 0;
+        z-index: 2;
+        outline: none;
+    }
+
+    .listing-like:hover {
+        background: rgba(239, 71, 111, 0.1);
+        color: var(--danger);
+        border-color: var(--danger);
+        transform: scale(1.1);
+    }
+
+    /* Liked state - IMMEDIATE visual feedback */
+    .listing-like.liked {
+        background: var(--danger) !important;
+        color: white !important;
+        border-color: var(--danger) !important;
+        animation: heartBeat 2s infinite !important;
+        box-shadow: 0 4px 12px rgba(239, 71, 111, 0.3) !important;
+    }
+
+    .listing-like.liked:hover {
+        background: #e63946 !important;
+        transform: scale(1.1) !important;
+        box-shadow: 0 6px 16px rgba(239, 71, 111, 0.4) !important;
+    }
+
+    /* Heart icon styling */
+    .listing-like i {
+        font-size: 16px;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Count badge - ABSOLUTE POSITIONING */
+    .listing-favorite-count {
+        position: absolute;
+        top: -6px; /* Position above the button */
+        right: -6px; /* Position to the right of the button */
+        background: linear-gradient(135deg, var(--danger) 0%, #e63946 100%);
+        color: white;
+        font-size: 10px;
+        font-weight: 800;
+        min-width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 5px;
+        z-index: 3; /* Above the button */
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        border: 2px solid var(--card-bg); /* Creates a border effect with background color */
+        animation: pulse 2s infinite;
+        pointer-events: none; /* Don't interfere with button clicks */
+        white-space: nowrap;
+    }
+
+    /* When count is 0, hide it completely */
+    .listing-favorite-count[style*="display: none"] {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        animation: none !important;
+    }
+
+    /* When count is displayed, show with animation */
+    .listing-favorite-count[style*="display: flex"],
+    .listing-favorite-count:not([style*="display: none"]) {
+        opacity: 1 !important;
+        visibility: visible !important;
+        animation: pulse 2s infinite !important;
+    }
+
+    /* Loading state for button */
+    .listing-like.loading {
+        opacity: 0.7;
+        cursor: wait;
+    }
+
+    .listing-like.loading i {
+        animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    /* Hover effect for count badge */
+    .listing-favorite-count:hover {
+        transform: scale(1.1);
+        transition: transform 0.2s ease;
+    }
+
+    /* Active state for button */
+    .listing-like:active {
+        transform: scale(0.95);
+    }
+
+    /* Ensure the wrapper doesn't affect layout */
+    .favorite-button-wrapper {
+        line-height: 0; /* Prevent extra spacing */
+    }
+
+    /* For product detail specific favorite wrapper */
+    .product-favorite-wrapper {
+        position: relative;
+        display: inline-block;
+        width: 36px;
+        height: 36px;
+    }
+
 </style>
 {% endblock %}
 
@@ -900,11 +1030,25 @@
                     
                     <!-- Favorite Button -->
                     <div class="product-favorite">
-                        <form action="{% url 'toggle_favorite' product.id %}" method="post">
-                            {% csrf_token %}
-                            <button type="submit" class="favorite-btn {% if product.id in user_favorites %}active{% endif %}">
-                                <i class="bi bi-heart{% if product.id in user_favorites %}-fill{% endif %}"></i>
+                
+                        <!-- Favorite Button - UPDATED to match all_listings.html -->
+                        {% if user.is_authenticated %}
+                        <div class="favorite-button-wrapper">
+                            <button type="button" 
+                                    class="listing-like {% if product.id in user_favorites %}liked{% endif %}" 
+                                    data-listing-id="{{ product.id }}"
+                                    onclick="handleFavoriteClick(this, {{ product.id }})">
+                                <i class="bi {% if product.id in user_favorites %}bi-heart-fill{% else %}bi-heart{% endif %}"></i>
                             </button>
+                            
+                            <!-- Favorite count badge -->
+                            <span class="listing-favorite-count" 
+                                data-listing-id="{{ product.id }}"
+                                style="{% if product.favorites.count > 0 %}display: flex; opacity: 1;{% else %}display: none; opacity: 0;{% endif %}">
+                                {{ product.favorites.count|default:0 }}
+                            </span>
+                        </div>
+                        {% endif %}
                         </form>
                     </div>
                 </div>
@@ -1178,10 +1322,211 @@
                             top: targetElement.offsetTop - 80,
                             behavior: 'smooth'
                         });
+
                     }
                 }
             });
+            // ===== FAVORITE FUNCTIONS (from all_listings.html) =====
+            const pendingFavoriteUpdates = new Set();
+            
+            window.handleFavoriteClick = function(button, listingId) {
+                // Prevent multiple clicks and check authentication
+                if (button.classList.contains('processing') || pendingFavoriteUpdates.has(listingId)) {
+                    return;
+                }
+                
+                if (!{% if user.is_authenticated %}true{% else %}false{% endif %}) {
+                    showToast('Please login to add favorites', 'error');
+                    return;
+                }
+                
+                // Mark as pending to prevent duplicate requests
+                pendingFavoriteUpdates.add(listingId);
+                
+                // Get current state
+                const currentState = window.favoriteStates ? window.favoriteStates.get(listingId) : null;
+                const isCurrentlyLiked = button.classList.contains('liked');
+                const currentCount = parseInt(button.nextElementSibling?.textContent || 0);
+                
+                // Calculate optimistic update
+                const newLikedState = !isCurrentlyLiked;
+                const newCount = newLikedState ? currentCount + 1 : Math.max(0, currentCount - 1);
+                
+                // Update global state manager if exists
+                if (window.favoriteStates) {
+                    window.favoriteStates.set(listingId, { liked: newLikedState, count: newCount });
+                }
+                
+                // Show processing state
+                button.classList.add('processing');
+                
+                // Find the count badge
+                const wrapper = button.closest('.favorite-button-wrapper');
+                const countBadge = wrapper ? wrapper.querySelector('.listing-favorite-count') : null;
+                
+                // IMMEDIATELY update UI
+                updateFavoriteButtonImmediately(button, newLikedState);
+                if (countBadge) {
+                    updateFavoriteCountImmediately(countBadge, newCount);
+                }
+                
+                // Make API call
+                fetch(`/favorites/toggle/${listingId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin'
+                })
+                .then(response => {
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType || !contentType.includes('application/json')) {
+                        throw new Error('Server returned non-JSON response');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Favorite toggle response:', data);
+                    
+                    if (data.success) {
+                        // Update state with server data
+                        if (window.favoriteStates) {
+                            window.favoriteStates.set(listingId, { 
+                                liked: data.is_favorited, 
+                                count: data.listing_favorite_count || newCount 
+                            });
+                        }
+                        
+                        // Update UI with server data
+                        updateFavoriteButtonImmediately(button, data.is_favorited);
+                        if (countBadge) {
+                            updateFavoriteCountImmediately(countBadge, data.listing_favorite_count || newCount);
+                        }
+                        
+                        // Show success message
+                        showToast(data.is_favorited ? 'Added to favorites!' : 'Removed from favorites!', 'success');
+                        
+                    } else {
+                        // Server error - revert to original state
+                        updateFavoriteButtonImmediately(button, isCurrentlyLiked);
+                        if (countBadge) {
+                            updateFavoriteCountImmediately(countBadge, currentCount);
+                        }
+                        
+                        if (data.error) {
+                            showToast(data.error, 'error');
+                        } else {
+                            showToast('Failed to update favorite', 'error');
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Favorite API error:', error);
+                    
+                    // Network error - revert to original state
+                    updateFavoriteButtonImmediately(button, isCurrentlyLiked);
+                    if (countBadge) {
+                        updateFavoriteCountImmediately(countBadge, currentCount);
+                    }
+                    
+                    let errorMessage = 'Network error. Please check your connection.';
+                    if (error.message.includes('non-JSON')) {
+                        errorMessage = 'Server error. Please try again.';
+                    }
+                    showToast(errorMessage, 'error');
+                })
+                .finally(() => {
+                    // Remove processing state and pending marker
+                    setTimeout(() => {
+                        button.classList.remove('processing');
+                        pendingFavoriteUpdates.delete(listingId);
+                    }, 300);
+                });
+            };
+            
+            function updateFavoriteButtonImmediately(button, isLiked) {
+                // Update button class
+                if (isLiked) {
+                    button.classList.add('liked');
+                } else {
+                    button.classList.remove('liked');
+                }
+                
+                // Update icon
+                const icon = button.querySelector('i');
+                if (icon) {
+                    icon.className = isLiked ? 'bi bi-heart-fill' : 'bi bi-heart';
+                }
+                
+                // Add visual feedback
+                button.style.transform = 'scale(1.2)';
+                setTimeout(() => {
+                    button.style.transform = 'scale(1)';
+                }, 200);
+            }
+            
+            function updateFavoriteCountImmediately(countBadge, newCount) {
+                if (!countBadge) return;
+                
+                // Update the count text
+                countBadge.textContent = newCount;
+                
+                // Show/hide based on count
+                if (newCount > 0) {
+                    countBadge.style.display = 'flex';
+                    countBadge.style.opacity = '1';
+                    countBadge.style.visibility = 'visible';
+                    
+                    // Add count change animation
+                    countBadge.classList.add('changing');
+                    setTimeout(() => {
+                        countBadge.classList.remove('changing');
+                    }, 300);
+                } else {
+                    // Hide if count is 0
+                    setTimeout(() => {
+                        countBadge.style.display = 'none';
+                        countBadge.style.opacity = '0';
+                        countBadge.style.visibility = 'hidden';
+                    }, 300);
+                }
+            }
+            
+            function showToast(message, type = 'success') {
+                if (window.showToast && typeof window.showToast === 'function') {
+                    window.showToast(message, type);
+                    return;
+                }
+                
+                const toast = document.createElement('div');
+                toast.className = `custom-toast toast-${type}`;
+                toast.textContent = message;
+                toast.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: ${type === 'success' ? '#06D6A0' : '#EF476F'};
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    z-index: 9999;
+                    animation: slideIn 0.3s ease;
+                `;
+                
+                document.body.appendChild(toast);
+                
+                setTimeout(() => {
+                    toast.style.animation = 'slideOut 0.3s ease';
+                    setTimeout(() => {
+                        document.body.removeChild(toast);
+                    }, 300);
+                }, 3000);
+            }
         });
+        
 
         // Update active nav based on scroll position
         function updateActiveNav() {
