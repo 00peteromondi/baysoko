@@ -181,63 +181,12 @@ def store_edit(request, slug):
     """
     store = get_object_or_404(Store, slug=slug, owner=request.user)
     
-    # Check subscription status for featured eligibility
-    has_active_subscription = Subscription.objects.filter(
-        store=store, 
-        status='active'
-    ).exists()
-    has_valid_trial = Subscription.objects.filter(
-        store=store,
-        status='trialing',
-        trial_ends_at__gt=timezone.now()
-    ).exists()
-    
-    can_be_featured = has_active_subscription or has_valid_trial
-    is_enterprise = Subscription.objects.filter(
-        store=store,
-        status='active',
-        plan='enterprise'
-    ).exists()
-    
     if request.method == 'POST':
         form = StoreForm(request.POST, request.FILES, instance=store, user=request.user)
         
         if form.is_valid():
             try:
-                store = form.save(commit=False)
-                
-                # Handle is_featured based on subscription (similar to ListingUpdateView)
-                if 'is_featured' in form.cleaned_data:
-                    if can_be_featured:
-                        # Enterprise stores get automatic featured status
-                        if is_enterprise:
-                            store.is_featured = True
-                        else:
-                            store.is_featured = form.cleaned_data.get('is_featured', False)
-                    else:
-                        # Non-premium users can't set featured
-                        store.is_featured = False
-                        messages.info(request, "Featured status requires an active subscription. The featured flag was not applied.")
-                elif not can_be_featured:
-                    # Ensure non-premium stores are not featured
-                    store.is_featured = False
-                
-                # Handle logo upload - FIXED: Only update if new file is provided or clear is requested
-                if 'logo' in request.FILES:
-                    store.logo = request.FILES['logo']
-                elif 'logo-clear' in request.POST:
-                    store.logo = None
-                # If neither new file nor clear, keep existing logo (do nothing)
-                
-                # Handle cover image upload - FIXED: Only update if new file is provided or clear is requested
-                if 'cover_image' in request.FILES:
-                    store.cover_image = request.FILES['cover_image']
-                elif 'cover_image-clear' in request.POST:
-                    store.cover_image = None
-                # If neither new file nor clear, keep existing cover image (do nothing)
-                
-                # Save the store
-                store.save()
+                store = form.save()
                 
                 messages.success(request, "Store updated successfully!")
                 return redirect('storefront:store_detail', slug=store.slug)
@@ -248,9 +197,6 @@ def store_edit(request, slug):
                     'form': form,
                     'store': store,
                     'creating_store': False,
-                    'can_be_featured': can_be_featured,
-                    'is_enterprise': is_enterprise,
-                    'has_active_subscription': has_active_subscription or has_valid_trial,
                 })
             except Exception as e:
                 messages.error(request, f"Error updating store: {str(e)}")
@@ -258,9 +204,6 @@ def store_edit(request, slug):
                     'form': form,
                     'store': store,
                     'creating_store': False,
-                    'can_be_featured': can_be_featured,
-                    'is_enterprise': is_enterprise,
-                    'has_active_subscription': has_active_subscription or has_valid_trial,
                 })
         else:
             # Form is invalid, show errors
@@ -277,9 +220,6 @@ def store_edit(request, slug):
         'form': form,
         'store': store,
         'creating_store': False,
-        'can_be_featured': can_be_featured,
-        'is_enterprise': is_enterprise,
-        'has_active_subscription': has_active_subscription or has_valid_trial,
     }
     
     return render(request, 'storefront/store_form.html', context)
@@ -331,6 +271,19 @@ def product_create(request, store_slug):
             listing = form.save(commit=False)
             listing.seller = request.user
             listing.store = store
+            
+            # Set is_featured automatically based on store's subscription
+            from storefront.models import Subscription
+            from django.utils import timezone
+            from django.db.models import Q
+            active_premium_subscription = Subscription.objects.filter(
+                store=store,
+                plan__in=['premium', 'enterprise']
+            ).filter(
+                Q(status='active') | Q(status='trialing', trial_ends_at__gt=timezone.now())
+            ).exists()
+            listing.is_featured = active_premium_subscription
+            
             listing.save()
             # Handle multiple uploaded images robustly
             images = request.FILES.getlist('images')
@@ -414,6 +367,19 @@ def product_edit(request, pk):
                     )
                     listing.store = store
                     messages.info(request, "A new store was created for your listings.")
+            
+            # Set is_featured automatically based on store's subscription
+            from storefront.models import Subscription
+            from django.utils import timezone
+            from django.db.models import Q
+            if listing.store:
+                active_premium_subscription = Subscription.objects.filter(
+                    store=listing.store,
+                    plan__in=['premium', 'enterprise']
+                ).filter(
+                    Q(status='active') | Q(status='trialing', trial_ends_at__gt=timezone.now())
+                ).exists()
+                listing.is_featured = active_premium_subscription
             
             listing.save()
             

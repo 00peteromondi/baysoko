@@ -1,4 +1,5 @@
 from django import forms
+from django.db import models
 from .models import Store
 from listings.forms import ListingForm
 from .mpesa import MpesaGateway
@@ -86,52 +87,8 @@ class StoreForm(forms.ModelForm):
             self.fields['logo'].required = False
             self.fields['cover_image'].required = False
             
-        # For existing stores (edit mode), check subscription for featured eligibility
-        if self.instance and self.instance.pk and self.user:
-            # Check if store has active subscription or valid trial
-            has_active = Subscription.objects.filter(
-                store=self.instance, 
-                status='active'
-            ).exists()
-            has_valid_trial = Subscription.objects.filter(
-                store=self.instance,
-                status='trialing',
-                trial_ends_at__gt=timezone.now()
-            ).exists()
-            
-            can_be_featured = has_active or has_valid_trial
-            
-            if can_be_featured:
-                # Check if it's an enterprise subscription
-                is_enterprise = Subscription.objects.filter(
-                    store=self.instance,
-                    status='active',
-                    plan='enterprise'
-                ).exists()
-                
-                # Add is_featured field for premium stores
-                self.fields['is_featured'] = forms.BooleanField(
-                    required=False,
-                    label='Featured Store',
-                    help_text='Check to feature your store in listings',
-                    widget=forms.CheckboxInput(attrs={
-                        'class': 'form-check-input',
-                        'disabled': is_enterprise  # Disable for enterprise (always featured)
-                    }),
-                    initial=self.instance.is_featured if self.instance else False,
-                    disabled=is_enterprise  # Disable for enterprise stores
-                )
-                
-                # Store subscription info for later use
-                self.can_be_featured = True
-                self.is_enterprise = is_enterprise
-            else:
-                self.can_be_featured = False
-                self.is_enterprise = False
-        else:
-            # For new stores, no featured option
-            self.can_be_featured = False
-            self.is_enterprise = False
+        # For existing stores (edit mode), no featured option - it's set automatically
+        # Remove all is_featured field logic
     
     def clean_slug(self):
         slug = self.cleaned_data.get('slug')
@@ -151,14 +108,7 @@ class StoreForm(forms.ModelForm):
         if self.instance and self.instance.pk and 'owner' in cleaned_data:
             del cleaned_data['owner']
         
-        # Handle is_featured validation
-        if 'is_featured' in cleaned_data and hasattr(self, 'can_be_featured'):
-            if not self.can_be_featured:
-                # Non-premium users can't set featured
-                cleaned_data['is_featured'] = False
-            elif hasattr(self, 'is_enterprise') and self.is_enterprise:
-                # Enterprise stores are always featured
-                cleaned_data['is_featured'] = True
+        # is_featured is now set automatically based on subscription, no manual setting
         
         return cleaned_data
     
@@ -178,11 +128,31 @@ class StoreForm(forms.ModelForm):
         if 'cover_image' in self.cleaned_data and self.cleaned_data['cover_image'] is not None:
             pass
         
+        # Set is_featured automatically based on subscription
+        store.is_featured = self._get_featured_status(store)
+        
         if commit:
             store.save()
             self.save_m2m()
         
         return store
+    
+    def _get_featured_status(self, store):
+        """Determine if store should be featured based on active subscription"""
+        from .models import Subscription
+        from django.utils import timezone
+        
+        # Check for active premium or enterprise subscription
+        active_premium_subscription = Subscription.objects.filter(
+            store=store,
+            status__in=['active', 'trialing'],
+            plan__in=['premium', 'enterprise']
+        ).filter(
+            # For trialing, ensure trial hasn't expired
+            ~models.Q(status='trialing', trial_ends_at__lt=timezone.now())
+        ).exists()
+        
+        return active_premium_subscription
 
 # Reuse ListingForm for creating/editing storefront "products" (listings)
 class ProductForm(ListingForm):

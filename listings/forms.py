@@ -1,5 +1,7 @@
 # listings/forms.py
 from django import forms
+from django.db.models import Q
+from django.utils import timezone
 from .models import Listing, Category, Review, Payment
 from . import ai_listing_helper
 
@@ -9,7 +11,7 @@ class ListingForm(forms.ModelForm):
         fields = ['title', 'description', 'price', 'category', 'store', 'location', 
                  'image', 'condition', 'delivery_option', 'stock', 'brand', 
                  'model', 'dimensions', 'weight', 'color', 'material', 
-                 'meta_description', 'is_featured']
+                 'meta_description']
         widgets = {
             'title': forms.TextInput(attrs={'placeholder': 'Enter a catchy title for your item', 'class': 'form-control'}),
             'price': forms.NumberInput(attrs={'min': '0', 'step': '0.01', 'placeholder': '0.00', 'class': 'form-control'}),
@@ -26,7 +28,6 @@ class ListingForm(forms.ModelForm):
             'color': forms.TextInput(attrs={'placeholder': 'e.g., Black, White, Blue, Red', 'class': 'form-control'}),
             'material': forms.TextInput(attrs={'placeholder': 'e.g., Metal, Wood, Cotton, Plastic', 'class': 'form-control'}),
             'meta_description': forms.Textarea(attrs={'rows': 2, 'placeholder': 'SEO description (auto-generated if empty)', 'maxlength': '160', 'class': 'form-control'}),
-            'is_featured': forms.CheckboxInput(attrs={'class': 'form-check-input', 'style': 'margin-left:0'}),
         }
     
     # Update the __init__ method of ListingForm class
@@ -104,6 +105,34 @@ class ListingForm(forms.ModelForm):
                 raise forms.ValidationError("Image file too large ( > 10MB )")
         
         return image
+    
+    def save(self, commit=True):
+        listing = super().save(commit=False)
+        
+        # Set is_featured automatically based on store's subscription
+        if listing.store:
+            listing.is_featured = self._get_featured_status(listing.store)
+        
+        if commit:
+            listing.save()
+        
+        return listing
+    
+    def _get_featured_status(self, store):
+        """Determine if listing should be featured based on store's active subscription"""
+        from storefront.models import Subscription
+        from django.utils import timezone
+        from django.db.models import Q
+        
+        # Check for active premium or enterprise subscription
+        active_premium_subscription = Subscription.objects.filter(
+            store=store,
+            plan__in=['premium', 'enterprise']
+        ).filter(
+            Q(status='active') | Q(status='trialing', trial_ends_at__gt=timezone.now())
+        ).exists()
+        
+        return active_premium_subscription
         
 class CheckoutForm(forms.Form):
     shipping_address = forms.CharField(
@@ -229,7 +258,7 @@ class AIListingForm(ListingForm):
         model = Listing
         fields = ['title', 'description', 'price', 'category', 'store', 'location', 
                  'image', 'condition', 'delivery_option', 'stock', 'brand', 
-                 'model', 'dimensions', 'weight', 'color', 'material', 'meta_description', 'is_featured']
+                 'model', 'dimensions', 'weight', 'color', 'material', 'meta_description']
         widgets = {
             'title': forms.TextInput(attrs={
                 'placeholder': 'Enter a catchy title for your item',
@@ -258,7 +287,6 @@ class AIListingForm(ListingForm):
                 'maxlength': '160',
                 'class': 'form-control'
             }),
-            'is_featured': forms.CheckboxInput(attrs={'class': 'form-check-input', 'style': 'margin-left:0'}),
         }
     
     def __init__(self, *args, **kwargs):

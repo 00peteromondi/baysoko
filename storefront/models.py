@@ -284,23 +284,23 @@ class Store(models.Model):
                 if not (has_premium_store or has_active_subscription or has_valid_trial):
                     raise ValidationError("You must upgrade to Pro (subscribe) to create additional storefronts.")
         
-        # Additional validation for featured stores
-        if self.is_featured:
-            # Check if store can be featured
-            owner = getattr(self, 'owner', None)
-            if owner:
-                has_active = Subscription.objects.filter(
-                    store=self, 
-                    status='active'
-                ).exists()
-                has_valid_trial = Subscription.objects.filter(
-                    store=self,
-                    status='trialing',
-                    trial_ends_at__gt=timezone.now()
-                ).exists()
-                
-                if not (has_active or has_valid_trial):
-                    raise ValidationError("Store must have an active subscription or valid trial to be featured.")
+        # Additional validation for featured stores - REMOVED: is_featured is now set automatically
+        # if self.is_featured:
+        #     # Check if store can be featured
+        #     owner = getattr(self, 'owner', None)
+        #     if owner:
+        #         has_active = Subscription.objects.filter(
+        #             store=self, 
+        #             status='active'
+        #         ).exists()
+        #         has_valid_trial = Subscription.objects.filter(
+        #             store=self,
+        #             status='trialing',
+        #             trial_ends_at__gt=timezone.now()
+        #         ).exists()
+        #         
+        #         if not (has_active or has_valid_trial):
+        #             raise ValidationError("Store must have an active subscription or valid trial to be featured.")
     
     def save(self, *args, **kwargs):
         # Run clean validation before saving
@@ -442,6 +442,31 @@ class Subscription(models.Model):
             self.trial_ended_at = timezone.now()
         
         super().save(*args, **kwargs)
+        
+        # Update featured status for store and listings
+        self._update_featured_status()
+    
+    def _update_featured_status(self):
+        """Update featured status for store and its listings based on subscription"""
+        from listings.models import Listing
+        from django.db.models import Q
+        
+        # Check if store has any active premium or enterprise subscription
+        now = timezone.now()
+        has_premium = Subscription.objects.filter(
+            store=self.store,
+            plan__in=['premium', 'enterprise']
+        ).filter(
+            Q(status='active') | Q(status='trialing', trial_ends_at__gt=now)
+        ).exists()
+        
+        # Update store
+        if self.store.is_featured != has_premium:
+            self.store.is_featured = has_premium
+            self.store.save(update_fields=['is_featured'])
+        
+        # Update all listings for this store
+        Listing.objects.filter(store=self.store).update(is_featured=has_premium)
 
     @property
     def expires_at(self):

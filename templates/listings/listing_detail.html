@@ -1,6 +1,6 @@
 <!-- templates/listings/listing_detail.html -->
 {% extends 'base.html' %}
-{% load static %}
+{% load static humanize cart_filters custom_filters listing_filters listing_tags %}
 
 {% block title %}{{ listing.title }} - Baysoko Marketplace{% endblock %}
 
@@ -1484,7 +1484,270 @@
         animation: heartBeat 0.6s ease-in-out;
         background-color: var(--danger);
     }
-    
+    /* ============================================
+    CART BUTTON HOVER EFFECTS (WHITE ON HOVER)
+    ============================================ */
+
+    /* Normal cart button hover - turns white */
+    .action-cart:not(.in-cart):not(.loading):hover {
+        background: white !important;
+        color: var(--primary) !important;
+        border-color: var(--primary) !important;
+    }
+
+    /* Cart button when in cart - hover effect */
+    .action-cart.in-cart:not(.loading):hover {
+        background: var(--success-dark) !important;
+        color: white !important;
+        border-color: var(--success-dark) !important;
+        transform: translateY(-1px);
+    }
+
+    /* Cart button loading state hover - no changes */
+    .action-cart.loading:hover {
+        background: var(--bg-secondary) !important;
+        color: var(--text-primary) !important;
+        border-color: var(--border-color) !important;
+        cursor: not-allowed;
+    }
+
+    /* ============================================
+    LIKE BUTTON CONSISTENT STYLING
+    ============================================ */
+
+    /* Ensure consistent styling for like buttons across both templates */
+    .listing-like, .product-favorite-button {
+        position: relative;
+        width: 36px;
+        height: 36px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        color: var(--text-secondary);
+        font-size: 16px;
+        padding: 0;
+        margin: 0;
+        z-index: 2;
+        outline: none;
+    }
+
+    .listing-like:hover, .product-favorite-button:hover {
+        background: rgba(239, 71, 111, 0.1);
+        color: var(--danger);
+        border-color: var(--danger);
+        transform: scale(1.1);
+    }
+
+    .listing-like.liked, .product-favorite-button.liked {
+        background: var(--danger) !important;
+        color: white !important;
+        border-color: var(--danger) !important;
+        animation: heartBeat 2s infinite !important;
+        box-shadow: 0 4px 12px rgba(239, 71, 111, 0.3) !important;
+    }
+
+    .listing-like.liked:hover, .product-favorite-button.liked:hover {
+        background: #e63946 !important;
+        transform: scale(1.1) !important;
+        box-shadow: 0 6px 16px rgba(239, 71, 111, 0.4) !important;
+    }
+
+    /* For product_detail.html specifically - update the existing structure */
+    .product-favorite-wrapper {
+        position: relative;
+        display: inline-block;
+        width: 36px;
+        height: 36px;
+    }
+
+    .product-favorite-count {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        background: linear-gradient(135deg, var(--danger) 0%, #e63946 100%);
+        color: white;
+        font-size: 10px;
+        font-weight: 800;
+        min-width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 5px;
+        z-index: 3;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        border: 2px solid var(--card-bg);
+        animation: pulse 2s infinite;
+        pointer-events: none;
+        white-space: nowrap;
+    }
+
+    /* Update the product actions in product_detail.html to match the structure */
+    .product-actions .d-flex {
+        gap: 10px;
+    }
+
+    .product-actions .btn-custom.flex-fill {
+        flex: 1;
+    }
+
+    /* For listing_detail.html - update the favorite form to match the new structure */
+    .favorite-form {
+        position: relative;
+        width: 36px;
+        height: 36px;
+        margin: 0;
+    }
+
+    .favorite-form button {
+        position: absolute;
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Update the like button text to be consistent */
+    .favorite-form button i {
+        font-size: 16px;
+    }
+
+    /* Remove the text from the like button, only show icon */
+    .favorite-form button .btn-text {
+        display: none;
+    }
+
+    /* Add a count badge for listing_detail.html */
+    .favorite-form::after {
+        content: attr(data-count);
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        background: linear-gradient(135deg, var(--danger) 0%, #e63946 100%);
+        color: white;
+        font-size: 10px;
+        font-weight: 800;
+        min-width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 5px;
+        z-index: 3;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        border: 2px solid var(--card-bg);
+        animation: pulse 2s infinite;
+        pointer-events: none;
+        white-space: nowrap;
+    }
+
+    /* Hide the count when it's 0 */
+    .favorite-form[data-count="0"]::after {
+        display: none;
+    }
+
+    /* ============================================
+    ANIMATIONS
+    ============================================ */
+
+    @keyframes heartBeat {
+        0% { transform: scale(1); }
+        5% { transform: scale(1.1); }
+        10% { transform: scale(1); }
+        15% { transform: scale(1.1); }
+        20% { transform: scale(1); }
+        100% { transform: scale(1); }
+    }
+
+    @keyframes pulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(239, 71, 111, 0.7);
+        }
+        70% {
+            box-shadow: 0 0 0 10px rgba(239, 71, 111, 0);
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(239, 71, 111, 0);
+        }
+    }
+
+    @keyframes cartBounce {
+        0% { transform: scale(1); }
+        30% { transform: scale(1.1); }
+        50% { transform: scale(0.95); }
+        70% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+
+    /* ============================================
+    RESPONSIVE ADJUSTMENTS
+    ============================================ */
+
+    @media (max-width: 768px) {
+        .action-cart:not(.in-cart):not(.loading):hover {
+            background: var(--bg-secondary) !important;
+            color: var(--text-primary) !important;
+            border-color: var(--border-color) !important;
+        }
+        
+        .action-cart.in-cart:not(.loading):hover {
+            background: var(--success) !important;
+            color: white !important;
+            border-color: var(--success) !important;
+        }
+        
+        .listing-like, .product-favorite-button, .favorite-form button {
+            width: 32px;
+            height: 32px;
+            font-size: 14px;
+        }
+        
+        .product-favorite-wrapper, .favorite-form {
+            width: 32px;
+            height: 32px;
+        }
+        
+        .product-favorite-count, .favorite-form::after {
+            font-size: 9px;
+            min-width: 16px;
+            height: 16px;
+            border-radius: 8px;
+            top: -5px;
+            right: -5px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .listing-like, .product-favorite-button, .favorite-form button {
+            width: 30px;
+            height: 30px;
+            font-size: 13px;
+        }
+        
+        .product-favorite-wrapper, .favorite-form {
+            width: 30px;
+            height: 30px;
+        }
+        
+        .product-favorite-count, .favorite-form::after {
+            font-size: 8px;
+            min-width: 15px;
+            height: 15px;
+            border-radius: 7.5px;
+            top: -4px;
+            right: -4px;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -1570,7 +1833,7 @@
                         <!-- Price and Price History -->
                         <div class="listing-price">
                             <span class="price-currency">KSh</span>
-                            {{ listing.price }}
+                            {{ listing.price|intcomma }}
                         </div>
                         
                         {% if listing.price_trend != 'stable' or listing.original_price %}
@@ -1583,7 +1846,7 @@
                                     {% elif listing.price_trend == 'down' %}
                                     Price decreased by {{ price_change_percentage }}%
                                     {% endif %}
-                                    (was KSh {{ listing.original_price }})
+                                    (was KSh {{ listing.original_price|intcomma }})
                                 {% else %}
                                 Price stable
                                 {% endif %}
@@ -1675,18 +1938,31 @@
                     <div class="listing-actions">
                         {% if user.is_authenticated and user != listing.seller %}
                             {% if listing.stock > 0 and not listing.is_sold %}
-                            <form method="post" action="{% url 'add_to_cart' listing.id %}" class="d-inline w-100">
-                                {% csrf_token %}
-                                <button type="submit" class="btn-custom btn-primary">
-                                    <i class="bi bi-cart-plus"></i> Add to Cart
+                                {% with cart_item=listing|in_cart:request.user %}
+                                <button type="button" 
+                                        class="btn-custom action-cart w-100 {% if cart_item %}in-cart{% endif %}" 
+                                        id="cart-btn-{{ listing.id }}"
+                                        data-listing-id="{{ listing.id }}"
+                                        data-cart-quantity="{{ cart_item.quantity|default:0 }}"
+                                        onclick="handleListingCartClick(this, {{ listing.id }})">
+                                    <i class="bi {% if cart_item %}bi-cart-check{% else %}bi-cart-plus{% endif %}"></i>
+                                    <span class="cart-btn-text">
+                                        {% if cart_item %}
+                                            {{ cart_item.quantity }} in cart
+                                        {% else %}
+                                            Add to Cart
+                                        {% endif %}
+                                    </span>
                                 </button>
-                            </form>
+                                {% endwith %}
                             {% endif %}
                             <a href="{% url 'start-conversation' listing.id listing.seller.id %}" class="btn-custom btn-accent">
                                 <i class="bi bi-chat"></i> Contact Seller
                             </a>
                         {% elif not user.is_authenticated %}
-                            <a href="{% url 'login' %}?next={{ request.path }}" class="btn-custom btn-primary w-100">Login to Purchase</a>
+                            <a href="{% url 'login' %}?next={{ request.path }}" class="btn-custom btn-primary w-100">
+                                <i class="bi bi-box-arrow-in-right"></i> Login to Purchase
+                            </a>
                         {% endif %}
                     </div>
                 </div>
@@ -1927,7 +2203,7 @@
                         <img src="{{ seller_listing.get_image_url }}" alt="{{ seller_listing.title }}" class="listing-card-img">
                         <div class="listing-card-content">
                             <h6 class="listing-card-title">{{ seller_listing.title }}</h6>
-                            <div class="listing-card-price">KSh {{ seller_listing.price }}</div>
+                            <div class="listing-card-price">KSh {{ seller_listing.price|intcomma }}</div>
                             <div class="listing-card-location">
                                 <i class="bi bi-geo-alt"></i> {{ seller_listing.get_location_display|truncatechars:15 }}
                             </div>
@@ -1954,7 +2230,7 @@
                         <img src="{{ similar_listing.get_image_url }}" alt="{{ similar_listing.title }}" class="listing-card-img">
                         <div class="listing-card-content">
                             <h6 class="listing-card-title">{{ similar_listing.title }}</h6>
-                            <div class="listing-card-price">KSh {{ similar_listing.price }}</div>
+                            <div class="listing-card-price">KSh {{ similar_listing.price|intcomma }}</div>
                             <div class="listing-card-location">
                                 <i class="bi bi-geo-alt"></i> {{ similar_listing.get_location_display|truncatechars:15 }}
                             </div>
@@ -2019,14 +2295,18 @@
                     <!-- Action Buttons -->
                     <div class="seller-actions">
                         <!-- Favorite Button -->
-                        <form action="{% url 'toggle_favorite' listing.id %}" method="post" class="favorite-form">
-                            {% csrf_token %}
-                            <button type="submit" class="btn-custom {% if is_favorited %}btn-primary{% else %}btn-ghost{% endif %}">
-                                <i class="bi bi-heart{% if is_favorited %}-fill{% endif %}"></i>
-                                {% if is_favorited %}Likes{% else %}Like{% endif %}
-                                ({{ listing.favorites.count }})
+                        <div class="favorite-form" data-count="{{ listing.favorites.count }}">
+                            <button type="button" 
+                                    class="listing-like {% if is_favorited %}liked{% endif %}" 
+                                    data-listing-id="{{ listing.id }}"
+                                    onclick="handleFavoriteClick(this, {{ listing.id }})">
+                                <i class="bi {% if is_favorited %}bi-heart-fill{% else %}bi-heart{% endif %}"></i>
+                                <span class="btn-text" style="display: none;">
+                                    {% if is_favorited %}Likes{% else %}Like{% endif %}
+                                    ({{ listing.favorites.count }})
+                                </span>
                             </button>
-                        </form>
+                        </div>
 
                         <!-- View Profile Button -->
                         <a href="{% url 'profile' listing.seller.pk %}" class="btn-custom btn-ghost">
@@ -2134,7 +2414,7 @@
                                 </a>
                                 
                                 <div class="recent-listing-price">
-                                    KSh {{ recent.price }}
+                                    KSh {{ recent.price|intcomma }}
                                 </div>
                                 
                                 <div class="recent-listing-meta">
@@ -2158,9 +2438,10 @@
                                         <i class="bi bi-eye me-1"></i> View
                                     </a>
                                     {% if user.is_authenticated %}
-                                    <button class="btn-custom btn-ghost btn-sm recent-quick-favorite" 
-                                            data-listing-id="{{ recent.id }}">
-                                        <i class="bi bi-heart{% if is_favorited %}-fill{% endif %}"></i>  
+                                    <button class="btn-custom btn-ghost btn-sm recent-quick-favorite listing-like {% if recent.id in user_favorites %}liked{% endif %}" 
+                                            data-listing-id="{{ recent.id }}"
+                                            onclick="handleFavoriteClick(this, {{ recent.id }})">
+                                        <i class="bi {% if recent.id in user_favorites %}bi-heart-fill{% else %}bi-heart{% endif %}"></i>  
                                     </button>
                                     {% endif %}
                                 </div>
@@ -2885,5 +3166,381 @@
             }, 250);
         });
     });
+    // ===== CART AND FAVORITE FUNCTIONS FOR LISTING_DETAIL.HTML =====
+
+// Add these functions if they don't already exist in the template
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+let isCartRequestInProgress = false;
+
+window.handleListingCartClick = function(button, listingId) {
+    if (button.classList.contains('loading') || isCartRequestInProgress) {
+        return;
+    }
+    
+    isCartRequestInProgress = true;
+    const currentQuantity = parseInt(button.getAttribute('data-cart-quantity') || 0);
+    const url = `/cart/add/${listingId}/`;
+    
+    button.classList.add('loading');
+    button.disabled = true;
+    const originalHTML = button.innerHTML;
+    
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({action: 'add'})
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            const newQuantity = data.item_quantity || (currentQuantity + 1);
+            
+            button.classList.add('in-cart');
+            button.innerHTML = `<i class="bi bi-cart-check"></i> <span class="cart-btn-text">${newQuantity} in cart</span>`;
+            button.setAttribute('data-cart-quantity', newQuantity);
+            
+            button.style.animation = 'cartBounce 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+            setTimeout(() => {
+                button.style.animation = '';
+            }, 500);
+            
+            if (window.showToast) {
+                window.showToast(data.message || 'Added to cart!', 'success');
+            }
+            
+            if (data.cart_total !== undefined && data.cart_item_count !== undefined) {
+                updateNavbarCart(data.cart_total, data.cart_item_count);
+            }
+            
+        } else {
+            if (window.showToast) {
+                window.showToast(data.error || 'Failed to add to cart', 'error');
+            }
+            button.innerHTML = originalHTML;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        if (window.showToast) {
+            window.showToast('Error adding to cart', 'error');
+        }
+        button.innerHTML = originalHTML;
+    })
+    .finally(() => {
+        button.classList.remove('loading');
+        button.disabled = false;
+        isCartRequestInProgress = false;
+    });
+};
+
+function updateNavbarCart(total, count) {
+    console.log('Updating navbar cart:', { total, count });
+    
+    document.querySelectorAll('.cart-count-badge, .mobile-cart-badge').forEach(badge => {
+        if (count > 0) {
+            badge.textContent = count;
+            badge.style.display = 'flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    });
+    
+    const cartTotalElements = document.querySelectorAll('.cart-total');
+    cartTotalElements.forEach(element => {
+        if (count > 0) {
+            element.textContent = `KSh ${parseFloat(total).toFixed(2)}`;
+            element.style.display = 'inline';
+        } else {
+            element.style.display = 'none';
+        }
+    });
+    
+    const desktopCartBadge = document.getElementById('desktopCartBadge');
+    if (desktopCartBadge) {
+        if (count > 0) {
+            desktopCartBadge.textContent = count;
+            desktopCartBadge.style.display = 'inline-flex';
+        } else {
+            desktopCartBadge.style.display = 'none';
+        }
+    }
+    
+    // Dispatch event for other components
+    document.dispatchEvent(new CustomEvent('cartUpdated', {
+        detail: { itemCount: count, total: total }
+    }));
+}
+
+// FAVORITE FUNCTIONS
+let pendingFavoriteUpdates = new Set();
+
+window.handleFavoriteClick = function(button, listingId) {
+    // Prevent multiple clicks and check authentication
+    if (button.classList.contains('processing') || pendingFavoriteUpdates.has(listingId)) {
+        return;
+    }
+    
+    if (!{% if user.is_authenticated %}true{% else %}false{% endif %}) {
+        showToast('Please login to add favorites', 'error');
+        return;
+    }
+    
+    // Mark as pending to prevent duplicate requests
+    pendingFavoriteUpdates.add(listingId);
+    
+    // Get current state
+    const isCurrentlyLiked = button.classList.contains('liked');
+    const parentForm = button.closest('.favorite-form');
+    const currentCount = parentForm ? parseInt(parentForm.getAttribute('data-count') || 0) : 0;
+    
+    // Calculate optimistic update
+    const newLikedState = !isCurrentlyLiked;
+    const newCount = newLikedState ? currentCount + 1 : Math.max(0, currentCount - 1);
+    
+    // Show processing state
+    button.classList.add('processing');
+    
+    // IMMEDIATELY update UI
+    updateFavoriteButtonImmediately(button, newLikedState);
+    if (parentForm) {
+        parentForm.setAttribute('data-count', newCount);
+        updateFavoriteFormCount(parentForm, newCount);
+    }
+    
+    // Make API call
+    fetch(`/favorites/toggle/${listingId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/json'
+        },
+        credentials: 'same-origin'
+    })
+    .then(response => {
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Server returned non-JSON response');
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Favorite toggle response:', data);
+        
+        if (data.success) {
+            // Update UI with server data
+            updateFavoriteButtonImmediately(button, data.is_favorited);
+            if (parentForm) {
+                parentForm.setAttribute('data-count', data.listing_favorite_count || newCount);
+                updateFavoriteFormCount(parentForm, data.listing_favorite_count || newCount);
+            }
+            
+            // Show success message
+            showToast(data.is_favorited ? 'Added to favorites!' : 'Removed from favorites!', 'success');
+            
+        } else {
+            // Server error - revert to original state
+            updateFavoriteButtonImmediately(button, isCurrentlyLiked);
+            if (parentForm) {
+                parentForm.setAttribute('data-count', currentCount);
+                updateFavoriteFormCount(parentForm, currentCount);
+            }
+            
+            if (data.error) {
+                showToast(data.error, 'error');
+            } else {
+                showToast('Failed to update favorite', 'error');
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Favorite API error:', error);
+        
+        // Network error - revert to original state
+        updateFavoriteButtonImmediately(button, isCurrentlyLiked);
+        if (parentForm) {
+            parentForm.setAttribute('data-count', currentCount);
+            updateFavoriteFormCount(parentForm, currentCount);
+        }
+        
+        let errorMessage = 'Network error. Please check your connection.';
+        if (error.message.includes('non-JSON')) {
+            errorMessage = 'Server error. Please try again.';
+        }
+        showToast(errorMessage, 'error');
+    })
+    .finally(() => {
+        // Remove processing state and pending marker
+        setTimeout(() => {
+            button.classList.remove('processing');
+            pendingFavoriteUpdates.delete(listingId);
+        }, 300);
+    });
+};
+
+function updateFavoriteButtonImmediately(button, isLiked) {
+    // Update button class
+    if (isLiked) {
+        button.classList.add('liked');
+    } else {
+        button.classList.remove('liked');
+    }
+    
+    // Update icon
+    const icon = button.querySelector('i');
+    if (icon) {
+        icon.className = isLiked ? 'bi bi-heart-fill' : 'bi bi-heart';
+    }
+    
+    // Add visual feedback
+    button.style.transform = 'scale(1.2)';
+    setTimeout(() => {
+        button.style.transform = 'scale(1)';
+    }, 200);
+}
+
+function updateFavoriteFormCount(formElement, newCount) {
+    if (!formElement) return;
+    
+    // Update the pseudo-element content
+    formElement.setAttribute('data-count', newCount);
+    
+    // Add/remove the pseudo-element based on count
+    if (newCount > 0) {
+        formElement.style.setProperty('--favorite-count', `"${newCount}"`);
+        
+        // Add count change animation
+        formElement.classList.add('count-changing');
+        setTimeout(() => {
+            formElement.classList.remove('count-changing');
+        }, 300);
+    }
+}
+
+function showToast(message, type = 'success') {
+    if (window.showToast && typeof window.showToast === 'function') {
+        window.showToast(message, type);
+        return;
+    }
+    
+    const toast = document.createElement('div');
+    toast.className = `custom-toast toast-${type}`;
+    toast.textContent = message;
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'success' ? '#06D6A0' : '#EF476F'};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 9999;
+        animation: slideIn 0.3s ease;
+    `;
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => {
+            document.body.removeChild(toast);
+        }, 300);
+    }, 3000);
+}
+
+// Add CSS for the form count pseudo-element
+const style = document.createElement('style');
+style.textContent = `
+    .favorite-form {
+        position: relative;
+    }
+    
+    .favorite-form::after {
+        content: attr(data-count);
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        background: linear-gradient(135deg, var(--danger) 0%, #e63946 100%);
+        color: white;
+        font-size: 10px;
+        font-weight: 800;
+        min-width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 5px;
+        z-index: 3;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        border: 2px solid var(--card-bg);
+        animation: pulse 2s infinite;
+        pointer-events: none;
+        white-space: nowrap;
+    }
+    
+    .favorite-form[data-count="0"]::after {
+        display: none;
+    }
+    
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+    
+    .count-changing {
+        animation: countChange 0.5s ease;
+    }
+`;
+document.head.appendChild(style);
+
+// Initialize cart state from Django template
+document.addEventListener('DOMContentLoaded', function() {
+    // Update navbar cart if cart data is available
+    {% if cart_total and cart_item_count %}
+    updateNavbarCart({{ cart_total }}, {{ cart_item_count }});
+    {% endif %}
+});
 </script>
 {% endblock %}

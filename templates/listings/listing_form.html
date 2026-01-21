@@ -840,6 +840,31 @@
     .text-muted {
         color: var(--text-secondary) !important;
     }
+    
+    /* Added: Better image preview handling */
+    .preview-container {
+        position: relative;
+        margin-top: 15px;
+    }
+    
+    .preview-placeholder {
+        text-align: center;
+        padding: 30px;
+        color: #6c757d;
+        font-style: italic;
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        background: #f8f9fa;
+    }
+    
+    /* Ensure new image previews are visible */
+    .new-image-preview {
+        border: 2px solid #28a745 !important;
+    }
+    
+    .new-image-badge {
+        background: #28a745 !important;
+    }
 </style>
 {% endblock %}
 
@@ -1383,28 +1408,6 @@
                         {% endif %}
                     </div>
 
-                    <!-- Is Featured Field -->
-                    <div class="form-group full-width">
-                        <div class="form-check">
-                            <input type="checkbox" 
-                                   name="{{ form.is_featured.name }}" 
-                                   id="{{ form.is_featured.id_for_label }}" 
-                                   class="form-check-input {% if form.is_featured.errors %}error{% endif %}"
-                                   {% if form.is_featured.value or form.instance.is_featured %}checked{% endif %}>
-                            <label for="{{ form.is_featured.id_for_label }}" class="form-check-label form-label">
-                                <i class="bi bi-star-fill me-2"></i>Feature this listing
-                            </label>
-                        </div>
-                        <small class="form-text text-muted">
-                            Featured listings appear prominently on the homepage. This requires an active subscription.
-                        </small>
-                        {% if form.is_featured.errors %}
-                            <div class="error-message">
-                                <i class="bi bi-exclamation-circle"></i>
-                                {{ form.is_featured.errors.0 }}
-                            </div>
-                        {% endif %}
-                    </div>
                 </div>
             </div>
 
@@ -1469,10 +1472,14 @@
                         </button>
                     </div>
                     
-                    <!-- New main image preview -->
-                    <div class="image-previews-container">
-                        <div id="main-image-preview" class="preview-grid">
+                    <!-- New main image preview container - Always present -->
+                    <div class="preview-container">
+                        <div class="preview-grid" id="main-image-preview">
                             <!-- New main image preview will be inserted here by JavaScript -->
+                            <div class="preview-placeholder" id="main-image-placeholder">
+                                <i class="bi bi-image display-6 text-muted mb-2"></i>
+                                <p class="mb-0">No main image selected yet</p>
+                            </div>
                         </div>
                     </div>
                     
@@ -1514,10 +1521,14 @@
                         </button>
                     </div>
                     
-                    <!-- New additional images preview -->
-                    <div class="image-previews-container">
-                        <div id="additional-images-preview" class="preview-grid">
+                    <!-- New additional images preview container - Always present -->
+                    <div class="preview-container">
+                        <div class="preview-grid" id="additional-images-preview">
                             <!-- New additional images preview will be inserted here by JavaScript -->
+                            <div class="preview-placeholder" id="additional-images-placeholder">
+                                <i class="bi bi-images display-6 text-muted mb-2"></i>
+                                <p class="mb-0">No additional images selected yet</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1646,7 +1657,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Image Upload Handling
+    // Image Upload Handling - FIXED VERSION
     function initImageUpload() {
         const mainImageInput = document.getElementById('id_image');
         const additionalImagesInput = document.getElementById('id_images');
@@ -1655,6 +1666,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const mainImageUploadArea = document.getElementById('main-image-upload-area');
         const additionalImagesUploadArea = document.getElementById('additional-images-upload-area');
         const clearImageCheckbox = document.getElementById('image-clear');
+        const mainImagePlaceholder = document.getElementById('main-image-placeholder');
+        const additionalImagesPlaceholder = document.getElementById('additional-images-placeholder');
         
         // Clear checkbox handling for updates
         if (clearImageCheckbox && isEditMode) {
@@ -1767,8 +1780,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const reader = new FileReader();
             
             reader.onload = function(e) {
+                // Remove placeholder if present
+                const placeholder = container.querySelector('.preview-placeholder');
+                if (placeholder) {
+                    placeholder.remove();
+                }
+                
                 const previewItem = document.createElement('div');
-                previewItem.className = `preview-item ${isMain ? 'main-image' : ''}`;
+                previewItem.className = `preview-item ${isMain ? 'main-image new-image-preview' : 'new-image-preview'}`;
                 
                 const img = document.createElement('img');
                 img.src = e.target.result;
@@ -1791,6 +1810,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (isMain) {
                         mainImageFile = null;
                         mainImageInput.value = '';
+                        
+                        // Show placeholder again if no images
+                        if (container.querySelectorAll('.preview-item').length === 0) {
+                            const placeholderDiv = document.createElement('div');
+                            placeholderDiv.className = 'preview-placeholder';
+                            placeholderDiv.id = isMain ? 'main-image-placeholder' : 'additional-images-placeholder';
+                            placeholderDiv.innerHTML = `
+                                <i class="bi bi-${isMain ? 'image' : 'images'} display-6 text-muted mb-2"></i>
+                                <p class="mb-0">No ${isMain ? 'main' : 'additional'} image selected yet</p>
+                            `;
+                            container.appendChild(placeholderDiv);
+                        }
                         showToast('Main image removed', 'info');
                     } else {
                         const index = additionalImageFiles.findIndex(f => f.name === file.name);
@@ -1803,8 +1834,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (isMain) {
                     const badge = document.createElement('div');
-                    badge.className = 'preview-badge';
+                    badge.className = 'preview-badge new-image-badge';
                     badge.textContent = 'New Main';
+                    previewItem.appendChild(badge);
+                } else {
+                    const badge = document.createElement('div');
+                    badge.className = 'preview-badge new-image-badge';
+                    badge.textContent = 'New';
                     previewItem.appendChild(badge);
                 }
                 
@@ -1814,6 +1850,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 previewItem.appendChild(overlay);
                 
                 if (isMain) {
+                    // For main image, clear container first
                     container.innerHTML = '';
                 }
                 container.appendChild(previewItem);

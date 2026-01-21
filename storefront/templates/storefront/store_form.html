@@ -535,6 +535,29 @@
             padding: var(--spacing-lg);
         }
     }
+    
+    /* Added: Better image preview handling */
+    .image-preview-container {
+        margin-top: 15px;
+        min-height: 100px;
+    }
+    
+    .no-preview {
+        text-align: center;
+        padding: 20px;
+        color: #6c757d;
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        background: #f8f9fa;
+    }
+    
+    .new-image-preview-item {
+        border: 2px solid #28a745 !important;
+    }
+    
+    .new-image-badge {
+        background: #28a745 !important;
+    }
 </style>
 {% endblock %}
 
@@ -663,23 +686,33 @@
                                 </button>
                             </div>
                             
-                            {% if not creating_store and store.logo %}
-                            <div class="image-previews-grid mt-3">
-                                <div class="preview-item-modern">
-                                    <img src="{{ store.logo.url }}" 
-                                         alt="{{ store.name }} logo"
-                                         class="preview-img-modern">
-                                    <div class="preview-overlay-modern">
-                                        <button type="button" 
-                                                class="btn btn-danger btn-sm"
-                                                data-bs-toggle="modal" 
-                                                data-bs-target="#deleteLogoModal">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </div>
+                            <!-- Logo preview container - Always present -->
+                            <div class="image-preview-container">
+                                <div class="image-previews-grid" id="logoPreviewContainer">
+                                    {% if not creating_store and store.logo %}
+                                        <!-- Existing logo preview -->
+                                        <div class="preview-item-modern">
+                                            <img src="{{ store.logo.url }}" 
+                                                 alt="{{ store.name }} logo"
+                                                 class="preview-img-modern">
+                                            <div class="preview-overlay-modern">
+                                                <button type="button" 
+                                                        class="btn btn-danger btn-sm"
+                                                        data-bs-toggle="modal" 
+                                                        data-bs-target="#deleteLogoModal">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <!-- Placeholder for new store or when no logo -->
+                                        <div class="no-preview" id="logoNoPreview">
+                                            <i class="bi bi-image display-6 text-muted mb-2"></i>
+                                            <p class="mb-0">No logo selected yet</p>
+                                        </div>
+                                    {% endif %}
                                 </div>
                             </div>
-                            {% endif %}
                         </div>
 
                         <!-- Cover Image Upload -->
@@ -709,23 +742,33 @@
                                 </button>
                             </div>
                             
-                            {% if not creating_store and store.cover_image %}
-                            <div class="image-previews-grid mt-3">
-                                <div class="preview-item-modern">
-                                    <img src="{{ store.cover_image.url }}" 
-                                         alt="{{ store.name }} cover"
-                                         class="preview-img-modern">
-                                    <div class="preview-overlay-modern">
-                                        <button type="button" 
-                                                class="btn btn-danger btn-sm"
-                                                data-bs-toggle="modal" 
-                                                data-bs-target="#deleteCoverModal">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </div>
+                            <!-- Cover preview container - Always present -->
+                            <div class="image-preview-container">
+                                <div class="image-previews-grid" id="coverPreviewContainer">
+                                    {% if not creating_store and store.cover_image %}
+                                        <!-- Existing cover preview -->
+                                        <div class="preview-item-modern">
+                                            <img src="{{ store.cover_image.url }}" 
+                                                 alt="{{ store.name }} cover"
+                                                 class="preview-img-modern">
+                                            <div class="preview-overlay-modern">
+                                                <button type="button" 
+                                                        class="btn btn-danger btn-sm"
+                                                        data-bs-toggle="modal" 
+                                                        data-bs-target="#deleteCoverModal">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <!-- Placeholder for new store or when no cover -->
+                                        <div class="no-preview" id="coverNoPreview">
+                                            <i class="bi bi-images display-6 text-muted mb-2"></i>
+                                            <p class="mb-0">No cover image selected yet</p>
+                                        </div>
+                                    {% endif %}
                                 </div>
                             </div>
-                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -1025,11 +1068,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // File upload drag & drop
+    // File upload drag & drop - FIXED VERSION
     const logoUploadArea = document.getElementById('logoUploadArea');
     const coverUploadArea = document.getElementById('coverUploadArea');
+    const logoInput = document.getElementById('id_logo');
+    const coverInput = document.getElementById('id_cover_image');
+    const logoPreviewContainer = document.getElementById('logoPreviewContainer');
+    const coverPreviewContainer = document.getElementById('coverPreviewContainer');
     
-    function setupDragDrop(uploadArea, inputId) {
+    function setupDragDrop(uploadArea, input, previewContainer) {
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             uploadArea.addEventListener(eventName, preventDefaults, false);
         });
@@ -1054,56 +1101,123 @@ document.addEventListener('DOMContentLoaded', function() {
         uploadArea.addEventListener('drop', (e) => {
             const files = e.dataTransfer.files;
             if (files.length > 0) {
-                const input = document.getElementById(inputId);
-                if (input) {
-                    input.files = files;
-                    // Trigger change event
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                if (input === logoInput) {
+                    handleImageUpload(files[0], input, previewContainer, 'logo');
+                } else {
+                    handleImageUpload(files[0], input, previewContainer, 'cover');
                 }
             }
         }, false);
     }
     
-    if (logoUploadArea) setupDragDrop(logoUploadArea, 'id_logo');
-    if (coverUploadArea) setupDragDrop(coverUploadArea, 'id_cover_image');
-    
-    // File input change handlers
-    const logoInput = document.getElementById('id_logo');
-    const coverInput = document.getElementById('id_cover_image');
-    
-    function previewImage(input, containerId) {
-        if (input.files && input.files[0]) {
-            const reader = new FileReader();
-            const container = document.querySelector(containerId);
-            
-            reader.onload = function(e) {
-                if (container) {
-                    container.innerHTML = `
-                        <div class="preview-item-modern">
-                            <img src="${e.target.result}" class="preview-img-modern" alt="Preview">
-                            <div class="preview-overlay-modern">
-                                <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.preview-item-modern').remove()">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </div>
-                        </div>
-                    `;
-                }
-            }
-            
-            reader.readAsDataURL(input.files[0]);
+    function handleImageUpload(file, input, previewContainer, type) {
+        if (!file || !file.type.match('image.*')) {
+            showToast('Please select a valid image file.', 'error');
+            return;
         }
+        
+        // Check file size (10MB limit)
+        if (file.size > 10 * 1024 * 1024) {
+            showToast('Image file is too large. Maximum size is 10MB.', 'error');
+            return;
+        }
+        
+        displayImagePreview(file, input, previewContainer, type);
+        showToast(`${type === 'logo' ? 'Logo' : 'Cover image'} uploaded successfully`, 'success');
     }
     
+    function displayImagePreview(file, input, container, type) {
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            // Remove placeholder if present
+            const noPreview = container.querySelector('.no-preview');
+            if (noPreview) {
+                noPreview.remove();
+            }
+            
+            // Clear existing preview (for new images)
+            const existingPreview = container.querySelector('.preview-item-modern:not(.existing-image)');
+            if (existingPreview) {
+                existingPreview.remove();
+            }
+            
+            const previewItem = document.createElement('div');
+            previewItem.className = 'preview-item-modern new-image-preview-item';
+            
+            const img = document.createElement('img');
+            img.src = e.target.result;
+            img.className = 'preview-img-modern';
+            img.alt = `New ${type} preview`;
+            
+            const overlay = document.createElement('div');
+            overlay.className = 'preview-overlay-modern';
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn btn-danger btn-sm';
+            removeBtn.innerHTML = '<i class="bi bi-trash"></i>';
+            removeBtn.title = 'Remove image';
+            removeBtn.onclick = function() {
+                previewItem.remove();
+                input.value = '';
+                
+                // Show placeholder again if no images
+                if (container.querySelectorAll('.preview-item-modern').length === 0) {
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'no-preview';
+                    placeholder.id = `${type}NoPreview`;
+                    placeholder.innerHTML = `
+                        <i class="bi bi-${type === 'logo' ? 'image' : 'images'} display-6 text-muted mb-2"></i>
+                        <p class="mb-0">No ${type} selected yet</p>
+                    `;
+                    container.appendChild(placeholder);
+                }
+                showToast(`${type === 'logo' ? 'Logo' : 'Cover image'} removed`, 'info');
+            };
+            
+            overlay.appendChild(removeBtn);
+            previewItem.appendChild(img);
+            previewItem.appendChild(overlay);
+            
+            // Add new image badge
+            const badge = document.createElement('div');
+            badge.className = 'preview-badge new-image-badge';
+            badge.textContent = 'New';
+            badge.style.position = 'absolute';
+            badge.style.top = '8px';
+            badge.style.left = '8px';
+            previewItem.appendChild(badge);
+            
+            container.appendChild(previewItem);
+        };
+        
+        reader.readAsDataURL(file);
+    }
+    
+    // Setup drag & drop
+    if (logoUploadArea && logoInput && logoPreviewContainer) {
+        setupDragDrop(logoUploadArea, logoInput, logoPreviewContainer);
+    }
+    
+    if (coverUploadArea && coverInput && coverPreviewContainer) {
+        setupDragDrop(coverUploadArea, coverInput, coverPreviewContainer);
+    }
+    
+    // File input change handlers
     if (logoInput) {
-        logoInput.addEventListener('change', function() {
-            previewImage(this, '#logoUploadArea + .image-previews-grid');
+        logoInput.addEventListener('change', function(e) {
+            if (this.files.length > 0) {
+                handleImageUpload(this.files[0], this, logoPreviewContainer, 'logo');
+            }
         });
     }
     
     if (coverInput) {
-        coverInput.addEventListener('change', function() {
-            previewImage(this, '#coverUploadArea + .image-previews-grid');
+        coverInput.addEventListener('change', function(e) {
+            if (this.files.length > 0) {
+                handleImageUpload(this.files[0], this, coverPreviewContainer, 'cover');
+            }
         });
     }
     
@@ -1189,6 +1303,7 @@ function showToast(message, type = 'info') {
                 ${message}
             </div>
             <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
         </div>
     `;
     
