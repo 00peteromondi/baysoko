@@ -4,6 +4,7 @@ from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.views import PasswordChangeView
+from django.contrib.auth import views as auth_views
 from django.views.generic import DetailView, UpdateView
 from django.urls import reverse_lazy
 from django.contrib import messages
@@ -25,6 +26,8 @@ from urllib.parse import urlencode
 import secrets
 import requests
 from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+
 
 
 logger = logging.getLogger(__name__)
@@ -426,6 +429,34 @@ class CustomPasswordChangeView(LoginRequiredMixin, PasswordChangeView):
     def form_valid(self, form):
         messages.success(self.request, 'Your password has been changed successfully!')
         return super().form_valid(form)
+
+
+class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
+    template_name = 'users/password_reset_confirm.html'
+    success_url = reverse_lazy('password_reset_complete')
+    
+    def form_valid(self, form):
+        messages.success(self.request, 'Your password has been reset successfully!')
+        return super().form_valid(form)
+
+
+class CustomPasswordResetView(auth_views.PasswordResetView):
+    template_name = 'users/password_reset.html'
+    email_template_name = 'users/password_reset_email.html'
+    subject_template_name = 'users/password_reset_subject.txt'
+    success_url = reverse_lazy('password_reset_done')
+    
+    def form_valid(self, form):
+        messages.success(self.request, 'Password reset email has been sent to your email address.')
+        return super().form_valid(form)
+
+
+class CustomPasswordResetCompleteView(auth_views.PasswordResetCompleteView):
+    template_name = 'users/password_reset_complete.html'
+    
+    def get(self, request, *args, **kwargs):
+        messages.success(self.request, 'Your password has been successfully reset. You can now log in with your new password.')
+        return super().get(request, *args, **kwargs)
 
 
 @staff_member_required

@@ -617,7 +617,7 @@ if not DEBUG:
     EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
     EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
     EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-    DEFAULT_FROM_EMAIL = 'HomaBay Souq <noreply@homabaysouq.com>'
+    DEFAULT_FROM_EMAIL = '00peteromondi@gmail.com'
 
     # Password reset timeout in seconds (24 hours)
     PASSWORD_RESET_TIMEOUT = 86400
@@ -632,10 +632,10 @@ else:
     EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
     EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
     EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-    DEFAULT_FROM_EMAIL = 'HomaBay Souq <noreply@homabaysouq.com>'
+    DEFAULT_FROM_EMAIL = '00peteromondi@gmail.com'
 
-    # Password reset timeout in seconds (24 hours)
-    PASSWORD_RESET_TIMEOUT = 86400
+    # Password reset timeout in seconds (1 hour)
+    PASSWORD_RESET_TIMEOUT = 3600
 
 # Basic logging configuration for production
 LOGGING = {

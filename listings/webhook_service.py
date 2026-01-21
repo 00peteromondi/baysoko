@@ -62,6 +62,9 @@ class DeliveryWebhookService:
                     self._update_order_from_response(order, response.json())
                 
                 return True
+            elif response.status_code in [302, 403, 500]:
+                logger.error(f"Webhook failed for order #{order.id}: {response.status_code} - {response.text}")
+                return False
             else:
                 logger.error(f"Webhook failed for order #{order.id}: {response.status_code}")
                 return False
