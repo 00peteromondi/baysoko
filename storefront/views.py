@@ -51,8 +51,14 @@ def store_detail(request, slug):
     store = get_object_or_404(Store, slug=slug)
     # Only show listings associated with this specific store
     products = Listing.objects.filter(store=store, is_active=True)
+    user_favorites = []
+    if request.user.is_authenticated:
+        user_favorites = Favorite.objects.filter(
+            user=request.user, 
+            listing__in=store.listings.all()
+        ).values_list('listing_id', flat=True)
     
-    return render(request, 'storefront/store_detail.html', {'store': store, 'products': products})
+    return render(request, 'storefront/store_detail.html', {'store': store, 'products': products, 'user_favorites': user_favorites})
 
 
 def product_detail(request, store_slug, slug):
@@ -77,8 +83,8 @@ def seller_dashboard(request):
     # Get all listings from all stores
     total_listings = sum(store.listings.count() for store in stores)
     premium_stores = stores.filter(is_premium=True).count()
-    # total_views isn't tracked on listings; default to 0 for now
-    total_views = 0
+    # Fixed total views functioning as expected
+    total_views = Listing.objects.filter(store__in=stores).aggregate(total=Sum('views'))['total'] or 0
 
     # free listing limit from settings
     free_limit = getattr(settings, 'STORE_FREE_LISTING_LIMIT', 5)
@@ -101,7 +107,6 @@ def seller_dashboard(request):
 
 
 @login_required
-
 def store_create(request):
     """
     Create a new store with enforced subscription-based limits.
@@ -123,10 +128,13 @@ def store_create(request):
         return render(request, 'storefront/confirm_store_create.html')
 
     if request.method == 'POST':
-        form = StoreForm(request.POST, request.FILES)
+        form = StoreForm(request.POST, request.FILES, user=request.user)  # Pass user to form
         if form.is_valid():
             store = form.save(commit=False)
             store.owner = request.user
+            
+            # For new stores, is_featured should always be False initially
+            store.is_featured = False
             
             try:
                 # This will trigger the clean() method which enforces store limits
@@ -161,7 +169,7 @@ def store_create(request):
                 messages.error(request, f"{field.title()}: {errors[0]}")
 
     else:
-        form = StoreForm()
+        form = StoreForm(user=request.user)
 
     context = {
         'form': form,
@@ -169,6 +177,8 @@ def store_create(request):
         'has_existing_store': existing_stores.exists(),
         'has_premium': has_premium,
         'has_active_subscription': has_active_subscription,
+        'can_be_featured': False,  # New stores cannot be featured
+        'is_enterprise': False,     # New stores are not enterprise
     }
     return render(request, 'storefront/store_form.html', context)
 
@@ -180,6 +190,31 @@ def store_edit(request, slug):
     Edit an existing store with proper form handling and validation.
     """
     store = get_object_or_404(Store, slug=slug, owner=request.user)
+    
+    # Check if store can be featured (has active subscription or valid trial)
+    # Only check if store has a primary key (it should since we're editing)
+    can_be_featured = False
+    is_enterprise = False
+    
+    if store.pk:
+        has_active = Subscription.objects.filter(
+            store=store, 
+            status='active'
+        ).exists()
+        has_valid_trial = Subscription.objects.filter(
+            store=store,
+            status='trialing',
+            trial_ends_at__gt=timezone.now()
+        ).exists()
+        can_be_featured = has_active or has_valid_trial
+        
+        # Check if it's enterprise
+        if can_be_featured:
+            is_enterprise = Subscription.objects.filter(
+                store=store,
+                status='active',
+                plan='enterprise'
+            ).exists()
     
     if request.method == 'POST':
         form = StoreForm(request.POST, request.FILES, instance=store, user=request.user)
@@ -197,6 +232,8 @@ def store_edit(request, slug):
                     'form': form,
                     'store': store,
                     'creating_store': False,
+                    'can_be_featured': can_be_featured,
+                    'is_enterprise': is_enterprise,
                 })
             except Exception as e:
                 messages.error(request, f"Error updating store: {str(e)}")
@@ -204,6 +241,8 @@ def store_edit(request, slug):
                     'form': form,
                     'store': store,
                     'creating_store': False,
+                    'can_be_featured': can_be_featured,
+                    'is_enterprise': is_enterprise,
                 })
         else:
             # Form is invalid, show errors
@@ -220,6 +259,8 @@ def store_edit(request, slug):
         'form': form,
         'store': store,
         'creating_store': False,
+        'can_be_featured': can_be_featured,
+        'is_enterprise': is_enterprise,
     }
     
     return render(request, 'storefront/store_form.html', context)

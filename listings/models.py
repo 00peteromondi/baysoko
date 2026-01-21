@@ -181,6 +181,11 @@ class Listing(models.Model):
     def rating_count(self):
         """Get number of reviews for this listing"""
         return self.reviews.filter(review_type='listing').count()
+
+    @property
+    def get_views(self):
+        """Get number of views for this listing"""
+        return self.views
     
     def get_rating_display(self):
         """Get rating for display (with star icons)"""
