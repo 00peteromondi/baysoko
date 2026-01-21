@@ -43,6 +43,9 @@ urlpatterns = [
              template_name='users/password_reset_complete.html'
          ), 
          name='password_reset_complete'),
+
+    # Debug endpoint for SMTP testing (staff only)
+    path('debug-email-send/', views.debug_send_email, name='debug_email_send'),
     
     # Password Change URLs (for logged-in users)
     path('password-change/', 

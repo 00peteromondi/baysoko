@@ -105,7 +105,6 @@ def seller_dashboard(request):
         'store_with_slug': store_with_slug
     })
 
-
 @login_required
 def store_create(request):
     """
@@ -192,29 +191,35 @@ def store_edit(request, slug):
     store = get_object_or_404(Store, slug=slug, owner=request.user)
     
     # Check if store can be featured (has active subscription or valid trial)
-    # Only check if store has a primary key (it should since we're editing)
     can_be_featured = False
     is_enterprise = False
     
+    # Only check if store has a primary key
     if store.pk:
-        has_active = Subscription.objects.filter(
-            store=store, 
-            status='active'
-        ).exists()
-        has_valid_trial = Subscription.objects.filter(
-            store=store,
-            status='trialing',
-            trial_ends_at__gt=timezone.now()
-        ).exists()
-        can_be_featured = has_active or has_valid_trial
-        
-        # Check if it's enterprise
-        if can_be_featured:
-            is_enterprise = Subscription.objects.filter(
-                store=store,
-                status='active',
-                plan='enterprise'
+        try:
+            has_active = Subscription.objects.filter(
+                store=store, 
+                status='active'
             ).exists()
+            has_valid_trial = Subscription.objects.filter(
+                store=store,
+                status='trialing',
+                trial_ends_at__gt=timezone.now()
+            ).exists()
+            can_be_featured = has_active or has_valid_trial
+            
+            # Check if it's enterprise
+            if can_be_featured:
+                is_enterprise = Subscription.objects.filter(
+                    store=store,
+                    status='active',
+                    plan='enterprise'
+                ).exists()
+        except Exception as e:
+            # If there's any error with subscription check, default to not featured
+            print(f"Error checking subscription: {e}")
+            can_be_featured = False
+            is_enterprise = False
     
     if request.method == 'POST':
         form = StoreForm(request.POST, request.FILES, instance=store, user=request.user)

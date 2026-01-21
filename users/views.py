@@ -27,6 +27,11 @@ import secrets
 import requests
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+import io
+import contextlib
+import smtplib
+import traceback
+from email.message import EmailMessage
 
 
 
@@ -510,6 +515,54 @@ def oauth_diagnostics(request):
         'env_vars': env_vars,
         'social_providers': settings.SOCIALACCOUNT_PROVIDERS if hasattr(settings, 'SOCIALACCOUNT_PROVIDERS') else {},
     })
+
+
+@staff_member_required
+def debug_send_email(request):
+    """Temporary staff-only endpoint to test SMTP delivery and capture SMTP dialog.
+
+    Usage: GET /debug-email-send/?to=recipient@example.com&subject=Test
+    """
+    to_addr = request.GET.get('to') or request.user.email or settings.DEFAULT_FROM_EMAIL
+    subject = request.GET.get('subject', 'Baysoko SMTP Debug')
+    body = request.GET.get('body', 'This is a test message from Baysoko SMTP debug endpoint.')
+
+    buf = io.StringIO()
+    status = 'unknown'
+
+    try:
+        with contextlib.redirect_stdout(buf):
+            conn = smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT, timeout=15)
+            conn.set_debuglevel(1)
+            conn.ehlo()
+            if getattr(settings, 'EMAIL_USE_TLS', False):
+                conn.starttls()
+                conn.ehlo()
+            # Attempt login if credentials available
+            if getattr(settings, 'EMAIL_HOST_USER', ''):
+                conn.login(settings.EMAIL_HOST_USER, settings.EMAIL_HOST_PASSWORD)
+
+            msg = EmailMessage()
+            msg['Subject'] = subject
+            msg['From'] = settings.DEFAULT_FROM_EMAIL or settings.EMAIL_HOST_USER
+            msg['To'] = to_addr
+            msg.set_content(body)
+
+            conn.send_message(msg)
+            conn.quit()
+        status = 'sent'
+    except Exception as e:
+        status = 'error'
+        buf.write('\n=== EXCEPTION ===\n')
+        buf.write(str(e) + '\n')
+        buf.write(traceback.format_exc())
+
+    output = buf.getvalue()
+    # Build a concise response
+    content = f"status: {status}\nrecipient: {to_addr}\n\nSMTP log and server responses:\n\n{output}"
+
+    from django.http import HttpResponse
+    return HttpResponse(content, content_type='text/plain')
 
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm
