@@ -619,6 +619,11 @@ if not DEBUG:
     EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
     DEFAULT_FROM_EMAIL = '00peteromondi@gmail.com'
 
+    # Debug email configuration
+    print(f"📧 EMAIL_HOST_USER: {'SET' if config('EMAIL_HOST_USER', default='') else 'NOT SET'}")
+    print(f"📧 EMAIL_HOST_PASSWORD: {'SET' if config('EMAIL_HOST_PASSWORD', default='') else 'NOT SET'}")
+    print(f"📧 DEFAULT_FROM_EMAIL: {config('DEFAULT_FROM_EMAIL', default='00peteromondi@gmail.com')}")
+
     # Password reset timeout in seconds (24 hours)
     PASSWORD_RESET_TIMEOUT = 86400
     MPESA_CONSUMER_KEY = os.environ.get('MPESA_CONSUMER_KEY', '')

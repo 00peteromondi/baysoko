@@ -447,8 +447,18 @@ class CustomPasswordResetView(auth_views.PasswordResetView):
     success_url = '/password-reset/done/'
     
     def form_valid(self, form):
-        messages.success(self.request, 'Password reset email has been sent to your email address.')
-        return super().form_valid(form)
+        # Log the attempt
+        logger.info(f"Password reset requested for email: {form.cleaned_data['email']}")
+        
+        try:
+            response = super().form_valid(form)
+            logger.info(f"Password reset email sent successfully to: {form.cleaned_data['email']}")
+            messages.success(self.request, 'Password reset email has been sent to your email address.')
+            return response
+        except Exception as e:
+            logger.error(f"Password reset email failed for {form.cleaned_data['email']}: {str(e)}")
+            messages.error(self.request, 'There was an error sending the password reset email. Please try again later.')
+            return self.form_invalid(form)
 
 
 class CustomPasswordResetCompleteView(auth_views.PasswordResetCompleteView):
