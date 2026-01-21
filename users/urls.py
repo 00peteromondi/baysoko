@@ -22,8 +22,7 @@ urlpatterns = [
          CustomPasswordResetView.as_view(
              template_name='users/password_reset.html',
              email_template_name='users/password_reset_email.html',
-             subject_template_name='users/password_reset_subject.txt',
-             success_url='/users/password-reset/done/'
+             subject_template_name='users/password_reset_subject.txt'
          ), 
          name='password_reset'),
     
@@ -35,8 +34,7 @@ urlpatterns = [
     
     path('password-reset-confirm/<uidb64>/<token>/', 
          CustomPasswordResetConfirmView.as_view(
-             template_name='users/password_reset_confirm.html',
-             success_url='/users/password-reset-complete/'
+             template_name='users/password_reset_confirm.html'
          ), 
          name='password_reset_confirm'),
     

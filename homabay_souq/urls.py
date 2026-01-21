@@ -6,6 +6,14 @@ from django.views.static import serve
 from django.urls import re_path
 from listings import admin_views
 
+# Import error handlers
+from . import views
+
+# Set up error handlers
+handler404 = views.custom_error_404
+handler403 = views.custom_error_403
+handler500 = views.custom_error_500
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('listings.urls')),
@@ -29,12 +37,6 @@ if settings.DELIVERY_SYSTEM_ENABLED:
         path('api/delivery/webhook/', include('delivery.integration.urls', namespace='delivery_webhook')),
         
     ]
-
-# Custom error handlers
-from django.conf.urls import handler500
-handler500 = 'homabay_souq.views.custom_error_500'
-from django.conf.urls import handler403
-handler403 = 'homabay_souq.views.custom_error_403'
 
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

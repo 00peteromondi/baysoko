@@ -433,7 +433,7 @@ class CustomPasswordChangeView(LoginRequiredMixin, PasswordChangeView):
 
 class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
     template_name = 'users/password_reset_confirm.html'
-    success_url = reverse_lazy('password_reset_complete')
+    success_url = '/password-reset-complete/'
     
     def form_valid(self, form):
         messages.success(self.request, 'Your password has been reset successfully!')
@@ -444,7 +444,7 @@ class CustomPasswordResetView(auth_views.PasswordResetView):
     template_name = 'users/password_reset.html'
     email_template_name = 'users/password_reset_email.html'
     subject_template_name = 'users/password_reset_subject.txt'
-    success_url = reverse_lazy('password_reset_done')
+    success_url = '/password-reset/done/'
     
     def form_valid(self, form):
         messages.success(self.request, 'Password reset email has been sent to your email address.')
