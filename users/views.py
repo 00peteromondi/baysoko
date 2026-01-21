@@ -461,15 +461,22 @@ class CustomPasswordResetView(auth_views.PasswordResetView):
             logger.info(f"Email user: {getattr(connection, 'username', 'N/A')}")
             
             response = super().form_valid(form)
-            logger.info(f"Password reset email sent successfully to: {email}")
-            messages.success(self.request, f'Password reset email has been sent to {email}. Please check your inbox and spam folder.')
+            
+            # Check if using console backend
+            if connection.__class__.__name__ == 'ConsoleBackend':
+                logger.info(f"Password reset email would be sent to: {email} (printed to console)")
+                messages.success(self.request, f'Password reset email has been printed to console for {email}. Check your Django console output.')
+            else:
+                logger.info(f"Password reset email sent successfully to: {email}")
+                messages.success(self.request, f'Password reset email has been sent to {email}. Please check your inbox and spam folder.')
+            
             return response
         except Exception as e:
             logger.error(f"Password reset email failed for {email}: {str(e)}")
             logger.error(f"Exception type: {type(e).__name__}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
-            messages.error(self.request, 'There was an error sending the password reset email. Please try again later or contact support.')
+            messages.error(self.request, f'There was an error sending the password reset email to {email}. Please try again later or contact support.')
             return self.form_invalid(form)
 
 

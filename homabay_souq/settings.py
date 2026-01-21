@@ -609,38 +609,27 @@ ECOMMERCE_PLATFORMS = [
     }
 ]
 
-# Email configuration (for production)
-if not DEBUG:
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
-    EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
-    EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
-    EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
-    EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-    DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@homabaysouq.com')
+# Email configuration
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@homabaysouq.com')
 
-    # Debug email configuration
-    print(f"📧 EMAIL_HOST_USER: {'SET' if config('EMAIL_HOST_USER', default='') else 'NOT SET'}")
-    print(f"📧 EMAIL_HOST_PASSWORD: {'SET' if config('EMAIL_HOST_PASSWORD', default='') else 'NOT SET'}")
-    print(f"📧 DEFAULT_FROM_EMAIL: {config('DEFAULT_FROM_EMAIL', default='noreply@homabaysouq.com')}")
+# Debug email configuration
+print(f"📧 EMAIL_BACKEND: {EMAIL_BACKEND}")
+print(f"📧 EMAIL_HOST: {EMAIL_HOST}")
+print(f"📧 EMAIL_PORT: {EMAIL_PORT}")
+print(f"📧 EMAIL_USE_TLS: {EMAIL_USE_TLS}")
+print(f"📧 EMAIL_HOST_USER: {'SET' if EMAIL_HOST_USER else 'NOT SET'}")
+print(f"📧 EMAIL_HOST_PASSWORD: {'SET' if EMAIL_HOST_PASSWORD else 'NOT SET'}")
+print(f"📧 DEFAULT_FROM_EMAIL: {DEFAULT_FROM_EMAIL}")
+print(f"📧 DEBUG: {DEBUG}")
 
-    # Password reset timeout in seconds (24 hours)
-    PASSWORD_RESET_TIMEOUT = 86400
-    MPESA_CONSUMER_KEY = os.environ.get('MPESA_CONSUMER_KEY', '')
-    MPESA_CONSUMER_SECRET = os.environ.get('MPESA_CONSUMER_SECRET', '')
-    MPESA_ENVIRONMENT = os.environ.get('MPESA_ENVIRONMENT', 'production')
-else:
-    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-    # Email Configuration
-    EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
-    EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
-    EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
-    EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
-    EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-    DEFAULT_FROM_EMAIL = '00peteromondi@gmail.com'
-
-    # Password reset timeout in seconds (1 hour)
-    PASSWORD_RESET_TIMEOUT = 3600
+# Password reset timeout in seconds
+PASSWORD_RESET_TIMEOUT = 3600 if DEBUG else 86400
 
 # Basic logging configuration for production
 LOGGING = {
