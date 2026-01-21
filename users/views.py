@@ -448,16 +448,28 @@ class CustomPasswordResetView(auth_views.PasswordResetView):
     
     def form_valid(self, form):
         # Log the attempt
-        logger.info(f"Password reset requested for email: {form.cleaned_data['email']}")
+        email = form.cleaned_data['email']
+        logger.info(f"Password reset requested for email: {email}")
         
         try:
+            # Get the email backend and log details
+            from django.core.mail import get_connection
+            connection = get_connection()
+            logger.info(f"Email backend: {connection.__class__.__name__}")
+            logger.info(f"Email host: {getattr(connection, 'host', 'N/A')}")
+            logger.info(f"Email port: {getattr(connection, 'port', 'N/A')}")
+            logger.info(f"Email user: {getattr(connection, 'username', 'N/A')}")
+            
             response = super().form_valid(form)
-            logger.info(f"Password reset email sent successfully to: {form.cleaned_data['email']}")
-            messages.success(self.request, 'Password reset email has been sent to your email address.')
+            logger.info(f"Password reset email sent successfully to: {email}")
+            messages.success(self.request, f'Password reset email has been sent to {email}. Please check your inbox and spam folder.')
             return response
         except Exception as e:
-            logger.error(f"Password reset email failed for {form.cleaned_data['email']}: {str(e)}")
-            messages.error(self.request, 'There was an error sending the password reset email. Please try again later.')
+            logger.error(f"Password reset email failed for {email}: {str(e)}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            messages.error(self.request, 'There was an error sending the password reset email. Please try again later or contact support.')
             return self.form_invalid(form)
 
 

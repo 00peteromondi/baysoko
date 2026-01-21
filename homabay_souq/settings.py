@@ -617,12 +617,12 @@ if not DEBUG:
     EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
     EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
     EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-    DEFAULT_FROM_EMAIL = '00peteromondi@gmail.com'
+    DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@homabaysouq.com')
 
     # Debug email configuration
     print(f"📧 EMAIL_HOST_USER: {'SET' if config('EMAIL_HOST_USER', default='') else 'NOT SET'}")
     print(f"📧 EMAIL_HOST_PASSWORD: {'SET' if config('EMAIL_HOST_PASSWORD', default='') else 'NOT SET'}")
-    print(f"📧 DEFAULT_FROM_EMAIL: {config('DEFAULT_FROM_EMAIL', default='00peteromondi@gmail.com')}")
+    print(f"📧 DEFAULT_FROM_EMAIL: {config('DEFAULT_FROM_EMAIL', default='noreply@homabaysouq.com')}")
 
     # Password reset timeout in seconds (24 hours)
     PASSWORD_RESET_TIMEOUT = 86400
