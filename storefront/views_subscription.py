@@ -6,9 +6,12 @@ from django.utils import timezone
 from django.db import transaction
 from datetime import timedelta
 from .models import Store, Subscription, MpesaPayment
+from .mpesa import MpesaGateway
 from .forms import SubscriptionPlanForm, UpgradeForm
 from .subscription_service import SubscriptionService
 from .utils.subscription_states import SubscriptionStateManager
+from .decorators import store_owner_required
+from django.db.models import Q
 import logging
 
 logger = logging.getLogger(__name__)
@@ -464,3 +467,309 @@ def subscription_cancel(request, slug):
     }
     
     return render(request, 'storefront/subscription_cancel.html', context)
+
+@login_required
+@store_owner_required
+def store_upgrade(request, slug):
+    """
+    Enhanced upgrade view with plan selection from session or direct POST
+    """
+    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    
+    # Determine whether this user can start a trial: if they've already had a trial that ended, disallow
+    past_trial_exists = Subscription.objects.filter(
+        store__owner=request.user,
+        trial_ends_at__isnull=False,
+        trial_ends_at__lt=timezone.now()
+    ).exists()
+    can_start_trial = not past_trial_exists
+    
+    # Get plan from session or default to basic
+    selected_plan = request.session.get('selected_plan', 'basic')
+    
+    # Plan pricing - MUST MATCH what's in subscription_plan_select.html
+    plan_pricing = {
+        'basic': 999,
+        'premium': 1999,
+        'enterprise': 4999
+    }
+    
+    amount = plan_pricing.get(selected_plan, 999)
+    
+    if request.method == 'POST':
+        form = UpgradeForm(request.POST)
+        if form.is_valid():
+            phone_number = form.cleaned_data['phone_number']
+            
+            # Extract plan from POST data if available
+            plan_from_post = request.POST.get('plan', selected_plan)
+            if plan_from_post in plan_pricing:
+                selected_plan = plan_from_post
+                amount = plan_pricing[selected_plan]
+            
+            try:
+                mpesa = MpesaGateway()
+
+                # Handle start-trial request: enforce global per-user single trial rule
+                if 'start_trial' in request.POST and request.POST.get('start_trial') == '1':
+                    # Start trial without initiating payment
+                    if not can_start_trial:
+                        messages.error(request, "You have already used a trial period and cannot start another one.")
+                        return redirect('storefront:subscription_manage', slug=slug)
+
+                    subscription = Subscription.objects.filter(store=store).first()
+                    if not subscription:
+                        subscription = Subscription.objects.create(
+                            store=store,
+                            plan=selected_plan,
+                            status='trialing',
+                            amount=amount,
+                            trial_ends_at=timezone.now() + timedelta(days=7),
+                            mpesa_phone=phone_number,
+                            metadata={'plan_selected': selected_plan}
+                        )
+                    else:
+                        subscription.plan = selected_plan
+                        subscription.amount = amount
+                        subscription.mpesa_phone = phone_number
+                        subscription.metadata['plan_selected'] = selected_plan
+                        subscription.status = 'trialing'
+                        subscription.trial_ends_at = timezone.now() + timedelta(days=7)
+                        subscription.save()
+
+                    # Activate premium features for trial period
+                    store.is_premium = True
+                    store.save()
+
+                    messages.success(request, "Trial started — premium features are active for the trial period.")
+                    return redirect('storefront:seller_dashboard')
+
+                # Otherwise initiate payment flow (user is subscribing now)
+                # Check for existing active subscription to avoid duplicate payments
+                subscription = Subscription.objects.filter(store=store).filter(
+                    Q(status='active') | Q(status='trialing', trial_ends_at__gt=timezone.now())
+                ).first()
+
+                if not subscription:
+                    subscription = Subscription.objects.create(
+                        store=store,
+                        plan=selected_plan,
+                        status='trialing',
+                        amount=amount,
+                        trial_ends_at=timezone.now() + timedelta(days=7),
+                        mpesa_phone=phone_number,
+                        metadata={'plan_selected': selected_plan}
+                    )
+                else:
+                    # Update existing subscription
+                    subscription.plan = selected_plan
+                    subscription.amount = amount
+                    subscription.mpesa_phone = phone_number
+                    subscription.metadata['plan_selected'] = selected_plan
+                    subscription.save()
+
+                # Initiate M-Pesa payment
+                response = mpesa.initiate_stk_push(
+                    phone=phone_number,
+                    amount=amount,
+                    account_reference=f"Store-{store.id}-{selected_plan}"
+                )
+
+                # Create payment record
+                MpesaPayment.objects.create(
+                    subscription=subscription,
+                    checkout_request_id=response['CheckoutRequestID'],
+                    merchant_request_id=response['MerchantRequestID'],
+                    phone_number=phone_number,
+                    amount=amount,
+                    status='pending'
+                )
+
+                # Activate store premium features for trial period
+                store.is_premium = True
+                store.save()
+                
+                # Clear session data
+                if 'selected_plan' in request.session:
+                    del request.session['selected_plan']
+                
+                messages.success(request, 
+                    f"✅ Payment of KSh {amount:,} initiated for {selected_plan.capitalize()} plan. "
+                    "Please check your phone to complete the M-Pesa payment."
+                )
+                return redirect('storefront:seller_dashboard')
+                
+            except Exception as e:
+                logger.error(f"Payment initiation failed for store {store.id}: {str(e)}")
+                messages.error(request, 
+                    f'Payment initiation failed: {str(e)}. '
+                    'Please check your phone number and try again.'
+                )
+                # Keep form data for retry
+                return render(request, 'storefront/confirm_upgrade.html', {
+                    'store': store,
+                    'form': form,
+                    'selected_plan': selected_plan,
+                    'amount': amount
+                , 'can_start_trial': can_start_trial
+                })
+        else:
+            # Form is invalid - show errors
+            return render(request, 'storefront/confirm_upgrade.html', {
+                'store': store,
+                'form': form,
+                'selected_plan': selected_plan,
+                'amount': amount,
+                'can_start_trial': can_start_trial,
+            })
+    else:
+        # GET request - show form
+        # Check for existing subscription (treat trialing as active only if trial hasn't ended)
+        existing_sub = store.subscriptions.filter(
+        ).filter(
+            Q(status='active') | Q(status='trialing', trial_ends_at__gt=timezone.now())
+        ).first()
+        
+        if existing_sub:
+            messages.info(request, 
+                f"You already have an active {existing_sub.get_plan_display()} subscription. "
+                f"Status: {existing_sub.get_status_display()}"
+            )
+            return redirect('storefront:subscription_manage', slug=slug)
+        
+        # Pre-fill with last used phone if available
+        initial_data = {}
+        last_payment = MpesaPayment.objects.filter(
+            subscription__store=store,
+            status='completed'
+        ).order_by('-created_at').first()
+        
+        if last_payment:
+            # Extract phone number (remove +254 for display)
+            phone = last_payment.phone_number
+            if phone.startswith('+254'):
+                phone = phone[4:]  # Remove +254
+            elif phone.startswith('254'):
+                phone = phone[3:]  # Remove 254
+            initial_data['phone_number'] = phone
+        
+        form = UpgradeForm(initial=initial_data)
+    
+    return render(request, 'storefront/confirm_upgrade.html', {
+        'store': store,
+        'form': form,
+        'selected_plan': selected_plan,
+        'amount': amount,
+        'plan_pricing': plan_pricing,
+        'can_start_trial': can_start_trial,
+    })
+
+
+
+@login_required
+@store_owner_required
+def subscription_invoice(request, slug, payment_id):
+    """
+    View invoice for a payment
+    """
+    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    payment = get_object_or_404(MpesaPayment, id=payment_id, subscription__store=store)
+    
+    context = {
+        'store': store,
+        'payment': payment,
+        'subscription': payment.subscription,
+    }
+    
+    return render(request, 'storefront/subscription_invoice.html', context)
+
+
+@login_required
+@store_owner_required
+def subscription_settings(request, slug):
+    """
+    Subscription settings (update payment method, etc.)
+    """
+    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    subscription = Subscription.objects.filter(store=store).order_by('-created_at').first()
+    
+    if request.method == 'POST':
+        # Handle settings update
+        phone_number = request.POST.get('phone_number')
+        
+        if phone_number:
+            # Validate phone number
+            if len(phone_number) == 9 and phone_number.startswith('7'):
+                if subscription:
+                    subscription.mpesa_phone = f"+254{phone_number}"
+                    subscription.save()
+                    messages.success(request, "Payment method updated successfully.")
+                else:
+                    messages.error(request, "No subscription found.")
+            else:
+                messages.error(request, "Please enter a valid Kenyan phone number.")
+        
+        return redirect('storefront:subscription_settings', slug=slug)
+    
+    context = {
+        'store': store,
+        'subscription': subscription,
+    }
+    
+    return render(request, 'storefront/subscription_settings.html', context)
+
+
+@login_required
+@store_owner_required
+def retry_payment(request, slug):
+    """Retry failed payment"""
+    if request.method != 'POST':
+        return redirect('storefront:subscription_manage', slug=slug)
+        
+    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    subscription = store.subscriptions.order_by('-started_at').first()
+    
+    if not subscription or subscription.status not in ['past_due', 'trialing']:
+        messages.error(request, 'Invalid subscription status for payment retry.')
+        return redirect('storefront:subscription_manage', slug=slug)
+    
+    # Get last known phone number
+    last_payment = subscription.payments.filter(
+        Q(status='completed') | Q(phone_number__isnull=False)
+    ).order_by('-transaction_date').first()
+    
+    if not last_payment or not last_payment.phone_number:
+        messages.error(request, 'No payment phone number found. Please upgrade again.')
+        return redirect('storefront:store_upgrade', slug=slug)
+    
+    try:
+        mpesa = MpesaGateway()
+        phone_norm = mpesa._normalize_phone(last_payment.phone_number)
+        
+        # Use subscription amount, not hardcoded 999
+        response = mpesa.initiate_stk_push(
+            phone=phone_norm,
+            amount=float(subscription.amount),
+            account_reference=f"Store-{store.id}-Retry"
+        )
+        
+        MpesaPayment.objects.create(
+            subscription=subscription,
+            checkout_request_id=response['CheckoutRequestID'],
+            merchant_request_id=response['MerchantRequestID'],
+            phone_number=phone_norm,
+            amount=subscription.amount,
+            status='pending'
+        )
+        
+        messages.success(request, 'Payment initiated. Please complete the M-Pesa payment on your phone.')
+        
+    except Exception as e:
+        logger.error(f"Payment retry failed: {str(e)}")
+        messages.error(request, f'Failed to initiate payment: {str(e)}')
+    
+    return redirect('storefront:subscription_manage', slug=slug)
+
+
+
+

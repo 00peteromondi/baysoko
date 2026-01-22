@@ -45,12 +45,9 @@ urlpatterns = [
     path('dashboard/store/<slug:slug>/subscription/renew/', views_subscription.subscription_renew, name='subscription_renew'),
     path('dashboard/store/<slug:slug>/subscription/cancel/', views_subscription.subscription_cancel, name='cancel_subscription'),
     
-    # Legacy subscription URLs for backward compatibility
-    path('dashboard/store/<slug:slug>/subscription/cancel/', views.subscription_cancel, name='cancel_subscription'),
-    path('dashboard/store/<slug:slug>/subscription/renew/', views.subscription_renew, name='subscription_renew'),
-    path('dashboard/store/<slug:slug>/subscription/invoice/<int:payment_id>/', views.subscription_invoice, name='subscription_invoice'),
-    path('dashboard/store/<slug:slug>/subscription/settings/', views.subscription_settings, name='subscription_settings'),
-    path('dashboard/store/<slug:slug>/subscription/retry/', views.retry_payment, name='retry_payment'),
+    path('dashboard/store/<slug:slug>/subscription/invoice/<int:payment_id>/', views_subscription.subscription_invoice, name='subscription_invoice'),
+    path('dashboard/store/<slug:slug>/subscription/settings/', views_subscription.subscription_settings, name='subscription_settings'),
+    path('dashboard/store/<slug:slug>/subscription/retry/', views_subscription.retry_payment, name='retry_payment'),
     
     # Admin subscription views
     path('admin/subscriptions/', views.admin_subscription_list, name='admin_subscription_list'),

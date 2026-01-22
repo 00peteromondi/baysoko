@@ -10,6 +10,9 @@ python manage.py makemigrations
 # Apply database migrations
 python manage.py migrate
 
+# Create superuser
+python create_superuser.py
+
 # Create social applications
 python manage.py setup_social_apps
 
