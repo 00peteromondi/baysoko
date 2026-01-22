@@ -55,8 +55,18 @@ def store_list(request):
     
     return render(request, 'storefront/store_list.html', context)
 
+from django.db.models import F
+
+
 def store_detail(request, slug):
     store = get_object_or_404(Store, slug=slug)
+    
+    # Increment the view count (using F() to avoid race conditions)
+    Store.objects.filter(pk=store.pk).update(total_views=F('total_views') + 1)
+    
+    # Refresh the store object to get updated view count
+    store.refresh_from_db()
+    
     # Only show listings associated with this specific store
     products = Listing.objects.filter(store=store, is_active=True)
     user_favorites = []
@@ -75,7 +85,6 @@ def store_detail(request, slug):
         context['can_create_listing'] = PlanPermissions.can_create_listing(request.user, store)
     
     return render(request, 'storefront/store_detail.html', context)
-
 
 def product_detail(request, store_slug, slug):
 
@@ -104,7 +113,9 @@ def seller_dashboard(request):
     # Compute metrics only for visible stores/listings
     total_listings = user_listings.count()
     premium_stores = stores.filter(is_premium=True).count()
-    total_views = user_listings.aggregate(total=Sum('views'))['total'] or 0
+    store_views_sum = stores.aggregate(total=Sum('total_views'))['total'] or 0
+    listing_views_sum = user_listings.aggregate(total=Sum('views'))['total'] or 0
+    total_views = store_views_sum + listing_views_sum
 
     # Get plan limits for display
     limits = PlanPermissions.get_plan_limits(request.user)
@@ -1474,3 +1485,42 @@ def admin_subscription_detail(request, subscription_id):
     }
     
     return render(request, 'storefront/admin_subscription_detail.html', context)
+
+
+from django.http import JsonResponse
+from django.views.decorators.http import require_GET
+
+@login_required
+@store_owner_required
+@require_GET
+def store_views_analytics(request, slug):
+    """Get store views analytics data"""
+    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    
+    # You can implement more detailed analytics here
+    # For example, views over time, comparison with other stores, etc.
+    
+    data = {
+        'total_views': store.total_views,
+        'store_name': store.name,
+        'avg_daily_views': store.total_views / max((timezone.now() - store.created_at).days, 1),
+        'rank': None,  # You can add ranking logic
+    }
+    
+    return JsonResponse(data)
+
+def popular_stores(request):
+    """Display stores sorted by popularity (views)"""
+    stores = Store.objects.filter(is_active=True).order_by('-total_views')
+    
+    # Filter by category or other criteria if needed
+    category = request.GET.get('category')
+    if category:
+        stores = stores.filter(listings__category__slug=category).distinct()
+    
+    context = {
+        'stores': stores,
+        'title': 'Most Popular Stores',
+    }
+    
+    return render(request, 'storefront/popular_stores.html', context)

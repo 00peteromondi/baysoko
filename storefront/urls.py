@@ -36,7 +36,7 @@ urlpatterns = [
     path('store/<slug:slug>/review/<int:review_id>/update/', views.store_review_update, name='store_review_update'),
     path('store/<slug:slug>/review/<int:review_id>/delete/', views.store_review_delete, name='store_review_delete'),
     path('store/<slug:slug>/review/<int:review_id>/helpful/', views.mark_review_helpful, name='mark_review_helpful'),
-    
+    path('store/<slug:slug>/analytics/views/', views.store_views_analytics, name='store_views_analytics'),
    # Enhanced Subscription Management
     path('dashboard/store/<slug:slug>/subscription/plans/', views_subscription.subscription_plan_select, name='subscription_plan_select'),
     path('dashboard/store/<slug:slug>/subscription/payment-options/', views_subscription.subscription_payment_options, name='subscription_payment_options'),

@@ -2,7 +2,7 @@ from django.conf import settings
 from django.db import models
 from django.urls import reverse
 from django.core.exceptions import ValidationError
-from django.db.models import Sum, Avg
+from django.db.models import Sum, Avg, F
 from django.utils import timezone
 from datetime import timedelta
 
@@ -253,9 +253,32 @@ class Store(models.Model):
         from listings.models import Review
         return Review.objects.filter(listing__store=self).select_related('user', 'listing').order_by('-created_at')
     
-    def get_total_views(self):
-        """Get total views for this store."""
+    def increment_views(self, request=None):
+        """Increment total views and track unique visitors"""
+        # Use update() with F() expression for atomic increment
+        Store.objects.filter(pk=self.pk).update(total_views=F('total_views') + 1)
+        
+        # Track unique view if request is provided
+        if request:
+            self._track_unique_view(request)
+        
+        # Refresh to get updated count
+        self.refresh_from_db()
         return self.total_views
+    # Add this method if you want to track unique views (requires more setup)
+    def track_view(self, request):
+        """Track store view with session to avoid duplicate counts from same user"""
+        session_key = f'store_view_{self.id}'
+        
+        if not request.session.get(session_key):
+            # Mark this session as having viewed the store
+            request.session[session_key] = True
+            request.session.modified = True
+            
+            # Increment the view count
+            self.total_views = F('total_views') + 1
+            self.save(update_fields=['total_views'])
+            self.refresh_from_db()
         
     def clean(self):
         """

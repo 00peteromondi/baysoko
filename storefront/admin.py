@@ -27,11 +27,12 @@ class MpesaPaymentInline(admin.TabularInline):
 @admin.register(Store)
 class StoreAdmin(admin.ModelAdmin):
     """Admin configuration for Store model"""
-    list_display = ['name', 'owner', 'is_premium', 'is_active', 'get_listing_count', 'get_rating', 'created_at']
-    list_filter = ['is_premium', 'is_active', 'created_at']
+    list_display = ['name', 'owner', 'is_premium', 'is_active', 'get_listing_count', 'get_rating', 'created_at', 'total_views']
+    list_filter = ['is_premium', 'is_active', 'created_at', 'is_featured']
     search_fields = ['name', 'owner__username', 'owner__email', 'description']
     readonly_fields = ['slug', 'created_at', 'updated_at']
     inlines = [StoreReviewInline]
+    actions = ['reset_views']
     
     fieldsets = (
         ('Store Information', {
@@ -49,6 +50,11 @@ class StoreAdmin(admin.ModelAdmin):
         }),
     )
     
+    def reset_views(self, request, queryset):
+        updated = queryset.update(total_views=0)
+        self.message_user(request, f'Reset views for {updated} stores.')
+    reset_views.short_description = "Reset view counts"
+
     def get_listing_count(self, obj):
         """Get number of listings for this store"""
         try:
@@ -290,3 +296,5 @@ class UserTrialAdmin(admin.ModelAdmin):
         self.message_user(request, f"{queryset.count()} trials flagged for review.")
     
     flag_for_review.short_description = "Flag selected trials for review"
+
+

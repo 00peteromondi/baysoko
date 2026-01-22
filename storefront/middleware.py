@@ -120,3 +120,20 @@ class SubscriptionMiddleware:
                 pass
         
         return None
+    
+from django.utils.deprecation import MiddlewareMixin
+from .models import Store
+
+class StoreViewMiddleware(MiddlewareMixin):
+    """Middleware to track store views"""
+    
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        # Check if this is a store detail view
+        if view_func.__name__ == 'store_detail' and 'slug' in view_kwargs:
+            try:
+                store = Store.objects.get(slug=view_kwargs['slug'])
+                # Use the track_view method if you implement session-based tracking
+                store.increment_views()
+            except Store.DoesNotExist:
+                pass
+        return None
