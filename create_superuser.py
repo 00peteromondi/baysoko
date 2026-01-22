@@ -6,7 +6,7 @@ import django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'homabay_souq.settings')
 django.setup()
 
-from django.contrib.auth.models import User
+from users.models import User
 
 def create_superuser():
     username = 'adallapete'
