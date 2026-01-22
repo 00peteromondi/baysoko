@@ -28,6 +28,7 @@ class Store(models.Model):
     location = models.CharField(max_length=255, blank=True)
     policies = models.TextField(blank=True, help_text="Store policies, return policy, etc.")
     is_featured = models.BooleanField(default=False, help_text="Featured stores get premium placement")
+    total_views = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ['-created_at']
@@ -251,6 +252,10 @@ class Store(models.Model):
         """Get product reviews for this store's listings."""
         from listings.models import Review
         return Review.objects.filter(listing__store=self).select_related('user', 'listing').order_by('-created_at')
+    
+    def get_total_views(self):
+        """Get total views for this store."""
+        return self.total_views
         
     def clean(self):
         """
@@ -753,3 +758,6 @@ class InventoryAudit(models.Model):
     
     def __str__(self):
         return f"Audit {self.audit_date.strftime('%Y-%m-%d')} - {self.store.name}"
+
+# Import bulk models to ensure they're discovered by Django
+from . import models_bulk

@@ -360,3 +360,64 @@ class TemplateForm(forms.ModelForm):
                 self.add_error('name', f'A template with this name already exists for {template_type}')
         
         return cleaned_data
+
+
+class BulkImportForm(forms.ModelForm):
+    """Form for bulk importing data"""
+
+    template_type = forms.ChoiceField(
+        label="Data Type",
+        choices=[
+            ('products', 'Products'),
+            ('inventory', 'Inventory Updates'),
+            ('customers', 'Customer Data'),
+        ],
+        initial='products',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+
+    update_existing = forms.BooleanField(
+        label="Update existing records",
+        required=False,
+        initial=True,
+        help_text="Update records that already exist",
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+
+    create_new = forms.BooleanField(
+        label="Create new records",
+        required=False,
+        initial=True,
+        help_text="Create new records for data that doesn't exist",
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+
+    skip_errors = forms.BooleanField(
+        label="Skip errors and continue",
+        required=False,
+        initial=False,
+        help_text="Continue processing even if some rows have errors",
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+
+    class Meta:
+        model = BatchJob
+        fields = ['file']
+        widgets = {
+            'file': forms.FileInput(attrs={
+                'class': 'form-control',
+                'accept': '.csv,.xlsx,.xls'
+            })
+        }
+
+    def __init__(self, store, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.store = store
+        # Set template queryset to store's templates
+        self.fields['template'] = forms.ModelChoiceField(
+            label="Use Template (Optional)",
+            queryset=ImportTemplate.objects.filter(store=store, is_active=True),
+            required=False,
+            empty_label="Select a template...",
+            widget=forms.Select(attrs={'class': 'form-control'})
+        )

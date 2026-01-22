@@ -63,7 +63,7 @@ def mpesa_callback(request):
                 }, status=400)
             
             # Check if this payment was for activation (subscription not yet active)
-            if subscription.status in ['canceled', 'past_due', 'trialing']:
+            if subscription.status in ['canceled', 'past_due', 'trialing', 'unpaid']:
                 # Use the safe activation method - this is the ONLY way to activate subscriptions
                 activation_success, activation_message = SubscriptionService.activate_subscription_safely(subscription, payment)
                 
@@ -81,6 +81,42 @@ def mpesa_callback(request):
                     'message': 'Subscription activated successfully after payment validation'
                 })
                 
+            # Check for pending plan changes that require payment
+            elif subscription.metadata and subscription.metadata.get('change_requires_payment'):
+                # Apply pending plan change after successful payment
+                pending_plan = subscription.metadata.get('pending_plan_change')
+                if pending_plan:
+                    old_plan = subscription.metadata.get('pending_old_plan', subscription.plan)
+                    old_amount = subscription.metadata.get('pending_old_amount', subscription.amount)
+                    
+                    # Apply the plan change
+                    subscription.plan = pending_plan
+                    subscription.amount = SubscriptionService.PLAN_DETAILS[pending_plan]['price']
+                    subscription.metadata.update({
+                        'plan_changed_at': timezone.now().isoformat(),
+                        'old_plan': old_plan,
+                        'new_plan': pending_plan,
+                        'change_type': subscription.metadata.get('pending_change_type', 'upgrade'),
+                        'activated_via_payment': True,
+                        'payment_reference': checkout_request_id,
+                    })
+                    
+                    # Clear pending change metadata
+                    pending_keys = [
+                        'pending_plan_change', 'pending_plan_change_at', 'pending_payment_amount',
+                        'pending_old_plan', 'pending_old_amount', 'pending_change_type', 'change_requires_payment'
+                    ]
+                    for key in pending_keys:
+                        subscription.metadata.pop(key, None)
+                    
+                    subscription.save()
+                    
+                    logger.info(f"Pending plan change applied for subscription {subscription.id}: {old_plan} -> {pending_plan}")
+                    return JsonResponse({
+                        'status': 'success',
+                        'message': f'Plan successfully changed to {pending_plan.capitalize()} after payment confirmation'
+                    })
+            
             else:
                 # This was a payment for an already active subscription (renewal/upgrade)
                 # Just update the billing cycle

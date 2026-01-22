@@ -26,7 +26,7 @@ from .forms_bulk import (
     ExportSettingsForm, TemplateForm
 )
 from listings.models import Listing, Category
-from .decorators import staff_required
+from .decorators import store_owner_required, plan_required
 
 # Celery tasks will be in tasks.py
 from .tasks_bulk import (
@@ -36,7 +36,8 @@ from .tasks_bulk import (
 )
 
 @login_required
-@staff_required('edit')
+@store_owner_required
+@plan_required('bulk_operations')
 def bulk_operations_dashboard(request, slug):
     """Bulk operations dashboard"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -73,7 +74,7 @@ def bulk_operations_dashboard(request, slug):
     return render(request, 'storefront/bulk/dashboard.html', context)
 
 @login_required
-@staff_required('edit')
+@store_owner_required
 def bulk_update_products(request, slug):
     """Bulk update products view"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -112,7 +113,7 @@ def bulk_update_products(request, slug):
     return render(request, 'storefront/bulk/update_products.html', context)
 
 @login_required
-@staff_required('edit')
+@store_owner_required
 def bulk_import_data(request, slug):
     """Bulk import data view"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -159,7 +160,7 @@ def bulk_import_data(request, slug):
     return render(request, 'storefront/bulk/import_data.html', context)
 
 @login_required
-@staff_required('view')
+@store_owner_required
 def export_data(request, slug):
     """Export data view"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -204,7 +205,7 @@ def export_data(request, slug):
     return render(request, 'storefront/bulk/export_data.html', context)
 
 @login_required
-@staff_required('view')
+@store_owner_required
 def manage_templates(request, slug):
     """Manage import templates"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -233,7 +234,7 @@ def manage_templates(request, slug):
     return render(request, 'storefront/bulk/templates.html', context)
 
 @login_required
-@staff_required('view')
+@store_owner_required
 def bulk_job_list(request, slug):
     """List all bulk jobs"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -273,7 +274,7 @@ def bulk_job_list(request, slug):
     return render(request, 'storefront/bulk/job_list.html', context)
 
 @login_required
-@staff_required('view')
+@store_owner_required
 def bulk_job_detail(request, slug, job_id):
     """View batch job details"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -299,7 +300,7 @@ def bulk_job_detail(request, slug, job_id):
     return render(request, 'storefront/bulk/job_detail.html', context)
 
 @login_required
-@staff_required('view')
+@store_owner_required
 def export_job_list(request, slug):
     """List all export jobs"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -332,7 +333,7 @@ def export_job_list(request, slug):
     return render(request, 'storefront/bulk/export_list.html', context)
 
 @login_required
-@staff_required('view')
+@store_owner_required
 def export_job_detail(request, slug, job_id):
     """View export job details"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -346,7 +347,7 @@ def export_job_detail(request, slug, job_id):
     return render(request, 'storefront/bulk/export_detail.html', context)
 
 @login_required
-@staff_required('view')
+@store_owner_required
 def download_export(request, slug, job_id):
     """Download exported file"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -366,7 +367,7 @@ def download_export(request, slug, job_id):
     return response
 
 @login_required
-@staff_required('edit')
+@store_owner_required
 def delete_template(request, slug, template_id):
     """Delete import template"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -385,7 +386,7 @@ def delete_template(request, slug, template_id):
     return render(request, 'storefront/bulk/delete_template.html', context)
 
 @login_required
-@staff_required('edit')
+@store_owner_required
 def download_template(request, slug, template_id):
     """Download import template"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -405,7 +406,7 @@ def download_template(request, slug, template_id):
     return response
 
 @login_required
-@staff_required('edit')
+@store_owner_required
 def cancel_job(request, slug, job_id):
     """Cancel a batch job"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -505,7 +506,7 @@ def get_export_columns(request, slug):
 # Quick bulk actions
 @require_POST
 @login_required
-@staff_required('edit')
+@store_owner_required
 def quick_bulk_action(request, slug):
     """Quick bulk actions for selected products"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -566,7 +567,7 @@ def quick_bulk_action(request, slug):
 
 # Generate sample template
 @login_required
-@staff_required('edit')
+@store_owner_required
 def generate_sample_template(request, slug):
     """Generate and download a sample template"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)

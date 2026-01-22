@@ -94,6 +94,17 @@
         animation: fadeInUp 0.8s ease-out 0.6s both;
     }
 
+    .hero-actions .btn-custom.disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+        background: var(--text-secondary) !important;
+    }
+
+    .hero-actions .btn-custom.disabled:hover {
+        transform: none;
+        box-shadow: none;
+    }
+
     /* Animated Background Elements */
     .floating-shapes {
         position: absolute;
@@ -1571,6 +1582,34 @@
     .stat-count {
         font-weight: 600;
     }
+
+    /* Lock Badge Styling */
+    .lock-badge {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        background: var(--danger);
+        color: white;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        border: 2px solid white;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .quick-action-card.disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+    }
+
+    .quick-action-card.disabled:hover {
+        transform: none;
+        box-shadow: var(--shadow-sm);
+    }
 </style>
 {% endblock %}
 
@@ -1624,11 +1663,23 @@
                         <i class="bi bi-person-plus"></i>
                         Join Now
                     </a>
-                    {% else %}
+                    {% elif can_create_listing %}
                     <a href="{% url 'listing-create' %}" class="btn-custom btn-accent">
                         <i class="bi bi-plus-circle"></i>
                         Sell Item
                     </a>
+                    {% else %}
+                    {% if user_stores %}
+                    <a href="{% url 'storefront:subscription_manage' slug=user_stores.0.slug %}" class="btn-custom btn-accent disabled" title="Upgrade to create more listings">
+                        <i class="bi bi-plus-circle"></i>
+                        Sell Item <i class="bi bi-lock-fill ms-1"></i>
+                    </a>
+                    {% else %}
+                    <a href="{% url 'storefront:seller_dashboard' %}" class="btn-custom btn-accent disabled" title="Create a store first to upgrade">
+                        <i class="bi bi-plus-circle"></i>
+                        Sell Item <i class="bi bi-lock-fill ms-1"></i>
+                    </a>
+                    {% endif %}
                     {% endif %}
                 </div>
             </div>
@@ -1812,13 +1863,34 @@
         
         <!-- Quick Actions -->
         <div class="quick-actions-grid">
-            <a href="{% url 'listing-create' %}" class="quick-action-card animate-fade-left" style="animation-delay: 0.5s">
-                <div class="quick-action-icon">
-                    <i class="bi bi-plus-circle"></i>
-                </div>
-                <div class="quick-action-title">Sell an Item</div>
-                <div class="quick-action-description">Create a new listing in minutes</div>
-            </a>
+            {% if user.is_authenticated %}
+                {% if can_create_listing %}
+                <a href="{% url 'listing-create' %}" class="quick-action-card animate-fade-left" style="animation-delay: 0.5s">
+                    <div class="quick-action-icon">
+                        <i class="bi bi-plus-circle"></i>
+                    </div>
+                    <div class="quick-action-title">Sell an Item</div>
+                    <div class="quick-action-description">Create a new listing in minutes</div>
+                </a>
+                {% else %}
+                {% if user_stores %}
+                <a href="{% url 'storefront:subscription_manage' slug=user_stores.0.slug %}" class="quick-action-card animate-fade-left disabled" style="animation-delay: 0.5s" title="Upgrade to create more listings">
+                {% else %}
+                <a href="{% url 'storefront:seller_dashboard' %}" class="quick-action-card animate-fade-left disabled" style="animation-delay: 0.5s" title="Create a store first to upgrade">
+                {% endif %}
+                    <div class="quick-action-title">Sell an Item</div>
+                    <div class="quick-action-description">Upgrade to create more listings</div>
+                </a>
+                {% endif %}
+            {% else %}
+                <a href="{% url 'listing-create' %}" class="quick-action-card animate-fade-left" style="animation-delay: 0.5s">
+                    <div class="quick-action-icon">
+                        <i class="bi bi-plus-circle"></i>
+                    </div>
+                    <div class="quick-action-title">Sell an Item</div>
+                    <div class="quick-action-description">Create a new listing in minutes</div>
+                </a>
+            {% endif %}
             
             <a href="{% url 'my-listings' %}" class="quick-action-card animate-fade-up" style="animation-delay: 0.6s">
                 <div class="quick-action-icon">
@@ -1955,9 +2027,27 @@
                     <i class="bi bi-shop" style="font-size: 3rem; margin-bottom: var(--spacing-md);"></i>
                     <h3>No Featured Stores Yet</h3>
                     <p>Be the first to create a store and get featured!</p>
-                    <a href="{% url 'storefront:store_create' %}" class="btn-custom">
-                        Create Your Store
-                    </a>
+                    {% if user.is_authenticated %}
+                        {% if can_create_store %}
+                        <a href="{% url 'storefront:store_create' %}" class="btn-custom">
+                            Create Your Store
+                        </a>
+                        {% else %}
+                        {% if user_stores %}
+                        <a href="{% url 'storefront:subscription_manage' slug=user_stores.0.slug %}" class="btn-custom disabled" title="Upgrade to create more stores">
+                            Create Your Store <i class="bi bi-lock-fill ms-1"></i>
+                        </a>
+                        {% else %}
+                        <a href="{% url 'storefront:seller_dashboard' %}" class="btn-custom disabled" title="Create a store first to upgrade">
+                            Create Your Store <i class="bi bi-lock-fill ms-1"></i>
+                        </a>
+                        {% endif %}
+                        {% endif %}
+                    {% else %}
+                        <a href="{% url 'storefront:store_create' %}" class="btn-custom">
+                            Create Your Store
+                        </a>
+                    {% endif %}
                 </div>
                 {% endfor %}
                 
@@ -2910,16 +3000,28 @@
                 </div>
                 
                 <div class="hero-actions">
-                    {% if user_store %}
-                    <a href="{% url 'storefront:store_upgrade' user_store.slug %}" class="btn-custom btn-primary">
+                    {% if user_stores %}
+                    <a href="{% url 'storefront:subscription_manage' slug=user_stores.0.slug %}" class="btn-custom btn-primary">
                         <i class="bi bi-rocket-takeoff"></i>
                         Upgrade Now
                     </a>
-                    {% else %}
+                    {% elif can_create_store %}
                     <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-primary">
                         <i class="bi bi-plus-circle"></i>
                         Create Store
                     </a>
+                    {% else %}
+                    {% if user_stores %}
+                    <a href="{% url 'storefront:subscription_manage' slug=user_stores.0.slug %}" class="btn-custom btn-primary disabled" title="Upgrade to create more stores">
+                        <i class="bi bi-plus-circle"></i>
+                        Create Store <i class="bi bi-lock-fill ms-1"></i>
+                    </a>
+                    {% else %}
+                    <a href="{% url 'storefront:seller_dashboard' %}" class="btn-custom btn-primary disabled" title="Create a store first to upgrade">
+                        <i class="bi bi-plus-circle"></i>
+                        Create Store <i class="bi bi-lock-fill ms-1"></i>
+                    </a>
+                    {% endif %}
                     {% endif %}
                     
                     <a href="{% url 'profile' user.pk %}" class="btn-custom btn-secondary">

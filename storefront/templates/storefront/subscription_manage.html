@@ -120,6 +120,25 @@
         margin-bottom: 1rem;
     }
 
+    .limit-warning {
+        background: linear-gradient(135deg, rgba(255, 193, 7, 0.1) 0%, rgba(255, 158, 31, 0.1) 100%);
+        border: 1px solid rgba(255, 158, 31, 0.3);
+        border-radius: var(--radius-md);
+        padding: 1rem;
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .limit-warning-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .limit-warning-icon {
+        color: var(--warning);
+        font-size: 1.5rem;
+    }
+
     .payment-table {
         width: 100%;
         border-collapse: separate;
@@ -321,6 +340,103 @@
 {% endblock %}
 
 {% block content %}
+<!-- Limit Reached Warning -->
+{% if limit_reached %}
+<div class="limit-warning mb-4">
+    <div class="limit-warning-header">
+        <i class="bi bi-exclamation-triangle-fill limit-warning-icon"></i>
+        <div>
+            <h5 class="fw-bold mb-1">Free Listing Limit Reached</h5>
+            <p class="mb-0">
+                You've created {{ current_count }} of {{ free_limit }} free listings.
+                Upgrade to premium for unlimited listings and advanced features.
+            </p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Upgrade Mode (when coming from product_create) -->
+{% if upgrade_mode %}
+<div class="selected-plan-display mb-4">
+    <div class="plan-display-row">
+        <span class="plan-label">Selected Plan:</span>
+        <span class="plan-value">{{ selected_plan|title }} Plan</span>
+    </div>
+    <div class="plan-display-row">
+        <span class="plan-label">Monthly Price:</span>
+        <span class="plan-value">KSh {{ amount|floatformat:0|intcomma }}</span>
+    </div>
+    {% if can_start_trial %}
+    <div class="plan-display-row">
+        <span class="plan-label">Trial Period:</span>
+        <span class="plan-value">7 days free</span>
+    </div>
+    {% endif %}
+    <div class="plan-display-row">
+        <span class="plan-label">Total Due Today:</span>
+        <span class="plan-value">KSh {% if can_start_trial %}0{% else %}{{ amount|floatformat:0|intcomma }}{% endif %}</span>
+    </div>
+</div>
+{% endif %}
+
+<!-- Action Required Messages -->
+{% if action_required == 'no_subscription' %}
+<div class="alert alert-info mb-4">
+    <i class="bi bi-info-circle-fill me-2"></i>
+    <strong>No Active Subscription</strong>
+    <p class="mb-2">You don't have an active subscription. Select a plan to get started with premium features.</p>
+    <a href="{% url 'storefront:subscription_plan_select' store.slug %}" class="btn btn-primary">
+        <i class="bi bi-plus-circle me-2"></i>Select Plan
+    </a>
+</div>
+{% elif action_required == 'trial_expired' %}
+<div class="alert alert-warning mb-4">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+    <strong>Trial Expired</strong>
+    <p class="mb-2">Your trial period has ended. Subscribe now to continue using premium features.</p>
+    <a href="{% url 'storefront:subscription_renew' store.slug %}" class="btn btn-warning">
+        <i class="bi bi-arrow-clockwise me-2"></i>Subscribe Now
+    </a>
+</div>
+{% elif action_required == 'trial_ending' %}
+<div class="alert alert-warning mb-4">
+    <i class="bi bi-clock-fill me-2"></i>
+    <strong>Trial Ending Soon</strong>
+    <p class="mb-2">Your trial ends in {{ trial_info.remaining_days }} days. Subscribe now to avoid interruption.</p>
+    <a href="{% url 'storefront:subscription_payment_options' store.slug %}" class="btn btn-warning">
+        <i class="bi bi-credit-card me-2"></i>Subscribe Now
+    </a>
+</div>
+{% elif action_required == 'past_due' %}
+<div class="alert alert-danger mb-4">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+    <strong>Payment Overdue</strong>
+    <p class="mb-2">Your subscription payment is overdue. Please update your payment method to continue using premium features.</p>
+    <a href="{% url 'storefront:subscription_renew' store.slug %}" class="btn btn-danger">
+        <i class="bi bi-arrow-clockwise me-2"></i>Update Payment
+    </a>
+</div>
+{% elif action_required == 'renew' %}
+<div class="alert alert-secondary mb-4">
+    <i class="bi bi-arrow-clockwise me-2"></i>
+    <strong>Subscription Ended</strong>
+    <p class="mb-2">Your subscription has ended. Renew now to restore premium features.</p>
+    <a href="{% url 'storefront:subscription_renew' store.slug %}" class="btn btn-primary">
+        <i class="bi bi-arrow-clockwise me-2"></i>Renew Subscription
+    </a>
+</div>
+{% elif action_required == 'upgrade_needed' %}
+<div class="alert alert-warning mb-4">
+    <i class="bi bi-arrow-up-circle-fill me-2"></i>
+    <strong>Upgrade Required</strong>
+    <p class="mb-2">You've reached your listing limit. Upgrade to premium for unlimited listings.</p>
+    <a href="{% url 'storefront:subscription_plan_select' store.slug %}" class="btn btn-warning">
+        <i class="bi bi-arrow-up-circle me-2"></i>Upgrade Now
+    </a>
+</div>
+{% endif %}
+
 <div class="subscription-container">
     <div class="container-custom">
         <!-- Header -->
@@ -357,8 +473,7 @@
         </div>
         {% endif %}
 
-        <!-- Current Subscription Card -->
-        <div class="subscription-card animate-scale-in">
+        <!-- Current Subscription Card -->        {% if subscription %}        <div class="subscription-card animate-scale-in">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h3 class="fw-bold mb-0">Current Subscription</h3>
                 <span class="status-badge-modern status-{{ subscription.status }}">
@@ -600,6 +715,47 @@
                     <i class="bi bi-arrow-left me-2"></i>
                     Back to Dashboard
                 </a>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Available Plans -->
+        <div class="subscription-card">
+            <h5 class="fw-bold mb-3">Available Plans</h5>
+            <div class="row">
+                {% for plan_key, plan_info in plan_details.items %}
+                <div class="col-md-4 mb-3">
+                    <div class="card-custom h-100 {% if subscription and subscription.plan == plan_key %}border-primary{% endif %}">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="fw-bold mb-0">{{ plan_info.name }}</h6>
+                                {% if subscription and subscription.plan == plan_key %}
+                                <span class="badge bg-primary">Current Plan</span>
+                                {% endif %}
+                            </div>
+                            <div class="display-6 fw-bold text-primary mb-2">KSh {{ plan_info.price|floatformat:0|intcomma }}</div>
+                            <p class="text-muted mb-3">{{ plan_info.period|title }} subscription</p>
+                            <ul class="list-unstyled">
+                                {% for feature in plan_info.features %}
+                                <li class="mb-1">
+                                    <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                    {{ feature }}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% if not subscription or subscription.plan != plan_key %}
+                            <a href="{% url 'storefront:subscription_plan_select' store.slug %}" class="btn btn-outline-primary w-100 mt-3">
+                                {% if subscription %}
+                                Change to {{ plan_info.name }}
+                                {% else %}
+                                Select {{ plan_info.name }}
+                                {% endif %}
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
             </div>
         </div>
 

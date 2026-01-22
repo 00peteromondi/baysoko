@@ -20,10 +20,11 @@ from .forms_inventory import (
     BulkStockUpdateForm
 )
 from listings.models import Listing, Category
-from .decorators import store_owner_required
+from .decorators import store_owner_required, plan_required
 
 @login_required
 @store_owner_required('inventory')
+@plan_required('inventory')
 def inventory_dashboard(request, slug):
     """Main inventory dashboard with overview"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)

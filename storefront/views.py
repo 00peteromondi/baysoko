@@ -1,6 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
-from .decorators import store_owner_required
+from .decorators import store_owner_required, analytics_access_required, store_limit_check
 from django.contrib import messages
 from django.conf import settings
 from .models import Store, Subscription, MpesaPayment
@@ -40,12 +40,20 @@ def store_list(request):
     stores = Store.objects.filter()
     premium_count = Store.objects.filter(is_premium=True).count()
     total_products = sum(store.listings.count() for store in stores)
-
-    return render(request, 'storefront/store_list.html', {
+    
+    context = {
         'stores': stores,
         'premium_count': premium_count,
         'total_products': total_products
-    })
+    }
+    
+    # Add plan-related context for authenticated users
+    if request.user.is_authenticated:
+        from .utils.plan_permissions import PlanPermissions
+        context['plan_limits'] = PlanPermissions.get_plan_limits(request.user)
+        context['can_create_store'] = PlanPermissions.can_create_store(request.user)
+    
+    return render(request, 'storefront/store_list.html', context)
 
 def store_detail(request, slug):
     store = get_object_or_404(Store, slug=slug)
@@ -58,7 +66,15 @@ def store_detail(request, slug):
             listing__in=store.listings.all()
         ).values_list('listing_id', flat=True)
     
-    return render(request, 'storefront/store_detail.html', {'store': store, 'products': products, 'user_favorites': user_favorites})
+    context = {'store': store, 'products': products, 'user_favorites': user_favorites}
+    
+    # Add plan-related context for authenticated users
+    if request.user.is_authenticated:
+        from .utils.plan_permissions import PlanPermissions
+        context['plan_limits'] = PlanPermissions.get_plan_limits(request.user, store)
+        context['can_create_listing'] = PlanPermissions.can_create_listing(request.user, store)
+    
+    return render(request, 'storefront/store_detail.html', context)
 
 
 def product_detail(request, store_slug, slug):
@@ -76,22 +92,26 @@ def product_detail(request, store_slug, slug):
     return render(request, 'storefront/product_detail.html', {'store': store, 'product': product, 'user_favorites': user_favorites})
 
 @login_required
-@store_owner_required
 def seller_dashboard(request):
-    stores = Store.objects.filter(owner=request.user)
-    # Compute some simple metrics for the dashboard
-    # Get all listings from all stores
-    total_listings = sum(store.listings.count() for store in stores)
+    from .utils.plan_permissions import PlanPermissions
+    
+    # Get visible stores based on plan
+    stores = PlanPermissions.get_visible_stores(request.user)
+    
+    # Get visible listings based on plan
+    user_listings = PlanPermissions.get_visible_listings(request.user)
+    
+    # Compute metrics only for visible stores/listings
+    total_listings = user_listings.count()
     premium_stores = stores.filter(is_premium=True).count()
-    # Fixed total views functioning as expected
-    total_views = Listing.objects.filter(store__in=stores).aggregate(total=Sum('views'))['total'] or 0
+    total_views = user_listings.aggregate(total=Sum('views'))['total'] or 0
 
-    # free listing limit from settings
-    free_limit = getattr(settings, 'STORE_FREE_LISTING_LIMIT', 5)
+    # Get plan limits for display
+    limits = PlanPermissions.get_plan_limits(request.user)
+    free_limit = limits['max_products']
     remaining = max(free_limit - total_listings, 0)
+    percentage_used = (total_listings / free_limit * 100) if free_limit > 0 else 0
 
-    # All listings grouped by store (for dashboard display)
-    user_listings = Listing.objects.filter(store__in=stores).order_by('-date_created')
     store_with_slug = stores.filter(slug__isnull=False).exclude(slug='').first()
 
     return render(request, 'storefront/dashboard.html', {
@@ -101,11 +121,16 @@ def seller_dashboard(request):
         'total_views': total_views,
         'free_limit': free_limit,
         'remaining_slots': remaining,
+        'percentage_used': min(percentage_used, 100),
         'user_listings': user_listings,
-        'store_with_slug': store_with_slug
+        'store_with_slug': store_with_slug,
+        'plan_limits': limits,
+        'plan_status': PlanPermissions.get_user_plan_status(request.user)
     })
 
 @login_required
+@login_required
+@store_limit_check
 def store_create(request):
     """
     Create a new store with enforced subscription-based limits.
@@ -292,7 +317,7 @@ def product_create(request, store_slug):
     if not is_premium and user_listing_count >= FREE_LISTING_LIMIT:
         store_for_template = user_store or Store(owner=request.user, name=f"{request.user.username}'s Store", slug=request.user.username)
         messages.warning(request, f"You've reached the free listing limit ({FREE_LISTING_LIMIT}). Upgrade to premium to add more listings.")
-        return render(request, 'storefront/confirm_upgrade.html', {
+        return render(request, 'storefront/subscription_manage.html', {
             'store': store_for_template,
             'limit_reached': True,
             'current_count': user_listing_count,
@@ -554,57 +579,6 @@ def delete_cover(request, slug):
 
 @login_required
 @store_owner_required
-def retry_payment(request, slug):
-    """Retry failed payment"""
-    if request.method != 'POST':
-        return redirect('storefront:subscription_manage', slug=slug)
-        
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
-    subscription = store.subscriptions.order_by('-started_at').first()
-    
-    if not subscription or subscription.status not in ['past_due', 'trialing']:
-        messages.error(request, 'Invalid subscription status for payment retry.')
-        return redirect('storefront:subscription_manage', slug=slug)
-    
-    # Get last known phone number
-    last_payment = subscription.payments.filter(
-        Q(status='completed') | Q(phone_number__isnull=False)
-    ).order_by('-transaction_date').first()
-    
-    if not last_payment or not last_payment.phone_number:
-        messages.error(request, 'No payment phone number found. Please upgrade again.')
-        return redirect('storefront:store_upgrade', slug=slug)
-    
-    try:
-        mpesa = MpesaGateway()
-        phone_norm = mpesa._normalize_phone(last_payment.phone_number)
-        
-        # Use subscription amount, not hardcoded 999
-        response = mpesa.initiate_stk_push(
-            phone=phone_norm,
-            amount=float(subscription.amount),
-            account_reference=f"Store-{store.id}-Retry"
-        )
-        
-        MpesaPayment.objects.create(
-            subscription=subscription,
-            checkout_request_id=response['CheckoutRequestID'],
-            merchant_request_id=response['MerchantRequestID'],
-            phone_number=phone_norm,
-            amount=subscription.amount,
-            status='pending'
-        )
-        
-        messages.success(request, 'Payment initiated. Please complete the M-Pesa payment on your phone.')
-        
-    except Exception as e:
-        logger.error(f"Payment retry failed: {str(e)}")
-        messages.error(request, f'Failed to initiate payment: {str(e)}')
-    
-    return redirect('storefront:subscription_manage', slug=slug)
-
-@login_required
-@store_owner_required
 def cancel_subscription(request, slug):
     """Cancel subscription"""
     if request.method != 'POST':
@@ -626,114 +600,128 @@ def cancel_subscription(request, slug):
     return redirect('storefront:subscription_manage', slug=slug)
 
 @login_required
-@store_owner_required
 def payment_monitor(request):
-    """Admin view for monitoring payment system health.
-
-    Supports time periods via ?period=24h|7d|30d|all and sends email alerts
-    to ADMINS for critical conditions.
     """
-    monitor = PaymentMonitor()
-    
-    # Determine time period
-    period = request.GET.get('period', '24h')
+    Comprehensive payment dashboard for sellers showing all payment types:
+    - Subscription payments
+    - Order payments (customer purchases)
+    - Escrow releases to sellers
+    """
+    # Get user's stores
+    user_stores = Store.objects.filter(owner=request.user)
+
+    # Get time period from query params
+    period = request.GET.get('period', '30d')
     time_period = None
-    if period == '24h':
-        time_period = timedelta(hours=24)
-    elif period == '7d':
-        time_period = timedelta(days=7)
-    elif period == '30d':
-        time_period = timedelta(days=30)
-    # else 'all' -> time_period stays None
+    if period != 'all':
+        days = int(period.rstrip('d'))
+        time_period = timezone.now() - timedelta(days=days)
 
-    # Gather metrics
-    success_rate = monitor.get_payment_success_rate(time_period)
-    failed_payments = monitor.get_failed_payments()
-    subscription_metrics = monitor.get_subscription_metrics(time_period)
+    # ===== SUBSCRIPTION PAYMENTS =====
+    subscription_payments = MpesaPayment.objects.filter(
+        subscription__store__in=user_stores
+    ).select_related('subscription', 'subscription__store')
 
-    alerts = []
+    if time_period:
+        subscription_payments = subscription_payments.filter(created_at__gte=time_period)
 
-    # Payment success rate alerting
-    if success_rate < 70:
-        severity = 'critical' if success_rate < 50 else 'warning'
-        alerts.append({
-            'message': f'Payment success rate low: {success_rate:.1f}%',
-            'severity': severity,
-            'timestamp': timezone.now()
-        })
-        # Send email on critical
-        if severity == 'critical':
-            try:
-                from .alerts import send_admin_alert
-                send_admin_alert(
-                    subject=f"Critical: Low payment success rate {success_rate:.1f}%",
-                    message=f"Payment success rate for period {period} is {success_rate:.1f}%. Please investigate."
-                )
-            except Exception:
-                # Don't raise in view; just log via logger configured elsewhere
-                pass
+    subscription_payments = subscription_payments.order_by('-created_at')[:50]
 
-    # Past due subscriptions
-    past_due = subscription_metrics.get('past_due_subscriptions', 0)
-    if past_due > 10:
-        severity = 'critical' if past_due > 20 else 'warning'
-        alerts.append({
-            'message': f'High number of past due subscriptions: {past_due}',
-            'severity': severity,
-            'timestamp': timezone.now()
-        })
-        if severity == 'critical':
-            try:
-                from .alerts import send_admin_alert
-                send_admin_alert(
-                    subject=f"Critical: High past due subscriptions ({past_due})",
-                    message=f"There are {past_due} past-due subscriptions. Please review billing and customer outreach."
-                )
-            except Exception:
-                pass
+    # ===== ORDER PAYMENTS (Customer purchases) =====
+    from listings.models import Payment as OrderPayment
+    order_payments = OrderPayment.objects.filter(
+        order__order_items__listing__store__in=user_stores
+    ).select_related(
+        'order',
+        'order__user'
+    ).prefetch_related('order__order_items__listing').distinct()
 
-    # Trial conversion / churn alerts (warning level)
-    if subscription_metrics.get('trial_conversion_rate', 100) < 30:
-        alerts.append({
-            'message': f"Low trial conversion rate: {subscription_metrics.get('trial_conversion_rate', 0):.1f}%",
-            'severity': 'warning',
-            'timestamp': timezone.now()
-        })
+    if time_period:
+        order_payments = order_payments.filter(created_at__gte=time_period)
 
-    if subscription_metrics.get('churn_rate', 0) > 5:
-        severity = 'critical' if subscription_metrics.get('churn_rate') > 10 else 'warning'
-        alerts.append({
-            'message': f"High churn rate: {subscription_metrics.get('churn_rate'):.1f}%",
-            'severity': severity,
-            'timestamp': timezone.now()
-        })
-        if severity == 'critical':
-            try:
-                from .alerts import send_admin_alert
-                send_admin_alert(
-                    subject=f"Critical: High churn rate {subscription_metrics.get('churn_rate'):.1f}%",
-                    message=f"Churn rate has exceeded acceptable threshold: {subscription_metrics.get('churn_rate'):.1f}%"
-                )
-            except Exception:
-                pass
+    order_payments = order_payments.order_by('-created_at')[:50]
 
-    # Prepare context for template (use enhanced template)
-    daily_trends = subscription_metrics.get('daily_trends', [])
-    avg_daily_subscriptions = 0
-    if daily_trends:
-        try:
-            avg_daily_subscriptions = sum(d['new_subscriptions'] for d in daily_trends) / len(daily_trends)
-        except Exception:
-            avg_daily_subscriptions = 0
+    # ===== ESCROW RELEASES =====
+    escrow_releases = OrderPayment.objects.filter(
+        order__order_items__listing__store__in=user_stores,
+        status='completed',
+        seller_payout_reference__isnull=False
+    ).exclude(seller_payout_reference='').select_related(
+        'order',
+        'order__user'
+    ).prefetch_related('order__order_items__listing').distinct()
+
+    if time_period:
+        escrow_releases = escrow_releases.filter(actual_release_date__gte=time_period)
+
+    escrow_releases = escrow_releases.order_by('-actual_release_date')[:50]
+
+    # ===== PAYMENT STATISTICS =====
+    # Total earnings from completed orders
+    total_earnings = OrderPayment.objects.filter(
+        order__order_items__listing__store__in=user_stores,
+        status='completed'
+    ).aggregate(total=Sum('amount'))['total'] or 0
+
+    # Pending escrow funds
+    pending_escrow = OrderPayment.objects.filter(
+        order__order_items__listing__store__in=user_stores,
+        status='completed',
+        is_held_in_escrow=True,
+        actual_release_date__isnull=True
+    ).aggregate(total=Sum('amount'))['total'] or 0
+
+    # Released escrow funds
+    released_escrow = OrderPayment.objects.filter(
+        order__order_items__listing__store__in=user_stores,
+        status='completed',
+        is_held_in_escrow=True,
+        actual_release_date__isnull=False
+    ).aggregate(total=Sum('amount'))['total'] or 0
+
+    # Subscription revenue
+    subscription_revenue = MpesaPayment.objects.filter(
+        subscription__store__in=user_stores,
+        status='completed'
+    ).aggregate(total=Sum('amount'))['total'] or 0
+
+    # Recent failed payments
+    failed_payments = []
+    failed_subs = MpesaPayment.objects.filter(
+        subscription__store__in=user_stores,
+        status='failed'
+    ).order_by('-created_at')[:10]
+    failed_orders = OrderPayment.objects.filter(
+        order__order_items__listing__store__in=user_stores,
+        status='failed'
+    ).order_by('-created_at')[:10]
+
+    failed_payments = list(failed_subs) + list(failed_orders)
+    failed_payments.sort(key=lambda x: x.created_at, reverse=True)
+    failed_payments = failed_payments[:20]
 
     context = {
         'period': period,
-        'success_rate': success_rate,
+        'user_stores': user_stores,
+
+        # Payment collections
+        'subscription_payments': subscription_payments,
+        'order_payments': order_payments,
+        'escrow_releases': escrow_releases,
         'failed_payments': failed_payments,
-        'alerts': sorted(alerts, key=lambda x: x.get('severity') == 'critical', reverse=True),
-        'avg_daily_subscriptions': avg_daily_subscriptions,
-        'daily_trends': daily_trends,
-        **subscription_metrics
+
+        # Statistics
+        'total_earnings': total_earnings,
+        'pending_escrow': pending_escrow,
+        'released_escrow': released_escrow,
+        'subscription_revenue': subscription_revenue,
+        'available_balance': released_escrow,  # Funds available for withdrawal
+
+        # Counts
+        'subscription_count': subscription_payments.count(),
+        'order_count': order_payments.count(),
+        'escrow_count': escrow_releases.count(),
+        'failed_count': len(failed_payments),
     }
 
     return render(request, 'storefront/payment_monitor_enhanced.html', context)
@@ -741,6 +729,8 @@ def payment_monitor(request):
 
 @login_required
 @store_owner_required
+@login_required
+@analytics_access_required('basic')
 def seller_analytics(request):
     """
     Seller analytics dashboard showing aggregated metrics across all stores.
@@ -1008,6 +998,7 @@ def seller_analytics(request):
 
 @login_required
 @store_owner_required
+@analytics_access_required('basic')
 def store_analytics(request, slug):
     """
     Store analytics view with comprehensive metrics and visualizations.
@@ -1432,136 +1423,6 @@ def subscription_plan_select(request, slug):
     return render(request, 'storefront/subscription_plan_select.html', context)
 
 
-
-@login_required
-@store_owner_required
-def subscription_renew(request, slug):
-    """
-    Renew expired subscription
-    """
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
-    subscription = Subscription.objects.filter(
-        store=store,
-        status__in=['past_due', 'canceled']
-    ).order_by('-created_at').first()
-    
-    if not subscription:
-        messages.error(request, "No subscription found to renew.")
-        return redirect('storefront:subscription_manage', slug=slug)
-    
-    if request.method == 'POST':
-        form = UpgradeForm(request.POST)
-        if form.is_valid():
-            phone_number = form.cleaned_data['phone_number']
-            
-            try:
-                mpesa = MpesaGateway()
-                
-                # Update subscription status
-                subscription.status = 'trialing'
-                subscription.save()
-                
-                # Initiate payment
-                response = mpesa.initiate_stk_push(
-                    phone=phone_number,
-                    amount=subscription.amount,
-                    account_reference=f"Renew-{store.id}-{subscription.plan}"
-                )
-                
-                # Create payment record
-                MpesaPayment.objects.create(
-                    subscription=subscription,
-                    checkout_request_id=response['CheckoutRequestID'],
-                    merchant_request_id=response['MerchantRequestID'],
-                    phone_number=phone_number,
-                    amount=subscription.amount,
-                    status='pending'
-                )
-                
-                messages.success(request, "Payment initiated for subscription renewal.")
-                return redirect('storefront:subscription_manage', slug=slug)
-                
-            except Exception as e:
-                messages.error(request, f'Payment initiation failed: {str(e)}')
-        else:
-            messages.error(request, "Please correct the errors below.")
-    else:
-        # Pre-fill with last used phone number
-        last_payment = subscription.payments.filter(
-            status='completed'
-        ).order_by('-created_at').first()
-        
-        initial = {}
-        if last_payment:
-            # Extract phone number from +254XXXXXXXXX format
-            phone = last_payment.phone_number.replace('+254', '')
-            initial['phone_number'] = phone
-        
-        form = UpgradeForm(initial=initial)
-    
-    context = {
-        'store': store,
-        'subscription': subscription,
-        'form': form,
-    }
-    
-    return render(request, 'storefront/subscription_renew.html', context)
-
-
-@login_required
-@store_owner_required
-def subscription_invoice(request, slug, payment_id):
-    """
-    View invoice for a payment
-    """
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
-    payment = get_object_or_404(MpesaPayment, id=payment_id, subscription__store=store)
-    
-    context = {
-        'store': store,
-        'payment': payment,
-        'subscription': payment.subscription,
-    }
-    
-    return render(request, 'storefront/subscription_invoice.html', context)
-
-
-@login_required
-@store_owner_required
-def subscription_settings(request, slug):
-    """
-    Subscription settings (update payment method, etc.)
-    """
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
-    subscription = Subscription.objects.filter(store=store).order_by('-created_at').first()
-    
-    if request.method == 'POST':
-        # Handle settings update
-        phone_number = request.POST.get('phone_number')
-        
-        if phone_number:
-            # Validate phone number
-            if len(phone_number) == 9 and phone_number.startswith('7'):
-                if subscription:
-                    subscription.mpesa_phone = f"+254{phone_number}"
-                    subscription.save()
-                    messages.success(request, "Payment method updated successfully.")
-                else:
-                    messages.error(request, "No subscription found.")
-            else:
-                messages.error(request, "Please enter a valid Kenyan phone number.")
-        
-        return redirect('storefront:subscription_settings', slug=slug)
-    
-    context = {
-        'store': store,
-        'subscription': subscription,
-    }
-    
-    return render(request, 'storefront/subscription_settings.html', context)
-
-
-# Admin Views for Subscription Management
 
 @login_required
 def admin_subscription_list(request):

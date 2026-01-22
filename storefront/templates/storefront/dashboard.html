@@ -185,6 +185,18 @@
         border-color: var(--primary);
     }
 
+    .dashboard-nav-link.disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        pointer-events: auto; /* Allow hover for tooltip */
+    }
+
+    .dashboard-nav-link.disabled:hover {
+        background: var(--bg-secondary) !important;
+        color: var(--text-secondary) !important;
+        border-color: var(--border-color) !important;
+    }
+
     /* ===== STORES SECTION ===== */
     .stores-section {
         margin-bottom: 30px;
@@ -560,6 +572,34 @@
         color: var(--primary);
     }
 
+    .action-card.disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        pointer-events: auto; /* Allow hover for tooltip */
+    }
+
+    .action-card.disabled:hover {
+        transform: none !important;
+        box-shadow: none !important;
+        border-color: var(--border-color) !important;
+        color: var(--text-primary) !important;
+    }
+
+    .lock-icon {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        background: var(--danger);
+        color: white;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+    }
+
     .action-icon {
         font-size: 24px;
         width: 48px;
@@ -668,14 +708,28 @@
         <p class="dashboard-subtitle">Manage your stores and track performance</p>
         
         <div class="d-flex gap-2 mt-3">
+            {% if plan_limits.max_stores > stores.count %}
             <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-primary">
                 <i class="bi bi-plus-circle me-2"></i>
                 Create New Store
             </a>
+            {% else %}
+            <a href="{% url 'storefront:subscription_manage' slug=stores.first.slug %}" class="btn-custom btn-primary disabled" title="Upgrade to create more stores">
+                <i class="bi bi-plus-circle me-2"></i>
+                Create New Store <i class="bi bi-lock-fill ms-1"></i>
+            </a>
+            {% endif %}
+            {% if plan_limits.max_products > total_listings %}
             <a href="{% url 'listing-create' %}" class="btn-custom btn-secondary">
                 <i class="bi bi-plus-lg me-2"></i>
                 Sell Item
             </a>
+            {% else %}
+            <a href="{% url 'storefront:subscription_manage' slug=stores.first.slug %}" class="btn-custom btn-secondary disabled" title="Upgrade to create more listings">
+                <i class="bi bi-plus-lg me-2"></i>
+                Sell Item <i class="bi bi-lock-fill ms-1"></i>
+            </a>
+            {% endif %}
         </div>
     </div>
 
@@ -686,10 +740,24 @@
                 <i class="bi bi-grid-3x3 me-1"></i>
                 Overview
             </a>
+            {% if plan_limits.features.analytics %}
             <a href="{% url 'storefront:seller_analytics' %}" class="dashboard-nav-link">
                 <i class="bi bi-graph-up me-1"></i>
                 Analytics
             </a>
+            {% else %}
+            {% if stores.exists %}
+            <a href="{% url 'storefront:subscription_manage' slug=stores.first.slug %}" class="dashboard-nav-link disabled" title="Upgrade to access analytics">
+                <i class="bi bi-graph-up me-1"></i>
+                Analytics <i class="bi bi-lock-fill ms-1"></i>
+            </a>
+            {% else %}
+            <a href="{% url 'storefront:store_create' %}" class="dashboard-nav-link disabled" title="Create a store first to upgrade">
+                <i class="bi bi-graph-up me-1"></i>
+                Analytics <i class="bi bi-lock-fill ms-1"></i>
+            </a>
+            {% endif %}
+            {% endif %}
             <a href="{% url 'storefront:payment_monitor' %}" class="dashboard-nav-link">
                 <i class="bi bi-cash-stack me-1"></i>
                 Payments
@@ -699,10 +767,17 @@
                 Orders
             </a>
             {% if stores.exists %}
+            {% if plan_limits.features.inventory %}
             <a href="{% url 'storefront:inventory_dashboard' stores.0.slug %}" class="dashboard-nav-link">
                 <i class="bi bi-clipboard me-1"></i>
                 Inventory
             </a>
+            {% else %}
+            <a href="{% url 'storefront:subscription_manage' slug=stores.first.slug %}" class="dashboard-nav-link disabled" title="Upgrade to access inventory management">
+                <i class="bi bi-clipboard me-1"></i>
+                Inventory <i class="bi bi-lock-fill ms-1"></i>
+            </a>
+            {% endif %}
             <a href="{% url 'storefront:store_edit' stores.0.slug %}" class="dashboard-nav-link">
                 <i class="bi bi-gear me-1"></i>
                 Settings
@@ -743,29 +818,38 @@
         </div>
     </div>
 
-    <!-- Upgrade Banner (for free users) -->
+    <!-- In the upgrade banner section -->
     {% if not stores.exists or not stores.first.is_premium %}
     <div class="upgrade-banner">
         <div class="upgrade-content">
             <div class="upgrade-text">
                 <h4>Free Listing Limit</h4>
-                <p>You've used {{ total_listings|default:0 }} of {{ free_limit|default:5 }} free listings</p>
+                <p>You've used <strong>{{ total_listings|default:0 }}</strong> of <strong>{{ free_limit|default:5 }}</strong> free listings</p>
                 <div class="progress mt-2" style="height: 8px; max-width: 300px; background: rgba(0,0,0,0.1);">
-                    {% with progress=total_listings|default:0|floatformat:0 %}
+                    {% with progress=percentage_used|default:0 %}
                     <div class="progress-bar bg-dark" role="progressbar" 
-                         style="width: {{ progress }}%" 
-                         aria-valuenow="{{ progress }}" 
-                         aria-valuemin="0" 
-                         aria-valuemax="{{ free_limit|default:5 }}">
+                        style="width: {{ progress }}%" 
+                        aria-valuenow="{{ progress }}" 
+                        aria-valuemin="0" 
+                        aria-valuemax="100">
                     </div>
                     {% endwith %}
                 </div>
+                {% if remaining_slots > 0 %}
+                <p class="small mt-2 mb-0">{{ remaining_slots }} free listing{{ remaining_slots|pluralize }} remaining</p>
+                {% else %}
+                <p class="small mt-2 mb-0 text-danger"><strong>Upgrade required to add more listings</strong></p>
+                {% endif %}
             </div>
             <div>
                 {% if stores.exists %}
-                <a href="{% url 'storefront:store_upgrade' slug=stores.first.slug %}" class="btn-custom btn-dark">
+                <a href="{% url 'storefront:subscription_manage' slug=stores.first.slug %}" class="btn-custom btn-dark">
                     <i class="bi bi-lightning-charge me-1"></i>
+                    {% if remaining_slots > 0 %}
+                    Upgrade to Premium
+                    {% else %}
                     Upgrade Now
+                    {% endif %}
                 </a>
                 {% else %}
                 <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-dark">
@@ -785,10 +869,17 @@
                 <h2 class="section-title">Your Stores</h2>
                 <p class="section-subtitle">{{ stores.count }} stores</p>
             </div>
-            <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-primary btn-sm">
-                <i class="bi bi-plus-circle me-1"></i>
+            {% if plan_limits.max_stores > stores.count %}
+            <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-primary">
+                <i class="bi bi-plus-circle me-2"></i>
                 Add Store
             </a>
+            {% else %}
+            <a href="{% url 'storefront:subscription_manage' slug=stores.first.slug %}" class="btn-custom btn-primary disabled" title="Upgrade to create more stores">
+                <i class="bi bi-plus-circle me-2"></i>
+                Add Store <i class="bi bi-lock-fill ms-1"></i>
+            </a>
+            {% endif %}
         </div>
         
         {% if stores.exists %}
@@ -874,10 +965,17 @@
                 <h2 class="section-title">Your Listings</h2>
                 <p class="section-subtitle">{{ user_listings.count }} active listings</p>
             </div>
-            <a href="{% url 'listing-create' %}" class="btn-custom btn-primary btn-sm">
-                <i class="bi bi-plus-lg me-1"></i>
+            {% if plan_limits.max_products > total_listings %}
+            <a href="{% url 'listing-create' %}" class="btn-custom btn-secondary">
+                <i class="bi bi-plus-lg me-2"></i>
                 Add Listing
             </a>
+            {% else %}
+            <a href="{% url 'storefront:subscription_manage' slug=stores.first.slug %}" class="btn-custom btn-secondary disabled" title="Upgrade to create more listings">
+                <i class="bi bi-plus-lg me-2"></i>
+                Add Listing <i class="bi bi-lock-fill ms-1"></i>
+            </a>
+            {% endif %}
         </div>
         
         {% if user_listings.exists %}
@@ -953,24 +1051,54 @@
     <section class="quick-actions">
         <h3 class="section-title mb-3">Quick Actions</h3>
         <div class="actions-grid">
+            {% if plan_limits.max_stores > stores.count %}
             <a href="{% url 'storefront:store_create' %}" class="action-card">
                 <div class="action-icon">
                     <i class="bi bi-shop"></i>
                 </div>
                 <h4 class="action-title">Create Store</h4>
             </a>
+            {% else %}
+            <a href="{% url 'storefront:subscription_manage' slug=stores.first.slug %}" class="action-card disabled" title="Upgrade to create more stores">
+                <div class="action-icon">
+                    <i class="bi bi-shop"></i>
+                    <i class="bi bi-lock-fill lock-icon"></i>
+                </div>
+                <h4 class="action-title">Create Store</h4>
+            </a>
+            {% endif %}
+            {% if plan_limits.max_products > total_listings %}
             <a href="{% url 'listing-create' %}" class="action-card">
                 <div class="action-icon">
                     <i class="bi bi-plus-lg"></i>
                 </div>
                 <h4 class="action-title">Sell Item</h4>
             </a>
+            {% else %}
+            <a href="{% url 'storefront:subscription_manage' slug=stores.first.slug %}" class="action-card disabled" title="Upgrade to create more listings">
+                <div class="action-icon">
+                    <i class="bi bi-plus-lg"></i>
+                    <i class="bi bi-lock-fill lock-icon"></i>
+                </div>
+                <h4 class="action-title">Sell Item</h4>
+            </a>
+            {% endif %}
+            {% if plan_limits.features.analytics %}
             <a href="{% url 'storefront:seller_analytics' %}" class="action-card">
                 <div class="action-icon">
                     <i class="bi bi-graph-up"></i>
                 </div>
                 <h4 class="action-title">Analytics</h4>
             </a>
+            {% else %}
+            <a href="{% url 'storefront:subscription_manage' slug=stores.first.slug %}" class="action-card disabled" title="Upgrade to access analytics">
+                <div class="action-icon">
+                    <i class="bi bi-graph-up"></i>
+                    <i class="bi bi-lock-fill lock-icon"></i>
+                </div>
+                <h4 class="action-title">Analytics</h4>
+            </a>
+            {% endif %}
             <a href="{% url 'order_list' %}" class="action-card">
                 <div class="action-icon">
                     <i class="bi bi-bag"></i>
@@ -978,25 +1106,45 @@
                 <h4 class="action-title">Orders</h4>
             </a>
             {% if stores.exists %}
+            {% if plan_limits.features.inventory %}
             <a href="{% url 'storefront:inventory_dashboard' stores.first.slug %}" class="action-card">
                 <div class="action-icon">
                     <i class="bi bi-clipboard"></i>
                 </div>
                 <h4 class="action-title">Inventory</h4>
             </a>
+            {% else %}
+            <a href="{% url 'storefront:subscription_manage' slug=stores.first.slug %}" class="action-card disabled" title="Upgrade to access inventory management">
+                <div class="action-icon">
+                    <i class="bi bi-clipboard"></i>
+                    <i class="bi bi-lock-fill lock-icon"></i>
+                </div>
+                <h4 class="action-title">Inventory</h4>
+            </a>
+            {% endif %}
+            {% if plan_limits.features.bulk_operations %}
             <a href="{% url 'storefront:bulk_import_data' stores.first.slug %}" class="action-card">
                 <div class="action-icon">
                     <i class="bi bi-upload"></i>
                 </div>
                 <h4 class="action-title">Bulk Upload</h4>
             </a>
+            {% else %}
+            <a href="{% url 'storefront:subscription_manage' slug=stores.first.slug %}" class="action-card disabled" title="Upgrade to access bulk operations">
+                <div class="action-icon">
+                    <i class="bi bi-upload"></i>
+                    <i class="bi bi-lock-fill lock-icon"></i>
+                </div>
+                <h4 class="action-title">Bulk Upload</h4>
+            </a>
+            {% endif %}
             {% endif %}
         </div>
     </section>
 </div>
-
+{% endblock %}
+{% block extra_scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
         // Store card hover effects
         document.querySelectorAll('.store-card').forEach(card => {
             card.addEventListener('mouseenter', function() {

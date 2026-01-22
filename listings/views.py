@@ -17,7 +17,7 @@ from django.http import JsonResponse
 from django.core.paginator import Paginator
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
-from django.db.models import Q
+from django.db.models import Q, Case, When, Value
 from blog.models import BlogPost
 from django.http import JsonResponse, HttpResponse
 import json
@@ -26,7 +26,9 @@ from storefront.models import Store, Subscription
 from django.utils import timezone
 from django.db.models import Subquery, OuterRef
 from django.db.models.functions import Coalesce
-from django.db.models import Case, When, Value
+from django.utils.decorators import method_decorator
+from storefront.decorators import listing_limit_check
+
 
 from notifications.utils import (
     notify_order_created, notify_order_shipped, notify_order_delivered,
@@ -276,6 +278,16 @@ class ListingListView(ListView):
         ).annotate(
             listing_count=Count('listing', filter=Q(listing__is_active=True))
         ).filter(listing_count__gt=0).order_by('-listing_count')[:8]
+        
+        # Add plan-related context for authenticated users
+        if self.request.user.is_authenticated:
+            from storefront.utils.plan_permissions import PlanPermissions
+            context['plan_limits'] = PlanPermissions.get_plan_limits(self.request.user)
+            context['plan_status'] = PlanPermissions.get_user_plan_status(self.request.user)
+            context['can_create_store'] = PlanPermissions.can_create_store(self.request.user)
+            context['can_create_listing'] = PlanPermissions.can_create_listing(self.request.user)
+            # Add user's stores for subscription management URLs
+            context['user_stores'] = Store.objects.filter(owner=self.request.user)[:1]  # Get first store if any
         
         # Recently viewed listings for authenticated users
         if self.request.user.is_authenticated:
@@ -547,6 +559,7 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
         kwargs['user'] = self.request.user
         return kwargs
 
+    @method_decorator(listing_limit_check)
     def form_valid(self, form):
         from django.conf import settings
         from django.shortcuts import render, redirect
@@ -575,14 +588,8 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
         # If user reached limit and is not premium, show upgrade prompt
         is_premium = user_store.is_premium if user_store else False
         if not is_premium and user_listing_count >= FREE_LISTING_LIMIT:
-            store_for_template = user_store or Store(owner=self.request.user, name=f"{self.request.user.username}'s Store", slug=self.request.user.username)
             messages.warning(self.request, f"You've reached the free listing limit ({FREE_LISTING_LIMIT}). Upgrade to premium to add more listings.")
-            return render(self.request, 'storefront/confirm_upgrade.html', {
-                'store': store_for_template,
-                'limit_reached': True,
-                'current_count': user_listing_count,
-                'free_limit': FREE_LISTING_LIMIT,
-            })
+            return redirect('storefront:seller_dashboard')
 
         # If there's still no user_store (and no explicit selection), require the user to create or select a storefront.
         # We intentionally DO NOT auto-create a store here so that the user explicitly chooses where the listing should appear.

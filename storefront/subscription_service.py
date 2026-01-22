@@ -800,6 +800,10 @@ class SubscriptionService:
         if existing_pending:
             return False, "Cannot change plan while a payment is pending. Please wait for the current payment to complete."
         
+        # Check for pending plan changes
+        if subscription.metadata and subscription.metadata.get('pending_plan_change'):
+            return False, "A plan change is already pending. Please complete the current plan change first."
+        
         # Check subscription status and determine payment requirements
         if subscription.status in ['canceled', 'past_due']:
             # Clear any existing pending plan changes before setting new one
@@ -850,46 +854,61 @@ class SubscriptionService:
         
         with transaction.atomic():
             if change_immediate:
-                # Apply the plan change immediately
-                subscription.plan = new_plan
-                subscription.amount = new_price
-                subscription.metadata = subscription.metadata or {}
-                subscription.metadata.update({
-                    'plan_changed_at': timezone.now().isoformat(),
-                    'old_plan': old_plan,
-                    'new_plan': new_plan,
-                    'change_type': 'upgrade' if is_upgrade else 'downgrade',
-                    'immediate_change': True,
-                })
-                
-                if is_downgrade:
-                    # For downgrades, store the original plan until period end
-                    subscription.metadata['downgrade_from'] = old_plan
-                    subscription.metadata['downgrade_at'] = timezone.now().isoformat()
-                
-                subscription.save()
-                
+                # CRITICAL FIX: For upgrades requiring payment, DO NOT apply changes immediately
+                # Wait for payment confirmation via webhook
                 if payment_required and payment_amount > 0:
-                    # Initiate payment for the upgrade
+                    # Store the intended plan change in metadata but DON'T apply it yet
+                    subscription.metadata = subscription.metadata or {}
+                    subscription.metadata.update({
+                        'pending_plan_change': new_plan,
+                        'pending_plan_change_at': timezone.now().isoformat(),
+                        'pending_payment_amount': payment_amount,
+                        'pending_old_plan': old_plan,
+                        'pending_old_amount': old_price,
+                        'pending_change_type': 'upgrade' if is_upgrade else 'downgrade',
+                        'change_requires_payment': True,
+                    })
+                    subscription.save()
+                    
+                    # Initiate payment - subscription will only change after successful payment
                     payment_success, payment_result = cls.process_payment(
                         subscription=subscription,
                         phone_number=phone_number or subscription.mpesa_phone.replace('+254', '')
                     )
                     
                     if not payment_success:
-                        # Payment failed, revert the plan change
-                        subscription.plan = old_plan
-                        subscription.amount = old_price
-                        subscription.metadata.pop('plan_changed_at', None)
-                        subscription.metadata.pop('old_plan', None)
-                        subscription.metadata.pop('new_plan', None)
-                        subscription.metadata.pop('change_type', None)
-                        subscription.metadata.pop('immediate_change', None)
+                        # Payment initiation failed, clear pending changes
+                        subscription.metadata.pop('pending_plan_change', None)
+                        subscription.metadata.pop('pending_plan_change_at', None)
+                        subscription.metadata.pop('pending_payment_amount', None)
+                        subscription.metadata.pop('pending_old_plan', None)
+                        subscription.metadata.pop('pending_old_amount', None)
+                        subscription.metadata.pop('pending_change_type', None)
+                        subscription.metadata.pop('change_requires_payment', None)
                         subscription.save()
                         return False, f"Payment failed: {payment_result}. Plan change cancelled."
                     
-                    return True, f"Plan upgraded to {new_plan.capitalize()} successfully! Payment of KSh {payment_amount} processed."
+                    return True, f"Plan change initiated. Please complete payment of KSh {payment_amount} to activate {new_plan.capitalize()} plan."
+                
                 else:
+                    # No payment required (downgrades or free changes) - apply immediately
+                    subscription.plan = new_plan
+                    subscription.amount = new_price
+                    subscription.metadata = subscription.metadata or {}
+                    subscription.metadata.update({
+                        'plan_changed_at': timezone.now().isoformat(),
+                        'old_plan': old_plan,
+                        'new_plan': new_plan,
+                        'change_type': 'upgrade' if is_upgrade else 'downgrade',
+                        'immediate_change': True,
+                    })
+                    
+                    if is_downgrade:
+                        # For downgrades, store the original plan until period end
+                        subscription.metadata['downgrade_from'] = old_plan
+                        subscription.metadata['downgrade_at'] = timezone.now().isoformat()
+                    
+                    subscription.save()
                     return True, f"Plan changed to {new_plan.capitalize()} successfully!"
                     
             else:
@@ -1037,11 +1056,12 @@ class SubscriptionService:
                 'canceled_at': subscription.canceled_at,
                 'is_active': subscription.status == 'active',
                 'is_trialing': subscription.status == 'trialing',
+                'is_unpaid': subscription.status == 'unpaid',
                 'is_expired': subscription.status in ['past_due', 'canceled'],
                 'can_renew': subscription.status in ['canceled', 'past_due'],
                 'can_cancel': subscription.status in ['active', 'trialing'],
                 'can_change_plan': subscription.status in ['active', 'trialing'],
-                'needs_payment': subscription.status == 'past_due',
+                'needs_payment': subscription.status in ['past_due', 'unpaid'],
                 'trial_expired': subscription.status == 'trialing' and 
                                 subscription.trial_ends_at and 
                                 timezone.now() > subscription.trial_ends_at,
@@ -1306,16 +1326,29 @@ class SubscriptionService:
         return subscription.payments.order_by('-created_at')[:limit]
 
     @classmethod
-    def is_subscription_valid(cls, subscription):
-        """Check if a subscription is currently valid (active or in trial)"""
-        if not subscription:
-            return False
+    def subscribe_immediately(cls, store, plan, phone_number):
+        """Create a subscription that requires immediate payment - DO NOT activate until payment succeeds"""
+        # Normalize phone number
+        normalized_phone = cls.normalize_phone_number(phone_number)
         
-        if subscription.status == 'active':
-            return True
-        
-        if subscription.status == 'trialing':
-            if subscription.trial_ends_at and subscription.trial_ends_at > timezone.now():
-                return True
-        
-        return False
+        with transaction.atomic():
+            # Create subscription in 'unpaid' status - NOT active
+            subscription = Subscription.objects.create(
+                store=store,
+                plan=plan,
+                status='unpaid',  # Changed from 'active' to 'unpaid'
+                amount=cls.PLAN_DETAILS[plan]['price'],
+                mpesa_phone=normalized_phone,
+                metadata={
+                    'created_via': 'immediate_subscription',
+                    'requires_payment': True,
+                    'phone_number': phone_number,
+                }
+            )
+            
+            # DO NOT enable premium features yet
+            # store.is_premium = True
+            # store.save()
+            
+            logger.info(f"Unpaid subscription created for store {store.id} - payment required before activation")
+            return True, subscription

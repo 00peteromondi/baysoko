@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block title %}Bulk Import Data - {{ store.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-upload me-2"></i>
+                        Bulk Import Data - {{ store.name }}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-lg-8">
+                            <form method="post" enctype="multipart/form-data">
+                                {% csrf_token %}
+                                {{ form|crispy }}
+
+                                <div class="d-flex gap-2 mt-4">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-upload me-2"></i>
+                                        Start Import
+                                    </button>
+                                    <a href="{% url 'storefront:seller_dashboard' %}" class="btn btn-secondary">
+                                        <i class="bi bi-arrow-left me-2"></i>
+                                        Back to Dashboard
+                                    </a>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="col-lg-4">
+                            {% if templates %}
+                            <div class="card border-info">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-file-earmark-spreadsheet me-2"></i>
+                                        Available Templates
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted small mb-3">
+                                        Select a template from the dropdown above, or download one of these sample templates:
+                                    </p>
+                                    {% for template in templates %}
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small">{{ template.name }}</span>
+                                        <a href="{{ template.file.url }}" class="btn btn-sm btn-outline-primary" download>
+                                            <i class="bi bi-download me-1"></i>
+                                            Download
+                                        </a>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            <div class="card border-warning mt-3">
+                                <div class="card-header bg-warning text-dark">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        Import Guidelines
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-unstyled small mb-0">
+                                        <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i> Use CSV or Excel format</li>
+                                        <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i> First row should be headers</li>
+                                        <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i> Check "Update existing" to modify current products</li>
+                                        <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i> Check "Skip errors" to continue on validation errors</li>
+                                        <li class="mb-0"><i class="bi bi-check-circle text-success me-2"></i> Large files will be processed in the background</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-submit form when template is selected
+document.addEventListener('DOMContentLoaded', function() {
+    const templateSelect = document.querySelector('select[name="template"]');
+    if (templateSelect) {
+        templateSelect.addEventListener('change', function() {
+            // Could add template preview or auto-fill logic here
+            console.log('Template selected:', this.value);
+        });
+    }
+});
+</script>
+{% endblock %}

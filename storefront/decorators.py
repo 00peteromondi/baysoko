@@ -1,8 +1,11 @@
 # storefront/decorators.py
 from functools import wraps
 from django.core.exceptions import PermissionDenied
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
+from django.contrib import messages
+from django.urls import reverse
 from .models import Store
+from .utils.plan_permissions import PlanPermissions
 
 
 def store_owner_required(permission=None):
@@ -62,6 +65,7 @@ def staff_required(permission=None):
                 raise PermissionDenied("Authentication required.")
 
             # Strict policy: only the store creator (owner) may satisfy staff_required for store-scoped views.
+            # Exception: superusers have access to all stores
             store_slug = kwargs.get('slug') or kwargs.get('store_slug')
             if not store_slug:
                 try:
@@ -74,6 +78,10 @@ def staff_required(permission=None):
             if not store_slug:
                 # No store context -> deny access
                 raise PermissionDenied("Staff privileges required.")
+
+            # Allow superusers access to all stores
+            if getattr(user, 'is_superuser', False):
+                return view_func(request, *args, **kwargs)
 
             try:
                 from .models import Store
@@ -91,4 +99,113 @@ def staff_required(permission=None):
     if callable(permission):
         return decorator(permission)
 
+    return decorator
+
+
+def plan_required(feature, redirect_url='storefront:subscription_manage'):
+    """
+    Decorator to check if user has access to a specific feature based on their plan
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request, *args, **kwargs):
+            # Get store from kwargs if available
+            store_slug = kwargs.get('slug')
+            store = None
+            if store_slug:
+                try:
+                    store = get_object_or_404(Store, slug=store_slug, owner=request.user)
+                except:
+                    pass
+
+            if not PlanPermissions.has_feature_access(request.user, feature, store):
+                plan_status = PlanPermissions.get_user_plan_status(request.user, store)
+                if plan_status['plan'] == 'free':
+                    messages.warning(
+                        request,
+                        "This feature requires an active subscription. Please upgrade to access premium features."
+                    )
+                else:
+                    messages.warning(
+                        request,
+                        f"This feature is not available on your {plan_status['plan'].title()} plan. Please upgrade to access it."
+                    )
+                return redirect(redirect_url, slug=store_slug) if store_slug else redirect(redirect_url)
+            return view_func(request, *args, **kwargs)
+        return _wrapped_view
+    return decorator
+
+
+def store_limit_check(view_func):
+    """
+    Decorator to check if user can create additional stores
+    """
+    @wraps(view_func)
+    def _wrapped_view(request, *args, **kwargs):
+        if not PlanPermissions.can_create_store(request.user):
+            limits = PlanPermissions.get_plan_limits(request.user)
+            messages.error(
+                request,
+                f"You've reached the maximum number of stores ({limits['max_stores']}) for your plan. "
+                "Please upgrade to create more stores."
+            )
+            # Try to find a store to redirect to subscription management
+            try:
+                user_store = Store.objects.filter(owner=request.user).first()
+                if user_store and user_store.slug:
+                    return redirect('storefront:subscription_manage', slug=user_store.slug)
+            except:
+                pass
+            # Fallback to seller dashboard if no store found
+            return redirect('storefront:seller_dashboard')
+        return view_func(request, *args, **kwargs)
+    return _wrapped_view
+
+
+def listing_limit_check(view_func):
+    """
+    Decorator to check if user can create additional listings
+    """
+    @wraps(view_func)
+    def _wrapped_view(request, *args, **kwargs):
+        store_slug = kwargs.get('slug')
+        store = None
+        if store_slug:
+            try:
+                store = get_object_or_404(Store, slug=store_slug, owner=request.user)
+            except:
+                pass
+
+        if not PlanPermissions.can_create_listing(request.user, store):
+            limits = PlanPermissions.get_plan_limits(request.user, store)
+            messages.warning(
+                request,
+                f"You've reached the listing limit ({limits['max_products']}) for your plan. "
+                "Upgrade to add more listings."
+            )
+            return redirect('storefront:seller_dashboard')
+        return view_func(request, *args, **kwargs)
+    return _wrapped_view
+
+
+def analytics_access_required(level='basic'):
+    """
+    Decorator to check analytics access level
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request, *args, **kwargs):
+            user_level = PlanPermissions.get_analytics_level(request.user)
+            level_hierarchy = {'none': 0, 'basic': 1, 'advanced': 2, 'enterprise': 3}
+            required_level = level_hierarchy.get(level, 1)
+            user_level_num = level_hierarchy.get(user_level, 0)
+
+            if user_level_num < required_level:
+                messages.warning(
+                    request,
+                    f"Advanced analytics requires a Premium or Enterprise plan. You have {user_level.title()} access."
+                )
+                return redirect('storefront:subscription_manage')
+            return view_func(request, *args, **kwargs)
+        return _wrapped_view
     return decorator

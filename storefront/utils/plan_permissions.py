@@ -1,0 +1,193 @@
+# storefront/utils/plan_permissions.py
+from ..subscription_service import SubscriptionService
+from django.utils import timezone
+from django.db.models import Q
+from storefront.models import Subscription
+from storefront.models import Store
+
+
+class PlanPermissions:
+    """Centralized plan-based permissions and feature access control"""
+
+    # Feature permissions by plan
+    FEATURE_PERMISSIONS = {
+        'free': {  # No active subscription
+            'analytics': False,
+            'inventory': False,
+            'bulk_operations': False,
+            'multiple_stores': False,
+            'advanced_analytics': False,
+            'api_access': False,
+            'custom_domain': False,
+            'white_label': False,
+        },
+        'basic': {
+            'analytics': True,  # Basic analytics only
+            'inventory': False,
+            'bulk_operations': False,
+            'multiple_stores': False,
+            'advanced_analytics': False,
+            'api_access': False,
+            'custom_domain': False,
+            'white_label': False,
+        },
+        'premium': {
+            'analytics': True,
+            'inventory': True,
+            'bulk_operations': True,
+            'multiple_stores': True,
+            'advanced_analytics': True,
+            'api_access': False,
+            'custom_domain': False,
+            'white_label': False,
+        },
+        'enterprise': {
+            'analytics': True,
+            'inventory': True,
+            'bulk_operations': True,
+            'multiple_stores': True,
+            'advanced_analytics': True,
+            'api_access': True,
+            'custom_domain': True,
+            'white_label': True,
+        }
+    }
+
+    @classmethod
+    def get_user_plan_status(cls, user, store=None):
+        """Get user's current plan and status"""
+        
+        # Get active subscription
+        subscription = None
+        if store:
+            subscription = Subscription.objects.filter(
+                store=store,
+                status__in=['active', 'trialing']
+            ).order_by('-created_at').first()
+        else:
+            # Check any active subscription for the user
+            subscription = Subscription.objects.filter(
+                store__owner=user,
+                status__in=['active', 'trialing']
+            ).order_by('-created_at').first()
+
+        if not subscription:
+            return {
+                'plan': 'free',
+                'status': 'inactive',
+                'subscription': None,
+                'is_active': False,
+                'is_trialing': False,
+            }
+
+        # Check if trial is expired
+        if subscription.status == 'trialing' and subscription.trial_ends_at:
+            if timezone.now() > subscription.trial_ends_at:
+                return {
+                    'plan': 'free',
+                    'status': 'trial_expired',
+                    'subscription': subscription,
+                    'is_active': False,
+                    'is_trialing': False,
+                }
+
+        return {
+            'plan': subscription.plan,
+            'status': subscription.status,
+            'subscription': subscription,
+            'is_active': subscription.status == 'active',
+            'is_trialing': subscription.status == 'trialing',
+        }
+
+    @classmethod
+    def has_feature_access(cls, user, feature, store=None):
+        """Check if user has access to a specific feature"""
+        plan_status = cls.get_user_plan_status(user, store)
+        plan = plan_status['plan']
+        return cls.FEATURE_PERMISSIONS.get(plan, {}).get(feature, False)
+
+    @classmethod
+    def get_plan_limits(cls, user, store=None):
+        """Get plan limits for the user"""
+        plan_status = cls.get_user_plan_status(user, store)
+        plan = plan_status['plan']
+
+        if plan == 'free':
+            return {
+                'max_stores': 1,
+                'max_products': 5,  # Only first 5 listings
+                'features': cls.FEATURE_PERMISSIONS['free']
+            }
+
+        plan_details = SubscriptionService.PLAN_DETAILS.get(plan, {})
+        return {
+            'max_stores': plan_details.get('max_stores', 1),
+            'max_products': plan_details.get('max_products', 5),
+            'features': cls.FEATURE_PERMISSIONS.get(plan, {})
+        }
+
+    @classmethod
+    def can_create_store(cls, user):
+        """Check if user can create additional stores"""
+        limits = cls.get_plan_limits(user)
+        
+        current_stores = Store.objects.filter(owner=user).count()
+        return current_stores < limits['max_stores']
+
+    @classmethod
+    def can_create_listing(cls, user, store=None):
+        """Check if user can create additional listings"""
+        limits = cls.get_plan_limits(user, store)
+        from listings.models import Listing
+        if store:
+            current_listings = Listing.objects.filter(seller=user, store=store).count()
+        else:
+            current_listings = Listing.objects.filter(seller=user).count()
+        return current_listings < limits['max_products']
+
+    @classmethod
+    def get_visible_stores(cls, user):
+        """Get stores that should be visible to the user based on plan"""
+        
+        limits = cls.get_plan_limits(user)
+        stores = Store.objects.filter(owner=user).order_by('-created_at')
+
+        if limits['max_stores'] and stores.count() > limits['max_stores']:
+            # Only show allowed number of stores
+            return stores[:limits['max_stores']]
+
+        return stores
+
+    @classmethod
+    def get_visible_listings(cls, user, store=None):
+        """Get listings that should be visible to the user based on plan"""
+        from listings.models import Listing
+        limits = cls.get_plan_limits(user, store)
+
+        if store:
+            listings = Listing.objects.filter(seller=user, store=store).order_by('-created_at')
+        else:
+            listings = Listing.objects.filter(seller=user).order_by('-date_created')
+
+        if limits['max_products'] and listings.count() > limits['max_products']:
+            # Only show allowed number of listings
+            return listings[:limits['max_products']]
+
+        return listings
+
+    @classmethod
+    def get_analytics_level(cls, user, store=None):
+        """Get the analytics level user has access to"""
+        plan_status = cls.get_user_plan_status(user, store)
+        plan = plan_status['plan']
+
+        if plan == 'free':
+            return 'none'
+        elif plan == 'basic':
+            return 'basic'
+        elif plan == 'premium':
+            return 'advanced'
+        elif plan == 'enterprise':
+            return 'enterprise'
+        else:
+            return 'none'
