@@ -245,6 +245,7 @@ MIDDLEWARE = [
     'notifications.middleware.NotificationsMiddleware',
     'storefront.middleware.SubscriptionMiddleware',
     'storefront.middleware.StoreViewMiddleware',
+    'chats.middleware.OnlineStatusMiddleware',
 ]
 
 ROOT_URLCONF = 'homabay_souq.urls'

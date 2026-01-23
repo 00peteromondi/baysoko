@@ -1,245 +1,808 @@
+<!-- templates/chats/inbox.html - FULLY UPDATED VERSION -->
 {% extends 'base.html' %}
+{% load static %}
+{% load humanize %}
 
-{% block title %}Messages - HomaBay Souq{% endblock %}
+{% block title %}Messages - Baysoko{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/messaging.css' %}">
+<style>
+    /* Message bubble animations - OPTIMIZED */
+    @keyframes slideInLeft {
+        from {
+            opacity: 0;
+            transform: translateX(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+    
+    @keyframes slideInRight {
+        from {
+            opacity: 0;
+            transform: translateX(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    
+    /* Message bubble alignment FIXED */
+    .messages-container {
+        display: flex;
+        flex-direction: column;
+        padding: 20px;
+        gap: 8px;
+        min-height: 200px;
+    }
+
+    .message-bubble {
+        position: relative;
+        padding: 10px 16px;
+        border-radius: 18px;
+        margin: 4px 0;
+        max-width: 75%;
+        word-wrap: break-word;
+        animation: messageAppear 0.3s ease-out;
+        box-sizing: border-box;
+    }
+
+    /* Received messages - left aligned */
+    .message-bubble.received {
+        background: #f1f3f4;
+        color: #202124;
+        border-radius: 18px 18px 18px 4px;
+        align-self: flex-start;
+        margin-right: auto;
+        border: 1px solid #e0e0e0;
+        animation: slideInLeft 0.3s ease-out;
+    }
+
+    /* Sent messages - right aligned */
+    .message-bubble.sent {
+        background: #007bff;
+        color: white;
+        border-radius: 18px 18px 4px 18px;
+        align-self: flex-end;
+        margin-left: auto;
+        animation: slideInRight 0.3s ease-out;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Message status indicators */
+    .message-status-container {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+        margin-top: 4px;
+        font-size: 11px;
+    }
+    
+    .message-time {
+        opacity: 0.8;
+    }
+    
+    .message-status {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+    }
+    
+    /* Message states */
+    .message-status-sent { color: rgba(255, 255, 255, 0.8); }
+    .message-status-delivered { color: rgba(255, 255, 255, 0.9); }
+    .message-status-read { color: #4fc3f7; }
+    
+    .message-bubble.received .message-status-container {
+        color: rgba(0, 0, 0, 0.6);
+    }
+    
+    /* Message actions for sent messages */
+    .message-bubble.sent .message-actions {
+        position: absolute;
+        top: -30px;
+        right: 0;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        display: flex;
+        gap: 4px;
+        background: white;
+        border-radius: 16px;
+        padding: 4px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        z-index: 10;
+    }
+
+    .message-bubble.sent:hover .message-actions {
+        opacity: 1;
+    }
+
+    .message-actions-btn {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: none;
+        background: transparent;
+        color: #666;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 12px;
+    }
+
+    .message-actions-btn:hover {
+        background: #f5f5f5;
+    }
+
+    .message-actions-btn.delete:hover {
+        background: #ff4444;
+        color: white;
+    }
+
+    @keyframes messageAppear {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Online status indicator improvements */
+    .online-indicator {
+        position: absolute;
+        bottom: 2px;
+        right: 2px;
+        width: 10px;
+        height: 10px;
+        background: #28a745;
+        border-radius: 50%;
+        border: 2px solid white;
+        display: none;
+        z-index: 5;
+    }
+    
+    .conversation-item.online .online-indicator {
+        display: block;
+    }
+    
+    .chat-participant-info img.online {
+        position: relative;
+    }
+    
+    .chat-participant-info img.online::after {
+        content: '';
+        position: absolute;
+        bottom: 2px;
+        right: 2px;
+        width: 10px;
+        height: 10px;
+        background: #28a745;
+        border-radius: 50%;
+        border: 2px solid white;
+        display: block;
+    }
+
+    /* Mobile responsive design - FIXED */
+    @media (max-width: 992px) {
+        .messaging-container {
+            height: calc(100vh - 60px);
+            border-radius: 0;
+        }
+        
+        .chat-panel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: white;
+            z-index: 1050;
+            display: none !important;
+            flex-direction: column;
+        }
+        
+        .chat-panel.active {
+            display: flex !important;
+        }
+        
+        /* Mobile chat header with safe area */
+        .chat-header {
+            padding-top: calc(16px + env(safe-area-inset-top));
+            padding-left: 16px;
+            padding-right: 16px;
+            background: white;
+            border-bottom: 1px solid #e9ecef;
+            min-height: 70px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Show back button on mobile */
+        .chat-header .back-to-list {
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            margin-right: 12px;
+            background: none;
+            border: none;
+            color: #333;
+            font-size: 20px;
+            cursor: pointer;
+            border-radius: 50%;
+            transition: background 0.2s ease;
+        }
+        
+        .chat-header .back-to-list:hover {
+            background: #f5f5f5;
+        }
+        
+        /* Hide conversations panel when chat is active */
+        .chat-panel.active ~ .conversations-panel {
+            display: none;
+        }
+        
+        /* Ensure proper scrolling on mobile */
+        .messages-container {
+            height: calc(100vh - 180px);
+            padding-bottom: 80px;
+        }
+        
+        /* Fix message input on mobile */
+        .chat-input-area {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-top: 1px solid #e9ecef;
+            padding: 12px 16px;
+            z-index: 1051;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        }
+        
+        /* Adjust message bubbles for mobile */
+        .message-bubble {
+            max-width: 85%;
+        }
+    }
+
+    /* Conversation list improvements */
+    .conversations-list {
+        height: calc(100vh - 240px);
+        min-height: 400px;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .conversation-item.active {
+        background: rgba(0, 123, 255, 0.05);
+        border-left: 3px solid #007bff;
+    }
+    
+    /* Chat participant info in header */
+    .chat-participant-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .chat-participant-info img {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid #e9ecef;
+    }
+    
+    .participant-details h5 {
+        margin: 0 0 2px 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #333;
+    }
+    
+    .participant-status {
+        font-size: 12px;
+        color: #666;
+    }
+    
+    /* Loading states */
+    .chat-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 200px;
+        color: #666;
+    }
+    
+    .conversation-skeleton {
+        padding: 12px;
+        display: flex;
+        gap: 12px;
+        animation: pulse 1.5s infinite;
+    }
+    
+    /* Scrollbar styling */
+    .conversations-list::-webkit-scrollbar,
+    .messages-container::-webkit-scrollbar {
+        width: 4px;
+    }
+    
+    .conversations-list::-webkit-scrollbar-track,
+    .messages-container::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 2px;
+    }
+    
+    .conversations-list::-webkit-scrollbar-thumb,
+    .messages-container::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 2px;
+    }
+    
+    .conversations-list::-webkit-scrollbar-thumb:hover,
+    .messages-container::-webkit-scrollbar-thumb:hover {
+        background: #a1a1a1;
+    }
+    
+    /* Date separator */
+    .date-separator {
+        text-align: center;
+        margin: 20px 0;
+        position: relative;
+    }
+    
+    .date-separator span {
+        background: #f8f9fa;
+        padding: 6px 16px;
+        border-radius: 16px;
+        font-size: 12px;
+        color: #666;
+        position: relative;
+        z-index: 1;
+        border: 1px solid #e9ecef;
+    }
+    
+    .date-separator:before {
+        content: '';
+        position: absolute;
+        left: 20px;
+        right: 20px;
+        top: 50%;
+        height: 1px;
+        background: #e9ecef;
+    }
+    
+    /* Typing indicator */
+    .typing-indicator {
+        background: #f1f3f4;
+        padding: 10px 16px;
+        border-radius: 18px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin: 4px 0;
+        max-width: fit-content;
+        align-self: flex-start;
+        margin-right: auto;
+        margin-left: 0;
+        border: 1px solid #e0e0e0;
+        animation: slideInLeft 0.3s ease-out;
+    }
+    
+    .typing-dots {
+        display: flex;
+        gap: 3px;
+    }
+    
+    .typing-dots span {
+        width: 6px;
+        height: 6px;
+        background: #666;
+        border-radius: 50%;
+        animation: pulse 1.4s infinite;
+    }
+    
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+    
+    /* Temp message styling */
+    .message-bubble.temp {
+        opacity: 0.7;
+    }
+    
+    .message-bubble.failed {
+        background: #ff4444 !important;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="h3 mb-1">Messages</h2>
-            <p class="text-muted mb-0">Manage your conversations with buyers and sellers</p>
+<div class="messaging-container">
+    <!-- Messages Header -->
+    <div class="messages-header">
+        <div class="messages-header-content">
+            <h1><i class="bi bi-chat-dots"></i> Messages</h1>
+            <div class="unread-badge" id="globalUnreadBadge" style="display: none;"></div>
         </div>
-        <button class="btn btn-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#newMessageModal">
-            <i class="bi bi-plus-circle me-2"></i> New Message
-        </button>
     </div>
-    
-    <div class="card shadow-lg border-0">
-        <div class="card-header bg-light py-3">
-            <div class="row align-items-center">
-                <div class="col-md-6">
-                    <h5 class="mb-0">Conversations</h5>
+
+    <!-- Messaging Layout -->
+    <div class="messaging-layout">
+        <!-- Conversations Panel -->
+        <div class="conversations-panel" id="conversationsPanel">
+            <div class="conversations-header">
+                <div class="conversations-search">
+                    <i class="bi bi-search"></i>
+                    <input type="text" id="searchConversations" placeholder="Search conversations..." autocomplete="off">
                 </div>
-                <div class="col-md-6 text-end">
-                    <div class="btn-group" role="group">
-                        <button type="button" class="btn btn-outline-secondary btn-sm active">All</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm">Unread</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm">Archived</button>
+                
+                <div class="conversations-actions">
+                    <button class="btn-custom btn-primary" id="newConversationBtn">
+                        <i class="bi bi-plus-circle"></i> New Message
+                    </button>
+                </div>
+                
+                <!-- Filter Tabs -->
+                <div class="conversation-filters">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    <button class="filter-btn" data-filter="unread">
+                        <i class="bi bi-circle-fill"></i> Unread
+                        <span class="filter-badge" id="unreadFilterBadge" style="display: none;"></span>
+                    </button>
+                    <button class="filter-btn" data-filter="with-listing">With Listing</button>
+                </div>
+            </div>
+
+            <!-- Conversations List -->
+            <div class="conversations-list mb-4 pb-5" id="conversationsList">
+                {% if conversations %}
+                    {% for conversation in conversations %}
+                    <div class="conversation-item {% if conversation.unread_count > 0 %}unread{% endif %} {% if conversation.is_online %}online{% endif %}" 
+                        data-conversation-id="{{ conversation.id }}"
+                        data-participant-id="{{ conversation.participant_id }}"
+                        data-participant-name="{{ conversation.participant_name }}"
+                        data-participant-avatar="{{ conversation.participant_avatar }}"
+                        data-listing-id="{{ conversation.listing_id|default:'' }}"
+                        data-is-online="{{ conversation.is_online|yesno:'true,false' }}">
+                        <div class="conversation-avatar">
+                            <img src="{{ conversation.participant_avatar }}" 
+                                alt="{{ conversation.participant_name }}"
+                                onerror="this.src='{% static 'images/default-avatar.svg' %}'">
+                            <span class="online-indicator"></span>
+                        </div>
+                        <div class="conversation-content">
+                            <div class="conversation-header">
+                                <div class="conversation-name">
+                                    {{ conversation.participant_name }}
+                                    <span class="conversation-status">
+                                        {% if conversation.is_online %}
+                                        <span class="online-status">● Online</span>
+                                        {% else %}
+                                        <span class="last-seen">Last seen {{ conversation.last_seen|timesince }} ago</span>
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                <div class="conversation-time" title="{{ conversation.last_message.timestamp|date:'M d, Y H:i' }}">
+                                    {{ conversation.last_message.timestamp|timesince }} ago
+                                </div>
+                            </div>
+                            <div class="conversation-preview">
+                                <div class="conversation-message {% if conversation.last_message.is_own_message %}own{% endif %}">
+                                    {% if conversation.last_message.is_own_message %}
+                                        You: {{ conversation.last_message.content|truncatechars:30 }}
+                                    {% else %}
+                                        {{ conversation.last_message.content|truncatechars:30 }}
+                                    {% endif %}
+                                </div>
+                                {% if conversation.unread_count > 0 %}
+                                <div class="conversation-unread">
+                                    {{ conversation.unread_count }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% if conversation.listing_title %}
+                            <div class="conversation-listing">
+                                <i class="bi bi-tag"></i>
+                                {{ conversation.listing_title|truncatechars:20 }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <!-- Loading skeleton -->
+                    <div class="conversation-skeleton">
+                        <div class="conversation-skeleton-avatar"></div>
+                        <div class="conversation-skeleton-content">
+                            <div class="conversation-skeleton-line"></div>
+                            <div class="conversation-skeleton-line"></div>
+                            <div class="conversation-skeleton-line"></div>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Chat Panel -->
+        <div class="chat-panel mb-4 pb-5" id="chatPanel">
+            <!-- New Conversation Panel -->
+            <div class="new-conversation-panel" id="newConversationPanel" style="display: none;">
+                <div class="new-conversation-header">
+                    <button class="back-to-chat" id="backToChatBtn">
+                        <i class="bi bi-arrow-left"></i>
+                    </button>
+                    <h5>New Message</h5>
+                </div>
+                <div class="new-conversation-content">
+                    <div class="recipient-search">
+                        <i class="bi bi-search"></i>
+                        <input type="text" id="newChatSearch" placeholder="Search users by name or username..." autocomplete="off">
+                    </div>
+                    
+                    <div class="search-results" id="searchResults">
+                        <div class="search-placeholder">
+                            <i class="bi bi-search"></i>
+                            <p>Search for users to start a conversation</p>
+                        </div>
+                    </div>
+                    
+                    <div class="selected-user-info" id="selectedUserInfo" style="display: none;">
+                        <div class="selected-user-header">
+                            <div class="selected-user-details">
+                                <img id="selectedUserAvatar" src="" alt="" onerror="this.src='{% static 'images/default-avatar.svg' %}'">
+                                <div>
+                                    <h6 id="selectedUserName"></h6>
+                                    <span id="selectedUserUsername"></span>
+                                </div>
+                            </div>
+                            <button class="btn-close" id="clearSelectionBtn"></button>
+                        </div>
+                        
+                        <div class="message-composer">
+                            <textarea id="newMessageText" placeholder="Type your message..." rows="3" maxlength="1000"></textarea>
+                            <div class="composer-actions">
+                                <div class="attachment-options">
+                                    <button type="button" class="btn-attachment" onclick="messaging.attachFile()">
+                                        <i class="bi bi-paperclip"></i>
+                                    </button>
+                                    <input type="file" id="newFileInput" multiple style="display: none;">
+                                </div>
+                                <div class="char-count">
+                                    <span id="newCharCount">0/1000</span>
+                                </div>
+                            </div>
+                            <button class="btn-send" id="sendNewMessageBtn" disabled>
+                                <i class="bi bi-send"></i> Send
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-        
-        <div class="card-body p-0">
-            {% if conversations %}
-            <div class="list-group list-group-flush">
-                {% for conversation in conversations %}
-                <a href="{% url 'conversation-detail' conversation.pk %}" 
-                   class="list-group-item list-group-item-action border-0 py-4 {% if not conversation.messages.last.is_read and conversation.messages.last.sender != user %}bg-light{% endif %}">
-                    <div class="d-flex align-items-center">
-                        {% for participant in conversation.participants.all %}
-                            {% if participant != user %}
-                            <div class="position-relative me-3">
-                              <img src="{{ participant.get_profile_picture_url }}" 
-                                     alt="{{ participant.username }}" 
-                                     class="rounded-circle"
-                                     width="56" 
-                                     height="56"
-                                     onerror="this.src='https://placehold.co/50x50/c2c2c2/1f1f1f?text=HS'">
-                                {% if participant.profile.is_verified %}
-                                <span class="position-absolute bottom-0 end-0 bg-primary rounded-circle p-1">
-                                    <i class="bi bi-patch-check-fill text-white" style="font-size: 0.6rem;"></i>
-                                </span>
-                                {% endif %}
+
+            <!-- Empty Chat State -->
+            <div class="chat-empty-state" id="chatEmptyState">
+                <i class="bi bi-chat-left-text"></i>
+                <h3>Select a conversation</h3>
+                <p>Choose a conversation from the list to start messaging, or start a new conversation.</p>
+                <button class="btn-custom btn-primary" id="emptyStateNewChatBtn">
+                    <i class="bi bi-plus-circle"></i> New Message
+                </button>
+            </div>
+
+            <!-- Active Chat -->
+            <div class="active-chat" id="activeChat" style="display: none;">
+                <div class="chat-header">
+                    <div class="chat-header-left">
+                        <button class="back-to-list" id="backToListBtn">
+                            <i class="bi bi-arrow-left"></i>
+                        </button>
+                        <div class="chat-participant-info">
+                            <img id="chatParticipantAvatar" src="{{ user.get_profile_picture_url }}" alt="" onerror="this.src='{% static 'images/default-avatar.svg' %}'">
+                            <div class="participant-details">
+                                <h5 id="chatParticipantName"></h5>
+                                <div class="participant-status">
+                                    <span id="chatParticipantStatus">Loading...</span>
+                                </div>
                             </div>
-                            {% endif %}
-                        {% endfor %}
-                        
-                        <div class="flex-grow-1 me-3">
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <h6 class="mb-0">
-                                    {% for participant in conversation.participants.all %}
-                                        {% if participant != user %}
-                                        {{ participant.username }}
-                                        {% endif %}
-                                    {% endfor %}
-                                </h6>
-                                <small class="text-muted">{{ conversation.messages.last.timestamp|timesince }} ago</small>
-                            </div>
-                            <p class="text-muted mb-1 text-truncate">
-                                {% if conversation.messages.last.sender == user %}
-                                <i class="bi bi-check2-all text-primary me-1"></i> You: {{ conversation.messages.last.content|truncatewords:8 }}
-                                {% else %}
-                                {{ conversation.messages.last.content|truncatewords:8 }}
-                                {% endif %}
-                            </p>
-                            {% if conversation.listing %}
-                            <small class="text-primary">
-                                <i class="bi bi-tag me-1"></i> {{ conversation.listing.title }}
-                            </small>
-                            {% endif %}
                         </div>
-                        
-                        <div class="text-end">
-                            {% if conversation.messages.last.sender != user and not conversation.messages.last.is_read %}
-                            <span class="badge bg-primary rounded-pill px-2 py-1">New</span>
-                            {% endif %}
-                            <button class="btn btn-sm btn-outline-secondary mt-2" 
-                                    data-bs-toggle="dropdown" 
-                                    aria-expanded="false">
-                                <i class="bi bi-three-dots"></i>
+                    </div>
+                    <div class="chat-header-actions">
+                        <button class="chat-action-btn" onclick="messaging.startCall('voice')" title="Voice call">
+                            <i class="bi bi-telephone"></i>
+                        </button>
+                        <button class="chat-action-btn" onclick="messaging.startCall('video')" title="Video call">
+                            <i class="bi bi-camera-video"></i>
+                        </button>
+                        <div class="dropdown">
+                            <button class="chat-action-btn" type="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-three-dots-vertical"></i>
                             </button>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="#"><i class="bi bi-archive me-2"></i>Archive</a></li>
-                                <li><a class="dropdown-item text-danger" href="#"><i class="bi bi-trash me-2"></i>Delete</a></li>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="#" id="viewProfileBtn">
+                                    <i class="bi bi-person me-2"></i>View Profile
+                                </a></li>
+                                <li><a class="dropdown-item" href="#" id="muteChatBtn">
+                                    <i class="bi bi-bell-slash me-2"></i>Mute Notifications
+                                </a></li>
+                                <li><a class="dropdown-item" href="#" id="archiveChatBtn">
+                                    <i class="bi bi-archive me-2"></i>Archive Chat
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-danger" href="#" id="deleteChatBtn">
+                                    <i class="bi bi-trash me-2"></i>Delete Conversation
+                                </a></li>
                             </ul>
                         </div>
                     </div>
-                </a>
-                {% endfor %}
+                </div>
+                
+                <div class="messages-container" id="messagesContainer">
+                    <!-- Messages will be loaded here -->
+                </div>
+                
+                <div class="chat-input-area">
+                    <div class="message-form">
+                        <div class="message-input-container">
+                            <textarea class="message-input" id="messageInput" placeholder="Type a message..." rows="1" maxlength="1000"></textarea>
+                            <div class="input-actions">
+                                <button type="button" class="btn-attachment" onclick="messaging.attachFile()">
+                                    <i class="bi bi-paperclip"></i>
+                                </button>
+                                <button type="button" class="btn-emoji" onclick="messaging.toggleEmojiPicker()">
+                                    <i class="bi bi-emoji-smile"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button class="btn-send" id="sendMessageBtn">
+                            <i class="bi bi-send"></i>
+                        </button>
+                    </div>
+                    <div class="message-length-indicator">
+                        <span id="messageLength">0/1000</span>
+                    </div>
+                    <div class="typing-indicator" id="typingIndicator" style="display: none;">
+                        <div class="typing-dots">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                        <span id="typingText"></span>
+                    </div>
+                </div>
             </div>
-            {% else %}
-            <div class="text-center py-5">
-                <i class="bi bi-chat-dots display-1 text-muted"></i>
-                <h4 class="mt-3 text-muted">No conversations yet</h4>
-                <p class="text-muted mb-4">Start a conversation by contacting a seller about their listing.</p>
-                <a href="{% url 'all-listings' %}" class="btn btn-primary rounded-pill">
-                    <i class="bi bi-grid me-2"></i> Browse Listings
-                </a>
-            </div>
-            {% endif %}
         </div>
-        
-        {% if conversations.has_other_pages %}
-        <div class="card-footer bg-transparent border-0">
-            <nav aria-label="Conversations pagination">
-                <ul class="pagination justify-content-center mb-0">
-                    {% if conversations.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ conversations.previous_page_number }}">Previous</a>
-                    </li>
-                    {% endif %}
-                    
-                    {% for i in conversations.paginator.page_range %}
-                    <li class="page-item {% if conversations.number == i %}active{% endif %}">
-                        <a class="page-link" href="?page={{ i }}">{{ i }}</a>
-                    </li>
-                    {% endfor %}
-                    
-                    {% if conversations.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ conversations.next_page_number }}">Next</a>
-                    </li>
-                    {% endif %}
-                </ul>
-            </nav>
-        </div>
-        {% endif %}
     </div>
 </div>
 
-<!-- New Message Modal -->
-<div class="modal fade" id="newMessageModal" tabindex="-1" aria-hidden="true">
+<!-- Error Toast Container -->
+<div id="messagingErrorContainer" class="messaging-error-container" style="display: none;"></div>
+
+<!-- Loading Overlay -->
+<div id="messagingLoadingOverlay" class="messaging-loading-overlay" style="display: none;">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmationModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header bg-gradient-primary text-white">
-                <h5 class="modal-title">New Message</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmationTitle"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <form id="newMessageForm">
-                    <div class="mb-3">
-                        <label for="recipientSearch" class="form-label">To</label>
-                        <input type="text" class="form-control" id="recipientSearch" placeholder="Search for a user...">
-                        <div class="form-text">Start typing to find users</div>
-                    </div>
-                    <div class="mb-3">
-                        <label for="listingSelect" class="form-label">About Listing (Optional)</label>
-                        <select class="form-select" id="listingSelect">
-                            <option value="">Select a listing...</option>
-                            <!-- Populate with user's listings or recent viewed -->
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label for="messageText" class="form-label">Message</label>
-                        <textarea class="form-control" id="messageText" rows="4" placeholder="Type your message here..."></textarea>
-                    </div>
-                </form>
-            </div>
+            <div class="modal-body" id="confirmationBody"></div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="sendNewMessage">Send Message</button>
+                <button type="button" class="btn btn-danger" id="confirmActionBtn">Confirm</button>
             </div>
         </div>
     </div>
 </div>
 
-<style>
-.list-group-item:hover {
-    background-color: var(--light-bg) !important;
-    transform: translateX(5px);
-    transition: all 0.3s ease;
-}
+<!-- Message Actions Menu -->
+<div class="dropdown-menu" id="messageActionsMenu">
+    <a class="dropdown-item" href="#" data-action="edit">
+        <i class="bi bi-pencil me-2"></i>Edit Message
+    </a>
+    <a class="dropdown-item" href="#" data-action="copy">
+        <i class="bi bi-copy me-2"></i>Copy Text
+    </a>
+    <a class="dropdown-item text-danger" href="#" data-action="delete">
+        <i class="bi bi-trash me-2"></i>Delete Message
+    </a>
+</div>
 
-.bg-gradient-primary {
-    background: linear-gradient(135deg, var(--primary-gemini) 0%, #0d47a1 100%) !important;
-}
-</style>
+<!-- Hidden elements for state -->
+<meta name="user-id" content="{{ request.user.id }}">
+<input type="hidden" id="csrf_token" value="{{ csrf_token }}">
+{% endblock %}
 
+{% block extra_js %}
+<script src="{% static 'js/messaging.js' %}"></script>
 <script>
+// Initialize messaging system when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    // Real-time updates for inbox
-    setInterval(() => {
-        updateUnreadCounts();
+    // Check if we're on the messages page
+    if (document.getElementById('conversationsList')) {
+        // Initialize the messaging system
+        window.messaging = new MessagingSystem();
+        window.messaging.init();
         
-        // Refresh conversation list every 30 seconds
-        fetch(window.location.href + '?partial=true')
-            .then(response => response.text())
-            .then(html => {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                const newList = doc.querySelector('.list-group');
-                if (newList) {
-                    document.querySelector('.list-group').innerHTML = newList.innerHTML;
-                }
-            });
-    }, 30000);
-    
-    // New message modal functionality
-    const newMessageModal = document.getElementById('newMessageModal');
-    if (newMessageModal) {
-        newMessageModal.addEventListener('shown.bs.modal', function() {
-            document.getElementById('recipientSearch').focus();
-        });
-        
-        document.getElementById('sendNewMessage').addEventListener('click', function() {
-            const recipient = document.getElementById('recipientSearch').value;
-            const message = document.getElementById('messageText').value;
-            
-            if (recipient && message) {
-                // Send message via AJAX
-                fetch('/api/send-message/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': '{{ csrf_token }}'
-                    },
-                    body: JSON.stringify({
-                        recipient: recipient,
-                        message: message
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        bootstrap.Modal.getInstance(newMessageModal).hide();
-                        // Refresh or redirect to new conversation
-                        window.location.href = data.conversation_url;
-                    }
-                });
-            }
-        });
+        // Expose for debugging
+        if (typeof window !== 'undefined') {
+            window.messaging = window.messaging;
+        }
     }
 });
+
+// Handle mobile back button
+window.addEventListener('popstate', function(event) {
+    if (window.messaging && window.messaging.isMobile && window.messaging.currentConversationId) {
+        window.messaging.closeActiveChat();
+        window.history.pushState(null, '', window.location.pathname);
+    }
+});
+
+// Handle page visibility changes
+document.addEventListener('visibilitychange', function() {
+    if (window.messaging) {
+        if (document.hidden) {
+            window.messaging.handleTabHidden();
+        } else {
+            window.messaging.handleTabVisible();
+        }
+    }
+});
+
+// Add chat-active class to body for mobile styling
+function updateBodyClass() {
+    if (window.innerWidth < 992) {
+        const chatPanel = document.getElementById('chatPanel');
+        if (chatPanel && chatPanel.classList.contains('active')) {
+            document.body.classList.add('chat-active');
+        } else {
+            document.body.classList.remove('chat-active');
+        }
+    } else {
+        document.body.classList.remove('chat-active');
+    }
+}
+
+// Watch for chat panel state changes
+const observer = new MutationObserver(function(mutations) {
+    mutations.forEach(function(mutation) {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+            updateBodyClass();
+        }
+    });
+});
+
+const chatPanel = document.getElementById('chatPanel');
+if (chatPanel) {
+    observer.observe(chatPanel, { attributes: true });
+}
+
+// Initial update
+updateBodyClass();
 </script>
 {% endblock %}

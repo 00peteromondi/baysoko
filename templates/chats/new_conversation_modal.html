@@ -1,0 +1,892 @@
+
+<!-- New Message Modal -->
+ <!-- Error Toast Container -->
+<div id="messagingErrorContainer" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
+
+<!-- Loading Overlay -->
+<div id="messagingLoadingOverlay" class="d-none" style="
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 9998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+</div>
+<div class="modal fade" id="newMessageModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <!-- Modal Header -->
+            <div class="modal-header bg-gradient-primary text-white">
+                <div class="d-flex align-items-center w-100">
+                    <i class="bi bi-chat-left-text me-2 fs-4"></i>
+                    <h5 class="modal-title mb-0 flex-grow-1">New Conversation</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+            </div>
+            
+            <!-- Modal Body -->
+            <div class="modal-body p-0">
+                <div class="d-flex" style="min-height: 500px;">
+                    <!-- Left Panel - User Search -->
+                    <div class="w-40 border-end">
+                        <div class="p-4">
+                            <div class="conversations-search mb-3">
+                                <i class="bi bi-search"></i>
+                                <input type="text" id="recipientSearch" placeholder="Search users by name or username...">
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold">About Listing (Optional)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="bi bi-tag"></i></span>
+                                    <select class="form-select" id="listingSelect">
+                                        <option value="">Select a listing...</option>
+                                        <option value="none">No specific listing</option>
+                                    </select>
+                                </div>
+                                <div class="form-text small mt-1">
+                                    Select a listing if this conversation is about a specific product
+                                </div>
+                            </div>
+                            
+                            <div id="recipientResults" class="mt-3" style="max-height: 300px; overflow-y: auto;">
+                                <!-- Search results will appear here -->
+                                <div class="text-center py-5 text-muted">
+                                    <i class="bi bi-search display-6 opacity-25 mb-3"></i>
+                                    <p class="mb-0">Search for users to start a conversation</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Right Panel - Message Preview -->
+                    <div class="w-60 bg-light">
+                        <div class="p-4 h-100 d-flex flex-column">
+                            <!-- Selected User Info -->
+                            <div class="selected-user-info mb-4" id="selectedUserInfo" style="display: none;">
+                                <div class="d-flex align-items-center gap-3 mb-3">
+                                    <div class="selected-user-avatar">
+                                        <img id="selectedUserAvatar" src="" alt="" class="rounded-circle" width="60" height="60">
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 id="selectedUserName" class="mb-1"></h6>
+                                        <div class="text-muted small" id="selectedUserMeta"></div>
+                                    </div>
+                                    <button type="button" class="btn-close" id="clearSelectionBtn" aria-label="Clear selection"></button>
+                                </div>
+                            </div>
+                            
+                            <!-- Message Area -->
+                            <div class="flex-grow-1 d-flex flex-column">
+                                <div class="bg-white rounded-3 p-3 mb-3 flex-grow-1 border" id="messagePreviewArea">
+                                    <div class="text-center py-5 text-muted">
+                                        <i class="bi bi-chat-left-text display-6 opacity-25 mb-3"></i>
+                                        <h6 class="mb-2">No user selected</h6>
+                                        <p class="small mb-0">Select a user to start writing your message</p>
+                                    </div>
+                                </div>
+                                
+                                <!-- Message Input -->
+                                <div class="mt-auto">
+                                    <label class="form-label fw-semibold">Your Message</label>
+                                    <div class="position-relative">
+                                        <textarea class="form-control" id="messageText" 
+                                                  rows="4" 
+                                                  placeholder="Type your message here..."></textarea>
+                                        <div class="d-flex justify-content-between align-items-center mt-2">
+                                            <div class="attachment-options">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary me-2" 
+                                                        onclick="document.getElementById('fileInput').click()">
+                                                    <i class="bi bi-paperclip"></i> Attach
+                                                </button>
+                                                <input type="file" id="fileInput" multiple style="display: none;" 
+                                                       accept="image/*,.pdf,.doc,.docx,.txt">
+                                                <div class="d-inline-block" id="attachmentPreview"></div>
+                                            </div>
+                                            <div class="text-muted small" id="charCount">0/1000</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Modal Footer -->
+            <div class="modal-footer border-top">
+                <div class="d-flex justify-content-between w-100 align-items-center">
+                    <div class="text-muted small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Your message will be sent immediately
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn-custom btn-ghost" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn-custom btn-primary" id="sendNewMessageBtn" disabled>
+                            <i class="bi bi-send me-2"></i> Send Message
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Voice/Video Call Modal -->
+<div class="modal fade" id="callModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-gradient-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-telephone me-2"></i> Start Call</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center py-4">
+                    <div class="avatar-wrapper mb-4">
+                        <img id="callAvatar" src="" alt="" class="rounded-circle" width="100" height="100">
+                        <div class="online-indicator call-online"></div>
+                    </div>
+                    <h4 id="callUserName"></h4>
+                    <p class="text-muted mb-4">Starting a call with this user...</p>
+                    
+                    <div class="call-options d-flex justify-content-center gap-3 mb-4">
+                        <button class="btn-custom btn-success rounded-circle" id="voiceCallBtn" style="width: 60px; height: 60px;">
+                            <i class="bi bi-telephone fs-4"></i>
+                        </button>
+                        <button class="btn-custom btn-primary rounded-circle" id="videoCallBtn" style="width: 60px; height: 60px;">
+                            <i class="bi bi-camera-video fs-4"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="call-info alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Calls are routed through WebRTC. Make sure you have enabled camera/microphone permissions.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Modal Styles */
+.modal-content {
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+}
+
+.modal-header.bg-gradient-primary {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+    border-bottom: none;
+    padding: 1.25rem 1.5rem;
+}
+
+.conversations-search {
+    position: relative;
+}
+
+.conversations-search input {
+    width: 100%;
+    padding: 10px 16px 10px 40px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 14px;
+    transition: var(--transition);
+}
+
+.conversations-search input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+}
+
+.conversations-search i {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary);
+}
+
+/* User Results */
+.user-result-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px;
+    border-radius: var(--radius-md);
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: var(--transition);
+    border: 1px solid transparent;
+}
+
+.user-result-item:hover {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+}
+
+.user-result-item.selected {
+    background: rgba(255, 107, 53, 0.1);
+    border-color: var(--primary);
+}
+
+.user-avatar img {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--border-color);
+}
+
+.user-info {
+    flex: 1;
+}
+
+.user-name {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 2px;
+    color: var(--text-primary);
+}
+
+.user-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Message Preview */
+.message-preview-bubble {
+    max-width: 80%;
+    margin-bottom: 12px;
+}
+
+.message-preview-bubble .message-content {
+    padding: 12px 16px;
+    border-radius: 18px;
+    background: var(--primary);
+    color: white;
+    border-bottom-right-radius: 6px;
+}
+
+/* Attachment Preview */
+.attachment-preview {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    margin-top: 8px;
+    font-size: 13px;
+}
+
+.attachment-preview img {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.attachment-info {
+    flex: 1;
+}
+
+.attachment-remove {
+    color: var(--danger);
+    cursor: pointer;
+}
+
+/* Call Modal */
+.avatar-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.call-online {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    width: 16px;
+    height: 16px;
+    background: var(--success);
+    border: 3px solid white;
+    border-radius: 50%;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .modal-dialog.modal-lg {
+        margin: 0.5rem;
+    }
+    
+    .modal-body .d-flex {
+        flex-direction: column;
+    }
+    
+    .w-40, .w-60 {
+        width: 100% !important;
+    }
+    
+    .w-40 {
+        border-right: none !important;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .modal-body {
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+}
+</style>
+
+<script>
+// Global variables
+let selectedUser = null;
+let selectedListing = null;
+let attachments = [];
+
+// Initialize modal
+function initNewConversationModal() {
+    const modal = new bootstrap.Modal(document.getElementById('newMessageModal'));
+    const searchInput = document.getElementById('recipientSearch');
+    const resultsDiv = document.getElementById('recipientResults');
+    const messageText = document.getElementById('messageText');
+    const sendBtn = document.getElementById('sendNewMessageBtn');
+    const charCount = document.getElementById('charCount');
+    
+    // Load user's listings
+    loadUserListings();
+    
+    // User search with debounce
+    let searchTimeout;
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const query = this.value.trim();
+        
+        if (query.length < 2) {
+            showInitialState(resultsDiv);
+            return;
+        }
+        
+        searchTimeout = setTimeout(() => {
+            searchUsers(query, resultsDiv);
+        }, 300);
+    });
+    
+    // Character count for message
+    messageText.addEventListener('input', function() {
+        const length = this.value.length;
+        charCount.textContent = `${length}/1000`;
+        
+        if (length > 1000) {
+            charCount.classList.add('text-danger');
+            sendBtn.disabled = true;
+        } else if (selectedUser && length > 0) {
+            charCount.classList.remove('text-danger');
+            sendBtn.disabled = false;
+        } else {
+            sendBtn.disabled = true;
+        }
+        
+        // Update preview
+        updateMessagePreview();
+    });
+    
+    // Clear selection
+    document.getElementById('clearSelectionBtn').addEventListener('click', function() {
+        selectedUser = null;
+        document.getElementById('selectedUserInfo').style.display = 'none';
+        document.getElementById('messagePreviewArea').innerHTML = getNoUserSelectedHTML();
+        sendBtn.disabled = true;
+        messageText.value = '';
+        charCount.textContent = '0/1000';
+        document.querySelectorAll('.user-result-item').forEach(item => {
+            item.classList.remove('selected');
+        });
+    });
+    
+    // Send message
+    sendBtn.addEventListener('click', sendNewMessage);
+    
+    // File attachment
+    document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+    
+    return modal;
+}
+
+// Search users function
+async function searchUsers(query, resultsDiv) {
+    try {
+        showLoadingState(resultsDiv);
+        
+        const response = await fetch(`/chats/api/search-users/?q=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        
+        if (data.users && data.users.length > 0) {
+            renderUserResults(data.users, resultsDiv);
+        } else {
+            showNoResults(resultsDiv);
+        }
+    } catch (error) {
+        console.error('Search error:', error);
+        showErrorState(resultsDiv);
+    }
+}
+
+// Render user results
+function renderUserResults(users, container) {
+    container.innerHTML = '';
+    
+    users.forEach(user => {
+        const userElement = document.createElement('div');
+        userElement.className = 'user-result-item';
+        userElement.innerHTML = `
+            <div class="user-avatar">
+                <img src="${user.avatar || 'https://placehold.co/48x48/c2c2c2/1f1f1f?text=User'}" 
+                     alt="${user.name}" 
+                     onerror="this.src='https://placehold.co/48x48/c2c2c2/1f1f1f?text=User'">
+            </div>
+            <div class="user-info">
+                <div class="user-name">${user.name}</div>
+                <div class="user-meta">@${user.username}</div>
+                ${user.listing_count ? `<div class="user-meta small">${user.listing_count} listings</div>` : ''}
+            </div>
+        `;
+        
+        userElement.addEventListener('click', () => {
+            selectUser(user, userElement);
+        });
+        
+        container.appendChild(userElement);
+    });
+}
+
+// Select user
+function selectUser(user, element) {
+    selectedUser = user;
+    
+    // Update UI
+    document.querySelectorAll('.user-result-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+    element.classList.add('selected');
+    
+    // Show selected user info
+    document.getElementById('selectedUserInfo').style.display = 'block';
+    document.getElementById('selectedUserName').textContent = user.name;
+    document.getElementById('selectedUserAvatar').src = user.avatar || 'https://placehold.co/60x60/c2c2c2/1f1f1f?text=User';
+    document.getElementById('selectedUserMeta').textContent = `@${user.username}`;
+    
+    // Update message preview
+    updateMessagePreview();
+    
+    // Enable send button if message exists
+    const messageText = document.getElementById('messageText');
+    const sendBtn = document.getElementById('sendNewMessageBtn');
+    sendBtn.disabled = !messageText.value.trim();
+}
+
+// Update message preview
+function updateMessagePreview() {
+    const messageText = document.getElementById('messageText');
+    const previewArea = document.getElementById('messagePreviewArea');
+    
+    if (!selectedUser) {
+        previewArea.innerHTML = getNoUserSelectedHTML();
+        return;
+    }
+    
+    const message = messageText.value.trim();
+    let previewHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0">Message Preview</h6>
+            <span class="badge bg-primary">To: ${selectedUser.name}</span>
+        </div>
+    `;
+    
+    if (message) {
+        previewHTML += `
+            <div class="message-preview-bubble">
+                <div class="message-content">
+                    ${message}
+                </div>
+            </div>
+        `;
+    } else {
+        previewHTML += `
+            <div class="text-center py-4 text-muted">
+                <i class="bi bi-chat-left-text display-6 opacity-25 mb-3"></i>
+                <p class="mb-0">Your message will appear here</p>
+            </div>
+        `;
+    }
+    
+    // Add attachments preview
+    if (attachments.length > 0) {
+        previewHTML += '<div class="mt-3"><h6 class="small mb-2">Attachments:</h6>';
+        attachments.forEach((file, index) => {
+            if (file.type.startsWith('image/')) {
+                previewHTML += `
+                    <div class="attachment-preview mb-2">
+                        <img src="${URL.createObjectURL(file)}" alt="${file.name}">
+                        <div class="attachment-info">
+                            <div class="fw-medium">${file.name}</div>
+                            <div class="text-muted small">${formatFileSize(file.size)} • Image</div>
+                        </div>
+                        <button type="button" class="attachment-remove" onclick="removeAttachment(${index})">
+                            <i class="bi bi-x-circle"></i>
+                        </button>
+                    </div>
+                `;
+            } else {
+                previewHTML += `
+                    <div class="attachment-preview mb-2">
+                        <i class="bi bi-file-earmark-text fs-4"></i>
+                        <div class="attachment-info">
+                            <div class="fw-medium">${file.name}</div>
+                            <div class="text-muted small">${formatFileSize(file.size)} • Document</div>
+                        </div>
+                        <button type="button" class="attachment-remove" onclick="removeAttachment(${index})">
+                            <i class="bi bi-x-circle"></i>
+                        </button>
+                    </div>
+                `;
+            }
+        });
+        previewHTML += '</div>';
+    }
+    
+    previewArea.innerHTML = previewHTML;
+}
+
+// Send new message
+async function sendNewMessage() {
+    if (!selectedUser) {
+        showToast('Please select a recipient', 'error');
+        return;
+    }
+    
+    const messageText = document.getElementById('messageText').value.trim();
+    if (!messageText && attachments.length === 0) {
+        showToast('Please enter a message or attach a file', 'error');
+        return;
+    }
+    
+    const sendBtn = document.getElementById('sendNewMessageBtn');
+    const originalText = sendBtn.innerHTML;
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<i class="bi bi-hourglass me-2"></i> Sending...';
+    
+    try {
+        const formData = new FormData();
+        formData.append('recipient', selectedUser.id);
+        formData.append('message', messageText);
+        
+        if (selectedListing) {
+            formData.append('listing_id', selectedListing);
+        }
+        
+        // Add attachments
+        attachments.forEach((file, index) => {
+            formData.append(`attachment_${index}`, file);
+        });
+        
+        const response = await fetch('/chats/api/send-message/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('Message sent successfully!', 'success');
+            
+            // Close modal and redirect to conversation
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById('newMessageModal')).hide();
+                window.location.href = data.conversation_url;
+            }, 1500);
+        } else {
+            showToast(data.error || 'Failed to send message', 'error');
+            sendBtn.disabled = false;
+        }
+        
+    } catch (error) {
+        console.error('Error sending message:', error);
+        showToast('Error sending message. Please try again.', 'error');
+        sendBtn.disabled = false;
+    } finally {
+        sendBtn.innerHTML = originalText;
+    }
+}
+
+// File handling
+function handleFileSelect(event) {
+    const files = Array.from(event.target.files);
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 
+                         'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                         'text/plain'];
+    
+    files.forEach(file => {
+        if (!allowedTypes.includes(file.type)) {
+            showToast(`File type not allowed: ${file.name}`, 'error');
+            return;
+        }
+        
+        if (file.size > maxSize) {
+            showToast(`File too large (max 10MB): ${file.name}`, 'error');
+            return;
+        }
+        
+        attachments.push(file);
+    });
+    
+    // Update preview
+    updateMessagePreview();
+    event.target.value = '';
+}
+
+function removeAttachment(index) {
+    attachments.splice(index, 1);
+    updateMessagePreview();
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' bytes';
+    else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    else return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+// UI helpers
+function showLoadingState(container) {
+    container.innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border spinner-border-sm text-primary mb-3" role="status"></div>
+            <p class="mb-0 text-muted">Searching...</p>
+        </div>
+    `;
+}
+
+function showNoResults(container) {
+    container.innerHTML = `
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-search display-6 opacity-25 mb-3"></i>
+            <h6 class="mb-2">No users found</h6>
+            <p class="small mb-0">Try a different search term</p>
+        </div>
+    `;
+}
+
+function showErrorState(container) {
+    container.innerHTML = `
+        <div class="text-center py-5 text-danger">
+            <i class="bi bi-exclamation-triangle display-6 mb-3"></i>
+            <p class="mb-0">Error searching users</p>
+        </div>
+    `;
+}
+
+function showInitialState(container) {
+    container.innerHTML = `
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-search display-6 opacity-25 mb-3"></i>
+            <p class="mb-0">Start typing to search for users</p>
+        </div>
+    `;
+}
+
+function getNoUserSelectedHTML() {
+    return `
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-chat-left-text display-6 opacity-25 mb-3"></i>
+            <h6 class="mb-2">No user selected</h6>
+            <p class="small mb-0">Select a user to start writing your message</p>
+        </div>
+    `;
+}
+
+// Load user's listings
+async function loadUserListings() {
+    try {
+        const response = await fetch('/chats/api/my-listings/');
+        const data = await response.json();
+        
+        const select = document.getElementById('listingSelect');
+        
+        // Clear existing options except the first two
+        while (select.options.length > 2) {
+            select.remove(2);
+        }
+        
+        if (data.listings && data.listings.length > 0) {
+            data.listings.forEach(listing => {
+                const option = document.createElement('option');
+                option.value = listing.id;
+                option.textContent = `${listing.title} (KSh ${listing.price})`;
+                select.appendChild(option);
+            });
+        } else {
+            // Add a disabled option if no listings
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'No listings found';
+            option.disabled = true;
+            select.appendChild(option);
+        }
+        
+        select.addEventListener('change', function() {
+            selectedListing = this.value === 'none' ? null : this.value;
+        });
+        
+    } catch (error) {
+        console.error('Error loading listings:', error);
+        
+        const select = document.getElementById('listingSelect');
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'Failed to load listings';
+        option.disabled = true;
+        select.appendChild(option);
+    }
+}
+// Call functionality
+function initCallModal() {
+    const callModal = new bootstrap.Modal(document.getElementById('callModal'));
+    
+    // Voice call
+    document.getElementById('voiceCallBtn').addEventListener('click', function() {
+        startVoiceCall();
+    });
+    
+    // Video call
+    document.getElementById('videoCallBtn').addEventListener('click', function() {
+        startVideoCall();
+    });
+    
+    return callModal;
+}
+
+function startCall(user) {
+    selectedUser = user;
+    
+    // Update call modal
+    document.getElementById('callUserName').textContent = user.name;
+    document.getElementById('callAvatar').src = user.avatar || 'https://placehold.co/100x100/c2c2c2/1f1f1f?text=User';
+    
+    const callModal = initCallModal();
+    callModal.show();
+}
+
+async function startVoiceCall() {
+    showToast('Initiating voice call...', 'info');
+    
+    // Create a simple WebRTC connection (simplified)
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        
+        // Send call request to server
+        const response = await fetch('/chats/api/initiate-call/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                recipient_id: selectedUser.id,
+                call_type: 'voice',
+                call_id: generateCallId()
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Open call interface
+            openCallInterface('voice', data.call_url, stream);
+        } else {
+            showToast('Failed to initiate call', 'error');
+        }
+        
+    } catch (error) {
+        console.error('Call error:', error);
+        showToast('Error accessing microphone', 'error');
+    }
+}
+
+async function startVideoCall() {
+    showToast('Initiating video call...', 'info');
+    
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        
+        const response = await fetch('/chats/api/initiate-call/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                recipient_id: selectedUser.id,
+                call_type: 'video',
+                call_id: generateCallId()
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            openCallInterface('video', data.call_url, stream);
+        } else {
+            showToast('Failed to initiate call', 'error');
+        }
+        
+    } catch (error) {
+        console.error('Video call error:', error);
+        showToast('Error accessing camera/microphone', 'error');
+    }
+}
+
+function openCallInterface(type, callUrl, localStream) {
+    // Create a call interface
+    const callInterface = `
+        <div class="call-interface">
+            <!-- Call interface HTML -->
+        </div>
+    `;
+    
+    // For now, just show a message
+    showToast(`${type === 'voice' ? 'Voice' : 'Video'} call started. Feature in development.`, 'info');
+    bootstrap.Modal.getInstance(document.getElementById('callModal')).hide();
+}
+
+function generateCallId() {
+    return 'call_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+// Export functions
+window.startNewConversation = function() {
+    const modal = initNewConversationModal();
+    modal.show();
+};
+
+window.startCallWithUser = function(user) {
+    startCall(user);
+};
+</script>
