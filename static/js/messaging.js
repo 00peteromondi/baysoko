@@ -1,4 +1,4 @@
-// static/js/messaging.js - COMPLETE REVAMPED VERSION WITH ALL FIXES
+// static/js/messaging.js - COMPLETE UPDATED VERSION WITH ALL FIXES
 class MessagingSystem {
     constructor() {
         // State
@@ -25,8 +25,12 @@ class MessagingSystem {
             newConversationRecipient: null,
             processedMessageIds: new Set(),
             pendingMessages: new Map(),
-            userStatusCache: new Map(), // Cache for user status
-            lastSeenCache: new Map() // Cache for last seen times
+            userStatusCache: new Map(),
+            lastSeenCache: new Map(),
+            initialized: false,
+            autoOpenConversationId: null,
+            isDarkMode: document.documentElement.getAttribute('data-theme') === 'dark' || 
+                        document.body.classList.contains('dark-mode')
         };
 
         // Configuration
@@ -37,7 +41,7 @@ class MessagingSystem {
             maxMessageLength: 1000,
             maxFileSize: 25 * 1024 * 1024,
             allowedFileTypes: ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'],
-            onlineThreshold: 180000 // 3 minutes in milliseconds
+            onlineThreshold: 180000
         };
 
         // Intervals and timeouts
@@ -46,7 +50,8 @@ class MessagingSystem {
             typing: null,
             conversations: null,
             online: null,
-            status: null
+            status: null,
+            conversationListSort: null
         };
 
         this.timeouts = {
@@ -54,7 +59,8 @@ class MessagingSystem {
             search: null,
             scroll: null,
             statusUpdate: null,
-            duplicateCheck: null
+            duplicateCheck: null,
+            themeCheck: null
         };
 
         // Event listeners for cleanup
@@ -74,6 +80,7 @@ class MessagingSystem {
         this.setupPolling();
         this.handleUrlParams();
         this.setupNetworkListeners();
+        this.setupThemeDetection();
         
         // Update mobile detection
         this.updateMobileDetection();
@@ -116,7 +123,11 @@ class MessagingSystem {
                     const participantId = convItem.dataset.participantId;
                     const participantAvatar = convItem.dataset.participantAvatar;
                     
+                    // Open the existing conversation
                     this.openConversation(convId, participantName, participantId, participantAvatar);
+                    
+                    // Hide new conversation panel if open
+                    this.hideNewConversation();
                     
                     // Update URL for mobile back button
                     if (this.state.isMobile) {
@@ -161,8 +172,16 @@ class MessagingSystem {
             
             // Popstate for mobile back button
             { element: window, type: 'popstate', handler: (e) => {
-                if (this.state.isMobile && this.state.currentConversationId) {
-                    this.closeActiveChat();
+                if (this.state.isMobile) {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const isNewConversation = urlParams.get('new');
+                    const openConversation = urlParams.get('open');
+                    
+                    if (openConversation && this.state.currentConversationId) {
+                        this.closeActiveChat();
+                    } else if (isNewConversation && document.getElementById('newConversationPanel').style.display === 'flex') {
+                        this.hideNewConversation();
+                    }
                 }
             }},
             
@@ -191,6 +210,57 @@ class MessagingSystem {
         });
     }
 
+    setupThemeDetection() {
+        // Check for theme changes
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.attributeName === 'data-theme' || 
+                    mutation.attributeName === 'class' && 
+                    (mutation.target === document.documentElement || mutation.target === document.body)) {
+                    this.state.isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark' || 
+                                          document.body.classList.contains('dark-mode');
+                    this.applyTheme();
+                }
+            });
+        });
+
+        observer.observe(document.documentElement, { attributes: true });
+        observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+        // Initial theme check
+        clearTimeout(this.timeouts.themeCheck);
+        this.timeouts.themeCheck = setTimeout(() => {
+            this.state.isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark' || 
+                                  document.body.classList.contains('dark-mode');
+            this.applyTheme();
+        }, 100);
+    }
+
+    applyTheme() {
+        const container = document.getElementById('messagesContainer');
+        if (container) {
+            if (this.state.isDarkMode) {
+                container.classList.add('dark-mode');
+                container.classList.remove('light-mode');
+            } else {
+                container.classList.add('light-mode');
+                container.classList.remove('dark-mode');
+            }
+        }
+        
+        // Apply theme to other containers
+        const conversationsList = document.getElementById('conversationsList');
+        if (conversationsList) {
+            if (this.state.isDarkMode) {
+                conversationsList.classList.add('dark-mode');
+                conversationsList.classList.remove('light-mode');
+            } else {
+                conversationsList.classList.add('light-mode');
+                conversationsList.classList.remove('dark-mode');
+            }
+        }
+    }
+
     // Handle user selection in new conversation flow
     async handleUserSelection(userId, userName) {
         // First check if conversation already exists with this user
@@ -206,6 +276,8 @@ class MessagingSystem {
                 existingConversation.participant_id,
                 existingConversation.participant_avatar
             );
+            
+            // Hide new conversation panel
             this.hideNewConversation();
             return;
         }
@@ -239,6 +311,7 @@ class MessagingSystem {
         } finally {
             this.hideInitialLoading();
             this.state.initialLoadComplete = true;
+            this.applyTheme();
         }
     }
 
@@ -246,14 +319,21 @@ class MessagingSystem {
         try {
             const response = await this.fetchApi('/chats/api/conversations-list/');
             if (response.success && response.conversations) {
-                this.state.conversations = response.conversations;
+                // Sort conversations by last_message_time in descending order (newest first)
+                const sortedConversations = response.conversations.sort((a, b) => {
+                    const timeA = new Date(a.last_message_time || a.created_at);
+                    const timeB = new Date(b.last_message_time || b.created_at);
+                    return timeB - timeA; // Descending order
+                });
+                
+                this.state.conversations = sortedConversations;
                 this.renderConversations();
                 
                 // Update unread badge immediately
                 this.updateUnreadBadgeFromConversations();
                 
                 // Cache last seen times
-                this.cacheLastSeenTimes(response.conversations);
+                this.cacheLastSeenTimes(sortedConversations);
             }
         } catch (error) {
             console.error('Failed to load conversations:', error);
@@ -301,19 +381,29 @@ class MessagingSystem {
             const isOnline = this.state.onlineUsers.has(participantId);
             const lastSeen = this.getLastSeenDisplay(participantId, conv.last_seen);
             
+            // Get correct avatar URL - ensure it's an absolute URL
+            let avatarUrl = conv.participant_avatar || '';
+            if (avatarUrl && !avatarUrl.startsWith('http') && !avatarUrl.startsWith('https') && !avatarUrl.startsWith('/')) {
+                avatarUrl = '/' + avatarUrl;
+            }
+            
+            // Default fallback avatar
+            const defaultAvatar = window.STATIC_URL ? `${window.STATIC_URL}images/default-avatar.svg` : '/static/images/default-avatar.svg';
+            
             return `
             <div class="conversation-item ${conv.unread_count > 0 ? 'unread' : ''} ${isOnline ? 'online' : ''}"
                  data-conversation-id="${conv.id}"
                  data-participant-id="${conv.participant_id}"
                  data-participant-name="${conv.participant_name}"
-                 data-participant-avatar="${conv.participant_avatar}"
+                 data-participant-avatar="${avatarUrl}"
                  data-unread-count="${conv.unread_count || 0}"
                  data-is-online="${isOnline}"
-                 data-last-seen="${conv.last_seen || ''}">
+                 data-last-seen="${conv.last_seen || ''}"
+                 data-last-message-time="${conv.last_message_time || conv.created_at}">
                 <div class="conversation-avatar">
-                    <img src="${conv.participant_avatar}" 
+                    <img src="${avatarUrl || defaultAvatar}" 
                          alt="${conv.participant_name}"
-                         onerror="this.src='${window.STATIC_URL || ''}images/default-avatar.svg'">
+                         onerror="this.src='${defaultAvatar}'; this.onerror=null;">
                     <span class="online-indicator"></span>
                 </div>
                 <div class="conversation-content">
@@ -351,6 +441,15 @@ class MessagingSystem {
             </div>
             `;
         }).join('');
+        
+        // Apply theme
+        if (this.state.isDarkMode) {
+            container.classList.add('dark-mode');
+            container.classList.remove('light-mode');
+        } else {
+            container.classList.add('light-mode');
+            container.classList.remove('dark-mode');
+        }
     }
 
     // Get last seen display text
@@ -378,6 +477,9 @@ class MessagingSystem {
         this.state.currentParticipant = participantName;
         this.state.currentParticipantId = participantId;
         this.state.currentParticipantAvatar = participantAvatar;
+        
+        // Hide new conversation panel if open
+        this.hideNewConversation();
         
         // Clear processed messages for this conversation
         this.state.processedMessageIds.clear();
@@ -423,10 +525,18 @@ class MessagingSystem {
         const nameEl = document.getElementById('chatParticipantName');
         const statusEl = document.getElementById('chatParticipantStatus');
         
+        // Get correct avatar URL
+        let avatarUrl = participantAvatar || conversation.participant_avatar;
+        if (avatarUrl && !avatarUrl.startsWith('http') && !avatarUrl.startsWith('https') && !avatarUrl.startsWith('/')) {
+            avatarUrl = '/' + avatarUrl;
+        }
+        const defaultAvatar = window.STATIC_URL ? `${window.STATIC_URL}images/default-avatar.svg` : '/static/images/default-avatar.svg';
+        
         if (avatarEl) {
-            avatarEl.src = participantAvatar || conversation.participant_avatar;
+            avatarEl.src = avatarUrl || defaultAvatar;
             avatarEl.onerror = function() {
-                this.src = (window.STATIC_URL || '') + 'images/default-avatar.svg';
+                this.src = defaultAvatar;
+                this.onerror = null;
             };
             
             // Update online status
@@ -494,7 +604,7 @@ class MessagingSystem {
                 <div class="text-center py-4">
                     <i class="bi bi-exclamation-triangle text-danger fs-4"></i>
                     <p class="mt-2">Failed to load messages</p>
-                    <button class="btn btn-sm btn-primary mt-2" onclick="messaging.loadConversationMessages(${conversationId})">
+                    <button class="btn btn-sm btn-primary mt-2" onclick="window.messaging.loadConversationMessages(${conversationId})">
                         Retry
                     </button>
                 </div>
@@ -525,6 +635,9 @@ class MessagingSystem {
             </div>
             ${dateMessages.map(msg => this.renderMessageElement(msg)).join('')}
         `).join('');
+        
+        // Apply theme
+        this.applyTheme();
     }
 
     renderMessageElement(msg) {
@@ -555,10 +668,10 @@ class MessagingSystem {
                  data-temp-id="${tempId || ''}">
                 ${isOwn ? `
                     <div class="message-actions">
-                        <button class="message-actions-btn" onclick="messaging.editMessage('${msg.id || tempId}')" title="Edit">
+                        <button class="message-actions-btn" onclick="window.messaging.editMessage('${msg.id || tempId}')" title="Edit">
                             <i class="bi bi-pencil"></i>
                         </button>
-                        <button class="message-actions-btn delete" onclick="messaging.deleteMessage('${msg.id || tempId}')" title="Delete">
+                        <button class="message-actions-btn delete" onclick="window.messaging.deleteMessage('${msg.id || tempId}')" title="Delete">
                             <i class="bi bi-trash"></i>
                         </button>
                     </div>
@@ -643,8 +756,11 @@ class MessagingSystem {
                 // Replace temp message with real one
                 this.replaceTempMessage(tempId, response.message);
                 
-                // Update conversation preview
+                // Update conversation preview and sort list
                 this.updateConversationPreview(this.state.currentConversationId, message);
+                
+                // Re-sort conversations to bring current one to top
+                this.sortConversationsByLatest();
                 
                 this.showToast('Message sent', 'success');
                 
@@ -863,7 +979,12 @@ class MessagingSystem {
             conversationsPanel.style.display = 'none';
         }
         
+        // Hide new conversation panel and empty state
+        document.getElementById('newConversationPanel').style.display = 'none';
+        document.getElementById('newConversationPanel').classList.remove('active');
         document.getElementById('chatEmptyState').style.display = 'none';
+        
+        // Show active chat
         document.getElementById('activeChat').style.display = 'flex';
     }
 
@@ -880,6 +1001,7 @@ class MessagingSystem {
             document.body.classList.remove('chat-active');
         }
         
+        // Show empty state
         document.getElementById('chatEmptyState').style.display = 'flex';
         document.getElementById('activeChat').style.display = 'none';
         
@@ -891,6 +1013,7 @@ class MessagingSystem {
         // Clear current conversation
         this.state.currentConversationId = null;
         this.state.currentParticipant = null;
+        this.state.currentParticipantId = null;
         
         // Stop polling
         this.stopConversationPolling();
@@ -916,7 +1039,22 @@ class MessagingSystem {
             }
             const time = convItem.querySelector('.conversation-time');
             if (time) time.textContent = 'Just now';
+            
+            // Update the last message time attribute
+            convItem.dataset.lastMessageTime = new Date().toISOString();
         }
+    }
+
+    // Sort conversations by latest message
+    sortConversationsByLatest() {
+        this.state.conversations.sort((a, b) => {
+            const timeA = new Date(a.last_message_time || a.created_at);
+            const timeB = new Date(b.last_message_time || b.created_at);
+            return timeB - timeA; // Descending order
+        });
+        
+        // Re-render conversations
+        this.renderConversations();
     }
 
     // Mark conversation as read with optimistic update
@@ -1112,6 +1250,11 @@ class MessagingSystem {
             }
         }, 30000);
         
+        // Periodically sort conversations
+        this.intervals.conversationListSort = setInterval(() => {
+            this.sortConversationsByLatest();
+        }, 60000); // Sort every minute
+        
         this.state.activePolling = true;
     }
 
@@ -1182,6 +1325,9 @@ class MessagingSystem {
                     // Update last message ID
                     this.state.lastMessageId = newMessages[newMessages.length - 1].id;
                     
+                    // Update conversation list to reflect new message
+                    this.updateConversationAfterNewMessage(conversationId, newMessages[newMessages.length - 1]);
+                    
                     // Play notification sound if window not focused
                     if (!document.hasFocus()) {
                         this.playNotificationSound();
@@ -1190,12 +1336,54 @@ class MessagingSystem {
                     // Mark as read if we received messages
                     await this.markConversationAsRead(conversationId, true);
                     
-                    // Update conversation list
-                    setTimeout(() => this.loadConversations(), 1000);
+                    // Reload and sort conversations
+                    setTimeout(() => {
+                        this.loadConversations();
+                        this.sortConversationsByLatest();
+                    }, 1000);
                 }
             }
         } catch (error) {
             console.error('Failed to poll new messages:', error);
+        }
+    }
+
+    updateConversationAfterNewMessage(conversationId, message) {
+        const convItem = document.querySelector(`[data-conversation-id="${conversationId}"]`);
+        if (convItem) {
+            const preview = convItem.querySelector('.conversation-message');
+            if (preview) {
+                const isOwn = message.is_own_message || false;
+                preview.textContent = isOwn ? 'You: ' + this.truncateText(message.content, 30) : this.truncateText(message.content, 30);
+                preview.classList.toggle('own', isOwn);
+            }
+            
+            const time = convItem.querySelector('.conversation-time');
+            if (time) time.textContent = 'Just now';
+            
+            // Update the last message time attribute
+            convItem.dataset.lastMessageTime = new Date().toISOString();
+            
+            // Update unread count if it's not our own message
+            if (!message.is_own_message) {
+                const unreadCount = parseInt(convItem.dataset.unreadCount || 0) + 1;
+                convItem.dataset.unreadCount = unreadCount;
+                convItem.classList.add('unread');
+                
+                const unreadBadge = convItem.querySelector('.conversation-unread');
+                if (unreadBadge) {
+                    unreadBadge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+                } else {
+                    const previewDiv = convItem.querySelector('.conversation-preview');
+                    if (previewDiv) {
+                        previewDiv.insertAdjacentHTML('beforeend', `
+                            <div class="conversation-unread">
+                                ${unreadCount > 99 ? '99+' : unreadCount}
+                            </div>
+                        `);
+                    }
+                }
+            }
         }
     }
 
@@ -1257,30 +1445,61 @@ class MessagingSystem {
         }
     }
 
-    // New Conversation Flow
+    // New Conversation Flow - UPDATED
     showNewConversation() {
-        document.getElementById('newConversationPanel').style.display = 'block';
+        // Hide other panels
         document.getElementById('chatEmptyState').style.display = 'none';
         document.getElementById('activeChat').style.display = 'none';
-        document.getElementById('newChatSearch').focus();
+        
+        // Show new conversation panel
+        document.getElementById('newConversationPanel').style.display = 'flex';
+        document.getElementById('newConversationPanel').classList.add('active');
+        
+        // Clear any previous selection
         this.clearRecipientSelection();
+        
+        // Focus search input
+        document.getElementById('newChatSearch').focus();
+        
+        // Update URL for mobile back button
+        if (this.state.isMobile) {
+            window.history.pushState({ newConversation: true }, '', '?new=true');
+        }
     }
 
     hideNewConversation() {
         document.getElementById('newConversationPanel').style.display = 'none';
-        document.getElementById('chatEmptyState').style.display = 'flex';
+        document.getElementById('newConversationPanel').classList.remove('active');
+        
+        // Show appropriate panel based on state
+        if (this.state.currentConversationId) {
+            document.getElementById('activeChat').style.display = 'flex';
+        } else {
+            document.getElementById('chatEmptyState').style.display = 'flex';
+        }
+        
+        // Clear selection
         this.clearRecipientSelection();
+        
+        // Update URL
+        if (this.state.isMobile) {
+            const url = new URL(window.location);
+            url.searchParams.delete('new');
+            window.history.pushState({}, '', url);
+        }
     }
 
     async searchUsers(query) {
+        const resultsDiv = document.getElementById('searchResults');
+        
         if (!query || query.length < 2) {
             this.showSearchPlaceholder();
             return;
         }
         
-        const resultsDiv = document.getElementById('searchResults');
+        // Show loading state
         resultsDiv.innerHTML = `
-            <div class="text-center py-3">
+            <div class="text-center py-4">
                 <div class="spinner-border spinner-border-sm text-primary"></div>
                 <p class="mt-2 text-muted">Searching...</p>
             </div>
@@ -1290,11 +1509,13 @@ class MessagingSystem {
             const response = await this.fetchApi(`/chats/api/search-users/?q=${encodeURIComponent(query)}`);
             if (response.success && response.users) {
                 this.renderSearchResults(response.users);
+            } else {
+                this.showSearchPlaceholder();
             }
         } catch (error) {
             console.error('Failed to search users:', error);
             resultsDiv.innerHTML = `
-                <div class="text-center py-3">
+                <div class="text-center py-4">
                     <i class="bi bi-exclamation-triangle text-danger"></i>
                     <p class="mt-2 text-muted">Failed to search users</p>
                 </div>
@@ -1315,19 +1536,28 @@ class MessagingSystem {
             return;
         }
         
-        resultsDiv.innerHTML = users.map(user => `
+        resultsDiv.innerHTML = users.map(user => {
+            // Ensure avatar URL is correct
+            let avatarUrl = user.avatar || '';
+            if (avatarUrl && !avatarUrl.startsWith('http') && !avatarUrl.startsWith('https') && !avatarUrl.startsWith('/')) {
+                avatarUrl = '/' + avatarUrl;
+            }
+            const defaultAvatar = window.STATIC_URL ? `${window.STATIC_URL}images/default-avatar.svg` : '/static/images/default-avatar.svg';
+            
+            return `
             <div class="user-result" data-user-id="${user.id}" data-user-name="${user.name}">
                 <div class="user-avatar">
-                    <img src="${user.avatar || ((window.STATIC_URL || '') + 'images/default-avatar.svg')}" 
+                    <img src="${avatarUrl || defaultAvatar}" 
                          alt="${user.name}"
-                         onerror="this.src='${window.STATIC_URL || ''}images/default-avatar.svg'">
+                         onerror="this.src='${defaultAvatar}'; this.onerror=null;">
                 </div>
                 <div class="user-info">
                     <h6>${user.name}</h6>
-                    <span>@${user.username}</span>
+                    <span class="text-muted">@${user.username}</span>
                 </div>
             </div>
-        `).join('');
+            `;
+        }).join('');
     }
 
     selectRecipient(userId, userName) {
@@ -1335,31 +1565,59 @@ class MessagingSystem {
         this.state.newConversationRecipient = { id: userId, name: userName };
         
         // Update UI
-        document.getElementById('selectedUserInfo').style.display = 'block';
+        document.getElementById('selectedUserInfo').style.display = 'flex';
         document.getElementById('selectedUserName').textContent = userName;
         
-        // Set avatar
+        // Set avatar - try to find it in search results first
         const avatarEl = document.getElementById('selectedUserAvatar');
         const userResultImg = document.querySelector(`[data-user-id="${userId}"] img`);
+        const defaultAvatar = window.STATIC_URL ? `${window.STATIC_URL}images/default-avatar.svg` : '/static/images/default-avatar.svg';
+        
         if (userResultImg) {
             avatarEl.src = userResultImg.src;
         } else {
-            avatarEl.src = (window.STATIC_URL || '') + 'images/default-avatar.svg';
+            avatarEl.src = defaultAvatar;
+        }
+        
+        // Clear search results and hide search container on desktop
+        if (!this.state.isMobile) {
+            document.getElementById('searchResults').innerHTML = '';
+            document.querySelector('.search-results-container').style.display = 'none';
         }
         
         // Enable send button
         document.getElementById('sendNewMessageBtn').disabled = false;
         
         // Focus message input
-        document.getElementById('newMessageText').focus();
+        setTimeout(() => {
+            document.getElementById('newMessageText').focus();
+        }, 100);
     }
 
     clearRecipientSelection() {
         this.state.newConversationRecipient = null;
+        
+        // Hide selected user info
         document.getElementById('selectedUserInfo').style.display = 'none';
+        
+        // Clear message input
         document.getElementById('newMessageText').value = '';
+        this.updateCharCount(document.getElementById('newMessageText'), 'newCharCount');
+        
+        // Disable send button
         document.getElementById('sendNewMessageBtn').disabled = true;
+        
+        // Show search container again
+        const searchContainer = document.querySelector('.search-results-container');
+        if (searchContainer) {
+            searchContainer.style.display = 'flex';
+        }
+        
+        // Show search placeholder
         this.showSearchPlaceholder();
+        
+        // Refocus search input
+        document.getElementById('newChatSearch').focus();
     }
 
     async sendNewMessage() {
@@ -1539,6 +1797,8 @@ class MessagingSystem {
             if (this.state.pollingEnabled && !document.hidden) {
                 await this.loadConversations();
                 await this.loadUserStatuses();
+                // Ensure conversations are sorted by latest
+                this.sortConversationsByLatest();
             }
         }, 30000);
         
@@ -1625,8 +1885,37 @@ class MessagingSystem {
         // Update body class
         if (!this.state.isMobile) {
             document.body.classList.remove('chat-active');
+            // On desktop, ensure search container is visible when no recipient selected
+            if (!this.state.newConversationRecipient) {
+                const searchContainer = document.querySelector('.search-results-container');
+                if (searchContainer) {
+                    searchContainer.style.display = 'flex';
+                }
+            }
         } else if (this.state.currentConversationId) {
             document.body.classList.add('chat-active');
+        }
+        
+        // Adjust UI based on screen size
+        this.adjustUIForScreenSize();
+    }
+
+    adjustUIForScreenSize() {
+        const searchContainer = document.querySelector('.search-results-container');
+        const selectedInfo = document.getElementById('selectedUserInfo');
+        
+        if (!this.state.isMobile) {
+            // Desktop: Hide search container when recipient is selected
+            if (this.state.newConversationRecipient && searchContainer) {
+                searchContainer.style.display = 'none';
+            } else if (searchContainer) {
+                searchContainer.style.display = 'flex';
+            }
+        } else {
+            // Mobile: Always show search container in new conversation panel
+            if (searchContainer) {
+                searchContainer.style.display = 'flex';
+            }
         }
     }
 
@@ -1662,10 +1951,11 @@ class MessagingSystem {
             this.startConversationPolling(this.state.currentConversationId);
         }
         
-        // Refresh data
+        // Refresh data and sort conversations
         if (this.state.initialLoadComplete) {
             this.loadConversations();
             this.loadUserStatuses();
+            this.sortConversationsByLatest();
         }
     }
 
@@ -1701,6 +1991,7 @@ class MessagingSystem {
             <div class="search-placeholder">
                 <i class="bi bi-search"></i>
                 <p>Search for users to start a conversation</p>
+                <small class="text-muted mt-2">Type at least 2 characters to search</small>
             </div>
         `;
     }

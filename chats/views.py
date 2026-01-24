@@ -407,6 +407,94 @@ def conversation_detail(request, pk):
         'other_participants': other_participants
     })
 
+# In your views.py, update the conversations_list function:
+
+@login_required
+def conversations_list(request):
+    """Get conversations list with detailed information"""
+    try:
+        conversations = Conversation.objects.filter(
+            participants=request.user
+        ).annotate(
+            unread_count=Count(
+                'messages',
+                filter=Q(messages__is_read=False) & ~Q(messages__sender=request.user)
+            ),
+            last_message_time=Subquery(
+                Message.objects.filter(
+                    conversation=OuterRef('pk')
+                ).order_by('-timestamp').values('timestamp')[:1]
+            ),
+            last_message_content=Subquery(
+                Message.objects.filter(
+                    conversation=OuterRef('pk')
+                ).order_by('-timestamp').values('content')[:1]
+            ),
+            last_message_sender_id=Subquery(
+                Message.objects.filter(
+                    conversation=OuterRef('pk')
+                ).order_by('-timestamp').values('sender')[:1]
+            )
+        ).order_by('-last_message_time')[:50]
+        
+        conversations_data = []
+        for conversation in conversations:
+            # Get other participant
+            other_participant = conversation.participants.exclude(id=request.user.id).first()
+            
+            # Get participant avatar using the User model's get_profile_picture_url()
+            participant_avatar = ''
+            if other_participant:
+                try:
+                    participant_avatar = other_participant.get_profile_picture_url()
+                except:
+                    participant_avatar = '/static/images/default-avatar.svg'
+            
+            # Get online status and last activity
+            is_online = False
+            last_seen = None
+            last_activity = None
+            
+            try:
+                status = UserOnlineStatus.objects.get(user=other_participant)
+                is_online = status.is_online
+                last_seen = status.last_seen
+                last_activity = status.last_active
+            except UserOnlineStatus.DoesNotExist:
+                # Fall back to user's last login or activity
+                if other_participant:
+                    last_activity = other_participant.last_login or other_participant.date_joined
+            
+            conversations_data.append({
+                'id': conversation.id,
+                'participant_id': other_participant.id if other_participant else None,
+                'participant_username': other_participant.username if other_participant else '',
+                'participant_name': other_participant.get_full_name() or other_participant.username if other_participant else '',
+                'participant_avatar': participant_avatar,
+                'last_message_content': conversation.last_message_content or '',
+                'last_message_sender_id': conversation.last_message_sender_id,
+                'last_message_time': conversation.last_message_time.isoformat() if conversation.last_message_time else conversation.start_date.isoformat(),
+                'unread_count': conversation.unread_count,
+                'listing_id': conversation.listing.id if conversation.listing else None,
+                'listing_title': conversation.listing.title if conversation.listing else '',
+                'is_online': is_online,
+                'last_seen': last_seen.isoformat() if last_seen else None,
+                'last_activity': last_activity.isoformat() if last_activity else None
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'conversations': conversations_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in conversations_list: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'conversations': []
+        })
+
 @login_required
 def start_conversation(request, listing_id, recipient_id):
     from listings.models import Listing
@@ -830,75 +918,6 @@ def get_new_messages(request, conversation_id):
             'new_messages': []
         }, status=500)
 
-# Fix conversations_list endpoint
-@login_required
-def conversations_list(request):
-    """Get conversations list with detailed information"""
-    try:
-        conversations = Conversation.objects.filter(
-            participants=request.user
-        ).annotate(
-            unread_count=Count(
-                'messages',
-                filter=Q(messages__is_read=False) & ~Q(messages__sender=request.user)
-            ),
-            last_message_time=Subquery(
-                Message.objects.filter(
-                    conversation=OuterRef('pk')
-                ).order_by('-timestamp').values('timestamp')[:1]
-            ),
-            last_message_content=Subquery(
-                Message.objects.filter(
-                    conversation=OuterRef('pk')
-                ).order_by('-timestamp').values('content')[:1]
-            ),
-            last_message_sender_id=Subquery(
-                Message.objects.filter(
-                    conversation=OuterRef('pk')
-                ).order_by('-timestamp').values('sender')[:1]
-            )
-        ).order_by('-last_message_time')[:50]
-        
-        conversations_data = []
-        for conversation in conversations:
-            # Get other participant
-            other_participant = conversation.participants.exclude(id=request.user.id).first()
-            
-            # Get participant avatar
-            participant_avatar = 'https://placehold.co/48x48/c2c2c2/1f1f1f?text=User'
-            if other_participant and hasattr(other_participant, 'profile'):
-                try:
-                    if other_participant.profile.profile_picture and hasattr(other_participant.profile.profile_picture, 'url'):
-                        participant_avatar = other_participant.profile.profile_picture.url
-                except Exception:
-                    pass
-            
-            conversations_data.append({
-                'id': conversation.id,
-                'participant_id': other_participant.id if other_participant else None,
-                'participant_username': other_participant.username if other_participant else '',
-                'participant_name': other_participant.get_full_name() or other_participant.username if other_participant else '',
-                'participant_avatar': participant_avatar,
-                'last_message_content': conversation.last_message_content or '',
-                'last_message_sender_id': conversation.last_message_sender_id,
-                'last_message_time': conversation.last_message_time.isoformat() if conversation.last_message_time else conversation.start_date.isoformat(),
-                'unread_count': conversation.unread_count,
-                'listing_id': conversation.listing.id if conversation.listing else None,
-                'listing_title': conversation.listing.title if conversation.listing else ''
-            })
-        
-        return JsonResponse({
-            'success': True,
-            'conversations': conversations_data
-        })
-        
-    except Exception as e:
-        logger.error(f"Error in conversations_list: {e}")
-        return JsonResponse({
-            'success': False,
-            'error': str(e),
-            'conversations': []
-        })
     
 @login_required
 @csrf_exempt

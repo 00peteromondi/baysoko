@@ -1,4 +1,4 @@
-<!-- templates/chats/inbox.html - FULLY UPDATED VERSION -->
+<!-- templates/chats/inbox.html - UPDATED WITH ALL FIXES -->
 {% extends 'base.html' %}
 {% load static %}
 {% load humanize %}
@@ -8,7 +8,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/messaging.css' %}">
 <style>
-    /* Message bubble animations - OPTIMIZED */
+    /* Message bubble animations */
     @keyframes slideInLeft {
         from {
             opacity: 0;
@@ -29,11 +29,6 @@
             opacity: 1;
             transform: translateX(0);
         }
-    }
-    
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
     }
     
     /* Message bubble alignment FIXED */
@@ -67,6 +62,12 @@
         animation: slideInLeft 0.3s ease-out;
     }
 
+    body.dark-mode .message-bubble.received {
+        background: #2d3748;
+        color: #e2e8f0;
+        border-color: #4a5568;
+    }
+
     /* Sent messages - right aligned */
     .message-bubble.sent {
         background: #007bff;
@@ -78,126 +79,101 @@
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     }
 
-    /* Message status indicators */
-    .message-status-container {
+    /* NEW CONVERSATION FLOW IMPROVEMENTS */
+    .new-conversation-content {
         display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 6px;
-        margin-top: 4px;
-        font-size: 11px;
+        flex-direction: column;
+        height: 100%;
     }
     
-    .message-time {
-        opacity: 0.8;
+    body.dark-mode .search-container {
     }
     
-    .message-status {
+    .search-results-container {
+        flex: 1;
+        overflow-y: auto;
         display: flex;
-        align-items: center;
-        gap: 2px;
+        flex-direction: column;
     }
     
-    /* Message states */
-    .message-status-sent { color: rgba(255, 255, 255, 0.8); }
-    .message-status-delivered { color: rgba(255, 255, 255, 0.9); }
-    .message-status-read { color: #4fc3f7; }
-    
-    .message-bubble.received .message-status-container {
-        color: rgba(0, 0, 0, 0.6);
+    .search-results {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
     }
     
-    /* Message actions for sent messages */
-    .message-bubble.sent .message-actions {
-        position: absolute;
-        top: -30px;
-        right: 0;
-        opacity: 0;
-        transition: opacity 0.2s ease;
+    .search-placeholder {
         display: flex;
-        gap: 4px;
-        background: white;
-        border-radius: 16px;
-        padding: 4px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-        z-index: 10;
-    }
-
-    .message-bubble.sent:hover .message-actions {
-        opacity: 1;
-    }
-
-    .message-actions-btn {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        border: none;
-        background: transparent;
-        color: #666;
-        display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
+        height: 100%;
+        padding: 40px 20px;
+        text-align: center;
+        color: #6c757d;
+    }
+    
+    body.dark-mode .search-placeholder {
+        color: #a0aec0;
+    }
+    
+    .search-placeholder i {
+        font-size: 48px;
+        margin-bottom: 16px;
+        color: #dee2e6;
+    }
+    
+    body.dark-mode .search-placeholder i {
+        color: #4a5568;
+    }
+    
+    /* Message composer in new conversation */
+    .message-composer-container {
+        display: flex;
+        flex-direction: column;
+        border-top: 1px solid #e9ecef;
+        background: #f8f9fa;
+    }
+    
+    body.dark-mode .message-composer-container {
+        background: #2d3748;
+        border-top-color: #4a5568;
+    }
+    
+    /* User result improvements */
+    .user-result {
+        padding: 12px;
+        border-radius: 10px;
         cursor: pointer;
         transition: all 0.2s ease;
-        font-size: 12px;
-    }
-
-    .message-actions-btn:hover {
-        background: #f5f5f5;
-    }
-
-    .message-actions-btn.delete:hover {
-        background: #ff4444;
-        color: white;
-    }
-
-    @keyframes messageAppear {
-        from {
-            opacity: 0;
-            transform: translateY(10px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    /* Online status indicator improvements */
-    .online-indicator {
-        position: absolute;
-        bottom: 2px;
-        right: 2px;
-        width: 10px;
-        height: 10px;
-        background: #28a745;
-        border-radius: 50%;
-        border: 2px solid white;
-        display: none;
-        z-index: 5;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border: 1px solid transparent;
     }
     
-    .conversation-item.online .online-indicator {
-        display: block;
+    .user-result:hover {
+        background: #f8f9fa;
+        border-color: #dee2e6;
+        transform: translateX(5px);
     }
     
-    .chat-participant-info img.online {
-        position: relative;
+    body.dark-mode .user-result:hover {
+        background: #4a5568;
+        border-color: #718096;
     }
     
-    .chat-participant-info img.online::after {
-        content: '';
-        position: absolute;
-        bottom: 2px;
-        right: 2px;
-        width: 10px;
-        height: 10px;
-        background: #28a745;
-        border-radius: 50%;
-        border: 2px solid white;
-        display: block;
+    .user-result.selected {
+        background: #e3f2fd;
+        border-color: #007bff;
+    }
+    
+    body.dark-mode .user-result.selected {
+        background: rgba(0, 123, 255, 0.2);
     }
 
-    /* Mobile responsive design - FIXED */
+    /* Mobile optimizations for new conversation */
     @media (max-width: 992px) {
         .messaging-container {
             height: calc(100vh - 60px);
@@ -210,13 +186,38 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: white;
+            background: var(--light);
             z-index: 1050;
             display: none !important;
             flex-direction: column;
         }
         
+        body.dark-mode .chat-panel {
+            background: #1a1a1a;
+        }
+        
         .chat-panel.active {
+            display: flex !important;
+        }
+        
+        /* New conversation panel mobile fixes */
+        .new-conversation-panel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--light);
+            z-index: 1060;
+            display: none !important;
+            flex-direction: column;
+        }
+        
+        body.dark-mode .new-conversation-panel {
+            background: #1a1a1a;
+        }
+        
+        .new-conversation-panel.active {
             display: flex !important;
         }
         
@@ -225,10 +226,16 @@
             padding-top: calc(16px + env(safe-area-inset-top));
             padding-left: 16px;
             padding-right: 16px;
-            background: white;
+            background: var(--light);
             border-bottom: 1px solid #e9ecef;
             min-height: 70px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        body.dark-mode .chat-header {
+            background: #1a1a1a;
+            border-bottom-color: #2d3748;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
         
         /* Show back button on mobile */
@@ -248,13 +255,16 @@
             transition: background 0.2s ease;
         }
         
+        body.dark-mode .chat-header .back-to-list {
+            color: #e2e8f0;
+        }
+        
         .chat-header .back-to-list:hover {
             background: #f5f5f5;
         }
         
-        /* Hide conversations panel when chat is active */
-        .chat-panel.active ~ .conversations-panel {
-            display: none;
+        body.dark-mode .chat-header .back-to-list:hover {
+            background: #2d3748;
         }
         
         /* Ensure proper scrolling on mobile */
@@ -269,167 +279,83 @@
             bottom: 0;
             left: 0;
             right: 0;
-            background: white;
+            background: var(--light);
             border-top: 1px solid #e9ecef;
             padding: 12px 16px;
             z-index: 1051;
             box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
         }
         
+        body.dark-mode .chat-input-area {
+            background: #1a1a1a;
+            border-top-color: #2d3748;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
+        }
+        
         /* Adjust message bubbles for mobile */
         .message-bubble {
             max-width: 85%;
         }
+        
+        /* Search results container on mobile */
+        .search-results-container {
+            height: calc(100vh - 200px);
+        }
+        
+        .search-results {
+            padding: 12px;
+        }
+        
+        /* New conversation header on mobile */
+        .new-conversation-header {
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e9ecef;
+            background: var(--light);
+            flex-shrink: 0;
+        }
+        
+        body.dark-mode .new-conversation-header {
+            background: #1a1a1a;
+            border-bottom-color: #2d3748;
+        }
+        
+        /* Mobile-specific improvements for new conversation flow */
+        .new-conversation-panel {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        .selected-user-info {
+            padding: 16px;
+            position: sticky;
+            bottom: 0;
+            background: var(--light);
+            z-index: 10;
+        }
+        
+        body.dark-mode .selected-user-info {
+            background: #1a1a1a;
+        }
     }
 
-    /* Conversation list improvements */
-    .conversations-list {
-        height: calc(100vh - 240px);
-        min-height: 400px;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-    
-    .conversation-item.active {
-        background: rgba(0, 123, 255, 0.05);
-        border-left: 3px solid #007bff;
-    }
-    
-    /* Chat participant info in header */
-    .chat-participant-info {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-    
-    .chat-participant-info img {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        object-fit: cover;
-        border: 2px solid #e9ecef;
-    }
-    
-    .participant-details h5 {
-        margin: 0 0 2px 0;
-        font-size: 16px;
-        font-weight: 600;
-        color: #333;
-    }
-    
-    .participant-status {
-        font-size: 12px;
-        color: #666;
-    }
-    
-    /* Loading states */
-    .chat-loading {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 200px;
-        color: #666;
-    }
-    
-    .conversation-skeleton {
-        padding: 12px;
-        display: flex;
-        gap: 12px;
-        animation: pulse 1.5s infinite;
-    }
-    
-    /* Scrollbar styling */
-    .conversations-list::-webkit-scrollbar,
-    .messages-container::-webkit-scrollbar {
-        width: 4px;
-    }
-    
-    .conversations-list::-webkit-scrollbar-track,
-    .messages-container::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 2px;
-    }
-    
-    .conversations-list::-webkit-scrollbar-thumb,
-    .messages-container::-webkit-scrollbar-thumb {
-        background: #c1c1c1;
-        border-radius: 2px;
-    }
-    
-    .conversations-list::-webkit-scrollbar-thumb:hover,
-    .messages-container::-webkit-scrollbar-thumb:hover {
-        background: #a1a1a1;
-    }
-    
-    /* Date separator */
-    .date-separator {
-        text-align: center;
-        margin: 20px 0;
-        position: relative;
-    }
-    
-    .date-separator span {
-        background: #f8f9fa;
-        padding: 6px 16px;
-        border-radius: 16px;
-        font-size: 12px;
-        color: #666;
-        position: relative;
-        z-index: 1;
-        border: 1px solid #e9ecef;
-    }
-    
-    .date-separator:before {
-        content: '';
-        position: absolute;
-        left: 20px;
-        right: 20px;
-        top: 50%;
-        height: 1px;
-        background: #e9ecef;
-    }
-    
-    /* Typing indicator */
-    .typing-indicator {
-        background: #f1f3f4;
-        padding: 10px 16px;
-        border-radius: 18px;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        margin: 4px 0;
-        max-width: fit-content;
-        align-self: flex-start;
-        margin-right: auto;
-        margin-left: 0;
-        border: 1px solid #e0e0e0;
-        animation: slideInLeft 0.3s ease-out;
-    }
-    
-    .typing-dots {
-        display: flex;
-        gap: 3px;
-    }
-    
-    .typing-dots span {
-        width: 6px;
-        height: 6px;
-        background: #666;
-        border-radius: 50%;
-        animation: pulse 1.4s infinite;
-    }
-    
-    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
-    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
-    
-    /* Temp message styling */
-    .message-bubble.temp {
-        opacity: 0.7;
-    }
-    
-    .message-bubble.failed {
-        background: #ff4444 !important;
+    /* Desktop improvements for new conversation */
+    @media (min-width: 993px) {
+        .new-conversation-panel {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .search-results-container {
+            max-height: 300px;
+            min-height: 200px;
+        }
+        
+        .message-composer-container {
+            flex-shrink: 0;
+            padding: 16px;
+        }
     }
 </style>
 {% endblock %}
@@ -473,76 +399,12 @@
 
             <!-- Conversations List -->
             <div class="conversations-list mb-4 pb-5" id="conversationsList">
-                {% if conversations %}
-                    {% for conversation in conversations %}
-                    <div class="conversation-item {% if conversation.unread_count > 0 %}unread{% endif %} {% if conversation.is_online %}online{% endif %}" 
-                        data-conversation-id="{{ conversation.id }}"
-                        data-participant-id="{{ conversation.participant_id }}"
-                        data-participant-name="{{ conversation.participant_name }}"
-                        data-participant-avatar="{{ conversation.participant_avatar }}"
-                        data-listing-id="{{ conversation.listing_id|default:'' }}"
-                        data-is-online="{{ conversation.is_online|yesno:'true,false' }}">
-                        <div class="conversation-avatar">
-                            <img src="{{ conversation.participant_avatar }}" 
-                                alt="{{ conversation.participant_name }}"
-                                onerror="this.src='{% static 'images/default-avatar.svg' %}'">
-                            <span class="online-indicator"></span>
-                        </div>
-                        <div class="conversation-content">
-                            <div class="conversation-header">
-                                <div class="conversation-name">
-                                    {{ conversation.participant_name }}
-                                    <span class="conversation-status">
-                                        {% if conversation.is_online %}
-                                        <span class="online-status">● Online</span>
-                                        {% else %}
-                                        <span class="last-seen">Last seen {{ conversation.last_seen|timesince }} ago</span>
-                                        {% endif %}
-                                    </span>
-                                </div>
-                                <div class="conversation-time" title="{{ conversation.last_message.timestamp|date:'M d, Y H:i' }}">
-                                    {{ conversation.last_message.timestamp|timesince }} ago
-                                </div>
-                            </div>
-                            <div class="conversation-preview">
-                                <div class="conversation-message {% if conversation.last_message.is_own_message %}own{% endif %}">
-                                    {% if conversation.last_message.is_own_message %}
-                                        You: {{ conversation.last_message.content|truncatechars:30 }}
-                                    {% else %}
-                                        {{ conversation.last_message.content|truncatechars:30 }}
-                                    {% endif %}
-                                </div>
-                                {% if conversation.unread_count > 0 %}
-                                <div class="conversation-unread">
-                                    {{ conversation.unread_count }}
-                                </div>
-                                {% endif %}
-                            </div>
-                            {% if conversation.listing_title %}
-                            <div class="conversation-listing">
-                                <i class="bi bi-tag"></i>
-                                {{ conversation.listing_title|truncatechars:20 }}
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <!-- Loading skeleton -->
-                    <div class="conversation-skeleton">
-                        <div class="conversation-skeleton-avatar"></div>
-                        <div class="conversation-skeleton-content">
-                            <div class="conversation-skeleton-line"></div>
-                            <div class="conversation-skeleton-line"></div>
-                            <div class="conversation-skeleton-line"></div>
-                        </div>
-                    </div>
-                {% endif %}
+                <!-- Content loaded dynamically -->
             </div>
         </div>
 
         <!-- Chat Panel -->
-        <div class="chat-panel mb-4 pb-5" id="chatPanel">
+        <div class="chat-panel pb-5" id="chatPanel">
             <!-- New Conversation Panel -->
             <div class="new-conversation-panel" id="newConversationPanel" style="display: none;">
                 <div class="new-conversation-header">
@@ -551,29 +413,38 @@
                     </button>
                     <h5>New Message</h5>
                 </div>
+                
                 <div class="new-conversation-content">
-                    <div class="recipient-search">
-                        <i class="bi bi-search"></i>
-                        <input type="text" id="newChatSearch" placeholder="Search users by name or username..." autocomplete="off">
-                    </div>
-                    
-                    <div class="search-results" id="searchResults">
-                        <div class="search-placeholder">
+                    <!-- Search Section -->
+                    <div class="search-container">
+                        <div class="recipient-search">
                             <i class="bi bi-search"></i>
-                            <p>Search for users to start a conversation</p>
+                            <input type="text" id="newChatSearch" placeholder="Search users by name or username..." autocomplete="off">
                         </div>
                     </div>
                     
-                    <div class="selected-user-info" id="selectedUserInfo" style="display: none;">
+                    <!-- Search Results -->
+                    <div class="search-results-container">
+                        <div class="search-results" id="searchResults">
+                            <div class="search-placeholder">
+                                <i class="bi bi-search"></i>
+                                <p>Search for users to start a conversation</p>
+                                <small class="text-muted mt-2">Type at least 2 characters to search</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Message Composer (Shown when recipient is selected) -->
+                    <div class="message-composer-container" id="selectedUserInfo" style="display: none;">
                         <div class="selected-user-header">
                             <div class="selected-user-details">
-                                <img id="selectedUserAvatar" src="" alt="" onerror="this.src='{% static 'images/default-avatar.svg' %}'">
+                                <img id="selectedUserAvatar" src="" alt="">
                                 <div>
                                     <h6 id="selectedUserName"></h6>
-                                    <span id="selectedUserUsername"></span>
+                                    <span>Recipient</span>
                                 </div>
                             </div>
-                            <button class="btn-close" id="clearSelectionBtn"></button>
+                            <button class="btn-close" id="clearSelectionBtn" title="Clear selection"></button>
                         </div>
                         
                         <div class="message-composer">
@@ -590,7 +461,7 @@
                                 </div>
                             </div>
                             <button class="btn-send" id="sendNewMessageBtn" disabled>
-                                <i class="bi bi-send"></i> Send
+                                <i class="bi bi-send me-2"></i> Send Message
                             </button>
                         </div>
                     </div>
@@ -615,41 +486,13 @@
                             <i class="bi bi-arrow-left"></i>
                         </button>
                         <div class="chat-participant-info">
-                            <img id="chatParticipantAvatar" src="{{ user.get_profile_picture_url }}" alt="" onerror="this.src='{% static 'images/default-avatar.svg' %}'">
+                            <img id="chatParticipantAvatar" src="" alt="">
                             <div class="participant-details">
                                 <h5 id="chatParticipantName"></h5>
                                 <div class="participant-status">
                                     <span id="chatParticipantStatus">Loading...</span>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                    <div class="chat-header-actions">
-                        <button class="chat-action-btn" onclick="messaging.startCall('voice')" title="Voice call">
-                            <i class="bi bi-telephone"></i>
-                        </button>
-                        <button class="chat-action-btn" onclick="messaging.startCall('video')" title="Video call">
-                            <i class="bi bi-camera-video"></i>
-                        </button>
-                        <div class="dropdown">
-                            <button class="chat-action-btn" type="button" data-bs-toggle="dropdown">
-                                <i class="bi bi-three-dots-vertical"></i>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item" href="#" id="viewProfileBtn">
-                                    <i class="bi bi-person me-2"></i>View Profile
-                                </a></li>
-                                <li><a class="dropdown-item" href="#" id="muteChatBtn">
-                                    <i class="bi bi-bell-slash me-2"></i>Mute Notifications
-                                </a></li>
-                                <li><a class="dropdown-item" href="#" id="archiveChatBtn">
-                                    <i class="bi bi-archive me-2"></i>Archive Chat
-                                </a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item text-danger" href="#" id="deleteChatBtn">
-                                    <i class="bi bi-trash me-2"></i>Delete Conversation
-                                </a></li>
-                            </ul>
                         </div>
                     </div>
                 </div>
@@ -702,62 +545,32 @@
     </div>
 </div>
 
-<!-- Confirmation Modal -->
-<div class="modal fade" id="confirmationModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="confirmationTitle"></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body" id="confirmationBody"></div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-danger" id="confirmActionBtn">Confirm</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Message Actions Menu -->
-<div class="dropdown-menu" id="messageActionsMenu">
-    <a class="dropdown-item" href="#" data-action="edit">
-        <i class="bi bi-pencil me-2"></i>Edit Message
-    </a>
-    <a class="dropdown-item" href="#" data-action="copy">
-        <i class="bi bi-copy me-2"></i>Copy Text
-    </a>
-    <a class="dropdown-item text-danger" href="#" data-action="delete">
-        <i class="bi bi-trash me-2"></i>Delete Message
-    </a>
-</div>
-
 <!-- Hidden elements for state -->
 <meta name="user-id" content="{{ request.user.id }}">
 <input type="hidden" id="csrf_token" value="{{ csrf_token }}">
 {% endblock %}
-
 {% block extra_js %}
 <script src="{% static 'js/messaging.js' %}"></script>
 <script>
+// Prevent duplicate initialization
+let messagingSystemInitialized = false;
+
 // Initialize messaging system when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     // Check if we're on the messages page
-    if (document.getElementById('conversationsList')) {
+    if (document.getElementById('conversationsList') && !messagingSystemInitialized) {
         // Initialize the messaging system
-        window.messaging = new MessagingSystem();
-        window.messaging.init();
-        
-        // Expose for debugging
-        if (typeof window !== 'undefined') {
-            window.messaging = window.messaging;
+        if (!window.messaging) {
+            window.messaging = new MessagingSystem();
         }
+        window.messaging.init();
+        messagingSystemInitialized = true;
     }
 });
 
 // Handle mobile back button
 window.addEventListener('popstate', function(event) {
-    if (window.messaging && window.messaging.isMobile && window.messaging.currentConversationId) {
+    if (window.messaging && window.messaging.state.isMobile && window.messaging.state.currentConversationId) {
         window.messaging.closeActiveChat();
         window.history.pushState(null, '', window.location.pathname);
     }
@@ -774,35 +587,12 @@ document.addEventListener('visibilitychange', function() {
     }
 });
 
-// Add chat-active class to body for mobile styling
-function updateBodyClass() {
-    if (window.innerWidth < 992) {
-        const chatPanel = document.getElementById('chatPanel');
-        if (chatPanel && chatPanel.classList.contains('active')) {
-            document.body.classList.add('chat-active');
-        } else {
-            document.body.classList.remove('chat-active');
-        }
-    } else {
-        document.body.classList.remove('chat-active');
+// Clean up on page unload
+window.addEventListener('beforeunload', function() {
+    if (window.messaging) {
+        window.messaging.cleanup();
+        messagingSystemInitialized = false;
     }
-}
-
-// Watch for chat panel state changes
-const observer = new MutationObserver(function(mutations) {
-    mutations.forEach(function(mutation) {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-            updateBodyClass();
-        }
-    });
 });
-
-const chatPanel = document.getElementById('chatPanel');
-if (chatPanel) {
-    observer.observe(chatPanel, { attributes: true });
-}
-
-// Initial update
-updateBodyClass();
 </script>
 {% endblock %}
