@@ -238,19 +238,11 @@ def search_users(request):
         
         users_data = []
         for user in users:
-            avatar_url = 'https://placehold.co/50x50/c2c2c2/1f1f1f?text=User'
-            if hasattr(user, 'profile'):
-                try:
-                    if user.profile.profile_picture:
-                        avatar_url = request.build_absolute_uri(user.profile.profile_picture.url)
-                except:
-                    pass
-            
             users_data.append({
                 'id': user.id,
                 'username': user.username,
                 'name': user.get_full_name() or user.username,
-                'avatar': avatar_url,
+                'avatar': user.get_profile_picture_url() if hasattr(user, 'get_profile_picture_url') else 'https://placehold.co/50x50/c2c2c2/1f1f1f?text=User',
                 'email': user.email
             })
         
@@ -340,7 +332,7 @@ def conversation_detail(request, pk):
             return redirect('conversation-detail', pk=pk)
     
     # GET request handling
-    messages = conversation.messages.all().select_related('sender')
+    messages = conversation.messages.filter(is_deleted=False).select_related('sender')
     form = MessageForm()
     
     # Get other participant
@@ -358,7 +350,8 @@ def conversation_detail(request, pk):
                 'content': msg.content,
                 'timestamp': msg.timestamp.isoformat(),
                 'is_read': msg.is_read,
-                'is_own_message': msg.sender == request.user
+                'is_own_message': msg.sender == request.user,
+                'attachments': msg.attachments or []
             })
         
         # Check for new messages if polling
@@ -375,7 +368,8 @@ def conversation_detail(request, pk):
                         'content': msg.content,
                         'timestamp': msg.timestamp.isoformat(),
                         'is_read': msg.is_read,
-                        'is_own_message': msg.sender == request.user
+                        'is_own_message': msg.sender == request.user,
+                        'attachments': msg.attachments or []
                     })
                 return JsonResponse({'new_messages': new_messages_data})
             except ValueError:
@@ -729,7 +723,7 @@ logger = logging.getLogger(__name__)
 @login_required
 @csrf_exempt
 def send_message_api(request):
-    """API endpoint for sending messages via AJAX - FIXED"""
+    """API endpoint for sending messages via AJAX - UPDATED"""
     try:
         # Handle both JSON and form data
         if request.content_type == 'application/json':
@@ -740,7 +734,7 @@ def send_message_api(request):
         else:
             data = request.POST
         
-        logger.info(f"Message send attempt - data: {data}, files: {list(request.FILES.keys())}")
+        logger.info(f"Message send attempt - data: {data}")
         
         recipient_id = data.get('recipient_id') or data.get('recipient')
         message_content = data.get('message') or data.get('content', '').strip()
@@ -841,16 +835,14 @@ def send_message_api(request):
                     'content': message.content,
                     'timestamp': message.timestamp.isoformat(),
                     'sender': request.user.username,
+                    'sender_id': request.user.id,
                     'sender_avatar': sender_avatar,
                     'is_own_message': True,
                     'is_read': False,
-                    'status': 'sent'  # Initial status
+                    'delivered': True,
+                    'attachments': attachments_data
                 }
             }
-            
-            # Add attachments data if any
-            if attachments_data:
-                response_data['message']['attachments'] = attachments_data
             
             return JsonResponse(response_data)
             
@@ -861,7 +853,7 @@ def send_message_api(request):
     except Exception as e:
         logger.error(f"Unexpected error in send_message_api: {e}")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
+    
 # Fix get_new_messages function
 @login_required
 def get_new_messages(request, conversation_id):
@@ -879,34 +871,52 @@ def get_new_messages(request, conversation_id):
         # Get new messages
         new_messages = Message.objects.filter(
             conversation=conversation,
-            id__gt=last_message_id
+            id__gt=last_message_id,
+            is_deleted=False
         ).select_related('sender').order_by('timestamp')
         
         messages_data = []
         for msg in new_messages:
-            # Get sender avatar
-            sender_avatar = 'https://placehold.co/32x32/c2c2c2/1f1f1f?text=User'
-            if hasattr(msg.sender, 'profile'):
-                try:
-                    if msg.sender.profile.profile_picture and hasattr(msg.sender.profile.profile_picture, 'url'):
-                        sender_avatar = msg.sender.profile.profile_picture.url
-                except Exception:
-                    pass
-            
             messages_data.append({
                 'id': msg.id,
                 'sender': msg.sender.username,
-                'sender_avatar': sender_avatar,
+                'sender_avatar': msg.sender.get_profile_picture_url() if hasattr(msg.sender, 'get_profile_picture_url') else 'https://placehold.co/32x32/c2c2c2/1f1f1f?text=User',
                 'content': msg.content,
                 'timestamp': msg.timestamp.isoformat(),
                 'is_read': msg.is_read,
-                'is_own_message': msg.sender == request.user
+                'is_own_message': msg.sender == request.user,
+                'attachments': msg.attachments or []
             })
+        
+        # Get participant info for the conversation header
+        other_participant = conversation.participants.exclude(id=request.user.id).first()
+        participant_info = None
+        if other_participant:
+            # Get online status
+            is_online = False
+            last_seen = None
+            try:
+                from .models import UserOnlineStatus
+                online_status = UserOnlineStatus.objects.filter(user=other_participant).first()
+                if online_status:
+                    is_online = online_status.is_online
+                    last_seen = online_status.last_seen.isoformat() if online_status.last_seen else None
+            except:
+                pass
+            
+            participant_info = {
+                'id': other_participant.id,
+                'name': other_participant.get_full_name() or other_participant.username,
+                'avatar': other_participant.get_profile_picture_url() if hasattr(other_participant, 'get_profile_picture_url') else 'https://placehold.co/32x32/c2c2c2/1f1f1f?text=User',
+                'is_online': is_online,
+                'last_seen': last_seen
+            }
         
         return JsonResponse({
             'success': True,
             'conversation_id': conversation_id,
             'new_messages': messages_data,
+            'participant_info': participant_info,
             'last_message_id': new_messages.last().id if new_messages.exists() else last_message_id
         })
         

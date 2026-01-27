@@ -1740,6 +1740,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             mainImageFile = file;
+            // Attach file to the actual input so form submission includes it
+            try {
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                if (mainImageInput) mainImageInput.files = dt.files;
+            } catch (e) {
+                console.warn('Could not attach file to input programmatically', e);
+            }
             displayImagePreview(file, mainImagePreview, true);
             
             // Uncheck clear checkbox if it exists
@@ -1772,6 +1780,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 additionalImageFiles.push(file);
                 displayImagePreview(file, additionalImagesPreview, false);
             });
+
+            // Sync DataTransfer into the additional images input so the files are submitted
+            try {
+                const dt = new DataTransfer();
+                // preserve any existing files from the input
+                if (additionalImagesInput && additionalImagesInput.files) {
+                    Array.from(additionalImagesInput.files).forEach(f => dt.items.add(f));
+                }
+                validFiles.forEach(f => dt.items.add(f));
+                if (additionalImagesInput) additionalImagesInput.files = dt.files;
+            } catch (e) {
+                console.warn('Could not sync additional images into input', e);
+            }
             
             showToast(`${validFiles.length} additional image(s) uploaded`, 'success');
         }
@@ -1827,6 +1848,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         const index = additionalImageFiles.findIndex(f => f.name === file.name);
                         if (index > -1) {
                             additionalImageFiles.splice(index, 1);
+                            // Update the underlying input.files to reflect removal
+                            try {
+                                const dt2 = new DataTransfer();
+                                additionalImageFiles.forEach(f => dt2.items.add(f));
+                                if (additionalImagesInput) additionalImagesInput.files = dt2.files;
+                            } catch (e) {
+                                console.warn('Could not update additional images input after removal', e);
+                            }
                             showToast('Additional image removed', 'info');
                         }
                     }

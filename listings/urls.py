@@ -54,7 +54,6 @@ urlpatterns = [
     path('listing/ai-quick/', ai_views.ai_quick_listing, name='ai_quick_listing'),
     path('listing/ai-test/', views.ai_test_view, name='ai_test'),
     path('order/<int:order_id>/review/', views.create_order_review, name='create_review'),
-    path('ajax/get-unread-messages-count/', views.get_unread_messages_count, 
-         name='get_unread_messages_count'),
+    path('ajax/get-unread-messages-count/', views.get_unread_messages_count, name='get_unread_messages_count'),
     
 ]

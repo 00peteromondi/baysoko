@@ -5,6 +5,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.db.models import Q, Count, Avg, F
 from django.db import utils as db_utils
+from django.db import IntegrityError, OperationalError
 from django.conf import settings
 from .models import Listing, Category, Favorite, Activity, RecentlyViewed, Review, Order, OrderItem, Cart, CartItem, Payment, Escrow, ListingImage
 from chats.models import Message
@@ -409,13 +410,21 @@ class ListingDetailView(DetailView):
     def get_object(self, queryset=None):
         obj = super().get_object(queryset)
 
-        # Track recently viewed for authenticated users
+        # Track recently viewed for authenticated users (avoid update_or_create to reduce DB locking on SQLite)
         if self.request.user.is_authenticated:
-            RecentlyViewed.objects.update_or_create(
-                user=self.request.user,
-                listing=obj,
-                defaults={'viewed_at': timezone.now()}
-            )
+            try:
+                # Try to update existing record first (non-blocking)
+                updated = RecentlyViewed.objects.filter(user=self.request.user, listing=obj).update(viewed_at=timezone.now())
+                if not updated:
+                    # If no rows updated, try to create; handle race with IntegrityError
+                    try:
+                        RecentlyViewed.objects.create(user=self.request.user, listing=obj, viewed_at=timezone.now())
+                    except IntegrityError:
+                        # Another process created it concurrently — update the timestamp
+                        RecentlyViewed.objects.filter(user=self.request.user, listing=obj).update(viewed_at=timezone.now())
+            except OperationalError as e:
+                # DB locked or similar issue — log and continue without failing the view
+                logger.warning('Could not record RecentlyViewed (DB issue): %s', e)
 
         return obj
 
