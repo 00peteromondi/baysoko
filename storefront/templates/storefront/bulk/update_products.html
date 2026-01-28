@@ -1,0 +1,483 @@
+<!-- storefront/templates/storefront/bulk/update_products.html -->
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Bulk Update Products - {{ store.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .bulk-update-form {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 30px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 30px;
+    }
+    
+    .form-section {
+        margin-bottom: 30px;
+        padding-bottom: 30px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .form-section:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+    
+    .section-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid var(--primary);
+    }
+    
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+    }
+    
+    .form-group {
+        margin-bottom: 20px;
+    }
+    
+    .form-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+        display: block;
+    }
+    
+    .form-control, .form-select {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        border-radius: var(--radius-md);
+        padding: 10px 14px;
+        font-size: 14px;
+        width: 100%;
+        transition: all 0.2s ease;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        background: var(--card-bg);
+        outline: none;
+    }
+    
+    .checkbox-group {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 15px;
+        margin-bottom: 10px;
+    }
+    
+    .form-check {
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+    }
+    
+    .form-check-input {
+        margin-right: 10px;
+        margin-top: 0;
+    }
+    
+    .form-check-label {
+        font-size: 14px;
+        color: var(--text-primary);
+        cursor: pointer;
+    }
+    
+    .action-preview {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 20px;
+        margin-top: 20px;
+        border-left: 4px solid var(--primary);
+    }
+    
+    .action-preview-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 10px;
+    }
+    
+    .action-preview-item {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-bottom: 5px;
+        display: flex;
+        justify-content: space-between;
+    }
+    
+    .info-box {
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        border-radius: var(--radius-md);
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .info-box .info-icon {
+        color: #3b82f6;
+        margin-right: 10px;
+    }
+    
+    .form-actions {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 20px;
+        margin-top: 30px;
+        text-align: center;
+        border: 1px solid var(--border-color);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-custom py-3">
+    <!-- Header -->
+    <div class="bulk-header">
+        <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
+            <div>
+                <h1 class="bulk-title">Bulk Update Products</h1>
+                <p class="bulk-subtitle">Update multiple products at once</p>
+            </div>
+            <div>
+                <a href="{% url 'storefront:bulk_dashboard' slug=store.slug %}" class="btn-custom btn-outline text-primary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Box -->
+    <div class="info-box">
+        <div class="d-flex align-items-start">
+            <i class="bi bi-info-circle info-icon"></i>
+            <div>
+                <h6 class="mb-2" style="font-size: 14px;">How Bulk Update Works</h6>
+                <p class="mb-0" style="font-size: 13px;">
+                    Select the products you want to update, choose the fields to modify, and specify the new values. 
+                    The system will process your changes in the background and notify you when complete.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Update Form -->
+    <form method="POST" class="bulk-update-form">
+        {% csrf_token %}
+        
+        <!-- Product Selection -->
+        <div class="form-section">
+            <h3 class="section-title">1. Select Products</h3>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Product Selection Method</label>
+                    <select class="form-select" name="selection_method" id="selectionMethod">
+                        <option value="all">All Products</option>
+                        <option value="category">By Category</option>
+                        <option value="tags">By Tags</option>
+                        <option value="stock_status">By Stock Status</option>
+                        <option value="custom">Custom Selection</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="categorySelect" style="display: none;">
+                    <label class="form-label">Category</label>
+                    <select class="form-select" name="category">
+                        <option value="">All Categories</option>
+                        {% for category in store.categories.all %}
+                        <option value="{{ category.id }}">{{ category.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group" id="stockStatusSelect" style="display: none;">
+                    <label class="form-label">Stock Status</label>
+                    <select class="form-select" name="stock_status">
+                        <option value="in_stock">In Stock</option>
+                        <option value="low_stock">Low Stock</option>
+                        <option value="out_of_stock">Out of Stock</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Product Limit (Optional)</label>
+                <input type="number" class="form-control" name="limit" placeholder="Max number of products to update" min="1">
+                <small class="text-muted">Leave empty to update all matching products</small>
+            </div>
+        </div>
+
+        <!-- Fields to Update -->
+        <div class="form-section">
+            <h3 class="section-title">2. Choose Fields to Update</h3>
+            <div class="checkbox-group">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="update_fields" value="price" id="updatePrice">
+                    <label class="form-check-label" for="updatePrice">Price</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="update_fields" value="stock" id="updateStock">
+                    <label class="form-check-label" for="updateStock">Stock Quantity</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="update_fields" value="category" id="updateCategory">
+                    <label class="form-check-label" for="updateCategory">Category</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="update_fields" value="status" id="updateStatus">
+                    <label class="form-check-label" for="updateStatus">Status (Active/Inactive)</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="update_fields" value="description" id="updateDescription">
+                    <label class="form-check-label" for="updateDescription">Description</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="update_fields" value="tags" id="updateTags">
+                    <label class="form-check-label" for="updateTags">Tags</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Update Values -->
+        <div class="form-section">
+            <h3 class="section-title">3. Set New Values</h3>
+            <div class="form-grid">
+                <div class="form-group" id="priceField" style="display: none;">
+                    <label class="form-label">New Price (KSh)</label>
+                    <div class="input-group">
+                        <span class="input-group-text" style="background: var(--bg-secondary); border-color: var(--border-color);">KSh</span>
+                        <input type="number" class="form-control" name="price" step="0.01" min="0" placeholder="0.00">
+                        <select class="form-select" name="price_action" style="max-width: 150px;">
+                            <option value="set_to">Set to</option>
+                            <option value="increase_by">Increase by</option>
+                            <option value="decrease_by">Decrease by</option>
+                            <option value="multiply_by">Multiply by</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="stockField" style="display: none;">
+                    <label class="form-label">New Stock Quantity</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control" name="stock" min="0" placeholder="0">
+                        <select class="form-select" name="stock_action" style="max-width: 150px;">
+                            <option value="set_to">Set to</option>
+                            <option value="increase_by">Increase by</option>
+                            <option value="decrease_by">Decrease by</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="categoryField" style="display: none;">
+                    <label class="form-label">New Category</label>
+                    <select class="form-select" name="new_category">
+                        <option value="">Select Category</option>
+                        {% for category in store.categories.all %}
+                        <option value="{{ category.id }}">{{ category.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group" id="statusField" style="display: none;">
+                    <label class="form-label">New Status</label>
+                    <select class="form-select" name="new_status">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-group" id="descriptionField" style="display: none;">
+                <label class="form-label">New Description</label>
+                <textarea class="form-control" name="new_description" rows="3" placeholder="Enter new description"></textarea>
+                <small class="text-muted">This will replace existing descriptions</small>
+            </div>
+            
+            <div class="form-group" id="tagsField" style="display: none;">
+                <label class="form-label">New Tags</label>
+                <input type="text" class="form-control" name="new_tags" placeholder="comma,separated,tags">
+                <select class="form-select mt-2" name="tags_action">
+                    <option value="replace">Replace all tags</option>
+                    <option value="add">Add to existing tags</option>
+                    <option value="remove">Remove from tags</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Preview -->
+        <div class="action-preview">
+            <h4 class="action-preview-title">Update Preview</h4>
+            <div class="action-preview-item">
+                <span>Products Affected:</span>
+                <span id="previewCount">0</span>
+            </div>
+            <div class="action-preview-item">
+                <span>Fields to Update:</span>
+                <span id="previewFields">None selected</span>
+            </div>
+            <div class="action-preview-item">
+                <span>Estimated Time:</span>
+                <span id="previewTime">A few seconds</span>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="form-actions">
+            <div class="d-flex gap-3 justify-content-center">
+                <button type="submit" class="btn-custom btn-primary btn-lg">
+                    <i class="bi bi-play-circle me-2"></i>Start Bulk Update
+                </button>
+                <button type="button" class="btn-custom btn-outline text-secondary btn-lg" onclick="history.back()">
+                    Cancel
+                </button>
+            </div>
+            <p class="text-muted mt-3 mb-0" style="font-size: 12px;">
+                This operation will run in the background. You'll be notified when it's complete.
+            </p>
+        </div>
+    </form>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const selectionMethod = document.getElementById('selectionMethod');
+        const categorySelect = document.getElementById('categorySelect');
+        const stockStatusSelect = document.getElementById('stockStatusSelect');
+        
+        const updateFields = document.querySelectorAll('input[name="update_fields"]');
+        const priceField = document.getElementById('priceField');
+        const stockField = document.getElementById('stockField');
+        const categoryField = document.getElementById('categoryField');
+        const statusField = document.getElementById('statusField');
+        const descriptionField = document.getElementById('descriptionField');
+        const tagsField = document.getElementById('tagsField');
+        
+        const previewCount = document.getElementById('previewCount');
+        const previewFields = document.getElementById('previewFields');
+        const previewTime = document.getElementById('previewTime');
+        
+        // Handle selection method change
+        selectionMethod.addEventListener('change', function() {
+            categorySelect.style.display = 'none';
+            stockStatusSelect.style.display = 'none';
+            
+            if (this.value === 'category') {
+                categorySelect.style.display = 'block';
+            } else if (this.value === 'stock_status') {
+                stockStatusSelect.style.display = 'block';
+            }
+            
+            updatePreview();
+        });
+        
+        // Handle update fields change
+        updateFields.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const field = this.value;
+                let fieldElement;
+                
+                switch(field) {
+                    case 'price': fieldElement = priceField; break;
+                    case 'stock': fieldElement = stockField; break;
+                    case 'category': fieldElement = categoryField; break;
+                    case 'status': fieldElement = statusField; break;
+                    case 'description': fieldElement = descriptionField; break;
+                    case 'tags': fieldElement = tagsField; break;
+                }
+                
+                if (fieldElement) {
+                    fieldElement.style.display = this.checked ? 'block' : 'none';
+                }
+                
+                updatePreview();
+            });
+        });
+        
+        // Update preview
+        function updatePreview() {
+            // Count selected fields
+            const selectedFields = Array.from(updateFields)
+                .filter(cb => cb.checked)
+                .map(cb => {
+                    switch(cb.value) {
+                        case 'price': return 'Price';
+                        case 'stock': return 'Stock';
+                        case 'category': return 'Category';
+                        case 'status': return 'Status';
+                        case 'description': return 'Description';
+                        case 'tags': return 'Tags';
+                        default: return cb.value;
+                    }
+                });
+            
+            previewFields.textContent = selectedFields.join(', ') || 'None selected';
+            
+            // Estimate time
+            const timeEstimate = selectedFields.length > 2 ? '1-2 minutes' : 
+                                 selectedFields.length > 0 ? '30-60 seconds' : 
+                                 'A few seconds';
+            previewTime.textContent = timeEstimate;
+            
+            // Estimate count (this would be calculated from server in real implementation)
+            const method = selectionMethod.value;
+            let count = 'All';
+            if (method === 'category') count = 'Category-based selection';
+            else if (method === 'stock_status') count = 'Stock-based selection';
+            else if (method === 'custom') count = 'Custom selection';
+            
+            previewCount.textContent = count;
+        }
+        
+        // Form validation
+        const form = document.querySelector('form');
+        form.addEventListener('submit', function(e) {
+            const selectedFields = Array.from(updateFields).filter(cb => cb.checked);
+            
+            if (selectedFields.length === 0) {
+                e.preventDefault();
+                alert('Please select at least one field to update.');
+                return false;
+            }
+            
+            // Validate specific fields
+            if (document.getElementById('updatePrice').checked) {
+                const priceInput = document.querySelector('input[name="price"]');
+                if (!priceInput.value || parseFloat(priceInput.value) < 0) {
+                    e.preventDefault();
+                    alert('Please enter a valid price.');
+                    priceInput.focus();
+                    return false;
+                }
+            }
+            
+            if (document.getElementById('updateStock').checked) {
+                const stockInput = document.querySelector('input[name="stock"]');
+                if (!stockInput.value || parseInt(stockInput.value) < 0) {
+                    e.preventDefault();
+                    alert('Please enter a valid stock quantity.');
+                    stockInput.focus();
+                    return false;
+                }
+            }
+            
+            return true;
+        });
+        
+        // Initialize preview
+        updatePreview();
+    });
+</script>
+{% endblock %}

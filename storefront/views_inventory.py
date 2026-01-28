@@ -275,16 +275,32 @@ def adjust_stock(request, slug):
                     )
                 
                 messages.success(request, 'Stock adjusted successfully.')
+                # If request came from AJAX (frontend expects JSON), return JSON
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest':
+                    return JsonResponse({'success': True, 'product_id': product.id, 'variant_id': variant.id if variant else None, 'new_stock': variant.stock if variant else product.stock})
                 return redirect('storefront:inventory_dashboard', slug=slug)
-    
+        else:
+            # Form invalid
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': 'Invalid input', 'errors': form.errors}, status=400)
+            messages.error(request, 'Invalid input for stock adjustment.')
+            return redirect('storefront:adjust_stock', slug=slug)
     else:
         form = StockAdjustmentForm(store)
-    
+
+    # Provide products and helper data for the template to render and JS to operate
+    products = store.listings.all().order_by('title')
+    low_stock_products = store.listings.filter(stock__lte=5, stock__gt=0).order_by('stock')
+    recent_movements = StockMovement.objects.filter(store=store).select_related('product', 'created_by').order_by('-created_at')[:10]
+
     context = {
         'store': store,
         'form': form,
+        'products': products,
+        'low_stock_products': low_stock_products,
+        'recent_movements': recent_movements,
     }
-    
+
     return render(request, 'storefront/inventory/adjust_stock.html', context)
 
 @login_required
@@ -358,12 +374,12 @@ def export_inventory(request, slug):
     
     for product in products:
         writer.writerow([
-            product.sku or '',
+            getattr(product, 'sku', ''),
             product.title,
             product.category.name if product.category else '',
             product.price,
             product.stock,
-            product.cost_price or '',
+            getattr(product, 'cost_price', ''),
             product.weight or '',
             product.dimensions or '',
             'Active' if product.is_active else 'Inactive'
@@ -487,11 +503,20 @@ def stock_movements(request, slug):
     paginator = Paginator(movements, 50)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    
+    # Compute simple stats for display
+    stock_added = movements.filter(quantity__gt=0).aggregate(total=Sum('quantity'))['total'] or 0
+    stock_removed = movements.filter(quantity__lt=0).aggregate(total=Sum('quantity'))['total'] or 0
+    # stock_removed is negative; present as positive number
+    stock_removed = abs(stock_removed)
+    net_change = stock_added - stock_removed
+
     context = {
         'store': store,
         'page_obj': page_obj,
         'movement_types': StockMovement.MOVEMENT_TYPES,
+        'stock_added': stock_added,
+        'stock_removed': stock_removed,
+        'net_change': net_change,
     }
     
     return render(request, 'storefront/inventory/movements.html', context)
@@ -541,6 +566,7 @@ def delete_variant(request, slug, variant_id):
 # AJAX Views
 @require_GET
 @login_required
+@store_owner_required('inventory')
 def get_product_variants(request, slug, product_id):
     """Get variants for a product (AJAX)"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -550,8 +576,34 @@ def get_product_variants(request, slug, product_id):
     
     return JsonResponse({'variants': list(variants)})
 
+
+@require_GET
+@login_required
+@store_owner_required('inventory')
+def inventory_search(request, slug):
+    """Search inventory products by title or SKU (AJAX)"""
+    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    q = request.GET.get('q', '').strip()
+    results = []
+    if q:
+        qs = Listing.objects.filter(store=store).filter(
+            Q(title__icontains=q) | Q(sku__icontains=q)
+        ).order_by('title')[:10]
+
+        for p in qs:
+            results.append({
+                'id': p.id,
+                'title': p.title,
+                'sku': p.sku,
+                'stock': p.stock,
+                'price': str(p.price) if getattr(p, 'price', None) is not None else None,
+            })
+
+    return JsonResponse({'products': results})
+
 @require_POST
 @login_required
+@store_owner_required('inventory')
 def quick_stock_update(request, slug, product_id):
     """Quick stock update via AJAX"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
@@ -684,3 +736,4 @@ def send_stock_alert_sms(alert_id):
     """Send SMS notification for stock alert"""
     # Implement SMS sending logic using Africa's Talking
     pass
+

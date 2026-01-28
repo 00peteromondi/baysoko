@@ -1,370 +1,796 @@
 <!-- storefront/templates/storefront/bulk/dashboard.html -->
 {% extends 'base.html' %}
-{% load humanize %}
+{% load humanize math_extras %}
 
 {% block title %}Bulk Operations Dashboard - {{ store.name }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* ===== BULK DASHBOARD STYLES ===== */
+    .bulk-header {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .bulk-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+    }
+
+    .bulk-title {
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .bulk-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
+    /* ===== BULK METRICS ===== */
+    .bulk-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    @media (min-width: 768px) {
+        .bulk-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+
+    .bulk-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+        text-align: center;
+    }
+
+    .bulk-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .bulk-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: var(--primary);
+        opacity: 0.3;
+    }
+
+    .bulk-icon {
+        font-size: 24px;
+        margin-bottom: 12px;
+        color: var(--primary);
+        background: rgba(59, 130, 246, 0.1);
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 16px;
+    }
+
+    .bulk-value {
+        font-size: 24px;
+        font-weight: 800;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+    }
+
+    .bulk-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+    }
+
+    /* ===== QUICK ACTIONS ===== */
+    .bulk-actions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 16px;
+        margin-bottom: 30px;
+    }
+
+    .bulk-action-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        text-align: center;
+        text-decoration: none !important;
+        color: var(--text-primary) !important;
+        display: block;
+    }
+
+    .bulk-action-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+        text-decoration: none;
+    }
+
+    .bulk-action-icon {
+        font-size: 20px;
+        color: white;
+        background: var(--primary);
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 12px;
+    }
+
+    .bulk-action-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+    }
+
+    .bulk-action-desc {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-bottom: 0;
+    }
+
+    /* ===== RECENT JOBS TABLE ===== */
+    .jobs-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 30px;
+        scrollbar-width: thin;
+        scrollbar-color: var(--primary) transparent;
+    }
+
+    .jobs-header {
+        background: var(--bg-secondary);
+        padding: 20px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .jobs-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 0;
+    }
+
+    .jobs-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .jobs-table th {
+        background: var(--bg-secondary);
+        padding: 12px 16px;
+        text-align: left;
+        font-weight: 700;
+        color: var(--text-primary);
+        border-bottom: 2px solid var(--border-color);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .jobs-table td {
+        padding: 16px;
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: middle;
+    }
+
+    .jobs-table tbody tr {
+        transition: all 0.2s ease;
+    }
+
+    .jobs-table tbody tr:hover {
+        background: var(--bg-secondary);
+    }
+
+    .job-badge {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .badge-pending {
+        background: rgba(156, 163, 175, 0.1);
+        color: #6b7280;
+        border: 1px solid rgba(107, 114, 128, 0.3);
+    }
+
+    .badge-processing {
+        background: rgba(245, 158, 11, 0.1);
+        color: #f59e0b;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .badge-completed {
+        background: rgba(16, 185, 129, 0.1);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .badge-failed {
+        background: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    /* ===== TEMPLATES & EXPORTS ===== */
+    .bulk-charts {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 24px;
+        margin-bottom: 30px;
+    }
+
+    @media (min-width: 992px) {
+        .bulk-charts {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+
+    .bulk-chart-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        height: 100%;
+    }
+
+    .bulk-chart-card:hover {
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+    }
+
+    .bulk-chart-header {
+        margin-bottom: 20px;
+    }
+
+    .bulk-chart-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+
+    .bulk-chart-subtitle {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    .template-item {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        border: 1px solid var(--border-color);
+        margin-bottom: 12px;
+        transition: all 0.2s ease;
+    }
+
+    .template-item:hover {
+        background: var(--bg-tertiary);
+        border-color: var(--primary);
+    }
+
+    .template-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+
+    .template-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .template-count {
+        font-size: 11px;
+        font-weight: 700;
+        color: white;
+        background: var(--primary);
+        padding: 2px 8px;
+        border-radius: 10px;
+    }
+
+    .template-info {
+        font-size: 11px;
+        color: var(--text-secondary);
+    }
+
+    /* ===== PROGRESS BARS ===== */
+    .progress-container {
+        margin-bottom: 20px;
+    }
+
+    .progress-label {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .progress-value {
+        font-size: 13px;
+        font-weight: 800;
+    }
+
+    .progress-bar-container {
+        height: 8px;
+        background: var(--bg-secondary);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .progress-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+
+    /* ===== MODAL STYLES ===== */
+    .bulk-modal {
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        background: var(--card-bg);
+    }
+
+    .bulk-modal-header {
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+        padding: 20px 24px;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+
+    .bulk-modal-title {
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin: 0;
+    }
+
+    .bulk-modal-body {
+        padding: 24px;
+    }
+
+    .bulk-modal-footer {
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border-color);
+        padding: 16px 24px;
+        border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    }
+
+    /* ===== EMPTY STATES ===== */
+    .empty-bulk {
+        padding: 40px 20px;
+        text-align: center;
+    }
+
+    .empty-icon {
+        font-size: 48px;
+        color: var(--text-tertiary);
+        margin-bottom: 16px;
+    }
+
+    .empty-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+    }
+
+    .empty-desc {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin-bottom: 0;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .bulk-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .bulk-actions-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .jobs-table {
+            display: block;
+            overflow-x: auto;
+        }
+        
+        .bulk-charts {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .bulk-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .bulk-actions-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1 class="h2 mb-1">Bulk Operations Dashboard</h1>
-            <p class="text-muted mb-0">Manage bulk product operations and data imports/exports</p>
-        </div>
-        <div class="btn-group">
-            <a href="{% url 'storefront:bulk_update_products' slug=store.slug %}" class="btn btn-primary">
-                <i class="bi bi-pencil-square me-2"></i>Bulk Update
-            </a>
-            <a href="{% url 'storefront:bulk_import_data' slug=store.slug %}" class="btn btn-outline-primary">
-                <i class="bi bi-upload me-2"></i>Import Products
-            </a>
+<div class="container-custom py-3">
+    <!-- Header -->
+    <div class="bulk-header">
+        <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
+            <div>
+                <h1 class="bulk-title">Bulk Operations Dashboard</h1>
+                <p class="bulk-subtitle">Manage bulk product operations, imports, and exports</p>
+            </div>
+            <div class="btn-group">
+                <a href="{% url 'storefront:bulk_update_products' slug=store.slug %}" class="btn-custom btn-primary">
+                    <i class="bi bi-pencil-square me-2"></i>Bulk Update
+                </a>
+                <a href="{% url 'storefront:bulk_import_data' slug=store.slug %}" class="btn-custom btn-outline text-primary">
+                    <i class="bi bi-upload me-2"></i>Import Data
+                </a>
+                <a href="{% url 'storefront:seller_dashboard' %}" class="btn-custom btn-outline-primary">
+                    <i class="bi bi-arrow-left-circle me-2"></i>Back to Dashboard
+                </a>
+            </div>
         </div>
     </div>
 
-    <!-- Stats Cards -->
-    <div class="row mb-4">
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Total Jobs
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ job_stats.total }}</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="bi bi-briefcase fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
+    <!-- Bulk Metrics -->
+    <div class="bulk-grid">
+        <div class="bulk-card">
+            <div class="bulk-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+                <i class="bi bi-briefcase"></i>
             </div>
+            <div class="bulk-value">{{ job_stats.total|intcomma }}</div>
+            <div class="bulk-label">Total Jobs</div>
         </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-success shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                Completed
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ job_stats.completed }}</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="bi bi-check-circle fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
+        
+        <div class="bulk-card">
+            <div class="bulk-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+                <i class="bi bi-check-circle"></i>
             </div>
+            <div class="bulk-value">{{ job_stats.completed|intcomma }}</div>
+            <div class="bulk-label">Completed</div>
         </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                Processing
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ job_stats.processing }}</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="bi bi-clock fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
+        
+        <div class="bulk-card">
+            <div class="bulk-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
+                <i class="bi bi-clock"></i>
             </div>
+            <div class="bulk-value">{{ job_stats.processing|intcomma }}</div>
+            <div class="bulk-label">Processing</div>
         </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-danger shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                                Failed
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ job_stats.failed }}</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="bi bi-x-circle fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
+        
+        <div class="bulk-card">
+            <div class="bulk-icon" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;">
+                <i class="bi bi-x-circle"></i>
             </div>
+            <div class="bulk-value">{{ job_stats.failed|intcomma }}</div>
+            <div class="bulk-label">Failed</div>
         </div>
     </div>
 
     <!-- Quick Actions -->
-    <div class="row mb-4">
-        <div class="col-lg-8">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                    <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-3 mb-3">
-                            <a href="{% url 'storefront:bulk_update_products' slug=store.slug %}" class="btn btn-light btn-block text-left">
-                                <i class="bi bi-pencil-square text-primary mr-2"></i>
-                                Bulk Update Products
-                            </a>
+    <div class="bulk-actions-grid">
+        <a href="{% url 'storefront:bulk_update_products' slug=store.slug %}" class="bulk-action-card">
+            <div class="bulk-action-icon" style="background: #3b82f6;">
+                <i class="bi bi-pencil-square"></i>
+            </div>
+            <div class="bulk-action-title">Bulk Update Products</div>
+            <p class="bulk-action-desc">Update multiple products at once</p>
+        </a>
+        
+        <a href="{% url 'storefront:bulk_import_data' slug=store.slug %}" class="bulk-action-card">
+            <div class="bulk-action-icon" style="background: #10b981;">
+                <i class="bi bi-upload"></i>
+            </div>
+            <div class="bulk-action-title">Import from CSV</div>
+            <p class="bulk-action-desc">Bulk import products</p>
+        </a>
+        
+        <a href="{% url 'storefront:export_data' slug=store.slug %}" class="bulk-action-card">
+            <div class="bulk-action-icon" style="background: #8b5cf6;">
+                <i class="bi bi-download"></i>
+            </div>
+            <div class="bulk-action-title">Export to CSV</div>
+            <p class="bulk-action-desc">Download product data</p>
+        </a>
+        
+        <a href="{% url 'storefront:bulk_image_upload' slug=store.slug %}" class="bulk-action-card">
+            <div class="bulk-action-icon" style="background: #f59e0b;">
+                <i class="bi bi-images"></i>
+            </div>
+            <div class="bulk-action-title">Bulk Image Upload</div>
+            <p class="bulk-action-desc">Upload multiple images</p>
+        </a>
+    </div>
+
+    <!-- Recent Jobs & Templates -->
+    <div class="bulk-charts">
+        <!-- Recent Jobs -->
+        <div class="bulk-chart-card">
+            <div class="bulk-chart-header">
+                <h3 class="bulk-chart-title">Recent Batch Jobs</h3>
+                <p class="bulk-chart-subtitle">Latest bulk operations status</p>
+            </div>
+            {% if recent_jobs %}
+                {% for job in recent_jobs %}
+                <div class="template-item">
+                    <div class="template-header">
+                        <span class="template-name">#{{ job.id }} - {{ job.get_job_type_display }}</span>
+                        <span class="job-badge {% if job.status == 'completed' %}badge-completed{% elif job.status == 'processing' %}badge-processing{% elif job.status == 'failed' %}badge-failed{% else %}badge-pending{% endif %}">
+                            {{ job.get_status_display }}
+                        </span>
+                    </div>
+                    <div class="template-info">
+                        Started by {{ job.created_by.username|truncatechars:15 }} • {{ job.created_at|date:"M d, H:i" }}
+                    </div>
+                    {% if job.total_items > 0 %}
+                    <div class="progress-container mt-2">
+                        <div class="progress-label">
+                            <span>Progress</span>
+                            <span class="progress-value">{{ job.processed_items }}/{{ job.total_items }}</span>
                         </div>
-                        <div class="col-md-3 mb-3">
-                            <a href="{% url 'storefront:bulk_import_data' slug=store.slug %}" class="btn btn-light btn-block text-left">
-                                <i class="bi bi-upload text-success mr-2"></i>
-                                Import from CSV
-                            </a>
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <a href="{% url 'storefront:export_data' slug=store.slug %}" class="btn btn-light btn-block text-left">
-                                <i class="bi bi-download text-info mr-2"></i>
-                                Export to CSV
-                            </a>
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <a href="{% url 'storefront:bulk_image_upload' slug=store.slug %}" class="btn btn-light btn-block text-left">
-                                <i class="bi bi-images text-warning mr-2"></i>
-                                Bulk Image Upload
-                            </a>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill {% if job.status == 'completed' %}bg-success{% elif job.status == 'processing' %}bg-warning{% else %}bg-secondary{% endif %}"
+                                 style="width: {{ job.processed_items|div:job.total_items|mul:100 }}%">
+                            </div>
                         </div>
                     </div>
+                    {% endif %}
                 </div>
-            </div>
+                {% endfor %}
+                <div class="text-center mt-3">
+                    <a href="{% url 'storefront:bulk_job_list' slug=store.slug %}" class="btn-custom btn-sm btn-outline text-primary">
+                        View All Jobs
+                    </a>
+                </div>
+            {% else %}
+                <div class="empty-bulk">
+                    <div class="empty-icon">
+                        <i class="bi bi-clock-history"></i>
+                    </div>
+                    <p class="empty-title">No batch jobs yet</p>
+                    <p class="empty-desc">Start a bulk operation to see jobs here</p>
+                </div>
+            {% endif %}
         </div>
 
-        <div class="col-lg-4">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Bulk Operations Health</h6>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <span class="font-weight-bold">Success Rate:</span>
-                        {% if job_stats.total > 0 %}
-                            {% with success_rate=job_stats.completed|div:job_stats.total|mul:100 %}
-                            <span class="float-right {% if success_rate > 80 %}text-success{% elif success_rate > 50 %}text-warning{% else %}text-danger{% endif %}">
-                                {{ success_rate|floatformat:1 }}%
-                            </span>
-                            <div class="progress mt-2">
-                                <div class="progress-bar {% if success_rate > 80 %}bg-success{% elif success_rate > 50 %}bg-warning{% else %}bg-danger{% endif %}"
-                                     role="progressbar" style="width: {{ success_rate }}%">
-                                </div>
-                            </div>
-                            {% endwith %}
-                        {% else %}
-                            <span class="float-right text-muted">No jobs yet</span>
-                            <div class="progress mt-2">
-                                <div class="progress-bar bg-secondary" role="progressbar" style="width: 0%">
-                                </div>
-                            </div>
-                        {% endif %}
-                    </div>
-                    <div class="mb-0">
-                        <span class="font-weight-bold">Active Templates:</span>
-                        <span class="float-right text-primary">{{ templates|length }}</span>
-                    </div>
-                </div>
+        <!-- Templates & Exports -->
+        <div class="bulk-chart-card">
+            <div class="bulk-chart-header">
+                <h3 class="bulk-chart-title">Templates & Exports</h3>
+                <p class="bulk-chart-subtitle">Available resources</p>
             </div>
+            
+            <h6 class="mb-3" style="font-size: 13px; font-weight: 600; color: var(--text-primary);">Recent Exports</h6>
+            {% if recent_exports %}
+                {% for export in recent_exports %}
+                <div class="template-item">
+                    <div class="template-header">
+                        <span class="template-name">{{ export.filename|truncatechars:25 }}</span>
+                        <span class="template-count">{{ export.record_count }}</span>
+                    </div>
+                    <div class="template-info">
+                        {{ export.created_at|date:"M d, H:i" }} • {{ export.get_format_display }}
+                    </div>
+                    <div class="mt-2">
+                        <a href="{{ export.file.url }}" class="btn-custom btn-sm btn-outline text-success" download>
+                            <i class="bi bi-download me-1"></i>Download
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-bulk">
+                    <div class="empty-icon">
+                        <i class="bi bi-file-earmark-spreadsheet"></i>
+                    </div>
+                    <p class="empty-title">No exports yet</p>
+                    <p class="empty-desc">Export your data to see files here</p>
+                </div>
+            {% endif %}
+            
+            <h6 class="mb-3 mt-4" style="font-size: 13px; font-weight: 600; color: var(--text-primary);">Popular Templates</h6>
+            {% if templates %}
+                {% for template in templates %}
+                <div class="template-item">
+                    <div class="template-header">
+                        <span class="template-name">{{ template.name|truncatechars:25 }}</span>
+                        <span class="template-count">{{ template.download_count }}</span>
+                    </div>
+                    <div class="template-info">
+                        {{ template.get_template_type_display }} • {{ template.created_at|date:"M d" }}
+                    </div>
+                    <div class="mt-2">
+                        <a href="{% url 'storefront:download_template' slug=store.slug template_id=template.id %}" class="btn-custom btn-sm btn-outline text-primary">
+                            <i class="bi bi-download me-1"></i>Download
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-bulk">
+                    <div class="empty-icon">
+                        <i class="bi bi-file-earmark-text"></i>
+                    </div>
+                    <p class="empty-title">No templates</p>
+                    <p class="empty-desc">Create templates for easier imports</p>
+                </div>
+            {% endif %}
         </div>
     </div>
 
-    <!-- Recent Batch Jobs -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-            <h6 class="m-0 font-weight-bold text-primary">Recent Batch Jobs</h6>
-            <a href="{% url 'storefront:bulk_job_list' slug=store.slug %}" class="btn btn-sm btn-primary">
-                View All Jobs
+    <!-- Recent Batch Jobs Table -->
+    <div class="jobs-card">
+        <div class="jobs-header">
+            <h3 class="jobs-title">Recent Batch Jobs</h3>
+            <a href="{% url 'storefront:bulk_job_list' slug=store.slug %}" class="btn-custom btn-sm btn-outline text-primary">
+                View All
             </a>
         </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-bordered" width="100%" cellspacing="0">
-                    <thead>
-                        <tr>
-                            <th>Job ID</th>
-                            <th>Type</th>
-                            <th>Status</th>
-                            <th>Progress</th>
-                            <th>Created</th>
-                            <th>Started By</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for job in recent_jobs %}
-                        <tr>
-                            <td>#{{ job.id }}</td>
-                            <td>
-                                <span class="badge badge-primary">
-                                    {{ job.get_job_type_display }}
-                                </span>
-                            </td>
-                            <td>
-                                <span class="badge badge-{% if job.status == 'completed' %}success{% elif job.status == 'processing' %}warning{% elif job.status == 'failed' %}danger{% else %}secondary{% endif %}">
-                                    {{ job.get_status_display }}
-                                </span>
-                            </td>
-                            <td>
-                                {% if job.total_items > 0 %}
-                                    <div class="d-flex align-items-center">
-                                        <div class="progress flex-grow-1 mr-2" style="height: 8px;">
-                                            <div class="progress-bar {% if job.status == 'completed' %}bg-success{% elif job.status == 'processing' %}bg-warning{% elif job.status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}"
-                                                 role="progressbar"
-                                                 style="width: {{ job.processed_items|div:job.total_items|mul:100 }}%">
-                                            </div>
+        <div class="table-responsive">
+            <table class="jobs-table">
+                <thead>
+                    <tr>
+                        <th>Job ID</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th>Created</th>
+                        <th>Started By</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in recent_jobs|slice:":5" %}
+                    <tr>
+                        <td>#{{ job.id }}</td>
+                        <td>
+                            <span class="job-badge badge-pending">{{ job.get_job_type_display }}</span>
+                        </td>
+                        <td>
+                            <span class="job-badge {% if job.status == 'completed' %}badge-completed{% elif job.status == 'processing' %}badge-processing{% elif job.status == 'failed' %}badge-failed{% else %}badge-pending{% endif %}">
+                                {{ job.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if job.total_items > 0 %}
+                                <div class="d-flex align-items-center">
+                                    <div class="progress flex-grow-1 mr-2" style="height: 8px;">
+                                        <div class="progress-bar {% if job.status == 'completed' %}bg-success{% elif job.status == 'processing' %}bg-warning{% else %}bg-secondary{% endif %}"
+                                             role="progressbar"
+                                             style="width: {{ job.processed_items|div:job.total_items|mul:100 }}%">
                                         </div>
-                                        <small class="text-muted">{{ job.processed_items }}/{{ job.total_items }}</small>
                                     </div>
-                                {% else %}
-                                    <small class="text-muted">-</small>
-                                {% endif %}
-                            </td>
-                            <td>{{ job.created_at|date:"M d, H:i" }}</td>
-                            <td>{{ job.created_by.username }}</td>
-                            <td>
-                                <a href="{% url 'storefront:bulk_job_detail' slug=store.slug job_id=job.id %}" class="btn btn-sm btn-outline-primary">
-                                    View Details
-                                </a>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="7" class="text-center py-4">No batch jobs yet</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- Recent Exports and Templates -->
-    <div class="row">
-        <div class="col-lg-6">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Recent Exports</h6>
-                </div>
-                <div class="card-body">
-                    {% for export in recent_exports %}
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="mr-3">
-                            <i class="bi bi-file-earmark-spreadsheet text-success fa-lg"></i>
-                        </div>
-                        <div class="flex-grow-1">
-                            <div class="font-weight-bold">{{ export.filename }}</div>
-                            <div class="text-muted small">{{ export.created_at|date:"M d, Y H:i" }} • {{ export.record_count }} records</div>
-                        </div>
-                        <a href="{{ export.file.url }}" class="btn btn-sm btn-outline-success" download>
-                            <i class="bi bi-download"></i>
-                        </a>
-                    </div>
+                                    <small class="text-muted">{{ job.processed_items }}/{{ job.total_items }}</small>
+                                </div>
+                            {% else %}
+                                <small class="text-muted">-</small>
+                            {% endif %}
+                        </td>
+                        <td>{{ job.created_at|date:"M d, H:i" }}</td>
+                        <td>{{ job.created_by.username|truncatechars:10 }}</td>
+                        <td>
+                            <a href="{% url 'storefront:bulk_job_detail' slug=store.slug job_id=job.id %}" class="btn-custom btn-sm btn-outline text-primary">
+                                View Details
+                            </a>
+                        </td>
+                    </tr>
                     {% empty %}
-                    <div class="text-center py-4">
-                        <p class="text-muted mb-0">No recent exports</p>
-                    </div>
+                    <tr>
+                        <td colspan="7" class="text-center py-4">
+                            <div class="empty-bulk">
+                                <div class="empty-icon">
+                                    <i class="bi bi-clock-history"></i>
+                                </div>
+                                <p class="text-muted">No batch jobs yet</p>
+                            </div>
+                        </td>
+                    </tr>
                     {% endfor %}
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-6">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Popular Import Templates</h6>
-                </div>
-                <div class="card-body">
-                    {% for template in templates %}
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="mr-3">
-                            <i class="bi bi-file-earmark-text text-info fa-lg"></i>
-                        </div>
-                        <div class="flex-grow-1">
-                            <div class="font-weight-bold">{{ template.name }}</div>
-                            <div class="text-muted small">Downloaded {{ template.download_count }} times</div>
-                        </div>
-                        <a href="{% url 'storefront:download_template' slug=store.slug template_id=template.id %}" class="btn btn-sm btn-outline-info">
-                            <i class="bi bi-download"></i>
-                        </a>
-                    </div>
-                    {% empty %}
-                    <div class="text-center py-4">
-                        <p class="text-muted mb-0">No templates available</p>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
 
-<style>
-.card {
-    border-radius: 0.35rem;
-    border: 1px solid #e3e6f0;
-}
-
-.border-left-primary {
-    border-left: 0.25rem solid #4e73df !important;
-}
-
-.border-left-warning {
-    border-left: 0.25rem solid #f6c23e !important;
-}
-
-.border-left-danger {
-    border-left: 0.25rem solid #e74a3b !important;
-}
-
-.border-left-success {
-    border-left: 0.25rem solid #1cc88a !important;
-}
-
-.border-left-info {
-    border-left: 0.25rem solid #36b9cc !important;
-}
-
-.progress {
-    border-radius: 0.35rem;
-}
-
-.progress-sm {
-    height: 0.5rem;
-}
-
-.btn-block {
-    display: block;
-    width: 100%;
-}
-</style>
-
+<!-- Auto-refresh for processing jobs -->
 <script>
-// Auto-refresh every 30 seconds for processing jobs
-{% if job_stats.processing > 0 %}
-setTimeout(function() {
-    window.location.reload();
-}, 30000);
-{% endif %}
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-refresh every 30 seconds if there are processing jobs
+    {% if job_stats.processing > 0 %}
+    setTimeout(function() {
+        window.location.reload();
+    }, 30000);
+    {% endif %}
 
-// Job status polling for real-time updates
-function pollJobStatus(jobId) {
-    fetch(`/storefront/${store.slug}/bulk/job/${jobId}/status/`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'completed' || data.status === 'failed') {
-                location.reload();
-            }
-        })
-        .catch(error => console.log('Polling error:', error));
-}
+    // Table row hover effects
+    document.querySelectorAll('.jobs-table tbody tr').forEach(row => {
+        row.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateX(4px)';
+            this.style.boxShadow = 'var(--shadow-sm)';
+        });
+        
+        row.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateX(0)';
+            this.style.boxShadow = 'none';
+        });
+    });
 
-// Poll active jobs every 10 seconds
-{% for job in recent_jobs %}
-{% if job.status == 'processing' %}
-setInterval(() => pollJobStatus({{ job.id }}), 10000);
-{% endif %}
-{% endfor %}
+    // Job status polling for real-time updates
+    function pollJobStatus(jobId) {
+        fetch(`/storefront/${storeSlug}/bulk/job/${jobId}/progress/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'completed' || data.status === 'failed') {
+                    location.reload();
+                }
+            })
+            .catch(error => console.log('Polling error:', error));
+    }
+
+    // Poll active jobs every 10 seconds
+    {% for job in recent_jobs %}
+    {% if job.status == 'processing' %}
+    setInterval(() => pollJobStatus({{ job.id }}), 10000);
+    {% endif %}
+    {% endfor %}
+});
 </script>
 {% endblock %}

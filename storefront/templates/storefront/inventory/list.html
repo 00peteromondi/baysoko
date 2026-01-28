@@ -1,76 +1,472 @@
+<!-- storefront/templates/storefront/inventory/list.html -->
 {% extends 'base.html' %}
 {% load humanize %}
 
 {% block title %}Inventory List - {{ store.name }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* ===== INVENTORY LIST STYLES ===== */
+    .inventory-list-header {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .inventory-list-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+    }
+
+    .inventory-list-title {
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .inventory-list-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
+    /* ===== FILTERS CARD ===== */
+    .filters-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+    }
+
+    .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+    }
+
+    .form-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-primary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+    }
+
+    /* ===== PRODUCTS TABLE ===== */
+    .products-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 30px;
+    }
+
+    .products-header {
+        background: var(--bg-secondary);
+        padding: 20px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .products-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 0;
+    }
+
+    .products-count {
+        font-size: 14px;
+        color: var(--text-secondary);
+    }
+
+    .products-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .products-table th {
+        background: var(--bg-secondary);
+        padding: 12px 16px;
+        text-align: left;
+        font-weight: 700;
+        color: var(--text-primary);
+        border-bottom: 2px solid var(--border-color);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        min-width: fit-content;
+    }
+
+
+    .products-table td {
+        padding: 16px;
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: middle;
+    }
+
+    .products-table tbody tr {
+        transition: all 0.2s ease;
+    }
+
+    .products-table tbody tr:hover {
+        background: var(--bg-secondary);
+    }
+
+    /* ===== PRODUCT CELL ===== */
+    .product-cell {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .product-image {
+        width: 50px;
+        height: 50px;
+        border-radius: 8px;
+        object-fit: cover;
+        background: var(--bg-tertiary);
+    }
+
+    .product-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .product-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+        display: block;
+        text-decoration: none;
+    }
+
+    .product-name:hover {
+        color: var(--primary);
+        text-decoration: underline;
+    }
+
+    .product-description {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-bottom: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* ===== STOCK BADGES ===== */
+    .stock-badge {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 4px 8px;
+        border-radius: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: inline-block;
+    }
+
+    .badge-low {
+        background: rgba(245, 158, 11, 0.1);
+        color: #f59e0b;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .badge-out {
+        background: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .badge-good {
+        background: rgba(16, 185, 129, 0.1);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    /* ===== CATEGORY BADGE ===== */
+    .category-badge {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 4px 8px;
+        border-radius: 6px;
+        background: rgba(59, 130, 246, 0.1);
+        color: #3b82f6;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    /* ===== STATUS BADGE ===== */
+    .status-badge {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 4px 8px;
+        border-radius: 6px;
+    }
+
+    .status-active {
+        background: rgba(16, 185, 129, 0.1);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .status-inactive {
+        background: rgba(107, 114, 128, 0.1);
+        color: #6b7280;
+        border: 1px solid rgba(107, 114, 128, 0.3);
+    }
+
+    /* ===== ACTION BUTTONS ===== */
+    .action-buttons {
+        display: flex;
+        gap: 4px;
+    }
+
+    .btn-action {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--border-color);
+        background: var(--card-bg);
+        color: var(--text-secondary);
+        transition: all 0.2s ease;
+        text-decoration: none;
+    }
+
+    .btn-action:hover {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+
+    /* ===== BULK ACTIONS ===== */
+    .bulk-actions {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        padding: 16px 20px;
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+        display: none;
+    }
+
+    .bulk-actions.show {
+        display: block;
+    }
+
+    .bulk-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+
+    .selected-count {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .bulk-options {
+        display: flex;
+        gap: 8px;
+    }
+
+    /* ===== PAGINATION ===== */
+    .pagination {
+        display: flex;
+        justify-content: center;
+        gap: 4px;
+    }
+
+    .page-item {
+        list-style: none;
+    }
+
+    .page-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        background: var(--card-bg);
+        color: var(--text-primary);
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+    .page-link:hover {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+
+    .page-item.active .page-link {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+
+    /* ===== EMPTY STATE ===== */
+    .empty-products {
+        padding: 60px 20px;
+        text-align: center;
+    }
+
+    .empty-icon {
+        font-size: 48px;
+        color: var(--text-tertiary);
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .filter-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .products-table {
+            display: block;
+            overflow-x: auto;
+        }
+        
+        .action-buttons {
+            flex-direction: column;
+        }
+    }
+    .modal-content {
+        background: var(--card-bg);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+    }
+    .modal-content .form-label {
+        color: var(--primary);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-custom py-3">
     <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1 class="h2 mb-1">Inventory List</h1>
-            <p class="text-muted mb-0">{{ store.name }}</p>
-        </div>
-        <div class="btn-group">
-            <a href="{% url 'storefront:inventory_dashboard' slug=store.slug %}" 
-               class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
-            </a>
-            <a href="{% url 'storefront:adjust_stock' slug=store.slug %}" 
-               class="btn btn-primary">
-                <i class="bi bi-plus-circle me-2"></i>Adjust Stock
-            </a>
+    <div class="inventory-list-header">
+        <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
+            <div>
+                <h1 class="inventory-list-title">Inventory List</h1>
+                <p class="inventory-list-subtitle">{{ store.name }}</p>
+            </div>
+            <div class="btn-group">
+                <a href="{% url 'storefront:inventory_dashboard' slug=store.slug %}" class="btn-custom btn-outline">
+                    <i class="bi bi-arrow-left me-2"></i>Dashboard
+                </a>
+                <a href="{% url 'storefront:adjust_stock' slug=store.slug %}" class="btn-custom btn-primary">
+                    <i class="bi bi-plus-circle me-2"></i>Adjust Stock
+                </a>
+            </div>
         </div>
     </div>
 
-    <!-- Filters Card -->
-    <div class="card shadow mb-4">
-        <div class="card-body">
-            <form method="get" class="row g-3">
-                <div class="col-md-4">
-                    <label class="form-label">Search</label>
-                    <input type="text" name="q" class="form-control" 
-                           placeholder="Search products..." value="{{ search_query }}">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Category</label>
-                    <select name="category" class="form-select">
-                        <option value="">All Categories</option>
-                        {% for category in categories %}
-                        <option value="{{ category.id }}" 
-                                {% if selected_category == category.id|stringformat:"i" %}selected{% endif %}>
-                            {{ category.name }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Stock Status</label>
-                    <select name="stock_status" class="form-select">
-                        <option value="">All</option>
-                        <option value="low" {% if selected_status == 'low' %}selected{% endif %}>Low Stock</option>
-                        <option value="out" {% if selected_status == 'out' %}selected{% endif %}>Out of Stock</option>
-                        <option value="good" {% if selected_status == 'good' %}selected{% endif %}>Good Stock</option>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">&nbsp;</label>
-                    <button type="submit" class="btn btn-primary w-100">
-                        <i class="bi bi-filter me-2"></i>Filter
+    <!-- Filters -->
+    <div class="filters-card">
+        <form method="get" class="filter-grid">
+            <div>
+                <label class="form-label">Search</label>
+                <input type="text" name="q" class="form-control" 
+                       placeholder="Search products..." value="{{ search_query }}">
+            </div>
+            <div>
+                <label class="form-label">Category</label>
+                <select name="category" class="form-select">
+                    <option value="">All Categories</option>
+                    {% for category in categories %}
+                    <option value="{{ category.id }}" 
+                            {% if selected_category == category.id|stringformat:"i" %}selected{% endif %}>
+                        {{ category.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Stock Status</label>
+                <select name="stock_status" class="form-select">
+                    <option value="">All</option>
+                    <option value="low" {% if selected_status == 'low' %}selected{% endif %}>Low Stock</option>
+                    <option value="out" {% if selected_status == 'out' %}selected{% endif %}>Out of Stock</option>
+                    <option value="good" {% if selected_status == 'good' %}selected{% endif %}>Good Stock</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label">&nbsp;</label>
+                <button type="submit" class="btn-custom btn-primary w-100">
+                    <i class="bi bi-filter me-2"></i>Filter
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Bulk Actions -->
+    <div class="bulk-actions" id="bulkActions">
+        <div class="bulk-header">
+            <span class="selected-count" id="selectedCount">0 products selected</span>
+            <div class="bulk-options">
+                <button class="btn-custom btn-sm btn-outline" id="selectAllBtn">Select All</button>
+                <button class="btn-custom btn-sm btn-outline" id="clearSelectionBtn">Clear</button>
+                <div class="dropdown">
+                    <button class="btn-custom btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        Actions
                     </button>
+                    <div class="dropdown-menu dropdown-menu-end">
+                        <button class="dropdown-item" onclick="bulkAction('activate')">
+                            <i class="bi bi-check-circle text-success me-2"></i>Activate
+                        </button>
+                        <button class="dropdown-item" onclick="bulkAction('deactivate')">
+                            <i class="bi bi-x-circle text-danger me-2"></i>Deactivate
+                        </button>
+                        <div class="dropdown-divider"></div>
+                        <button class="dropdown-item" onclick="bulkAction('set_stock')">
+                            <i class="bi bi-box text-primary me-2"></i>Set Stock Level
+                        </button>
+                        <button class="dropdown-item" onclick="bulkAction('set_category')">
+                            <i class="bi bi-tag text-info me-2"></i>Assign Category
+                        </button>
+                    </div>
                 </div>
-            </form>
+            </div>
         </div>
     </div>
 
     <!-- Products Table -->
-    <div class="card shadow">
-        <div class="card-header py-3 d-flex justify-content-between align-items-center">
-            <h6 class="m-0 font-weight-bold text-primary">
-                Products ({{ page_obj.paginator.count }})
-            </h6>
+    <div class="products-card">
+        <div class="products-header">
+            <div>
+                <h3 class="products-title">Products</h3>
+                <p class="products-count">{{ page_obj.paginator.count }} items</p>
+            </div>
             <div class="d-flex gap-2">
-                <select class="form-select form-select-sm w-auto" id="sortSelect">
+                <select class="form-select form-select-sm" id="sortSelect" style="width: auto;">
                     <option value="name_asc" {% if sort_by == 'name' and sort_order == 'asc' %}selected{% endif %}>
                         Name A-Z
                     </option>
@@ -92,183 +488,137 @@
                 </select>
                 <div class="btn-group">
                     <a href="{% url 'storefront:export_inventory' slug=store.slug %}" 
-                       class="btn btn-sm btn-outline-success">
+                       class="btn-custom btn-sm btn-outline">
                         <i class="bi bi-download me-1"></i>Export
                     </a>
                     <a href="{% url 'storefront:import_inventory' slug=store.slug %}" 
-                       class="btn btn-sm btn-outline-primary">
+                       class="btn-custom btn-sm btn-outline">
                         <i class="bi bi-upload me-1"></i>Import
                     </a>
                 </div>
             </div>
         </div>
         
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover" id="inventoryTable">
-                    <thead>
-                        <tr>
-                            <th width="5%">
-                                <input type="checkbox" id="selectAll" class="form-check-input">
-                            </th>
-                            <th>Product</th>
-                            <th width="15%">SKU</th>
-                            <th width="10%">Price</th>
-                            <th width="15%">Stock</th>
-                            <th width="15%">Category</th>
-                            <th width="10%">Status</th>
-                            <th width="15%">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for product in page_obj %}
-                        <tr>
-                            <td>
-                                <input type="checkbox" class="form-check-input product-checkbox" 
-                                       value="{{ product.id }}">
-                            </td>
-                            <td>
-                                <div class="d-flex align-items-center">
-                                    <img src="{{ product.get_image_url }}" 
-                                         class="rounded me-3" 
-                                         style="width: 50px; height: 50px; object-fit: cover;"
-                                         onerror="this.src='https://placehold.co/50x50/c2c2c2/1f1f1f?text=Product'">
-                                    <div>
-                                        <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=product.slug %}" 
-                                           class="font-weight-bold text-dark mb-0">
-                                            {{ product.title }}
-                                        </a>
-                                        {% if product.description %}
-                                        <p class="text-muted small mb-0">
-                                            {{ product.description|truncatechars:50 }}
-                                        </p>
-                                        {% endif %}
-                                    </div>
+        <div class="table-responsive">
+            <table class="products-table">
+                <thead>
+                    <tr>
+                        <th width="40">
+                            <input type="checkbox" id="selectAllCheckbox" class="form-check-input">
+                        </th>
+                        <th>Product</th>
+                        <th width="100">SKU</th>
+                        <th width="100">Price</th>
+                        <th width="120">Stock</th>
+                        <th width="150">Category</th>
+                        <th width="100">Status</th>
+                        <th width="120">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in page_obj %}
+                    <tr>
+                        <td>
+                            <input type="checkbox" class="form-check-input product-checkbox" 
+                                   value="{{ product.id }}">
+                        </td>
+                        <td>
+                            <div class="product-cell">
+                                <img src="{{ product.get_image_url }}" 
+                                     class="product-image"
+                                     onerror="this.src='https://placehold.co/50x50/e5e7eb/6b7280?text=Product'">
+                                <div class="product-info">
+                                    <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=product.slug %}" 
+                                       class="product-name">
+                                        {{ product.title|truncatechars:30 }}
+                                    </a>
+                                    {% if product.description %}
+                                    <p class="product-description">
+                                        {{ product.description|truncatechars:40 }}
+                                    </p>
+                                    {% endif %}
                                 </div>
-                            </td>
-                            <td>
-                                <span class="font-monospace">{{ product.sku|default:"-" }}</span>
-                            </td>
-                            <td>
-                                <span class="fw-bold">KSh {{ product.price|intcomma }}</span>
-                            </td>
-                            <td>
-                                {% include 'storefront/inventory/partials/stock_badge.html' with product=product %}
+                            </div>
+                        </td>
+                        <td>
+                            <span class="text-muted small">{{ product.sku|default:"-" }}</span>
+                        </td>
+                        <td>
+                            <span class="fw-bold">KSh {{ product.price|intcomma }}</span>
+                        </td>
+                        <td>
+                            {% if product.stock == 0 %}
+                            <span class="stock-badge badge-out">Out of Stock</span>
+                            {% elif product.stock <= 5 %}
+                            <span class="stock-badge badge-low">Low Stock ({{ product.stock }})</span>
+                            {% else %}
+                            <span class="stock-badge badge-good">{{ product.stock }}</span>
+                            {% endif %}
+                            {% if product.variants.exists %}
+                            <div class="text-muted small mt-1">{{ product.variants.count }} variants</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if product.category %}
+                            <span class="category-badge">{{ product.category.name|truncatechars:12 }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if product.is_active %}
+                            <span class="status-badge status-active">Active</span>
+                            {% else %}
+                            <span class="status-badge status-inactive">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn-action quick-stock-btn"
+                                        data-product-id="{{ product.id }}"
+                                        data-product-name="{{ product.title }}"
+                                        data-current-stock="{{ product.stock }}"
+                                        title="Update Stock">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <a href="{% url 'storefront:product_edit' pk=product.id %}" 
+                                   class="btn-action" title="Edit">
+                                    <i class="bi bi-gear"></i>
+                                </a>
                                 {% if product.variants.exists %}
-                                <small class="text-muted d-block">
-                                    {{ product.variants.count }} variants
-                                </small>
+                                <a href="{% url 'storefront:manage_variants' slug=store.slug product_id=product.id %}" 
+                                   class="btn-action" title="Variants">
+                                    <i class="bi bi-list-ul"></i>
+                                </a>
                                 {% endif %}
-                            </td>
-                            <td>
-                                {% if product.category %}
-                                <span class="badge bg-info">{{ product.category.name }}</span>
-                                {% else %}
-                                <span class="text-muted">-</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if product.is_active %}
-                                <span class="badge bg-success">Active</span>
-                                {% else %}
-                                <span class="badge bg-secondary">Inactive</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-primary quick-stock-btn"
-                                            data-product-id="{{ product.id }}"
-                                            data-product-name="{{ product.title }}"
-                                            data-current-stock="{{ product.stock }}">
-                                        <i class="bi bi-pencil"></i>
-                                    </button>
-                                    <a href="{% url 'storefront:product_edit' pk=product.id %}" 
-                                       class="btn btn-outline-secondary">
-                                        <i class="bi bi-gear"></i>
-                                    </a>
-                                    <a href="{% url 'storefront:manage_variants' slug=store.slug product_id=product.id %}" 
-                                       class="btn btn-outline-info">
-                                        <i class="bi bi-list-ul"></i>
-                                    </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5">
+                            <div class="empty-products">
+                                <div class="empty-icon">
+                                    <i class="bi bi-inbox"></i>
                                 </div>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="8" class="text-center py-5">
-                                <i class="bi bi-inbox display-4 text-muted mb-3"></i>
-                                <h5>No products found</h5>
-                                <p class="text-muted">Try adjusting your filters or add new products.</p>
+                                <h5 class="text-muted mb-2">No products found</h5>
+                                <p class="text-muted mb-3">Try adjusting your filters or add new products.</p>
                                 <a href="{% url 'storefront:product_create' store_slug=store.slug %}" 
-                                   class="btn btn-primary">
+                                   class="btn-custom btn-primary">
                                     <i class="bi bi-plus-circle me-2"></i>Add Products
                                 </a>
                             </td>
                         </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
 
-            <!-- Bulk Actions Bar -->
-            <div id="bulkActions" class="mt-3 p-3 bg-light rounded d-none">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <span id="selectedCount">0</span> products selected
-                    </div>
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" 
-                                data-bs-toggle="dropdown">
-                            <i class="bi bi-gear me-2"></i>Bulk Actions
-                        </button>
-                        <ul class="dropdown-menu">
-                            <li>
-                                <a class="dropdown-item bulk-action-btn" 
-                                   data-action="activate">
-                                    <i class="bi bi-check-circle text-success me-2"></i>Activate
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item bulk-action-btn" 
-                                   data-action="deactivate">
-                                    <i class="bi bi-x-circle text-danger me-2"></i>Deactivate
-                                </a>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <a class="dropdown-item bulk-action-btn" 
-                                   data-action="set_stock"
-                                   data-bs-toggle="modal" 
-                                   data-bs-target="#setStockModal">
-                                    <i class="bi bi-box text-primary me-2"></i>Set Stock Level
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item bulk-action-btn" 
-                                   data-action="add_to_category"
-                                   data-bs-toggle="modal" 
-                                   data-bs-target="#categoryModal">
-                                    <i class="bi bi-tag text-info me-2"></i>Assign Category
-                                </a>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <a class="dropdown-item text-danger bulk-action-btn" 
-                                   data-action="delete"
-                                   data-bs-toggle="modal" 
-                                   data-bs-target="#deleteModal">
-                                    <i class="bi bi-trash me-2"></i>Delete Products
-                                </a>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Pagination -->
-            {% if page_obj.paginator.num_pages > 1 %}
-            <nav class="mt-4">
-                <ul class="pagination justify-content-center">
+        <!-- Pagination -->
+        {% if page_obj.paginator.num_pages > 1 %}
+        <div class="py-3 px-4 border-top">
+            <nav>
+                <ul class="pagination">
                     {% if page_obj.has_previous %}
                     <li class="page-item">
                         <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
@@ -300,180 +650,85 @@
                     {% endif %}
                 </ul>
             </nav>
-            {% endif %}
         </div>
+        {% endif %}
     </div>
 </div>
 
 <!-- Quick Stock Modal -->
 <div class="modal fade" id="quickStockModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-secondary">
             <div class="modal-header">
                 <h5 class="modal-title">Quick Stock Update</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <p>Update stock for: <strong id="modalProductName"></strong></p>
-                <div class="mb-3">
-                    <label class="form-label">Current Stock</label>
-                    <input type="text" class="form-control" id="currentStock" readonly>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">New Stock Level</label>
-                    <input type="number" class="form-control" id="newStock" min="0" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Notes (Optional)</label>
-                    <textarea class="form-control" id="stockNotes" rows="2"></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="saveStockBtn">Update Stock</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Set Stock Modal -->
-<div class="modal fade" id="setStockModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Set Stock Level</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Set stock level for <span id="setStockCount">0</span> selected products.</p>
-                <div class="mb-3">
-                    <label class="form-label">Stock Level</label>
-                    <input type="number" class="form-control" id="bulkStockValue" min="0" required>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="applyBulkStock">Apply</button>
+                <p class="text-muted mb-3">Current stock: <span class="fw-bold" id="currentStock"></span></p>
+                <form id="quickStockForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="modalProductId">
+                    <div class="mb-3">
+                        <label class="form-label">New Stock Level</label>
+                        <input type="number" class="form-control" id="newStock" min="0" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes (Optional)</label>
+                        <textarea class="form-control" id="stockNotes" rows="2"></textarea>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn-custom btn-primary flex-grow-1">Update Stock</button>
+                        <button type="button" class="btn-custom btn-outline" data-bs-dismiss="modal">Cancel</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 </div>
-
-<!-- Category Modal -->
-<div class="modal fade" id="categoryModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Assign Category</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Assign category to <span id="categoryCount">0</span> selected products.</p>
-                <div class="mb-3">
-                    <label class="form-label">Category</label>
-                    <select class="form-select" id="bulkCategory">
-                        <option value="">Select Category</option>
-                        {% for category in categories %}
-                        <option value="{{ category.id }}">{{ category.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="applyBulkCategory">Apply</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Delete Modal -->
-<div class="modal fade" id="deleteModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title text-danger">Delete Products</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p class="text-danger">
-                    <i class="bi bi-exclamation-triangle me-2"></i>
-                    Are you sure you want to delete <span id="deleteCount">0</span> selected products?
-                </p>
-                <p class="text-muted">
-                    This action cannot be undone. All product data including images and variants will be permanently deleted.
-                </p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-danger" id="confirmDelete">Delete Products</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<style>
-#inventoryTable tbody tr:hover {
-    background-color: rgba(0,0,0,.02);
-}
-
-.product-checkbox:checked {
-    background-color: var(--primary);
-    border-color: var(--primary);
-}
-
-.stock-low {
-    color: #f39c12;
-    font-weight: 600;
-}
-
-.stock-out {
-    color: #e74c3c;
-    font-weight: 600;
-}
-
-.stock-good {
-    color: #27ae60;
-    font-weight: 600;
-}
-
-#bulkActions {
-    transition: all 0.3s ease;
-    position: sticky;
-    bottom: 20px;
-    z-index: 1000;
-}
-</style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Checkbox functionality
-    const selectAll = document.getElementById('selectAll');
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
     const productCheckboxes = document.querySelectorAll('.product-checkbox');
     const bulkActions = document.getElementById('bulkActions');
     const selectedCount = document.getElementById('selectedCount');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const clearSelectionBtn = document.getElementById('clearSelectionBtn');
     
     function updateBulkActions() {
         const checkedCount = document.querySelectorAll('.product-checkbox:checked').length;
-        selectedCount.textContent = checkedCount;
-        
-        // Update modal counts
-        document.getElementById('setStockCount').textContent = checkedCount;
-        document.getElementById('categoryCount').textContent = checkedCount;
-        document.getElementById('deleteCount').textContent = checkedCount;
+        selectedCount.textContent = `${checkedCount} product${checkedCount !== 1 ? 's' : ''} selected`;
         
         if (checkedCount > 0) {
-            bulkActions.classList.remove('d-none');
+            bulkActions.classList.add('show');
         } else {
-            bulkActions.classList.add('d-none');
+            bulkActions.classList.remove('show');
         }
     }
     
-    selectAll.addEventListener('change', function() {
+    selectAllCheckbox.addEventListener('change', function() {
         const isChecked = this.checked;
         productCheckboxes.forEach(checkbox => {
             checkbox.checked = isChecked;
         });
+        updateBulkActions();
+    });
+    
+    selectAllBtn.addEventListener('click', function() {
+        productCheckboxes.forEach(checkbox => {
+            checkbox.checked = true;
+        });
+        selectAllCheckbox.checked = true;
+        updateBulkActions();
+    });
+    
+    clearSelectionBtn.addEventListener('click', function() {
+        productCheckboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        selectAllCheckbox.checked = false;
         updateBulkActions();
     });
     
@@ -484,20 +739,26 @@ document.addEventListener('DOMContentLoaded', function() {
     // Quick stock update
     const quickStockBtns = document.querySelectorAll('.quick-stock-btn');
     const quickStockModal = new bootstrap.Modal(document.getElementById('quickStockModal'));
-    let currentProductId = null;
     
     quickStockBtns.forEach(btn => {
         btn.addEventListener('click', function() {
-            currentProductId = this.dataset.productId;
-            document.getElementById('modalProductName').textContent = this.dataset.productName;
-            document.getElementById('currentStock').value = this.dataset.currentStock;
-            document.getElementById('newStock').value = this.dataset.currentStock;
+            const productId = this.dataset.productId;
+            const productName = this.dataset.productName;
+            const currentStock = this.dataset.currentStock;
+            
+            document.getElementById('modalProductName').textContent = productName;
+            document.getElementById('currentStock').textContent = currentStock;
+            document.getElementById('modalProductId').value = productId;
+            document.getElementById('newStock').value = currentStock;
             document.getElementById('stockNotes').value = '';
+            
             quickStockModal.show();
         });
     });
     
-    document.getElementById('saveStockBtn').addEventListener('click', function() {
+    document.getElementById('quickStockForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const productId = document.getElementById('modalProductId').value;
         const newStock = document.getElementById('newStock').value;
         const notes = document.getElementById('stockNotes').value;
         
@@ -506,7 +767,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        fetch(`{% url 'storefront:quick_stock_update' slug=store.slug product_id=0 %}`.replace('0', currentProductId), {
+        fetch(`{% url 'storefront:quick_stock_update' slug=store.slug product_id=0 %}`.replace('0', productId), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -520,7 +781,8 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                location.reload();
+                quickStockModal.hide();
+                window.location.reload();
             } else {
                 alert('Error: ' + data.error);
             }
@@ -542,67 +804,40 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Bulk actions
-    document.querySelectorAll('.bulk-action-btn').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            const action = this.dataset.action;
-            const selectedIds = Array.from(document.querySelectorAll('.product-checkbox:checked'))
-                .map(cb => cb.value);
-            
-            if (selectedIds.length === 0) {
-                alert('Please select at least one product');
-                return;
-            }
-            
-            // Handle modal-based actions
-            if (action === 'set_stock' || action === 'add_to_category' || action === 'delete') {
-                return; // Let modal handle it
-            }
-            
-            // Handle immediate actions
-            performBulkAction(action, selectedIds);
-        });
-    });
-    
-    // Apply bulk stock
-    document.getElementById('applyBulkStock').addEventListener('click', function() {
-        const selectedIds = getSelectedProductIds();
-        const stockValue = document.getElementById('bulkStockValue').value;
-        
-        if (!stockValue || stockValue < 0) {
-            alert('Please enter a valid stock level');
-            return;
-        }
-        
-        performBulkAction('set_stock', selectedIds, { value: parseInt(stockValue) });
-        bootstrap.Modal.getInstance(document.getElementById('setStockModal')).hide();
-    });
-    
-    // Apply bulk category
-    document.getElementById('applyBulkCategory').addEventListener('click', function() {
-        const selectedIds = getSelectedProductIds();
-        const categoryId = document.getElementById('bulkCategory').value;
-        
-        if (!categoryId) {
-            alert('Please select a category');
-            return;
-        }
-        
-        performBulkAction('add_to_category', selectedIds, { value: categoryId });
-        bootstrap.Modal.getInstance(document.getElementById('categoryModal')).hide();
-    });
-    
-    // Confirm delete
-    document.getElementById('confirmDelete').addEventListener('click', function() {
-        const selectedIds = getSelectedProductIds();
-        performBulkAction('delete', selectedIds);
-        bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
-    });
-    
-    function getSelectedProductIds() {
-        return Array.from(document.querySelectorAll('.product-checkbox:checked'))
+    window.bulkAction = function(action) {
+        const selectedIds = Array.from(document.querySelectorAll('.product-checkbox:checked'))
             .map(cb => cb.value);
-    }
+        
+        if (selectedIds.length === 0) {
+            alert('Please select at least one product');
+            return;
+        }
+        
+        switch(action) {
+            case 'activate':
+                if (confirm(`Activate ${selectedIds.length} product(s)?`)) {
+                    performBulkAction('activate', selectedIds);
+                }
+                break;
+            case 'deactivate':
+                if (confirm(`Deactivate ${selectedIds.length} product(s)?`)) {
+                    performBulkAction('deactivate', selectedIds);
+                }
+                break;
+            case 'set_stock':
+                const stockValue = prompt('Enter new stock level:', '0');
+                if (stockValue !== null && !isNaN(stockValue)) {
+                    performBulkAction('set_stock', selectedIds, { value: parseInt(stockValue) });
+                }
+                break;
+            case 'set_category':
+                const categoryId = prompt('Enter category ID (leave blank to remove):', '');
+                if (categoryId !== null) {
+                    performBulkAction('set_category', selectedIds, { value: categoryId });
+                }
+                break;
+        }
+    };
     
     function performBulkAction(action, productIds, extraData = {}) {
         const data = {
@@ -611,7 +846,7 @@ document.addEventListener('DOMContentLoaded', function() {
             ...extraData
         };
         
-        fetch('{% url "storefront:quick_bulk_action" slug=store.slug %}', {
+        fetch('{% url "storefront:bulk_stock_update" slug=store.slug %}', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -657,7 +892,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
                     ${message}
                 </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
             </div>
         `;
         

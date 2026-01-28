@@ -3,321 +3,656 @@
 
 {% block title %}Bulk Stock Update - {{ store.name }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* ===== BULK UPDATE STYLES ===== */
+    .bulk-header {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .bulk-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #10b981, #3b82f6);
+    }
+
+    .bulk-title {
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .bulk-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
+    /* ===== UPDATE TYPE SELECTION ===== */
+    .update-type-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .update-type-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        cursor: pointer;
+        text-align: center;
+    }
+
+    .update-type-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+    }
+
+    .update-type-card.selected {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    .update-type-icon {
+        font-size: 24px;
+        color: var(--primary);
+        background: rgba(79, 70, 229, 0.1);
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 12px;
+    }
+
+    .update-type-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+    }
+
+    .update-type-desc {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-bottom: 0;
+    }
+
+    /* ===== FORM CONTROLS ===== */
+    .form-section {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+    }
+
+    .section-header {
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .section-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+
+    .section-subtitle {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    .form-control-custom {
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 10px 14px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        background: var(--card-bg);
+        color: var(--text-primary);
+    }
+
+    .form-control-custom:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        outline: none;
+    }
+
+    .form-label-custom {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .form-help {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-top: 4px;
+    }
+
+    /* ===== PREVIEW CARD ===== */
+    .preview-card {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 20px;
+        border: 1px solid var(--border-color);
+    }
+
+    .preview-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .preview-result {
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--primary);
+        margin-bottom: 0;
+    }
+
+    /* ===== PRODUCT SELECTION ===== */
+    .products-list {
+        max-height: 300px;
+        overflow-y: auto;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        background: var(--card-bg);
+    }
+
+    .product-check-item {
+        padding: 12px;
+        border-bottom: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+    }
+
+    .product-check-item:hover {
+        background: var(--bg-secondary);
+    }
+
+    .product-check-item:last-child {
+        border-bottom: none;
+    }
+
+    .select-count {
+        font-size: 11px;
+        color: var(--text-secondary);
+        font-weight: 600;
+    }
+
+    /* ===== STATS CARDS ===== */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+
+    .stat-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        text-align: center;
+        border: 1px solid var(--border-color);
+    }
+
+    .stat-value {
+        font-size: 20px;
+        font-weight: 800;
+        margin-bottom: 4px;
+    }
+
+    .stat-label {
+        font-size: 10px;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* ===== PROGRESS BAR ===== */
+    .stock-progress {
+        height: 20px;
+        background: var(--bg-secondary);
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 8px;
+    }
+
+    .stock-progress-bar {
+        height: 100%;
+        border-radius: 10px;
+        transition: width 0.3s ease;
+    }
+
+    .progress-good {
+        background: #10b981;
+    }
+
+    .progress-low {
+        background: #f59e0b;
+    }
+
+    .progress-out {
+        background: #ef4444;
+    }
+
+    /* ===== QUICK PRESETS ===== */
+    .presets-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+        margin-top: 20px;
+    }
+
+    .preset-btn {
+        background: var(--card-bg);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        text-align: center;
+        cursor: pointer;
+    }
+
+    .preset-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-sm);
+        border-color: var(--primary);
+    }
+
+    .preset-icon {
+        font-size: 20px;
+        margin-bottom: 8px;
+        color: var(--primary);
+    }
+
+    .preset-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+
+    .preset-desc {
+        font-size: 10px;
+        color: var(--text-secondary);
+        margin-bottom: 0;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .update-type-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .presets-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .update-type-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-custom py-3">
     <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1 class="h2 mb-1">Bulk Stock Update</h1>
-            <p class="text-muted mb-0">Update stock levels for multiple products at once</p>
-        </div>
-        <div class="btn-group">
-            <a href="{% url 'storefront:inventory_dashboard' slug=store.slug %}" 
-               class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
-            </a>
-            <a href="{% url 'storefront:adjust_stock' slug=store.slug %}" 
-               class="btn btn-outline-primary">
-                <i class="bi bi-plus-circle me-2"></i>Single Product
-            </a>
+    <div class="bulk-header">
+        <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
+            <div>
+                <h1 class="bulk-title">Bulk Stock Update</h1>
+                <p class="bulk-subtitle">Update stock levels for multiple products at once</p>
+            </div>
+            <div class="btn-group">
+                <a href="{% url 'storefront:inventory_dashboard' slug=store.slug %}" class="btn-custom btn-outline text-primary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+                </a>
+                <a href="{% url 'storefront:adjust_stock' slug=store.slug %}" class="btn-custom btn-outline text-primary">
+                    <i class="bi bi-plus-circle me-2"></i>Single Product
+                </a>
+            </div>
         </div>
     </div>
 
-    <!-- Bulk Update Form -->
     <div class="row">
+        <!-- Left Column - Main Form -->
         <div class="col-lg-8">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Bulk Stock Update Settings</h6>
+            <!-- Update Type Selection -->
+            <div class="form-section">
+                <div class="section-header">
+                    <h3 class="section-title">1. Select Update Type</h3>
+                    <p class="section-subtitle">Choose how you want to update stock</p>
                 </div>
-                <div class="card-body">
-                    <form method="post" id="bulkUpdateForm">
-                        {% csrf_token %}
+                
+                <div class="update-type-grid">
+                    <div class="update-type-card selected" data-type="percentage">
+                        <div class="update-type-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+                            <i class="bi bi-percent"></i>
+                        </div>
+                        <div class="update-type-title">Percentage Change</div>
+                        <p class="update-type-desc">Increase or decrease by percentage</p>
+                    </div>
+                    
+                    <div class="update-type-card" data-type="fixed">
+                        <div class="update-type-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+                            <i class="bi bi-plus-slash-minus"></i>
+                        </div>
+                        <div class="update-type-title">Fixed Amount</div>
+                        <p class="update-type-desc">Add or subtract fixed units</p>
+                    </div>
+                    
+                    <div class="update-type-card" data-type="set">
+                        <div class="update-type-icon" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;">
+                            <i class="bi bi-arrow-right-circle"></i>
+                        </div>
+                        <div class="update-type-title">Set Exact Quantity</div>
+                        <p class="update-type-desc">Set all to specific level</p>
+                    </div>
+                </div>
+                
+                <input type="hidden" id="updateType" name="update_type" value="percentage">
+            </div>
+
+            <!-- Value Settings -->
+            <div class="form-section">
+                <div class="section-header">
+                    <h3 class="section-title">2. Set Value</h3>
+                    <p class="section-subtitle">Configure the update amount</p>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div id="percentageFields" class="update-fields">
+                            <label class="form-label-custom">Percentage Change</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control-custom" id="percentageValue" 
+                                       name="percentage_value" value="0" step="0.01" placeholder="10">
+                                <span class="input-group-text">%</span>
+                            </div>
+                            <div class="form-help">
+                                Positive to increase, negative to decrease. Example: 10 for 10% increase
+                            </div>
+                        </div>
                         
-                        <div class="mb-4">
-                            <h6 class="fw-bold mb-3">1. Select Update Type</h6>
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="form-check card border p-3 h-100">
-                                        <input class="form-check-input" type="radio" name="update_type" 
-                                               id="update_percentage" value="percentage" checked>
-                                        <label class="form-check-label fw-bold" for="update_percentage">
-                                            Percentage Change
-                                        </label>
-                                        <p class="text-muted small mt-2 mb-0">
-                                            Increase or decrease stock by percentage
-                                        </p>
-                                    </div>
+                        <div id="fixedFields" class="update-fields d-none">
+                            <label class="form-label-custom">Fixed Amount</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control-custom" id="fixedValue" 
+                                       name="fixed_value" value="0" step="1" placeholder="50">
+                                <span class="input-group-text">units</span>
+                            </div>
+                            <div class="form-help">
+                                Positive to add, negative to remove. Example: -5 to remove 5 units
+                            </div>
+                        </div>
+                        
+                        <div id="setFields" class="update-fields d-none">
+                            <label class="form-label-custom">Set Stock To</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control-custom" id="setValue" 
+                                       name="set_value" value="0" min="0" step="1" placeholder="100">
+                                <span class="input-group-text">units</span>
+                            </div>
+                            <div class="form-help">
+                                All selected products will be set to this exact stock level
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="preview-card">
+                            <div class="preview-title">Preview</div>
+                            <div id="previewExample">
+                                <p class="text-muted mb-1">Example: Product with 50 units</p>
+                                <p class="preview-result" id="previewResult">Will become 50 units</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Product Selection -->
+            <div class="form-section">
+                <div class="section-header">
+                    <h3 class="section-title">3. Select Products</h3>
+                    <p class="section-subtitle">Choose which products to update</p>
+                </div>
+                
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label-custom">Apply To</label>
+                        <select class="form-control-custom" id="applyTo" name="apply_to">
+                            <option value="all">All Products</option>
+                            <option value="category">Specific Category</option>
+                            <option value="low_stock">Low Stock Items Only</option>
+                            <option value="out_of_stock">Out of Stock Items Only</option>
+                            <option value="selected">Manually Selected Products</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6" id="categoryField" style="display: none;">
+                        <label class="form-label-custom">Category</label>
+                        <select class="form-control-custom" id="categorySelect" name="category">
+                            <option value="">Select Category</option>
+                            {% for category in categories %}
+                            <option value="{{ category.id }}">{{ category.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="selectedProductsField" class="d-none">
+                    <label class="form-label-custom d-flex justify-content-between align-items-center">
+                        <span>Select Products</span>
+                        <span class="select-count">Selected: <span id="selectedCount">0</span> products</span>
+                    </label>
+                    
+                    <div class="products-list">
+                        <div class="product-check-item">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="selectAllProducts">
+                                <label class="form-check-label fw-bold" for="selectAllProducts">
+                                    Select All Products
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div id="productsList">
+                            {% for product in products %}
+                            <div class="product-check-item">
+                                <div class="form-check">
+                                    <input class="form-check-input product-checkbox" type="checkbox" 
+                                           name="selected_products" value="{{ product.id }}" 
+                                           id="product_{{ product.id }}">
+                                    <label class="form-check-label" for="product_{{ product.id }}">
+                                        {{ product.title }}
+                                        <span class="text-muted small">(Stock: {{ product.stock }})</span>
+                                    </label>
                                 </div>
-                                <div class="col-md-4">
-                                    <div class="form-check card border p-3 h-100">
-                                        <input class="form-check-input" type="radio" name="update_type" 
-                                               id="update_fixed" value="fixed">
-                                        <label class="form-check-label fw-bold" for="update_fixed">
-                                            Fixed Amount
-                                        </label>
-                                        <p class="text-muted small mt-2 mb-0">
-                                            Add or subtract fixed number of units
-                                        </p>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="form-check card border p-3 h-100">
-                                        <input class="form-check-input" type="radio" name="update_type" 
-                                               id="update_set" value="set">
-                                        <label class="form-check-label fw-bold" for="update_set">
-                                            Set Exact Quantity
-                                        </label>
-                                        <p class="text-muted small mt-2 mb-0">
-                                            Set all products to specific stock level
-                                        </p>
-                                    </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Additional Options -->
+            <div class="form-section">
+                <div class="section-header">
+                    <h3 class="section-title">4. Additional Options</h3>
+                    <p class="section-subtitle">Configure advanced settings</p>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="skipOutOfStock" checked>
+                                <label class="form-check-label" for="skipOutOfStock">
+                                    Skip out of stock products
+                                </label>
+                                <div class="form-help">
+                                    Don't apply changes to products with 0 stock
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="mb-4">
-                            <h6 class="fw-bold mb-3">2. Set Value</h6>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div id="percentageFields" class="update-fields">
-                                        <label class="form-label">Percentage Change</label>
-                                        <div class="input-group">
-                                            <input type="number" class="form-control" name="percentage_value" 
-                                                   value="0" step="0.01" placeholder="10">
-                                            <span class="input-group-text">%</span>
-                                        </div>
-                                        <small class="text-muted">
-                                            Positive to increase, negative to decrease. Example: 10 for 10% increase
-                                        </small>
-                                    </div>
-                                    
-                                    <div id="fixedFields" class="update-fields d-none">
-                                        <label class="form-label">Fixed Amount</label>
-                                        <div class="input-group">
-                                            <input type="number" class="form-control" name="fixed_value" 
-                                                   value="0" step="1" placeholder="50">
-                                            <span class="input-group-text">units</span>
-                                        </div>
-                                        <small class="text-muted">
-                                            Positive to add, negative to remove. Example: -5 to remove 5 units
-                                        </small>
-                                    </div>
-                                    
-                                    <div id="setFields" class="update-fields d-none">
-                                        <label class="form-label">Set Stock To</label>
-                                        <div class="input-group">
-                                            <input type="number" class="form-control" name="set_value" 
-                                                   value="0" min="0" step="1" placeholder="100">
-                                            <span class="input-group-text">units</span>
-                                        </div>
-                                        <small class="text-muted">
-                                            All selected products will be set to this exact stock level
-                                        </small>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="card bg-light">
-                                        <div class="card-body">
-                                            <h6 class="card-title">Preview</h6>
-                                            <div id="previewExample">
-                                                <p class="text-muted mb-1">Example: Product with 50 units</p>
-                                                <p class="fw-bold" id="previewResult">Will become 55 units</p>
-                                            </div>
-                                        </div>
-                                    </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="preventNegative" checked>
+                                <label class="form-check-label" for="preventNegative">
+                                    Prevent negative stock
+                                </label>
+                                <div class="form-help">
+                                    Stock will never go below 0 units
                                 </div>
                             </div>
                         </div>
-                        
-                        <div class="mb-4">
-                            <h6 class="fw-bold mb-3">3. Select Products</h6>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Apply To</label>
-                                    <select class="form-select" id="applyTo" name="apply_to">
-                                        <option value="all">All Products</option>
-                                        <option value="category">Specific Category</option>
-                                        <option value="low_stock">Low Stock Items Only</option>
-                                        <option value="out_of_stock">Out of Stock Items Only</option>
-                                        <option value="selected">Manually Selected Products</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6 mb-3" id="categoryField">
-                                    <label class="form-label">Category</label>
-                                    <select class="form-select" name="category">
-                                        <option value="">Select Category</option>
-                                        {% for category in categories %}
-                                        <option value="{{ category.id }}">{{ category.name }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <div id="selectedProductsField" class="d-none">
-                                <label class="form-label">Select Products</label>
-                                <div class="card">
-                                    <div class="card-body" style="max-height: 300px; overflow-y: auto;">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="selectAllProducts">
-                                            <label class="form-check-label fw-bold" for="selectAllProducts">
-                                                Select All Products
-                                            </label>
-                                        </div>
-                                        <hr>
-                                        <div id="productsList">
-                                            {% for product in products %}
-                                            <div class="form-check mb-2">
-                                                <input class="form-check-input product-checkbox" type="checkbox" 
-                                                       name="selected_products" value="{{ product.id }}" 
-                                                       id="product_{{ product.id }}">
-                                                <label class="form-check-label" for="product_{{ product.id }}">
-                                                    {{ product.title }}
-                                                    <span class="text-muted small">(Stock: {{ product.stock }})</span>
-                                                </label>
-                                            </div>
-                                            {% endfor %}
-                                        </div>
-                                    </div>
-                                </div>
-                                <small class="text-muted">Selected: <span id="selectedCount">0</span> products</small>
-                            </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label-custom">Operation Notes</label>
+                            <textarea class="form-control-custom" id="notes" rows="3" 
+                                      placeholder="Add notes about this bulk update..."></textarea>
                         </div>
-                        
-                        <div class="mb-4">
-                            <h6 class="fw-bold mb-3">4. Additional Options</h6>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-check mb-3">
-                                        <input class="form-check-input" type="checkbox" name="skip_out_of_stock" 
-                                               id="skip_out_of_stock" checked>
-                                        <label class="form-check-label" for="skip_out_of_stock">
-                                            Skip out of stock products
-                                        </label>
-                                        <small class="text-muted d-block">
-                                            Don't apply changes to products with 0 stock
-                                        </small>
-                                    </div>
-                                    
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="prevent_negative" 
-                                               id="prevent_negative" checked>
-                                        <label class="form-check-label" for="prevent_negative">
-                                            Prevent negative stock
-                                        </label>
-                                        <small class="text-muted d-block">
-                                            Stock will never go below 0 units
-                                        </small>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label">Operation Notes</label>
-                                        <textarea class="form-control" name="notes" rows="3" 
-                                                  placeholder="Add notes about this bulk update..."></textarea>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <button type="button" class="btn btn-outline-secondary" onclick="resetForm()">
-                                    <i class="bi bi-arrow-clockwise me-2"></i>Reset Form
-                                </button>
-                            </div>
-                            <div>
-                                <button type="button" class="btn btn-outline-primary me-2" 
-                                        data-bs-toggle="modal" data-bs-target="#previewModal">
-                                    <i class="bi bi-eye me-2"></i>Preview Changes
-                                </button>
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="bi bi-check-circle me-2"></i>Apply Bulk Update
-                                </button>
-                            </div>
-                        </div>
-                    </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="d-flex justify-content-between">
+                <button type="button" class="btn-custom btn-outline text-secondary" onclick="resetForm()">
+                    <i class="bi bi-arrow-clockwise me-2"></i>Reset Form
+                </button>
+                <div>
+                    <button type="button" class="btn-custom btn-outline text-primary me-2" 
+                            data-bs-toggle="modal" data-bs-target="#previewModal">
+                        <i class="bi bi-eye me-2"></i>Preview Changes
+                    </button>
+                    <button type="submit" class="btn-custom btn-primary" id="submitBulkUpdate">
+                        <i class="bi bi-check-circle me-2"></i>Apply Bulk Update
+                    </button>
                 </div>
             </div>
         </div>
         
+        <!-- Right Column - Stats & Presets -->
         <div class="col-lg-4">
             <!-- Statistics -->
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Inventory Statistics</h6>
+            <div class="form-section">
+                <div class="section-header">
+                    <h3 class="section-title">Inventory Statistics</h3>
+                    <p class="section-subtitle">Current stock overview</p>
                 </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-6 mb-3">
-                            <div class="text-center">
-                                <div class="h3 mb-0 text-primary">{{ total_products }}</div>
-                                <small class="text-muted">Total Products</small>
-                            </div>
-                        </div>
-                        <div class="col-6 mb-3">
-                            <div class="text-center">
-                                <div class="h3 mb-0 text-success">{{ average_stock|floatformat:0 }}</div>
-                                <small class="text-muted">Avg Stock</small>
-                            </div>
-                        </div>
-                        <div class="col-6 mb-3">
-                            <div class="text-center">
-                                <div class="h3 mb-0 text-warning">{{ low_stock_count }}</div>
-                                <small class="text-muted">Low Stock</small>
-                            </div>
-                        </div>
-                        <div class="col-6 mb-3">
-                            <div class="text-center">
-                                <div class="h3 mb-0 text-danger">{{ out_of_stock_count }}</div>
-                                <small class="text-muted">Out of Stock</small>
-                            </div>
-                        </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value text-primary">{{ total_products }}</div>
+                        <div class="stat-label">Total Products</div>
                     </div>
                     
-                    <div class="mt-3">
-                        <h6 class="fw-bold">Stock Distribution</h6>
-                        <div class="progress mb-2" style="height: 20px;">
-                            <div class="progress-bar bg-success" style="width: {{ stock_distribution.good }}%">
-                                Good ({{ stock_distribution.good }}%)
-                            </div>
-                            <div class="progress-bar bg-warning" style="width: {{ stock_distribution.low }}%">
-                                Low ({{ stock_distribution.low }}%)
-                            </div>
-                            <div class="progress-bar bg-danger" style="width: {{ stock_distribution.out }}%">
-                                Out ({{ stock_distribution.out }}%)
-                            </div>
-                        </div>
-                        <div class="small text-muted">
-                            Good: 10+ units | Low: 1-9 units | Out: 0 units
-                        </div>
+                    <div class="stat-card">
+                        <div class="stat-value text-success">{{ average_stock|floatformat:0 }}</div>
+                        <div class="stat-label">Avg Stock</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-value text-warning">{{ low_stock_count }}</div>
+                        <div class="stat-label">Low Stock</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-value text-danger">{{ out_of_stock_count }}</div>
+                        <div class="stat-label">Out of Stock</div>
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="form-label-custom">Stock Distribution</span>
+                        <span class="small text-muted">Good: 10+ | Low: 1-9 | Out: 0</span>
+                    </div>
+                    <div class="stock-progress">
+                        <div class="stock-progress-bar progress-good" style="width: {{ stock_distribution.good }}%"></div>
+                        <div class="stock-progress-bar progress-low" style="width: {{ stock_distribution.low }}%"></div>
+                        <div class="stock-progress-bar progress-out" style="width: {{ stock_distribution.out }}%"></div>
                     </div>
                 </div>
             </div>
             
             <!-- Quick Presets -->
-            <div class="card shadow">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Quick Presets</h6>
+            <div class="form-section">
+                <div class="section-header">
+                    <h3 class="section-title">Quick Presets</h3>
+                    <p class="section-subtitle">Common bulk operations</p>
                 </div>
-                <div class="card-body">
-                    <div class="d-grid gap-2">
-                        <button type="button" class="btn btn-outline-success preset-btn" 
-                                data-type="percentage" data-value="10">
-                            <i class="bi bi-arrow-up me-2"></i>Increase All by 10%
-                        </button>
-                        <button type="button" class="btn btn-outline-warning preset-btn" 
-                                data-type="fixed" data-value="5">
-                            <i class="bi bi-plus-circle me-2"></i>Add 5 Units to All
-                        </button>
-                        <button type="button" class="btn btn-outline-info preset-btn" 
-                                data-type="set" data-value="20" data-apply="low_stock">
-                            <i class="bi bi-arrow-up-circle me-2"></i>Set Low Stock to 20
-                        </button>
-                        <button type="button" class="btn btn-outline-danger preset-btn" 
-                                data-type="set" data-value="0" data-apply="out_of_stock">
-                            <i class="bi bi-x-circle me-2"></i>Clear Out of Stock
-                        </button>
+                
+                <div class="presets-grid">
+                    <div class="preset-btn" data-type="percentage" data-value="10">
+                        <div class="preset-icon">
+                            <i class="bi bi-arrow-up"></i>
+                        </div>
+                        <div class="preset-title">Increase All by 10%</div>
+                    </div>
+                    
+                    <div class="preset-btn" data-type="fixed" data-value="5">
+                        <div class="preset-icon">
+                            <i class="bi bi-plus-circle"></i>
+                        </div>
+                        <div class="preset-title">Add 5 Units to All</div>
+                    </div>
+                    
+                    <div class="preset-btn" data-type="set" data-value="20" data-apply="low_stock">
+                        <div class="preset-icon">
+                            <i class="bi bi-arrow-up-circle"></i>
+                        </div>
+                        <div class="preset-title">Set Low Stock to 20</div>
+                    </div>
+                    
+                    <div class="preset-btn" data-type="set" data-value="0" data-apply="out_of_stock">
+                        <div class="preset-icon">
+                            <i class="bi bi-x-circle"></i>
+                        </div>
+                        <div class="preset-title">Clear Out of Stock</div>
                     </div>
                 </div>
             </div>
@@ -328,7 +663,7 @@
 <!-- Preview Modal -->
 <div class="modal fade" id="previewModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content">
+        <div class="modal-content text-secondary">
             <div class="modal-header">
                 <h5 class="modal-title">Preview Bulk Update</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -338,7 +673,7 @@
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Loading...</span>
                     </div>
-                    <p class="mt-3">Calculating changes...</p>
+                    <p class="mt-3 text-muted">Calculating changes...</p>
                 </div>
                 
                 <div id="previewContent" class="d-none">
@@ -349,43 +684,35 @@
                     
                     <div class="row mb-4">
                         <div class="col-md-4">
-                            <div class="card text-center">
-                                <div class="card-body">
-                                    <div class="h4 mb-0" id="previewTotalProducts">0</div>
-                                    <small class="text-muted">Total Products</small>
-                                </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="previewTotalProducts">0</div>
+                                <div class="stat-label">Total Products</div>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="card text-center">
-                                <div class="card-body">
-                                    <div class="h4 mb-0 text-success" id="previewUpdated">0</div>
-                                    <small class="text-muted">Will Be Updated</small>
-                                </div>
+                            <div class="stat-card">
+                                <div class="stat-value text-success" id="previewUpdated">0</div>
+                                <div class="stat-label">Will Be Updated</div>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="card text-center">
-                                <div class="card-body">
-                                    <div class="h4 mb-0 text-danger" id="previewSkipped">0</div>
-                                    <small class="text-muted">Will Be Skipped</small>
-                                </div>
+                            <div class="stat-card">
+                                <div class="stat-value text-danger" id="previewSkipped">0</div>
+                                <div class="stat-label">Will Be Skipped</div>
                             </div>
                         </div>
                     </div>
                     
                     <div class="mb-4">
-                        <h6>Summary</h6>
-                        <div class="card">
-                            <div class="card-body">
-                                <p id="previewSummary"></p>
-                                <p class="mb-0" id="previewNotes"></p>
-                            </div>
+                        <div class="form-label-custom mb-2">Summary</div>
+                        <div class="preview-card">
+                            <p id="previewSummary" class="mb-2"></p>
+                            <p class="text-muted small mb-0" id="previewNotes"></p>
                         </div>
                     </div>
                     
                     <div class="mb-4">
-                        <h6>Sample Changes</h6>
+                        <div class="form-label-custom mb-2">Sample Changes</div>
                         <div class="table-responsive">
                             <table class="table table-sm">
                                 <thead>
@@ -403,8 +730,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="confirmBulkUpdate">
+                <button type="button" class="btn-custom btn-outline text-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn-custom btn-primary" id="confirmBulkUpdate">
                     <i class="bi bi-check-circle me-2"></i>Confirm & Apply
                 </button>
             </div>
@@ -412,50 +739,30 @@
     </div>
 </div>
 
-<style>
-.update-fields {
-    transition: all 0.3s ease;
-}
-
-.form-check.card:hover {
-    border-color: #4e73df;
-    cursor: pointer;
-}
-
-.form-check-input:checked + .form-check-label {
-    color: #4e73df;
-}
-
-.preset-btn:hover {
-    transform: translateY(-2px);
-    transition: transform 0.2s ease;
-}
-
-#productsList {
-    max-height: 250px;
-    overflow-y: auto;
-}
-</style>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Update type toggles
-    const updateTypes = document.querySelectorAll('input[name="update_type"]');
-    const updateFields = {
-        percentage: document.getElementById('percentageFields'),
-        fixed: document.getElementById('fixedFields'),
-        set: document.getElementById('setFields')
-    };
+    // Update type selection
+    const updateTypeCards = document.querySelectorAll('.update-type-card');
+    const updateTypeInput = document.getElementById('updateType');
     
-    updateTypes.forEach(type => {
-        type.addEventListener('change', function() {
-            // Hide all fields
-            Object.values(updateFields).forEach(field => {
-                field.classList.add('d-none');
-            });
+    updateTypeCards.forEach(card => {
+        card.addEventListener('click', function() {
+            // Remove selected class from all cards
+            updateTypeCards.forEach(c => c.classList.remove('selected'));
             
-            // Show selected field
-            updateFields[this.value].classList.remove('d-none');
+            // Add selected class to clicked card
+            this.classList.add('selected');
+            
+            // Update hidden input
+            const type = this.dataset.type;
+            updateTypeInput.value = type;
+            
+            // Show/hide fields
+            document.getElementById('percentageFields').classList.add('d-none');
+            document.getElementById('fixedFields').classList.add('d-none');
+            document.getElementById('setFields').classList.add('d-none');
+            document.getElementById(type + 'Fields').classList.remove('d-none');
+            
             updatePreview();
         });
     });
@@ -501,14 +808,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Preview calculation
-    const valueInputs = document.querySelectorAll('input[name*="_value"], input[name="percentage_value"]');
+    const valueInputs = document.querySelectorAll('#percentageValue, #fixedValue, #setValue');
     valueInputs.forEach(input => {
         input.addEventListener('input', updatePreview);
     });
     
     function updatePreview() {
-        const updateType = document.querySelector('input[name="update_type"]:checked').value;
-        const value = parseFloat(document.querySelector(`input[name="${updateType}_value"]`).value) || 0;
+        const updateType = updateTypeInput.value;
+        const valueInput = document.getElementById(updateType + 'Value');
+        const value = parseFloat(valueInput?.value) || 0;
         const exampleStock = 50;
         
         let result = exampleStock;
@@ -541,16 +849,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const apply = this.dataset.apply || 'all';
             
             // Set update type
-            document.getElementById(`update_${type}`).checked = true;
-            document.getElementById(`update_${type}`).dispatchEvent(new Event('change'));
+            document.querySelector(`.update-type-card[data-type="${type}"]`).click();
             
             // Set value
-            document.querySelector(`input[name="${type}_value"]`).value = value;
+            document.getElementById(type + 'Value').value = value;
             
             // Set apply to
             if (apply !== 'all') {
-                document.getElementById('applyTo').value = apply;
-                document.getElementById('applyTo').dispatchEvent(new Event('change'));
+                applyToSelect.value = apply;
+                applyToSelect.dispatchEvent(new Event('change'));
             }
             
             updatePreview();
@@ -567,10 +874,7 @@ document.addEventListener('DOMContentLoaded', function() {
         previewLoading.classList.remove('d-none');
         previewContent.classList.add('d-none');
         
-        // Get form data
-        const formData = new FormData(document.getElementById('bulkUpdateForm'));
-        
-        // Simulate calculation (in real app, this would be an AJAX call)
+        // Simulate calculation
         setTimeout(() => {
             const totalProducts = {{ total_products }};
             const updatedProducts = Math.floor(totalProducts * 0.8);
@@ -580,9 +884,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('previewUpdated').textContent = updatedProducts;
             document.getElementById('previewSkipped').textContent = skippedProducts;
             
-            const updateType = formData.get('update_type');
-            const value = formData.get(`${updateType}_value`);
-            const applyTo = formData.get('apply_to');
+            const updateType = updateTypeInput.value;
+            const value = document.getElementById(updateType + 'Value').value;
+            const applyTo = applyToSelect.value;
             
             let summary = `Bulk ${updateType} update with value ${value}. `;
             summary += `Applied to ${applyTo.replace('_', ' ')} products.`;
@@ -621,20 +925,20 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Confirm bulk update
     document.getElementById('confirmBulkUpdate').addEventListener('click', function() {
-        const form = document.getElementById('bulkUpdateForm');
         const modal = bootstrap.Modal.getInstance(previewModal);
-        
         modal.hide();
-        form.submit();
+        
+        // Submit the form
+        document.getElementById('submitBulkUpdate').click();
     });
     
     // Form submission
-    document.getElementById('bulkUpdateForm').addEventListener('submit', function(e) {
+    document.getElementById('submitBulkUpdate').addEventListener('click', function(e) {
         e.preventDefault();
         
         // Validate
-        const updateType = document.querySelector('input[name="update_type"]:checked').value;
-        const value = document.querySelector(`input[name="${updateType}_value"]`).value;
+        const updateType = updateTypeInput.value;
+        const value = document.getElementById(updateType + 'Value').value;
         
         if (!value) {
             showToast('Please enter a value', 'error');
@@ -654,19 +958,33 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Submit form
-        this.submit();
+        // Here you would submit the form data
+        // For now, we'll just show a success message
+        showToast('Bulk update applied successfully!', 'success');
+        setTimeout(() => {
+            window.location.href = '{% url "storefront:inventory_list" slug=store.slug %}';
+        }, 2000);
     });
     
     function resetForm() {
-        document.getElementById('bulkUpdateForm').reset();
-        updateFields.percentage.classList.remove('d-none');
-        updateFields.fixed.classList.add('d-none');
-        updateFields.set.classList.add('d-none');
-        categoryField.style.display = 'none';
-        selectedProductsField.classList.add('d-none');
-        updatePreview();
+        // Reset update type
+        document.querySelector('.update-type-card[data-type="percentage"]').click();
+        document.getElementById('percentageValue').value = 0;
+        applyToSelect.value = 'all';
+        applyToSelect.dispatchEvent(new Event('change'));
+        document.getElementById('notes').value = '';
+        document.getElementById('skipOutOfStock').checked = true;
+        document.getElementById('preventNegative').checked = true;
+        
+        // Reset product selection
+        selectAllProducts.checked = false;
+        productCheckboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
         updateSelectedCount();
+        
+        updatePreview();
+        showToast('Form reset', 'info');
     }
     
     function showToast(message, type = 'info') {

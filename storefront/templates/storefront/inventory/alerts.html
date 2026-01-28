@@ -3,88 +3,381 @@
 
 {% block title %}Inventory Alerts - {{ store.name }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* ===== ALERTS STYLES ===== */
+    .alerts-header {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .alerts-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #f59e0b, #ef4444);
+    }
+
+    .alerts-title {
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .alerts-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
+    /* ===== ALERTS METRICS ===== */
+    .alerts-metrics {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .alert-metric-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+
+    .alert-metric-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .alert-metric-icon {
+        font-size: 24px;
+        margin-bottom: 12px;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 16px;
+    }
+
+    .alert-metric-value {
+        font-size: 24px;
+        font-weight: 800;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+    }
+
+    .alert-metric-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* ===== ALERTS TABLE ===== */
+    .alerts-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 30px;
+    }
+
+    .alerts-table-header {
+        background: var(--bg-secondary);
+        padding: 20px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .alerts-table-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 0;
+    }
+
+    .alerts-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .alerts-table th {
+        background: var(--bg-secondary);
+        padding: 12px 16px;
+        text-align: left;
+        font-weight: 700;
+        color: var(--text-primary);
+        border-bottom: 2px solid var(--border-color);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .alerts-table td {
+        padding: 16px;
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: middle;
+    }
+
+    .alerts-table tbody tr {
+        transition: all 0.2s ease;
+    }
+
+    .alerts-table tbody tr:hover {
+        background: var(--bg-secondary);
+    }
+
+    /* ===== ALERT BADGES ===== */
+    .alert-type-badge {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 4px 8px;
+        border-radius: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .badge-low-stock {
+        background: rgba(245, 158, 11, 0.1);
+        color: #f59e0b;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .badge-out-stock {
+        background: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .badge-expiring {
+        background: rgba(59, 130, 246, 0.1);
+        color: #3b82f6;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    /* ===== NOTIFICATION BADGES ===== */
+    .notification-badge {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 3px 6px;
+        border-radius: 6px;
+        margin-right: 4px;
+        margin-bottom: 4px;
+        display: inline-block;
+        background: var(--bg-secondary);
+        color: var(--text-secondary);
+        border: 1px solid var(--border-color);
+    }
+
+    /* ===== STATUS BADGES ===== */
+    .status-badge {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 4px 8px;
+        border-radius: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .status-active {
+        background: rgba(16, 185, 129, 0.1);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .status-inactive {
+        background: rgba(107, 114, 128, 0.1);
+        color: #6b7280;
+        border: 1px solid rgba(107, 114, 128, 0.3);
+    }
+
+    /* ===== EMPTY STATE ===== */
+    .empty-alerts {
+        padding: 60px 20px;
+        text-align: center;
+    }
+
+    .empty-icon {
+        font-size: 48px;
+        color: var(--text-tertiary);
+        margin-bottom: 16px;
+    }
+
+    /* ===== MODAL STYLES ===== */
+    .modal-form .form-control-custom {
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 10px 14px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        background: var(--card-bg);
+        color: var(--text-primary);
+    }
+
+    .modal-form .form-control-custom:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        outline: none;
+    }
+
+    .modal-form .form-label-custom {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .modal-form .form-help {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-top: 4px;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .alerts-metrics {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .alerts-table {
+            display: block;
+            overflow-x: auto;
+        }
+        
+        .alerts-table td {
+            min-width: 150px;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .alerts-metrics {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-custom py-3">
     <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1 class="h2 mb-1">Inventory Alerts</h1>
-            <p class="text-muted mb-0">Set up alerts for low stock, out of stock, and more</p>
+    <div class="alerts-header">
+        <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
+            <div>
+                <h1 class="alerts-title">Inventory Alerts</h1>
+                <p class="alerts-subtitle">Set up alerts for low stock, out of stock, and more</p>
+            </div>
+            <button type="button" class="btn-custom btn-primary" data-bs-toggle="modal" data-bs-target="#createAlertModal">
+                <i class="bi bi-plus-circle me-2"></i>Create Alert
+            </button>
         </div>
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createAlertModal">
-            <i class="bi bi-plus-circle me-2"></i>Create Alert
-        </button>
     </div>
 
-    <!-- Stats -->
-    <div class="row mb-4">
-        <div class="col-md-3 col-6">
-            <div class="card border-left-primary shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Active Alerts
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ alerts|length }}
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="bi bi-bell fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
+    <!-- Alerts Metrics -->
+    <div class="alerts-metrics">
+        <div class="alert-metric-card">
+            <div class="alert-metric-icon" style="background: rgba(79, 70, 229, 0.1); color: #4f46e5;">
+                <i class="bi bi-bell"></i>
             </div>
+            <div class="alert-metric-value">{{ alerts|length }}</div>
+            <div class="alert-metric-label">Active Alerts</div>
+        </div>
+        
+        <div class="alert-metric-card">
+            <div class="alert-metric-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
+                <i class="bi bi-exclamation-triangle"></i>
+            </div>
+            <div class="alert-metric-value">
+                {% with low_stock=alerts|length|add:"0" %}{{ low_stock }}{% endwith %}
+            </div>
+            <div class="alert-metric-label">Low Stock</div>
+        </div>
+        
+        <div class="alert-metric-card">
+            <div class="alert-metric-icon" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;">
+                <i class="bi bi-x-circle"></i>
+            </div>
+            <div class="alert-metric-value">
+                {% with out_stock=alerts|length|add:"0" %}{{ out_stock }}{% endwith %}
+            </div>
+            <div class="alert-metric-label">Out of Stock</div>
+        </div>
+        
+        <div class="alert-metric-card">
+            <div class="alert-metric-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+                <i class="bi bi-check-circle"></i>
+            </div>
+            <div class="alert-metric-value">
+                {% with active=alerts|length|add:"0" %}{{ active }}{% endwith %}
+            </div>
+            <div class="alert-metric-label">Triggered Today</div>
         </div>
     </div>
 
     <!-- Alerts Table -->
-    <div class="card shadow">
-        <div class="card-header py-3 d-flex justify-content-between align-items-center">
-            <h6 class="m-0 font-weight-bold text-primary">Inventory Alerts</h6>
+    <div class="alerts-card">
+        <div class="alerts-table-header">
+            <h3 class="alerts-table-title">Inventory Alerts</h3>
         </div>
         
-        <div class="card-body">
-            {% if alerts %}
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Product</th>
-                            <th>Alert Type</th>
-                            <th>Threshold</th>
-                            <th>Notification Method</th>
-                            <th>Last Triggered</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+        <div class="table-responsive">
+            <table class="alerts-table">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Alert Type</th>
+                        <th>Threshold</th>
+                        <th>Notifications</th>
+                        <th>Last Triggered</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if alerts %}
                         {% for alert in alerts %}
                         <tr>
                             <td>
-                                <div class="d-flex align-items-center">
+                                <div class="d-flex align-items-center gap-3">
                                     <img src="{{ alert.product.get_image_url }}" 
-                                         class="rounded me-3" 
+                                         class="rounded" 
                                          style="width: 40px; height: 40px; object-fit: cover;"
                                          onerror="this.src='https://placehold.co/40x40/c2c2c2/1f1f1f?text=Product'">
                                     <div>
                                         <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=alert.product.slug %}" 
-                                           class="font-weight-bold text-dark mb-0">
-                                            {{ alert.product.title }}
+                                           class="text-decoration-none fw-bold text-primary">
+                                            {{ alert.product.title|truncatechars:20 }}
                                         </a>
-                                        <p class="text-muted small mb-0">
-                                            SKU: {{ alert.product.sku|default:"-" }}
-                                        </p>
+                                        <div class="small text-muted">{{ alert.product.sku|default:"No SKU" }}</div>
                                     </div>
                                 </div>
                             </td>
                             <td>
-                                <span class="badge 
-                                    {% if alert.alert_type == 'low_stock' %}bg-warning text-dark
-                                    {% elif alert.alert_type == 'out_of_stock' %}bg-danger
-                                    {% else %}bg-info{% endif %}">
+                                <span class="alert-type-badge 
+                                    {% if alert.alert_type == 'low_stock' %}badge-low-stock
+                                    {% elif alert.alert_type == 'out_of_stock' %}badge-out-stock
+                                    {% else %}badge-expiring{% endif %}">
                                     {{ alert.get_alert_type_display }}
                                 </span>
                             </td>
@@ -92,41 +385,42 @@
                                 {% if alert.alert_type == 'low_stock' %}
                                 <span class="fw-bold">{{ alert.threshold }}</span> units
                                 {% else %}
-                                -
+                                <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
                             <td>
-                                {% for method in alert.notification_method %}
-                                <span class="badge bg-light text-dark me-1">
-                                    <i class="bi 
-                                        {% if method == 'email' %}bi-envelope
-                                        {% elif method == 'sms' %}bi-phone
-                                        {% elif method == 'dashboard' %}bi-bell
-                                        {% else %}bi-broadcast{% endif %} me-1">
-                                    </i>{{ method|title }}
-                                </span>
-                                {% endfor %}
+                                <div style="max-width: 150px;">
+                                    {% for method in alert.notification_method %}
+                                    <span class="notification-badge">
+                                        <i class="bi 
+                                            {% if method == 'email' %}bi-envelope
+                                            {% elif method == 'sms' %}bi-phone
+                                            {% elif method == 'dashboard' %}bi-bell
+                                            {% else %}bi-broadcast{% endif %} me-1">
+                                        </i>{{ method|title }}
+                                    </span>
+                                    {% endfor %}
+                                </div>
                             </td>
                             <td>
                                 {% if alert.last_triggered %}
-                                {{ alert.last_triggered|date:"M d, H:i" }}
+                                <div class="small">{{ alert.last_triggered|date:"M d, H:i" }}</div>
+                                <div class="small text-muted">{{ alert.last_triggered|timesince }} ago</div>
                                 {% else %}
                                 <span class="text-muted">Never</span>
                                 {% endif %}
                             </td>
                             <td>
-                                {% if alert.is_active %}
-                                <span class="badge bg-success">Active</span>
-                                {% else %}
-                                <span class="badge bg-secondary">Inactive</span>
-                                {% endif %}
+                                <span class="status-badge {% if alert.is_active %}status-active{% else %}status-inactive{% endif %}">
+                                    {% if alert.is_active %}Active{% else %}Inactive{% endif %}
+                                </span>
                             </td>
                             <td>
                                 <div class="btn-group btn-group-sm">
                                     <form method="post" action="{% url 'storefront:toggle_inventory_alert' slug=store.slug alert_id=alert.id %}" 
                                           class="d-inline">
                                         {% csrf_token %}
-                                        <button type="submit" class="btn btn-outline-{% if alert.is_active %}warning{% else %}success{% endif %}">
+                                        <button type="submit" class="btn-custom btn-sm {% if alert.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
                                             <i class="bi bi-power"></i>
                                         </button>
                                     </form>
@@ -134,7 +428,7 @@
                                           class="d-inline"
                                           onsubmit="return confirm('Are you sure you want to delete this alert?')">
                                         {% csrf_token %}
-                                        <button type="submit" class="btn btn-outline-danger">
+                                        <button type="submit" class="btn-custom btn-sm btn-outline-danger">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </form>
@@ -142,21 +436,26 @@
                             </td>
                         </tr>
                         {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="text-center py-5">
-                <i class="bi bi-bell-slash display-4 text-muted mb-3"></i>
-                <h5>No alerts configured</h5>
-                <p class="text-muted mb-4">
-                    Set up alerts to get notified when products are low on stock.
-                </p>
-                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createAlertModal">
-                    <i class="bi bi-plus-circle me-2"></i>Create Your First Alert
-                </button>
-            </div>
-            {% endif %}
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5">
+                            <div class="empty-alerts">
+                                <div class="empty-icon">
+                                    <i class="bi bi-bell-slash"></i>
+                                </div>
+                                <h5>No alerts configured</h5>
+                                <p class="text-muted mb-4">
+                                    Set up alerts to get notified when products are low on stock.
+                                </p>
+                                <button type="button" class="btn-custom btn-primary" data-bs-toggle="modal" data-bs-target="#createAlertModal">
+                                    <i class="bi bi-plus-circle me-2"></i>Create Your First Alert
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -164,24 +463,24 @@
 <!-- Create Alert Modal -->
 <div class="modal fade" id="createAlertModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content">
+        <div class="modal-content text-secondary">
             <div class="modal-header">
                 <h5 class="modal-title">Create Inventory Alert</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="post" action="{% url 'storefront:inventory_alerts' slug=store.slug %}">
+            <form method="post" action="{% url 'storefront:inventory_alerts' slug=store.slug %}" class="modal-form">
                 {% csrf_token %}
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Product *</label>
+                            <label class="form-label-custom">Product</label>
                             {{ form.product }}
                             {% if form.product.errors %}
                             <div class="text-danger small">{{ form.product.errors }}</div>
                             {% endif %}
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Alert Type *</label>
+                            <label class="form-label-custom">Alert Type</label>
                             {{ form.alert_type }}
                             {% if form.alert_type.errors %}
                             <div class="text-danger small">{{ form.alert_type.errors }}</div>
@@ -191,15 +490,17 @@
                     
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Threshold *</label>
+                            <label class="form-label-custom">Threshold</label>
                             {{ form.threshold }}
-                            <small class="text-muted">Get alerted when stock falls below this number</small>
+                            <div class="form-help" id="thresholdHelp">
+                                Get alerted when stock falls below this number
+                            </div>
                             {% if form.threshold.errors %}
                             <div class="text-danger small">{{ form.threshold.errors }}</div>
                             {% endif %}
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Notification Methods</label>
+                            <label class="form-label-custom">Notification Methods</label>
                             <div class="border rounded p-3">
                                 {{ form.notification_method }}
                             </div>
@@ -219,25 +520,13 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Create Alert</button>
+                    <button type="button" class="btn-custom btn-outline text-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-custom btn-primary">Create Alert</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-
-<style>
-.form-check-input:checked {
-    background-color: var(--primary);
-    border-color: var(--primary);
-}
-
-.checkbox-group {
-    max-height: 200px;
-    overflow-y: auto;
-}
-</style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -247,7 +536,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function updateThresholdHelp() {
         const alertType = alertTypeSelect.value;
-        const helpText = document.querySelector('.text-muted');
+        const helpText = document.getElementById('thresholdHelp');
         
         if (alertType === 'low_stock') {
             helpText.textContent = 'Get alerted when stock falls below this number';
@@ -264,6 +553,19 @@ document.addEventListener('DOMContentLoaded', function() {
     
     alertTypeSelect.addEventListener('change', updateThresholdHelp);
     updateThresholdHelp(); // Initial call
+    
+    // Table row hover effects
+    document.querySelectorAll('.alerts-table tbody tr').forEach(row => {
+        row.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateX(4px)';
+            this.style.boxShadow = 'var(--shadow-sm)';
+        });
+        
+        row.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateX(0)';
+            this.style.boxShadow = 'none';
+        });
+    });
 });
 </script>
 {% endblock %}

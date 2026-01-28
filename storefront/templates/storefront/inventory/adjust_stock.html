@@ -3,258 +3,576 @@
 
 {% block title %}Adjust Stock - {{ store.name }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* ===== ADJUST STOCK STYLES ===== */
+    .adjust-header {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .adjust-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #4f46e5, #7c3aed);
+    }
+
+    .adjust-title {
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .adjust-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
+    /* ===== FORM CARD ===== */
+    .form-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+        transition: all 0.3s ease;
+    }
+
+    .form-card:hover {
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+    }
+
+    .form-card-header {
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .form-card-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+
+    .form-card-subtitle {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    /* ===== FORM CONTROLS ===== */
+    .form-control-custom {
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 10px 14px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        background: var(--card-bg);
+        color: var(--text-primary);
+    }
+
+    .form-control-custom:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        outline: none;
+    }
+
+    .form-label-custom {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .form-help {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-top: 4px;
+    }
+
+    /* ===== STOCK DISPLAY ===== */
+    .stock-display {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 20px;
+        text-align: center;
+        border: 1px solid var(--border-color);
+    }
+
+    .stock-label {
+        font-size: 11px;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+    }
+
+    .stock-value {
+        font-size: 24px;
+        font-weight: 800;
+        margin-bottom: 0;
+    }
+
+    .stock-value.current {
+        color: #3b82f6;
+    }
+
+    .stock-value.new {
+        color: #10b981;
+    }
+
+    /* ===== RECENT ADJUSTMENTS ===== */
+    .adjustment-item {
+        padding: 16px;
+        border-bottom: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+    }
+
+    .adjustment-item:hover {
+        background: var(--bg-secondary);
+    }
+
+    .adjustment-item:last-child {
+        border-bottom: none;
+    }
+
+    .adjustment-product {
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+
+    .adjustment-details {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-bottom: 0;
+    }
+
+    .adjustment-change {
+        font-weight: 800;
+        font-size: 14px;
+    }
+
+    .change-positive {
+        color: #10b981;
+    }
+
+    .change-negative {
+        color: #ef4444;
+    }
+
+    /* ===== LOW STOCK TABLE ===== */
+    .low-stock-item {
+        padding: 16px;
+        border-bottom: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+    }
+
+    .low-stock-item:hover {
+        background: var(--bg-secondary);
+    }
+
+    .low-stock-item:last-child {
+        border-bottom: none;
+    }
+
+    .product-image {
+        width: 48px;
+        height: 48px;
+        border-radius: var(--radius-md);
+        object-fit: cover;
+        background: var(--bg-secondary);
+    }
+
+    .product-info {
+        flex: 1;
+    }
+
+    .product-name {
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+        font-size: 14px;
+    }
+
+    .product-sku {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-bottom: 0;
+    }
+
+    .stock-badge {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 4px 8px;
+        border-radius: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stock-badge.low {
+        background: rgba(245, 158, 11, 0.1);
+        color: #f59e0b;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .stock-badge.critical {
+        background: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    /* ===== QUICK ACTIONS ===== */
+    .quick-action-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        text-align: center;
+        text-decoration: none !important;
+        color: var(--text-primary) !important;
+        display: block;
+    }
+
+    .quick-action-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+    }
+
+    .quick-action-icon {
+        font-size: 20px;
+        color: white;
+        background: var(--primary);
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 12px;
+    }
+
+    .quick-action-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .form-row {
+            flex-direction: column;
+        }
+        
+        .form-row .col-md-6 {
+            width: 100%;
+            margin-bottom: 16px;
+        }
+        
+        .form-row .col-md-6:last-child {
+            margin-bottom: 0;
+        }
+    }
+</style>
+    /* Modal theming to respect card background */
+    .modal-custom .modal-content {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+    }
+
+    .modal-custom .modal-header {
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .modal-custom .modal-body {
+        background: transparent;
+    }
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-custom py-3">
     <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1 class="h2 mb-1">Adjust Stock</h1>
-            <p class="text-muted mb-0">Update stock levels for products</p>
-        </div>
-        <div class="btn-group">
-            <a href="{% url 'storefront:inventory_dashboard' slug=store.slug %}" 
-               class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
-            </a>
+    <div class="adjust-header">
+        <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
+            <div>
+                <h1 class="adjust-title">Adjust Stock</h1>
+                <p class="adjust-subtitle">Update stock levels for products</p>
+            </div>
+            <div class="btn-group">
+                <a href="{% url 'storefront:inventory_dashboard' slug=store.slug %}" class="btn-custom btn-outline text-primary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
         </div>
     </div>
 
-    <!-- Adjustment Form -->
     <div class="row">
+        <!-- Left Column - Adjustment Form -->
         <div class="col-lg-8">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Stock Adjustment Form</h6>
+            <!-- Adjustment Form Card -->
+            <div class="form-card">
+                <div class="form-card-header">
+                    <h3 class="form-card-title">Stock Adjustment Form</h3>
+                    <p class="form-card-subtitle">Update product stock levels</p>
                 </div>
-                <div class="card-body">
-                    <form method="post" id="adjustStockForm">
-                        {% csrf_token %}
-                        
-                        <div class="row mb-4">
-                            <div class="col-md-8">
-                                <label class="form-label">Product *</label>
-                                <select class="form-select" id="productSelect" name="product" required>
-                                    <option value="">Select a product</option>
-                                    {% for product in products %}
-                                    <option value="{{ product.id }}" data-stock="{{ product.stock }}">
-                                        {{ product.title }} (SKU: {{ product.sku|default:"-" }}, Stock: {{ product.stock }})
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Current Stock</label>
-                                <input type="text" class="form-control" id="currentStock" readonly value="0">
+                
+                <form method="post" id="adjustStockForm">
+                    {% csrf_token %}
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-8">
+                            <label class="form-label-custom">Product</label>
+                            <select class="form-control-custom" id="productSelect" name="product" required>
+                                <option value="">Select a product</option>
+                                {% for product in products %}
+                                <option value="{{ product.id }}" data-stock="{{ product.stock }}">
+                                    {{ product.title }} (SKU: {{ product.sku|default:"-" }}, Stock: {{ product.stock }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="stock-display">
+                                <div class="stock-label">Current Stock</div>
+                                <div class="stock-value current" id="currentStock">0</div>
                             </div>
                         </div>
-                        
-                        <div class="row mb-4">
-                            <div class="col-md-6">
-                                <label class="form-label">Variant (Optional)</label>
-                                <select class="form-select" id="variantSelect" name="variant" disabled>
-                                    <option value="">No variant</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Adjustment Type *</label>
-                                <select class="form-select" id="adjustmentType" name="adjustment_type" required>
-                                    <option value="add">Add Stock</option>
-                                    <option value="remove">Remove Stock</option>
-                                    <option value="set">Set Exact Quantity</option>
-                                </select>
-                            </div>
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label-custom">Variant (Optional)</label>
+                            <select class="form-control-custom" id="variantSelect" name="variant" disabled>
+                                <option value="">No variant</option>
+                            </select>
                         </div>
-                        
-                        <div class="row mb-4">
-                            <div class="col-md-6">
-                                <label class="form-label">Quantity *</label>
-                                <input type="number" class="form-control" id="quantity" name="quantity" 
-                                       min="0" step="1" value="0" required>
-                                <small class="text-muted" id="quantityHelp">
-                                    Number of units to add
-                                </small>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">New Stock Level</label>
-                                <input type="text" class="form-control" id="newStock" readonly value="0">
+                        <div class="col-md-6">
+                            <label class="form-label-custom">Adjustment Type</label>
+                            <select class="form-control-custom" id="adjustmentType" name="adjustment_type" required>
+                                <option value="add">Add Stock</option>
+                                <option value="remove">Remove Stock</option>
+                                <option value="set">Set Exact Quantity</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label-custom">Quantity</label>
+                            <input type="number" class="form-control-custom" id="quantity" name="quantity" 
+                                   min="0" step="1" value="0" required>
+                            <div class="form-help" id="quantityHelp">
+                                Number of units to add
                             </div>
                         </div>
-                        
-                        <div class="mb-4">
-                            <label class="form-label">Reason/Notes</label>
-                            <textarea class="form-control" id="notes" name="notes" rows="3" 
-                                      placeholder="Enter reason for stock adjustment..."></textarea>
-                            <small class="text-muted">This will be recorded in stock movement history</small>
+                        <div class="col-md-6">
+                            <div class="stock-display">
+                                <div class="stock-label">New Stock Level</div>
+                                <div class="stock-value new" id="newStock">0</div>
+                            </div>
                         </div>
-                        
-                        <div class="d-flex justify-content-between">
-                            <button type="button" class="btn btn-secondary" onclick="resetForm()">
-                                <i class="bi bi-arrow-clockwise me-2"></i>Reset
-                            </button>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-check-circle me-2"></i>Adjust Stock
-                            </button>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label-custom">Reason/Notes</label>
+                        <textarea class="form-control-custom" id="notes" name="notes" rows="3" 
+                                  placeholder="Enter reason for stock adjustment..."></textarea>
+                        <div class="form-help">
+                            This will be recorded in stock movement history
                         </div>
-                    </form>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <button type="button" class="btn-custom btn-outline text-secondary" onclick="resetForm()">
+                            <i class="bi bi-arrow-clockwise me-2"></i>Reset
+                        </button>
+                        <button type="submit" class="btn-custom btn-primary">
+                            <i class="bi bi-check-circle me-2"></i>Adjust Stock
+                        </button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Low Stock Products -->
+            <div class="form-card">
+                <div class="form-card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="form-card-title">Low Stock Products</h3>
+                        <p class="form-card-subtitle">{{ low_stock_products.count }} products need attention</p>
+                    </div>
+                    <span class="badge bg-warning">{{ low_stock_products.count }}</span>
                 </div>
+                
+                {% if low_stock_products %}
+                <div class="list-group">
+                    {% for product in low_stock_products|slice:":5" %}
+                    <div class="low-stock-item d-flex align-items-center gap-3">
+                        <img src="{{ product.get_image_url }}" 
+                             class="product-image" 
+                             onerror="this.src='https://placehold.co/48x48/c2c2c2/1f1f1f?text=Product'">
+                        <div class="product-info">
+                            <div class="product-name">{{ product.title|truncatechars:30 }}</div>
+                            <div class="product-sku">{{ product.sku|default:"No SKU" }}</div>
+                        </div>
+                        <div class="text-end">
+                            <span class="stock-badge {% if product.stock <= 3 %}critical{% else %}low{% endif %}">
+                                {{ product.stock }} units
+                            </span>
+                            <div class="mt-2">
+                                <button class="btn-custom btn-sm btn-outline text-primary quick-fill-btn"
+                                        data-product-id="{{ product.id }}"
+                                        data-product-name="{{ product.title }}"
+                                        data-current-stock="{{ product.stock }}">
+                                    <i class="bi bi-arrow-up-circle me-1"></i> Restock
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                {% if low_stock_products.count > 5 %}
+                <div class="text-center mt-3">
+                    <a href="{% url 'storefront:inventory_list' slug=store.slug %}?stock_status=low" 
+                       class="btn-custom btn-sm btn-outline text-primary">
+                        View All Low Stock Products
+                    </a>
+                </div>
+                {% endif %}
+                
+                {% else %}
+                <div class="text-center py-4">
+                    <div class="empty-icon">
+                        <i class="bi bi-check-circle display-4 text-success mb-3"></i>
+                    </div>
+                    <h5>No low stock products</h5>
+                    <p class="text-muted">All products have sufficient stock levels.</p>
+                </div>
+                {% endif %}
             </div>
         </div>
         
+        <!-- Right Column - Recent Actions -->
         <div class="col-lg-4">
             <!-- Recent Adjustments -->
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 font-weight-bold text-primary">Recent Adjustments</h6>
-                    <a href="{% url 'storefront:stock_movements' slug=store.slug %}" class="btn btn-sm btn-outline-primary">
+            <div class="form-card mb-4">
+                <div class="form-card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="form-card-title">Recent Adjustments</h3>
+                        <p class="form-card-subtitle">Latest stock changes</p>
+                    </div>
+                    <a href="{% url 'storefront:stock_movements' slug=store.slug %}" class="btn-custom btn-sm btn-outline text-primary">
                         View All
                     </a>
                 </div>
-                <div class="card-body">
-                    <div class="list-group list-group-flush">
-                        {% for movement in recent_movements %}
-                        <div class="list-group-item">
-                            <div class="d-flex w-100 justify-content-between">
-                                <h6 class="mb-1">{{ movement.product.title }}</h6>
-                                <small class="text-{% if movement.quantity > 0 %}success{% else %}danger{% endif %}">
-                                    {% if movement.quantity > 0 %}+{% endif %}{{ movement.quantity }}
-                                </small>
+                
+                {% if recent_movements %}
+                <div class="list-group">
+                    {% for movement in recent_movements %}
+                    <div class="adjustment-item">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div class="adjustment-product">{{ movement.product.title|truncatechars:20 }}</div>
+                            <div class="adjustment-change {% if movement.quantity > 0 %}change-positive{% else %}change-negative{% endif %}">
+                                {% if movement.quantity > 0 %}+{% endif %}{{ movement.quantity }}
                             </div>
-                            <p class="mb-1 small">
-                                <span class="badge bg-{% if movement.movement_type == 'adjustment' %}info{% elif movement.movement_type == 'sale' %}success{% else %}warning{% endif %}">
-                                    {{ movement.get_movement_type_display }}
-                                </span>
-                                {% if movement.variant %}
-                                <span class="badge bg-secondary">{{ movement.variant.name }}: {{ movement.variant.value }}</span>
-                                {% endif %}
-                            </p>
-                            <small class="text-muted">
-                                {{ movement.created_at|timesince }} ago by {{ movement.created_by.username }}
-                            </small>
                         </div>
-                        {% empty %}
-                        <div class="text-center py-3">
-                            <i class="bi bi-inbox text-muted display-6"></i>
-                            <p class="text-muted mt-2">No recent adjustments</p>
+                        <div class="adjustment-details">
+                            <span class="badge bg-{% if movement.movement_type == 'adjustment' %}info{% elif movement.movement_type == 'sale' %}success{% else %}warning{% endif %} me-2">
+                                {{ movement.get_movement_type_display|slice:":1" }}
+                            </span>
+                            {{ movement.created_at|timesince }} ago • {{ movement.created_by.username|truncatechars:10 }}
                         </div>
-                        {% endfor %}
                     </div>
+                    {% endfor %}
                 </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <div class="empty-icon">
+                        <i class="bi bi-inbox display-4 text-muted mb-3"></i>
+                    </div>
+                    <h5>No recent adjustments</h5>
+                    <p class="text-muted">Your stock adjustments will appear here</p>
+                </div>
+                {% endif %}
             </div>
             
             <!-- Quick Actions -->
-            <div class="card shadow">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
+            <div class="form-card">
+                <div class="form-card-header">
+                    <h3 class="form-card-title">Quick Actions</h3>
+                    <p class="form-card-subtitle">Common inventory tasks</p>
                 </div>
-                <div class="card-body">
-                    <div class="d-grid gap-2">
-                        <a href="{% url 'storefront:bulk_stock_update' slug=store.slug %}" class="btn btn-outline-primary">
-                            <i class="bi bi-arrow-up-down me-2"></i>Bulk Update Stock
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <a href="{% url 'storefront:bulk_stock_update' slug=store.slug %}" class="quick-action-card">
+                            <div class="quick-action-icon" style="background: #4f46e5;">
+                                <i class="bi bi-arrow-up-down"></i>
+                            </div>
+                            <div class="quick-action-title">Bulk Update</div>
+                            <p class="text-muted small mb-0">Multiple products</p>
                         </a>
-                        <a href="{% url 'storefront:inventory_list' slug=store.slug %}" class="btn btn-outline-secondary">
-                            <i class="bi bi-list-ul me-2"></i>View All Products
+                    </div>
+                    <div class="col-md-6">
+                        <a href="{% url 'storefront:inventory_list' slug=store.slug %}" class="quick-action-card">
+                            <div class="quick-action-icon" style="background: #10b981;">
+                                <i class="bi bi-list-ul"></i>
+                            </div>
+                            <div class="quick-action-title">All Products</div>
+                            <p class="text-muted small mb-0">View inventory</p>
                         </a>
-                        <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#quickAdjustModal">
-                            <i class="bi bi-lightning me-2"></i>Quick Adjustment
+                    </div>
+                    <div class="col-md-12">
+                        <button type="button" class="quick-action-card w-100" data-bs-toggle="modal" data-bs-target="#quickAdjustModal">
+                            <div class="quick-action-icon" style="background: #f59e0b;">
+                                <i class="bi bi-lightning"></i>
+                            </div>
+                            <div class="quick-action-title">Quick Adjustment</div>
+                            <p class="text-muted small mb-0">Fast stock update</p>
                         </button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    
-    <!-- Low Stock Products -->
-    <div class="card shadow">
-        <div class="card-header py-3 d-flex justify-content-between align-items-center">
-            <h6 class="m-0 font-weight-bold text-primary">Low Stock Products</h6>
-            <span class="badge bg-warning">{{ low_stock_products.count }} products</span>
-        </div>
-        <div class="card-body">
-            {% if low_stock_products %}
-            <div class="table-responsive">
-                <table class="table table-sm">
-                    <thead>
-                        <tr>
-                            <th>Product</th>
-                            <th>Current Stock</th>
-                            <th>Price</th>
-                            <th>Category</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for product in low_stock_products|slice:":10" %}
-                        <tr>
-                            <td>
-                                <div class="d-flex align-items-center">
-                                    <img src="{{ product.get_image_url }}" 
-                                         class="rounded me-2" 
-                                         style="width: 40px; height: 40px; object-fit: cover;"
-                                         onerror="this.src='https://placehold.co/40x40/c2c2c2/1f1f1f?text=Product'">
-                                    <div>
-                                        <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=product.slug %}" 
-                                           class="fw-bold text-dark">
-                                            {{ product.title }}
-                                        </a>
-                                        <p class="mb-0 small text-muted">{{ product.sku|default:"No SKU" }}</p>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="badge bg-warning">{{ product.stock }}</span>
-                            </td>
-                            <td>KSh {{ product.price|intcomma }}</td>
-                            <td>
-                                {% if product.category %}
-                                <span class="badge bg-info">{{ product.category.name }}</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <button class="btn btn-sm btn-outline-primary quick-fill-btn"
-                                        data-product-id="{{ product.id }}"
-                                        data-product-name="{{ product.title }}"
-                                        data-current-stock="{{ product.stock }}">
-                                    <i class="bi bi-arrow-up-circle"></i> Restock
-                                </button>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% if low_stock_products.count > 10 %}
-                <div class="text-center mt-3">
-                    <a href="{% url 'storefront:inventory_list' slug=store.slug %}?stock_status=low" 
-                       class="btn btn-sm btn-outline-secondary">
-                        View All Low Stock Products
-                    </a>
-                </div>
-                {% endif %}
-            </div>
-            {% else %}
-            <div class="text-center py-4">
-                <i class="bi bi-check-circle display-4 text-success mb-3"></i>
-                <h5>No low stock products</h5>
-                <p class="text-muted">All products have sufficient stock levels.</p>
-            </div>
-            {% endif %}
-        </div>
-    </div>
 </div>
 
 <!-- Quick Adjustment Modal -->
-<div class="modal fade" id="quickAdjustModal" tabindex="-1">
+<div class="modal modal-custom fade" id="quickAdjustModal" tabindex="-1">
     <div class="modal-dialog">
-        <div class="modal-content">
+        <div class="modal-content text-secondary">
             <div class="modal-header">
                 <h5 class="modal-title">Quick Stock Adjustment</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted">Quickly adjust stock for a product without filling the full form.</p>
+                <p class="text-muted mb-3">Quickly adjust stock for a product without filling the full form.</p>
                 
                 <div class="mb-3">
-                    <label class="form-label">Product Name or SKU</label>
-                    <input type="text" class="form-control" id="quickSearch" 
+                    <label class="form-label-custom">Product Name or SKU</label>
+                    <input type="text" class="form-control-custom" id="quickSearch" 
                            placeholder="Start typing to search...">
                     <div id="quickSearchResults" class="mt-2 d-none">
                         <div class="list-group" id="searchResultsList"></div>
@@ -262,38 +580,17 @@
                 </div>
                 
                 <div class="mb-3">
-                    <label class="form-label">New Stock Level</label>
-                    <input type="number" class="form-control" id="quickNewStock" min="0">
+                    <label class="form-label-custom">New Stock Level</label>
+                    <input type="number" class="form-control-custom" id="quickNewStock" min="0">
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="applyQuickAdjust">Apply</button>
+                <button type="button" class="btn-custom btn-outline text-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn-custom btn-primary" id="applyQuickAdjust">Apply</button>
             </div>
         </div>
     </div>
 </div>
-
-<style>
-#adjustStockForm .form-control:focus {
-    border-color: #4e73df;
-    box-shadow: 0 0 0 0.2rem rgba(78, 115, 223, 0.25);
-}
-
-.list-group-item:hover {
-    background-color: #f8f9fa;
-}
-
-#newStock {
-    font-weight: bold;
-    color: #1cc88a;
-}
-
-#currentStock {
-    font-weight: bold;
-    color: #36b9cc;
-}
-</style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -311,7 +608,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const selectedOption = this.options[this.selectedIndex];
         const currentStockValue = selectedOption.dataset.stock || 0;
         
-        currentStock.value = currentStockValue;
+        currentStock.textContent = currentStockValue;
         calculateNewStock();
         
         // Load variants
@@ -348,7 +645,7 @@ document.addEventListener('DOMContentLoaded', function() {
     quantityInput.addEventListener('input', calculateNewStock);
     
     function calculateNewStock() {
-        const currentValue = parseInt(currentStock.value) || 0;
+        const currentValue = parseInt(currentStock.textContent) || 0;
         const quantity = parseInt(quantityInput.value) || 0;
         const type = adjustmentType.value;
         
@@ -366,7 +663,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 break;
         }
         
-        newStock.value = result;
+        newStock.textContent = result;
     }
     
     function updateHelpText() {
@@ -440,7 +737,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         searchTimeout = setTimeout(() => {
-            fetch(`/dashboard/store/${'{{ store.slug }}'}/inventory/search/?q=${encodeURIComponent(query)}`)
+            const searchUrl = `{% url 'storefront:inventory_search' slug=store.slug %}`;
+            fetch(`${searchUrl}?q=${encodeURIComponent(query)}`)
                 .then(response => response.json())
                 .then(data => {
                     searchResultsList.innerHTML = '';
@@ -450,6 +748,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             const item = document.createElement('a');
                             item.href = '#';
                             item.className = 'list-group-item list-group-item-action';
+                            item.dataset.productId = product.id;
                             item.innerHTML = `
                                 <div class="d-flex w-100 justify-content-between">
                                     <h6 class="mb-1">${product.title}</h6>
@@ -458,13 +757,17 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <p class="mb-1 small">${product.sku ? 'SKU: ' + product.sku : 'No SKU'}</p>
                                 <small class="text-muted">KSh ${product.price}</small>
                             `;
-                            
+
                             item.addEventListener('click', function(e) {
                                 e.preventDefault();
                                 quickSearch.value = product.title;
+                                quickSearch.dataset.productId = product.id;
+                                // prefill quick new stock with current stock value
+                                const quickNew = document.getElementById('quickNewStock');
+                                if (quickNew) quickNew.value = product.stock || '';
                                 searchResults.classList.add('d-none');
                             });
-                            
+
                             searchResultsList.appendChild(item);
                         });
                         searchResults.classList.remove('d-none');
@@ -484,33 +787,55 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Apply quick adjustment
     document.getElementById('applyQuickAdjust').addEventListener('click', function() {
-        const productName = quickSearch.value;
+        const productIdFromSearch = quickSearch.dataset.productId;
         const newStockValue = document.getElementById('quickNewStock').value;
-        
-        if (!productName || !newStockValue) {
+
+        if ((!productIdFromSearch || productIdFromSearch === '') || !newStockValue) {
             alert('Please select a product and enter stock level');
             return;
         }
-        
-        // Find product by name
-        let productId = null;
-        for (let option of productSelect.options) {
-            if (option.text.includes(productName)) {
-                productId = option.value;
-                break;
-            }
-        }
-        
+
+        // Select the product by id
+        let productId = productIdFromSearch || null;
+
         if (productId) {
-            productSelect.value = productId;
-            productSelect.dispatchEvent(new Event('change'));
+            // ensure option exists; if not, try to reload options via fetch
+            let optionFound = false;
+            for (let option of productSelect.options) {
+                if (option.value === String(productId)) {
+                    productSelect.value = productId;
+                    optionFound = true;
+                    break;
+                }
+            }
+
+            if (!optionFound) {
+                // If product isn't in the select options (large catalogs), fetch product list and append this one
+                fetch(`{% url 'storefront:inventory_search' slug=store.slug %}?q=${encodeURIComponent(quickSearch.value)}`)
+                    .then(r => r.json())
+                    .then(d => {
+                        const p = d.products.find(x => String(x.id) === String(productId));
+                        if (p) {
+                            const opt = document.createElement('option');
+                            opt.value = p.id;
+                            opt.text = `${p.title} (SKU: ${p.sku || '-'}, Stock: ${p.stock})`;
+                            opt.dataset.stock = p.stock || 0;
+                            productSelect.appendChild(opt);
+                            productSelect.value = p.id;
+                            productSelect.dispatchEvent(new Event('change'));
+                        }
+                    });
+            } else {
+                productSelect.dispatchEvent(new Event('change'));
+            }
+
             adjustmentType.value = 'set';
             quantityInput.value = newStockValue;
             calculateNewStock();
-            
+
             const modal = bootstrap.Modal.getInstance(document.getElementById('quickAdjustModal'));
             modal.hide();
-            
+
             showToast('Product selected. Please review and submit the form.', 'success');
         } else {
             alert('Product not found. Please try again.');
@@ -548,8 +873,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function resetForm() {
         document.getElementById('adjustStockForm').reset();
-        currentStock.value = 0;
-        newStock.value = 0;
+        currentStock.textContent = 0;
+        newStock.textContent = 0;
         variantSelect.disabled = true;
         variantSelect.innerHTML = '<option value="">No variant</option>';
         updateHelpText();

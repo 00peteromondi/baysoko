@@ -1,0 +1,357 @@
+<!-- storefront/templates/storefront/bulk/export_list.html -->
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Export Jobs - {{ store.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .export-filters {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+    }
+    
+    .filter-group {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+    }
+    
+    .filter-item {
+        flex: 1;
+        min-width: 180px;
+    }
+    
+    .export-count {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-top: 8px;
+    }
+    
+    .export-actions {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .export-action-btn {
+        padding: 4px 8px;
+        font-size: 11px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        text-decoration: none;
+        transition: all 0.2s ease;
+    }
+    
+    .export-action-btn:hover {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+        text-decoration: none;
+    }
+    
+    .format-badge {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .badge-csv {
+        background: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+        border: 1px solid rgba(40, 167, 69, 0.3);
+    }
+    
+    .badge-excel {
+        background: rgba(0, 123, 255, 0.1);
+        color: #007bff;
+        border: 1px solid rgba(0, 123, 255, 0.3);
+    }
+    
+    .badge-json {
+        background: rgba(255, 193, 7, 0.1);
+        color: #ffc107;
+        border: 1px solid rgba(255, 193, 7, 0.3);
+    }
+    
+    .badge-pdf {
+        background: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+        border: 1px solid rgba(220, 53, 69, 0.3);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-custom py-3">
+    <!-- Header -->
+    <div class="bulk-header">
+        <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
+            <div>
+                <h1 class="bulk-title">Export Jobs</h1>
+                <p class="bulk-subtitle">Manage and download your exported files</p>
+            </div>
+            <div>
+                <a href="{% url 'storefront:export_data' slug=store.slug %}" class="btn-custom btn-primary">
+                    <i class="bi bi-plus-circle me-2"></i>New Export
+                </a>
+                <a href="{% url 'storefront:bulk_dashboard' slug=store.slug %}" class="btn-custom btn-outline text-primary ms-2">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="export-filters">
+        <form method="GET" class="filter-form">
+            <div class="filter-group">
+                <div class="filter-item">
+                    <label class="form-label small mb-1">Status</label>
+                    <select name="status" class="form-control form-control-sm">
+                        <option value="">All Status</option>
+                        <option value="pending" {% if request.GET.status == 'pending' %}selected{% endif %}>Pending</option>
+                        <option value="processing" {% if request.GET.status == 'processing' %}selected{% endif %}>Processing</option>
+                        <option value="completed" {% if request.GET.status == 'completed' %}selected{% endif %}>Completed</option>
+                        <option value="failed" {% if request.GET.status == 'failed' %}selected{% endif %}>Failed</option>
+                    </select>
+                </div>
+                
+                <div class="filter-item">
+                    <label class="form-label small mb-1">Export Type</label>
+                    <select name="type" class="form-control form-control-sm">
+                        <option value="">All Types</option>
+                        <option value="products" {% if request.GET.type == 'products' %}selected{% endif %}>Products</option>
+                        <option value="inventory" {% if request.GET.type == 'inventory' %}selected{% endif %}>Inventory</option>
+                        <option value="customers" {% if request.GET.type == 'customers' %}selected{% endif %}>Customers</option>
+                        <option value="orders" {% if request.GET.type == 'orders' %}selected{% endif %}>Orders</option>
+                    </select>
+                </div>
+                
+                <div class="filter-item">
+                    <label class="form-label small mb-1">Format</label>
+                    <select name="format" class="form-control form-control-sm">
+                        <option value="">All Formats</option>
+                        <option value="csv" {% if request.GET.format == 'csv' %}selected{% endif %}>CSV</option>
+                        <option value="excel" {% if request.GET.format == 'excel' %}selected{% endif %}>Excel</option>
+                        <option value="json" {% if request.GET.format == 'json' %}selected{% endif %}>JSON</option>
+                        <option value="pdf" {% if request.GET.format == 'pdf' %}selected{% endif %}>PDF</option>
+                    </select>
+                </div>
+                
+                <div class="filter-item">
+                    <label class="form-label small mb-1">Date From</label>
+                    <input type="date" name="date_from" class="form-control form-control-sm" 
+                           value="{{ request.GET.date_from }}">
+                </div>
+                
+                <div class="filter-item">
+                    <label class="form-label small mb-1">Date To</label>
+                    <input type="date" name="date_to" class="form-control form-control-sm" 
+                           value="{{ request.GET.date_to }}">
+                </div>
+                
+                <div class="filter-item">
+                    <button type="submit" class="btn-custom btn-primary btn-sm">
+                        <i class="bi bi-funnel me-1"></i>Filter
+                    </button>
+                    <a href="{% url 'storefront:export_job_list' slug=store.slug %}" class="btn-custom btn-outline text-secondary btn-sm ms-2">
+                        Clear
+                    </a>
+                </div>
+            </div>
+        </form>
+        <div class="export-count">
+            Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }} export jobs
+        </div>
+    </div>
+
+    <!-- Export Jobs Table -->
+    <div class="jobs-card">
+        <div class="jobs-header">
+            <h3 class="jobs-title">All Export Jobs</h3>
+            <div class="dropdown">
+                <button class="btn-custom btn-sm btn-outline dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-gear me-2"></i>Options
+                </button>
+                <div class="dropdown-menu dropdown-menu-end">
+                    <button class="dropdown-item" onclick="window.print()">
+                        <i class="bi bi-printer me-2"></i>Print List
+                    </button>
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-item" href="{% url 'storefront:export_data' slug=store.slug %}">
+                        <i class="bi bi-plus-circle me-2"></i>Create New Export
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="jobs-table">
+                <thead>
+                    <tr>
+                        <th>Job ID</th>
+                        <th>Export Type</th>
+                        <th>Format</th>
+                        <th>Status</th>
+                        <th>Records</th>
+                        <th>File Size</th>
+                        <th>Created</th>
+                        <th>Downloaded</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in page_obj %}
+                    <tr>
+                        <td>
+                            <strong>#{{ job.id }}</strong>
+                        </td>
+                        <td>{{ job.export_type|title }}</td>
+                        <td>
+                            {% if job.format == 'csv' %}
+                            <span class="format-badge badge-csv">CSV</span>
+                            {% elif job.format == 'excel' %}
+                            <span class="format-badge badge-excel">Excel</span>
+                            {% elif job.format == 'json' %}
+                            <span class="format-badge badge-json">JSON</span>
+                            {% elif job.format == 'pdf' %}
+                            <span class="format-badge badge-pdf">PDF</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if job.status == 'completed' %}
+                            <span class="job-badge badge-completed">{{ job.get_status_display }}</span>
+                            {% elif job.status == 'processing' %}
+                            <span class="job-badge badge-processing">{{ job.get_status_display }}</span>
+                            {% elif job.status == 'failed' %}
+                            <span class="job-badge badge-failed">{{ job.get_status_display }}</span>
+                            {% else %}
+                            <span class="job-badge badge-pending">{{ job.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ job.record_count|default:0|intcomma }}</td>
+                        <td>
+                            {% if job.file_size > 0 %}
+                            {{ job.file_size|filesizeformat }}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ job.created_at|date:"M d, H:i" }}</td>
+                        <td>{{ job.download_count }} times</td>
+                        <td>
+                            <div class="export-actions">
+                                {% if job.status == 'completed' and job.file %}
+                                <a href="{% url 'storefront:download_export' slug=store.slug job_id=job.id %}" 
+                                   class="export-action-btn" title="Download">
+                                    <i class="bi bi-download"></i>
+                                </a>
+                                {% endif %}
+                                <a href="{% url 'storefront:export_job_detail' slug=store.slug job_id=job.id %}" 
+                                   class="export-action-btn" title="View Details">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-4">
+                            <div class="empty-bulk">
+                                <div class="empty-icon">
+                                    <i class="bi bi-file-earmark-spreadsheet"></i>
+                                </div>
+                                <p class="text-muted">No export jobs found</p>
+                                <a href="{% url 'storefront:export_data' slug=store.slug %}" class="btn-custom btn-sm btn-primary mt-2">
+                                    Create Your First Export
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="pagination-container">
+        <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-center mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        Previous
+                    </a>
+                </li>
+                {% endif %}
+                
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ num }}</span>
+                    </li>
+                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            {{ num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        Next
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Auto-refresh for processing jobs
+        {% for job in page_obj %}
+        {% if job.status == 'processing' %}
+        setTimeout(function() {
+            window.location.reload();
+        }, 10000);
+        {% endif %}
+        {% endfor %}
+        
+        // Filter form submission
+        const filterForm = document.querySelector('.filter-form');
+        if (filterForm) {
+            filterForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(filterForm);
+                const params = new URLSearchParams();
+                
+                for (const [key, value] of formData.entries()) {
+                    if (value) {
+                        params.append(key, value);
+                    }
+                }
+                
+                window.location.href = '?' + params.toString();
+            });
+        }
+    });
+</script>
+{% endblock %}

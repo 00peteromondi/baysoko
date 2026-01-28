@@ -1,0 +1,931 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Stock Movements - {{ store.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== MOVEMENTS STYLES ===== */
+    .movements-header {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+    }
+
+    .header-title {
+        font-size: 24px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .header-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
+    /* ===== FILTERS CARD (styled like Inventory List) ===== */
+    .filters-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+    }
+
+    .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+    }
+
+    .form-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-primary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+    }
+
+    .form-control {
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 14px;
+        background: var(--card-bg);
+        color: var(--text-primary);
+        transition: all 0.15s ease;
+    }
+
+    .form-control:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(59,130,246,0.08);
+        border-color: var(--primary);
+    }
+
+    .form-select {
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 8px 12px;
+        background: var(--card-bg);
+        color: var(--text-primary);
+    }
+
+    /* ===== STATS GRID ===== */
+    .movement-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .movement-stat-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .movement-stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .movement-stat-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: var(--primary);
+        opacity: 0.3;
+    }
+
+    .movement-stat-icon {
+        font-size: 24px;
+        margin-bottom: 12px;
+        color: var(--primary);
+        background: rgba(255, 107, 53, 0.1);
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .movement-stat-value {
+        font-size: 24px;
+        font-weight: 800;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+    }
+
+    .movement-stat-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* ===== TABLE STYLES ===== */
+    .movements-table-container {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 30px;
+    }
+
+    .table-header {
+        background: var(--bg-secondary);
+        padding: 20px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .table-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 0;
+    }
+
+    .movements-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .movements-table th {
+        background: var(--bg-secondary);
+        padding: 16px;
+        text-align: left;
+        font-weight: 700;
+        color: var(--text-primary);
+        border-bottom: 2px solid var(--border-color);
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .movements-table td {
+        padding: 16px;
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: middle;
+    }
+
+    .movements-table tbody tr {
+        transition: all 0.2s ease;
+    }
+
+    .movements-table tbody tr:hover {
+        background: var(--bg-secondary);
+    }
+
+    /* ===== BADGE STYLES ===== */
+    .badge-movement {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .badge-purchase {
+        background: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+        border: 1px solid rgba(40, 167, 69, 0.3);
+    }
+
+    .badge-sale {
+        background: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+        border: 1px solid rgba(220, 53, 69, 0.3);
+    }
+
+    .badge-adjustment {
+        background: rgba(23, 162, 184, 0.1);
+        color: #17a2b8;
+        border: 1px solid rgba(23, 162, 184, 0.3);
+    }
+
+    .badge-return {
+        background: rgba(255, 193, 7, 0.1);
+        color: #ffc107;
+        border: 1px solid rgba(255, 193, 7, 0.3);
+    }
+
+    .badge-transfer {
+        background: rgba(108, 117, 125, 0.1);
+        color: #6c757d;
+        border: 1px solid rgba(108, 117, 125, 0.3);
+    }
+
+    /* ===== PRODUCT CELL ===== */
+    .product-cell {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .product-image {
+        width: 48px;
+        height: 48px;
+        border-radius: 8px;
+        object-fit: cover;
+        border: 1px solid var(--border-color);
+    }
+
+    .product-info {
+        flex: 1;
+    }
+
+    .product-name {
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 2px;
+        display: block;
+        text-decoration: none;
+    }
+
+    .product-name:hover {
+        color: var(--primary);
+    }
+
+    .product-sku {
+        font-size: 11px;
+        color: var(--text-secondary);
+    }
+
+    /* ===== QUICK FILTERS ===== */
+    .quick-filters {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+
+    .quick-filter-btn {
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 600;
+        background: var(--bg-secondary);
+        color: var(--text-secondary);
+        border: 2px solid var(--border-color);
+        transition: all 0.3s ease;
+        text-decoration: none;
+    }
+
+    .quick-filter-btn:hover {
+        background: var(--primary-light);
+        color: var(--primary);
+        border-color: var(--primary);
+    }
+
+    /* ===== EMPTY STATE ===== */
+    .empty-movements {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 60px 20px;
+        text-align: center;
+        border: 2px dashed var(--border-color);
+        margin-bottom: 20px;
+    }
+
+    .empty-icon {
+        font-size: 48px;
+        color: var(--text-tertiary);
+        margin-bottom: 16px;
+    }
+
+    /* ===== MODAL STYLES ===== */
+    .modal-custom .modal-content {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        box-shadow: var(--shadow-lg);
+    }
+
+    .modal-custom .modal-header {
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+        padding: 20px;
+    }
+
+    .modal-custom .modal-body {
+        padding: 20px;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .movements-table {
+            display: block;
+            overflow-x: auto;
+        }
+        
+        .filter-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .movement-stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 576px) {
+        .movement-stats-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .table-header {
+            flex-direction: column;
+            gap: 12px;
+            align-items: flex-start;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-custom py-3">
+    <!-- Header -->
+    <div class="movements-header">
+        <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
+            <div>
+                <h1 class="header-title">Stock Movement History</h1>
+                <p class="header-subtitle">Track all stock changes and adjustments</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% url 'storefront:inventory_dashboard' slug=store.slug %}" 
+                   class="btn-custom btn-ghost">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Inventory Dashboard
+                </a>
+                <a href="{% url 'storefront:adjust_stock' slug=store.slug %}" 
+                   class="btn-custom btn-primary">
+                    <i class="bi bi-plus-circle me-2"></i>New Adjustment
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Filters -->
+    <div class="quick-filters">
+        <a href="?period=1d" class="quick-filter-btn">Today</a>
+        <a href="?period=7d" class="quick-filter-btn">Last 7 Days</a>
+        <a href="?period=30d" class="quick-filter-btn">Last 30 Days</a>
+        <a href="?period=90d" class="quick-filter-btn">Last 90 Days</a>
+        <a href="{% url 'storefront:stock_movements' slug=store.slug %}" class="quick-filter-btn">Clear Filters</a>
+    </div>
+
+    <!-- Filters Card -->
+    <div class="filters-card">
+        <form method="get" id="movementFilters" class="filter-grid">
+            <div>
+                <label class="form-label">Movement Type</label>
+                <select name="type" class="form-select">
+                    <option value="">All Types</option>
+                    {% for value, label in movement_types %}
+                    <option value="{{ value }}" {% if request.GET.type == value %}selected{% endif %}>
+                        {{ label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Date From</label>
+                <input type="date" name="date_from" class="form-control" value="{{ request.GET.date_from }}">
+            </div>
+            <div>
+                <label class="form-label">Date To</label>
+                <input type="date" name="date_to" class="form-control" value="{{ request.GET.date_to }}">
+            </div>
+            <div>
+                <label class="form-label">&nbsp;</label>
+                <button type="submit" class="btn-custom btn-primary w-100">
+                    <i class="bi bi-filter me-2"></i>Apply Filters
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Stats -->
+    <div class="movement-stats-grid">
+        <div class="movement-stat-card">
+            <div class="movement-stat-icon">
+                <i class="bi bi-arrow-left-right"></i>
+            </div>
+            <div class="movement-stat-value">{{ page_obj.paginator.count }}</div>
+            <div class="movement-stat-label">Total Movements</div>
+        </div>
+        <div class="movement-stat-card">
+            <div class="movement-stat-icon">
+                <i class="bi bi-plus-circle"></i>
+            </div>
+            <div class="movement-stat-value">{{ stock_added|intcomma }}</div>
+            <div class="movement-stat-label">Stock Added</div>
+        </div>
+        <div class="movement-stat-card">
+            <div class="movement-stat-icon">
+                <i class="bi bi-dash-circle"></i>
+            </div>
+            <div class="movement-stat-value">{{ stock_removed|intcomma }}</div>
+            <div class="movement-stat-label">Stock Removed</div>
+        </div>
+        <div class="movement-stat-card">
+            <div class="movement-stat-icon">
+                <i class="bi bi-arrow-down-up"></i>
+            </div>
+            <div class="movement-stat-value {% if net_change >= 0 %}text-success{% else %}text-danger{% endif %}">
+                {% if net_change >= 0 %}+{% endif %}{{ net_change|intcomma }}
+            </div>
+            <div class="movement-stat-label">Net Change</div>
+        </div>
+    </div>
+
+    <!-- Movements Table -->
+    <div class="movements-table-container">
+        <div class="table-header">
+            <h3 class="table-title">Stock Movement History</h3>
+            <button type="button" class="btn-custom btn-outline" onclick="exportMovements()">
+                <i class="bi bi-download me-2"></i>Export
+            </button>
+        </div>
+        
+        <div class="table-responsive">
+            {% if page_obj %}
+            <table class="movements-table">
+                <thead>
+                    <tr>
+                        <th>Date & Time</th>
+                        <th>Product</th>
+                        <th>Type</th>
+                        <th>Quantity</th>
+                        <th>Previous</th>
+                        <th>New</th>
+                        <th>Changed By</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for movement in page_obj %}
+                    <tr data-movement-id="{{ movement.id }}">
+                        <td>
+                            <div class="d-flex flex-column">
+                                <span class="fw-bold">{{ movement.created_at|date:"M d, Y" }}</span>
+                                <small class="text-muted">{{ movement.created_at|time:"H:i" }}</small>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="product-cell">
+                                <img src="{{ movement.product.get_image_url }}" 
+                                     class="product-image"
+                                     onerror="this.src='https://placehold.co/48x48/c2c2c2/1f1f1f?text=Product'">
+                                <div class="product-info">
+                                    <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=movement.product.slug %}" 
+                                       class="product-name">
+                                        {{ movement.product.title }}
+                                    </a>
+                                    {% if movement.variant %}
+                                    <div class="product-sku">
+                                        {{ movement.variant.name }}: {{ movement.variant.value }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if movement.movement_type == 'purchase' %}
+                            <span class="badge-movement badge-purchase">
+                                {{ movement.get_movement_type_display }}
+                            </span>
+                            {% elif movement.movement_type == 'sale' %}
+                            <span class="badge-movement badge-sale">
+                                {{ movement.get_movement_type_display }}
+                            </span>
+                            {% elif movement.movement_type == 'adjustment' %}
+                            <span class="badge-movement badge-adjustment">
+                                {{ movement.get_movement_type_display }}
+                            </span>
+                            {% elif movement.movement_type == 'return' %}
+                            <span class="badge-movement badge-return">
+                                {{ movement.get_movement_type_display }}
+                            </span>
+                            {% else %}
+                            <span class="badge-movement badge-transfer">
+                                {{ movement.get_movement_type_display }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="fw-bold {% if movement.quantity > 0 %}text-success{% elif movement.quantity < 0 %}text-danger{% else %}text-muted{% endif %}">
+                                {% if movement.quantity > 0 %}+{% endif %}{{ movement.quantity }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="fw-bold">{{ movement.previous_stock }}</span>
+                        </td>
+                        <td>
+                            <span class="fw-bold text-primary">{{ movement.new_stock }}</span>
+                        </td>
+                        <td>
+                            {% if movement.created_by %}
+                            <span class="text-muted">{{ movement.created_by.username|truncatechars:10 }}</span>
+                            {% else %}
+                            <span class="text-muted">System</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="dropdown">
+                                <button class="btn-custom btn-ghost btn-sm dropdown-toggle" 
+                                        type="button" data-bs-toggle="dropdown">
+                                    <i class="bi bi-three-dots"></i>
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-end">
+                                    <button class="dropdown-item" onclick="showMovementDetails('{{ movement.id }}')">
+                                        <i class="bi bi-eye me-2"></i>View Details
+                                    </button>
+                                    {% if movement.movement_type == 'adjustment' %}
+                                    <button class="dropdown-item" onclick="undoMovement('{{ movement.id }}')">
+                                        <i class="bi bi-arrow-counterclockwise me-2"></i>Undo
+                                    </button>
+                                    {% endif %}
+                                    {% if movement.notes %}
+                                    <button class="dropdown-item" onclick="showNotes('{{ movement.notes }}')">
+                                        <i class="bi bi-chat-text me-2"></i>View Notes
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            <!-- Pagination -->
+            {% if page_obj.paginator.num_pages > 1 %}
+            <div class="pagination-wrapper px-4 py-3">
+                <nav aria-label="Page navigation">
+                    <ul class="pagination justify-content-center mb-0">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                <i class="bi bi-chevron-left"></i> Previous
+                            </a>
+                        </li>
+                        {% endif %}
+                        
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                    {{ num }}
+                                </a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                Next <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="empty-movements">
+                <div class="empty-icon">
+                    <i class="bi bi-inbox"></i>
+                </div>
+                <h3>No stock movements found</h3>
+                <p class="text-muted mb-4">
+                    {% if request.GET %}
+                    Try adjusting your filters or
+                    {% endif %}
+                    Stock movements will appear here when you adjust inventory.
+                </p>
+                <a href="{% url 'storefront:adjust_stock' slug=store.slug %}" class="btn-custom btn-primary">
+                    <i class="bi bi-plus-circle me-2"></i>Make First Adjustment
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Movement Details Modal -->
+<div class="modal modal-custom fade" id="movementDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Stock Movement Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="movementDetailContent">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-custom btn-ghost" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Notes Modal -->
+<div class="modal modal-custom fade" id="notesModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Movement Notes</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="notes-content">
+                    <i class="bi bi-chat-text text-muted me-2"></i>
+                    <p id="notesText" class="mb-0"></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-custom btn-ghost" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Row click handler
+        document.querySelectorAll('.movements-table tbody tr').forEach(row => {
+            row.addEventListener('click', function(e) {
+                // Don't trigger if clicking on dropdown or buttons
+                if (e.target.closest('.dropdown') || e.target.tagName === 'BUTTON' || e.target.tagName === 'A') {
+                    return;
+                }
+                
+                const movementId = this.dataset.movementId;
+                showMovementDetails(movementId);
+            });
+            
+            // Add hover effect
+            row.addEventListener('mouseenter', function() {
+                this.style.cursor = 'pointer';
+            });
+        });
+        
+        // Table row animations
+        setTimeout(() => {
+            document.querySelectorAll('.movements-table tbody tr').forEach((row, index) => {
+                row.style.opacity = '0';
+                row.style.transform = 'translateX(10px)';
+                
+                setTimeout(() => {
+                    row.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                    row.style.opacity = '1';
+                    row.style.transform = 'translateX(0)';
+                }, index * 50);
+            });
+        }, 100);
+        
+        // Stat card animations
+        document.querySelectorAll('.movement-stat-card').forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(10px)';
+            
+            setTimeout(() => {
+                card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, index * 100 + 200);
+        });
+    });
+    
+    // Movement detail modal
+    function showMovementDetails(movementId) {
+        const modal = new bootstrap.Modal(document.getElementById('movementDetailModal'));
+        const content = document.getElementById('movementDetailContent');
+        
+        // Show loading
+        content.innerHTML = `
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        `;
+        
+        modal.show();
+        
+        // Fetch movement details (use Django URL reverse)
+        fetch(`{% url 'storefront:movement_details' slug=store.slug movement_id=0 %}`.replace('0', movementId))
+            .then(response => response.json())
+            .then(data => {
+                content.innerHTML = `
+                    <div class="movement-details">
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h6 class="fw-bold mb-3">Product Information</h6>
+                                <div class="card-detail">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <img src="${data.product_image || 'https://placehold.co/60x60/c2c2c2/1f1f1f?text=Product'}" 
+                                             class="rounded"
+                                             width="60"
+                                             height="60"
+                                             style="object-fit: cover;">
+                                        <div>
+                                            <h5 class="mb-1">${data.product_title}</h5>
+                                            <p class="mb-0 text-muted small">SKU: ${data.product_sku || '-'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="fw-bold mb-3">Movement Details</h6>
+                                <div class="card-detail">
+                                    <div class="row mb-3">
+                                        <div class="col-6">
+                                            <small class="text-muted">Type</small>
+                                            <p class="mb-0 fw-bold">${data.movement_type_display}</p>
+                                        </div>
+                                        <div class="col-6">
+                                            <small class="text-muted">Date</small>
+                                            <p class="mb-0">${data.created_at_formatted}</p>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-4 text-center">
+                                            <small class="text-muted">Previous</small>
+                                            <p class="h4 mb-0">${data.previous_stock}</p>
+                                        </div>
+                                        <div class="col-4 text-center">
+                                            <small class="text-muted">Change</small>
+                                            <p class="h4 mb-0 ${data.quantity > 0 ? 'text-success' : 'text-danger'}">
+                                                ${data.quantity > 0 ? '+' : ''}${data.quantity}
+                                            </p>
+                                        </div>
+                                        <div class="col-4 text-center">
+                                            <small class="text-muted">New</small>
+                                            <p class="h4 mb-0 text-primary">${data.new_stock}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        ${data.reference ? `
+                        <div class="mb-4">
+                            <h6 class="fw-bold mb-3">Reference</h6>
+                            <div class="card-detail">
+                                <p class="mb-0">${data.reference}</p>
+                            </div>
+                        </div>
+                        ` : ''}
+                        
+                        ${data.notes ? `
+                        <div class="mb-4">
+                            <h6 class="fw-bold mb-3">Notes</h6>
+                            <div class="card-detail">
+                                <p class="mb-0">${data.notes}</p>
+                            </div>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="mb-4">
+                            <h6 class="fw-bold mb-3">Additional Information</h6>
+                            <div class="card-detail">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Changed By</small>
+                                        <p class="mb-0">${data.changed_by || 'System'}</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Movement ID</small>
+                                        <p class="mb-0">${data.id}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            })
+            .catch(error => {
+                content.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Error loading movement details. Please try again.
+                    </div>
+                `;
+            });
+    }
+    
+    // Show notes
+    function showNotes(notes) {
+        document.getElementById('notesText').textContent = notes;
+        new bootstrap.Modal(document.getElementById('notesModal')).show();
+    }
+    
+    // Undo movement
+    function undoMovement(movementId) {
+        if (!confirm('Are you sure you want to undo this stock movement? This will reverse the stock change.')) {
+            return;
+        }
+        
+        fetch(`{% url 'storefront:undo_movement' slug=store.slug movement_id=0 %}`.replace('0', movementId), {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Movement undone successfully', 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast('Error: ' + data.error, 'error');
+            }
+        })
+        .catch(error => {
+            showToast('Error undoing movement', 'error');
+        });
+    }
+    
+    // Export movements
+    function exportMovements() {
+        const params = new URLSearchParams(window.location.search);
+        params.set('export', 'csv');
+        
+        window.location.href = `${window.location.pathname}?${params.toString()}`;
+    }
+    
+    // Toast notification
+    function showToast(message, type = 'info') {
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = '9999';
+            document.body.appendChild(toastContainer);
+        }
+        
+        const toastId = 'toast-' + Date.now();
+        const toast = document.createElement('div');
+        toast.id = toastId;
+        toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.setAttribute('aria-live', 'assertive');
+        toast.setAttribute('aria-atomic', 'true');
+        
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body d-flex align-items-center">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        
+        toastContainer.appendChild(toast);
+        const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+        bsToast.show();
+        
+        toast.addEventListener('hidden.bs.toast', function() {
+            toast.remove();
+        });
+    }
+</script>
+{% endblock %}

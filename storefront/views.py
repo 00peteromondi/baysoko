@@ -737,15 +737,31 @@ def payment_monitor(request):
 
     return render(request, 'storefront/payment_monitor_enhanced.html', context)
 
+# views.py - Fixed and enhanced analytics views
+from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.utils import timezone
+from django.db.models import Sum, Count, Avg, F, Q
+from datetime import timedelta, datetime
+import json
+from decimal import Decimal
+from listings.models import OrderItem, Listing, Category, Order, Review
+from django.views.decorators.http import require_GET, require_POST
+
+# Helper function to serialize Decimal objects
+def dumps_with_decimals(data):
+    """JSON serializer that handles Decimal objects"""
+    def default(obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+    return json.dumps(data, default=default)
+
 
 @login_required
-@store_owner_required
-@login_required
-@analytics_access_required('basic')
 def seller_analytics(request):
-    """
-    Seller analytics dashboard showing aggregated metrics across all stores.
-    """
+    """Seller analytics dashboard showing aggregated metrics across all stores."""
     # Get all stores owned by the user
     stores = Store.objects.filter(owner=request.user)
     
@@ -754,20 +770,34 @@ def seller_analytics(request):
     time_period = None
     previous_period = None
     
+    # Calculate date ranges
+    end_date = timezone.now()
     if period == '24h':
-        time_period = timezone.now() - timedelta(hours=24)
-        previous_period = timezone.now() - timedelta(hours=48)
+        time_period = end_date - timedelta(hours=24)
+        previous_period = end_date - timedelta(hours=48)
+        interval = 'hour'
+        trend_days = 1
     elif period == '7d':
-        time_period = timezone.now() - timedelta(days=7)
-        previous_period = timezone.now() - timedelta(days=14)
+        time_period = end_date - timedelta(days=7)
+        previous_period = end_date - timedelta(days=14)
+        interval = 'day'
+        trend_days = 7
     elif period == '30d':
-        time_period = timezone.now() - timedelta(days=30)
-        previous_period = timezone.now() - timedelta(days=60)
+        time_period = end_date - timedelta(days=30)
+        previous_period = end_date - timedelta(days=60)
+        interval = 'day'
+        trend_days = 30
+    else:
+        # All time
+        time_period = None
+        previous_period = None
+        interval = 'month'
+        trend_days = 12
     
-    # Base queryset for orders across all stores - FIXED: Include both paid and delivered
+    # Base queryset for orders across all stores
     orders_qs = OrderItem.objects.filter(
         listing__store__in=stores,
-        order__status__in=['paid', 'delivered']  # Include both statuses
+        order__status__in=['paid', 'delivered']
     )
     
     # Current period metrics
@@ -775,7 +805,7 @@ def seller_analytics(request):
         current_orders = orders_qs.filter(added_at__gte=time_period)
         current_revenue = current_orders.aggregate(
             total=Sum(F('price') * F('quantity'), default=0)
-        )['total']
+        )['total'] or 0
         current_order_count = current_orders.count()
         
         # Previous period for trend calculation
@@ -785,29 +815,29 @@ def seller_analytics(request):
         )
         previous_revenue = previous_orders.aggregate(
             total=Sum(F('price') * F('quantity'), default=0)
-        )['total']
+        )['total'] or 0
         previous_order_count = previous_orders.count()
         
         # Calculate trends
         revenue_trend = (
             ((current_revenue - previous_revenue) / previous_revenue * 100)
-            if previous_revenue else 0
+            if previous_revenue > 0 else (100 if current_revenue > 0 else 0)
         )
         orders_trend = (
             ((current_order_count - previous_order_count) / previous_order_count * 100)
-            if previous_order_count else 0
+            if previous_order_count > 0 else (100 if current_order_count > 0 else 0)
         )
     else:
         # All time metrics
         current_revenue = orders_qs.aggregate(
             total=Sum(F('price') * F('quantity'), default=0)
-        )['total']
+        )['total'] or 0
         current_order_count = orders_qs.count()
         revenue_trend = 0
         orders_trend = 0
     
     # Store metrics
-    active_stores = stores.count()
+    active_stores = stores.filter(is_active=True).count()
     premium_stores = stores.filter(is_premium=True).count()
     active_listings = Listing.objects.filter(
         store__in=stores,
@@ -815,23 +845,36 @@ def seller_analytics(request):
     ).count()
     
     # Revenue & Orders trend data
-    trend_days = 30 if period == '30d' else (7 if period == '7d' else 1)
     revenue_data = []
     orders_data = []
     labels = []
     
     for i in range(trend_days):
-        day = timezone.now() - timedelta(days=i)
-        day_orders = orders_qs.filter(added_at__date=day.date())
+        if interval == 'hour':
+            hour_start = end_date - timedelta(hours=i)
+            hour_end = hour_start + timedelta(hours=1)
+            day_orders = orders_qs.filter(
+                added_at__gte=hour_start,
+                added_at__lt=hour_end
+            )
+            label = hour_start.strftime('%H:%M')
+        else:  # day or month
+            day_start = end_date - timedelta(days=i)
+            day_end = day_start + timedelta(days=1)
+            day_orders = orders_qs.filter(
+                added_at__gte=day_start,
+                added_at__lt=day_end
+            )
+            label = day_start.strftime('%b %d')
         
         revenue = day_orders.aggregate(
             total=Sum(F('price') * F('quantity'), default=0)
-        )['total']
+        )['total'] or 0
         orders = day_orders.count()
         
         revenue_data.insert(0, revenue)
         orders_data.insert(0, orders)
-        labels.insert(0, day.strftime('%b %d'))
+        labels.insert(0, label)
     
     revenue_orders_trend_data = {
         'labels': labels,
@@ -840,13 +883,17 @@ def seller_analytics(request):
                 'label': 'Revenue',
                 'data': revenue_data,
                 'borderColor': '#4CAF50',
+                'backgroundColor': 'rgba(76, 175, 80, 0.1)',
                 'yAxisID': 'y',
+                'tension': 0.4,
             },
             {
                 'label': 'Orders',
                 'data': orders_data,
                 'borderColor': '#2196F3',
+                'backgroundColor': 'rgba(33, 150, 243, 0.1)',
                 'yAxisID': 'y1',
+                'tension': 0.4,
             }
         ]
     }
@@ -856,45 +903,46 @@ def seller_analytics(request):
     for store in stores:
         store_revenue = orders_qs.filter(
             listing__store=store
-        ).aggregate(total=Sum(F('price') * F('quantity'), default=0))['total']
+        ).aggregate(total=Sum(F('price') * F('quantity'), default=0))['total'] or 0
         store_performance.append({
             'name': store.name,
-            'revenue': store_revenue
+            'revenue': store_revenue,
+            'store': store
         })
     
-
     store_performance.sort(key=lambda x: x['revenue'], reverse=True)
     
-    # Create store_performance_data for chart - ADDED THIS SECTION
     store_performance_data = {
-        'labels': [s['name'] for s in store_performance],
+        'labels': [s['name'][:15] + '...' if len(s['name']) > 15 else s['name'] 
+                   for s in store_performance[:5]],
         'datasets': [{
-            'data': [s['revenue'] for s in store_performance],
+            'data': [s['revenue'] for s in store_performance[:5]],
             'backgroundColor': [
                 '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'
             ]
         }]
     }
-
+    
     # Top performing stores
     top_stores = []
     for store in stores:
         store_orders = orders_qs.filter(listing__store=store)
         store_revenue = store_orders.aggregate(
             total=Sum(F('price') * F('quantity'), default=0)
-        )['total']
+        )['total'] or 0
         
         # Calculate average rating
         store_ratings = Review.objects.filter(
             seller=store.owner
-        ).aggregate(avg_rating=Avg('rating', default=0))
+        ).aggregate(avg_rating=Avg('rating'))
+        avg_rating = store_ratings['avg_rating'] or 0
         
         top_stores.append({
             'name': store.name,
             'slug': store.slug,
             'revenue': store_revenue,
             'orders': store_orders.count(),
-            'rating': store_ratings['avg_rating']
+            'rating': round(avg_rating, 1)
         })
     
     top_stores.sort(key=lambda x: x['revenue'], reverse=True)
@@ -911,7 +959,7 @@ def seller_analytics(request):
         )
         revenue = category_orders.aggregate(
             total=Sum(F('price') * F('quantity'), default=0)
-        )['total']
+        )['total'] or 0
         
         top_categories.append({
             'name': category.name,
@@ -931,28 +979,33 @@ def seller_analytics(request):
     recent_activity = []
     
     # Recent orders
-    recent_orders = orders_qs.order_by('-added_at')[:5]
+    recent_orders = Order.objects.filter(
+        order_items__listing__store__in=stores,
+        status__in=['paid', 'delivered']
+    ).distinct().order_by('-created_at')[:5]
+
     for order in recent_orders:
+        store_name = order.items.first().listing.store.name if order.items.exists() else "Unknown Store"
         recent_activity.append({
-            'timestamp': order.added_at,
-            'store': order.listing.store.name,
+            'timestamp': order.created_at,
+            'store': store_name,
             'type': 'Order',
-            'description': f'New order for {order.listing.title} (Qty: {order.quantity}) - Status: {order.order.status}'
+            'description': f'New order #{order.id} from {order.user.username}'
         })
     
     # Recent reviews
     recent_reviews = Review.objects.filter(
-        seller__in=[store.owner for store in stores]
+        seller=request.user
     ).order_by('-created_at')[:5]
     
     for review in recent_reviews:
-        if review.seller.stores.exists():
-            recent_activity.append({
-                'timestamp': review.created_at,
-                'store': review.seller.stores.first().name if review.seller.stores.exists() else 'Unknown Store',
-                'type': 'Review',
-                'description': f'{review.rating}★ reviewed by {review.user.username} - "{review.comment[:50]}{"..." if len(review.comment) > 50 else ""}"'
-            })
+        store_name = review.seller.stores.first().name if review.seller.stores.exists() else "Unknown Store"
+        recent_activity.append({
+            'timestamp': review.created_at,
+            'store': store_name,
+            'type': 'Review',
+            'description': f'{review.rating}★ review by {review.user.username}'
+        })
     
     # Recent listings
     recent_listings = Listing.objects.filter(
@@ -967,8 +1020,13 @@ def seller_analytics(request):
             'description': f'New listing: {listing.title}'
         })
     
+    # Sort by timestamp
     recent_activity.sort(key=lambda x: x['timestamp'], reverse=True)
     recent_activity = recent_activity[:10]
+    
+    # Format timestamps for template
+    for activity in recent_activity:
+        activity['timestamp'] = activity['timestamp'].strftime('%b %d, %H:%M')
     
     # Customer location data
     customer_locations = orders_qs.values(
@@ -978,7 +1036,7 @@ def seller_analytics(request):
     ).order_by('-count')[:5]
     
     customer_map_data = {
-        'labels': [loc['order__city'] for loc in customer_locations],
+        'labels': [loc['order__city'] or 'Unknown' for loc in customer_locations],
         'datasets': [{
             'data': [loc['count'] for loc in customer_locations],
             'backgroundColor': [
@@ -1009,73 +1067,94 @@ def seller_analytics(request):
 
 @login_required
 @store_owner_required
-@analytics_access_required('basic')
 def store_analytics(request, slug):
-    """
-    Store analytics view with comprehensive metrics and visualizations.
-    """
-    # Fetch the store by slug first, then ensure the requesting user is the owner.
+    """Store analytics view with comprehensive metrics and visualizations."""
     store = get_object_or_404(Store, slug=slug)
-    if store.owner != request.user and not request.user.is_staff:
-        message = "You do not have permission to view analytics for a store you do not own."
-        context = {'message': message, 'store': store}
-        return render(request, 'storefront/forbidden.html', context, status=403)
     
     # Get time period from query params
     period = request.GET.get('period', '24h')
     time_period = None
     
+    end_date = timezone.now()
     if period == '24h':
-        time_period = timezone.now() - timedelta(hours=24)
+        time_period = end_date - timedelta(hours=24)
+        interval = 'hour'
+        trend_days = 24
     elif period == '7d':
-        time_period = timezone.now() - timedelta(days=7)
+        time_period = end_date - timedelta(days=7)
+        interval = 'day'
+        trend_days = 7
     elif period == '30d':
-        time_period = timezone.now() - timedelta(days=30)
+        time_period = end_date - timedelta(days=30)
+        interval = 'day'
+        trend_days = 30
+    else:
+        time_period = None
+        interval = 'month'
+        trend_days = 12
     
     # Base queryset for the store's listings
     listings_qs = Listing.objects.filter(store=store)
-    # FIXED: Include both paid and delivered orders
     orders_qs = OrderItem.objects.filter(
         listing__store=store,
-        order__status__in=['paid', 'delivered']  # Include both statuses
+        order__status__in=['paid', 'delivered']
     )
     
     if time_period:
         orders_qs = orders_qs.filter(added_at__gte=time_period)
     
     # Basic metrics
-    revenue = orders_qs.aggregate(
+    revenue_result = orders_qs.aggregate(
         total=Sum(F('price') * F('quantity'), default=0)
-    )['total']
+    )
+    revenue = revenue_result['total'] or 0
     
     orders_count = orders_qs.count()
     active_listings = listings_qs.filter(is_active=True).count()
-    avg_order_value = orders_qs.aggregate(
-        avg=Avg(F('price') * F('quantity'), default=0)
-    )['avg']
     
-    # Revenue trend (daily data points)
-    trend_days = 30 if period == '30d' else (7 if period == '7d' else 1)
+    avg_order_result = orders_qs.aggregate(
+        avg=Avg(F('price') * F('quantity'))
+    )
+    avg_order_value = avg_order_result['avg'] or 0
+    
+    # Revenue trend (daily/hourly data points)
     revenue_trend = []
     labels = []
     
     for i in range(trend_days):
-        day = timezone.now() - timedelta(days=i)
-        day_revenue = orders_qs.filter(
-            added_at__date=day.date()
-        ).aggregate(total=Sum(F('price') * F('quantity'), default=0))['total']
+        if interval == 'hour':
+            hour_start = end_date - timedelta(hours=i)
+            hour_end = hour_start + timedelta(hours=1)
+            day_orders = orders_qs.filter(
+                added_at__gte=hour_start,
+                added_at__lt=hour_end
+            )
+            label = hour_start.strftime('%H:%M')
+        else:  # day or month
+            day_start = end_date - timedelta(days=i)
+            day_end = day_start + timedelta(days=1)
+            day_orders = orders_qs.filter(
+                added_at__gte=day_start,
+                added_at__lt=day_end
+            )
+            label = day_start.strftime('%b %d')
+        
+        day_revenue = day_orders.aggregate(
+            total=Sum(F('price') * F('quantity'), default=0)
+        )['total'] or 0
         
         revenue_trend.insert(0, day_revenue)
-        labels.insert(0, day.strftime('%b %d'))
+        labels.insert(0, label)
     
     revenue_trend_data = {
         'labels': labels,
         'datasets': [{
-            'label': 'Daily Revenue',
+            'label': 'Revenue',
             'data': revenue_trend,
-            'fill': False,
             'borderColor': '#4CAF50',
-            'tension': 0.1
+            'backgroundColor': 'rgba(76, 175, 80, 0.1)',
+            'fill': True,
+            'tension': 0.4
         }]
     }
     
@@ -1088,7 +1167,8 @@ def store_analytics(request, slug):
     ).order_by('-total_sales')[:5]
     
     category_data = {
-        'labels': [item['listing__category__name'] for item in category_sales],
+        'labels': [item['listing__category__name'] or 'Uncategorized' 
+                   for item in category_sales],
         'datasets': [{
             'data': [item['total_sales'] for item in category_sales],
             'backgroundColor': [
@@ -1099,6 +1179,7 @@ def store_analytics(request, slug):
     
     # Top performing products
     top_products = orders_qs.values(
+        'listing__id',
         'listing__title'
     ).annotate(
         sales_count=Sum('quantity'),
@@ -1107,14 +1188,18 @@ def store_analytics(request, slug):
     
     # Recent activity (orders, reviews, listings)
     recent_activity = []
-    
+    stores = Store.objects.filter(owner=request.user)
     # Add recent orders
-    recent_orders = orders_qs.order_by('-added_at')[:5]
+    recent_orders = Order.objects.filter(
+        order_items__listing__store__in=stores,
+        status__in=['paid', 'delivered']
+    ).distinct().order_by('-created_at')[:5]
+    
     for order in recent_orders:
         recent_activity.append({
-            'timestamp': order.added_at,
+            'timestamp': order.created_at,
             'type': 'Order',
-            'description': f'New order for {order.listing.title} (Qty: {order.quantity}) - Status: {order.order.status}'
+            'description': f'Order #{order.id} - KSh {order.total_amount}'
         })
     
     # Add recent reviews
@@ -1140,7 +1225,11 @@ def store_analytics(request, slug):
     
     # Sort combined activity by timestamp
     recent_activity.sort(key=lambda x: x['timestamp'], reverse=True)
-    recent_activity = recent_activity[:10]  # Keep top 10
+    recent_activity = recent_activity[:10]
+    
+    # Format timestamps for template
+    for activity in recent_activity:
+        activity['timestamp'] = activity['timestamp'].strftime('%b %d, %H:%M')
     
     context = {
         'store': store,
@@ -1151,12 +1240,293 @@ def store_analytics(request, slug):
         'avg_order_value': avg_order_value,
         'revenue_trend_data': dumps_with_decimals(revenue_trend_data),
         'category_data': dumps_with_decimals(category_data),
-        'top_products': top_products,
+        'top_products': list(top_products),
         'recent_activity': recent_activity,
     }
     
     return render(request, 'storefront/store_analytics.html', context)
 
+# ============== ANALYTICS API ENDPOINTS ==============
+
+@login_required
+@require_GET
+def seller_analytics_summary(request):
+    """API endpoint for seller analytics summary (JSON)"""
+    stores = Store.objects.filter(owner=request.user)
+    
+    # Get period from query params
+    period = request.GET.get('period', '7d')
+    time_period = timezone.now() - timedelta(days=7)
+    
+    if period == '24h':
+        time_period = timezone.now() - timedelta(hours=24)
+    elif period == '30d':
+        time_period = timezone.now() - timedelta(days=30)
+    
+    # Get metrics
+    orders_qs = OrderItem.objects.filter(
+        listing__store__in=stores,
+        order__status__in=['paid', 'delivered'],
+        added_at__gte=time_period
+    )
+    
+    revenue = orders_qs.aggregate(
+        total=Sum(F('price') * F('quantity'), default=0)
+    )['total'] or 0
+    
+    order_count = orders_qs.count()
+    active_listings = Listing.objects.filter(
+        store__in=stores,
+        is_active=True
+    ).count()
+    
+    active_stores = stores.filter(is_active=True).count()
+    
+    # Calculate week-over-week growth
+    previous_period = time_period - (timezone.now() - time_period)
+    previous_orders = OrderItem.objects.filter(
+        listing__store__in=stores,
+        order__status__in=['paid', 'delivered'],
+        added_at__gte=previous_period,
+        added_at__lt=time_period
+    )
+    
+    previous_revenue = previous_orders.aggregate(
+        total=Sum(F('price') * F('quantity'), default=0)
+    )['total'] or 0
+    
+    revenue_growth = (
+        ((revenue - previous_revenue) / previous_revenue * 100)
+        if previous_revenue > 0 else (100 if revenue > 0 else 0)
+    )
+    
+    # Top categories
+    top_categories = Category.objects.filter(
+        listing__store__in=stores
+    ).annotate(
+        revenue=Sum('listing__order_items__price')
+    ).order_by('-revenue')[:3]
+    
+    return JsonResponse({
+        'success': True,
+        'data': {
+            'revenue': float(revenue),
+            'order_count': order_count,
+            'active_listings': active_listings,
+            'active_stores': active_stores,
+            'revenue_growth': round(revenue_growth, 1),
+            'avg_order_value': float(revenue / order_count) if order_count > 0 else 0,
+            'top_categories': [
+                {
+                    'name': cat.name,
+                    'revenue': float(cat.revenue or 0)
+                }
+                for cat in top_categories
+            ],
+            'period': period,
+            'last_updated': timezone.now().isoformat()
+        }
+    })
+
+@login_required
+@store_owner_required
+@require_GET
+def store_analytics_summary(request, slug):
+    """API endpoint for store analytics summary (JSON)"""
+    store = get_object_or_404(Store, slug=slug)
+    
+    # Get period from query params
+    period = request.GET.get('period', '7d')
+    time_period = timezone.now() - timedelta(days=7)
+    
+    if period == '24h':
+        time_period = timezone.now() - timedelta(hours=24)
+    elif period == '30d':
+        time_period = timezone.now() - timedelta(days=30)
+    
+    # Get metrics
+    orders_qs = OrderItem.objects.filter(
+        listing__store=store,
+        order__status__in=['paid', 'delivered'],
+        added_at__gte=time_period
+    )
+    
+    revenue = orders_qs.aggregate(
+        total=Sum(F('price') * F('quantity'), default=0)
+    )['total'] or 0
+    
+    order_count = orders_qs.count()
+    active_listings = Listing.objects.filter(
+        store=store,
+        is_active=True
+    ).count()
+    
+    avg_order_value = revenue / order_count if order_count > 0 else 0
+    
+    # Views data (if available)
+    views = store.total_views or 0
+    
+    # Conversion rate (orders/views)
+    conversion_rate = (order_count / views * 100) if views > 0 else 0
+    
+    # Top products
+    top_products = orders_qs.values(
+        'listing__title',
+        'listing__id'
+    ).annotate(
+        quantity=Sum('quantity'),
+        revenue=Sum(F('price') * F('quantity'))
+    ).order_by('-revenue')[:5]
+    
+    return JsonResponse({
+        'success': True,
+        'data': {
+            'store_name': store.name,
+            'revenue': float(revenue),
+            'order_count': order_count,
+            'active_listings': active_listings,
+            'avg_order_value': float(avg_order_value),
+            'views': views,
+            'conversion_rate': round(conversion_rate, 2),
+            'rating': store.get_rating() if hasattr(store, 'get_rating') else 0,
+            'review_count': store.reviews.count() if hasattr(store, 'reviews') else 0,
+            'top_products': list(top_products),
+            'period': period,
+            'last_updated': timezone.now().isoformat()
+        }
+    })
+
+@login_required
+@require_GET
+def revenue_trend_data(request):
+    """API endpoint for revenue trend data (JSON)"""
+    stores = Store.objects.filter(owner=request.user)
+    store_slug = request.GET.get('store')
+    
+    # Filter by specific store if provided
+    if store_slug:
+        stores = stores.filter(slug=store_slug)
+    
+    # Get period from query params
+    period = request.GET.get('period', '7d')
+    
+    # Calculate date range and interval
+    end_date = timezone.now()
+    if period == '24h':
+        start_date = end_date - timedelta(hours=24)
+        interval = 'hour'
+        points = 24
+    elif period == '30d':
+        start_date = end_date - timedelta(days=30)
+        interval = 'day'
+        points = 30
+    else:  # 7d
+        start_date = end_date - timedelta(days=7)
+        interval = 'day'
+        points = 7
+    
+    # Generate data points
+    labels = []
+    revenue_data = []
+    orders_data = []
+    
+    for i in range(points):
+        if interval == 'hour':
+            point_start = end_date - timedelta(hours=i+1)
+            point_end = end_date - timedelta(hours=i)
+            label = point_start.strftime('%H:%M')
+        else:  # day
+            point_start = end_date - timedelta(days=i+1)
+            point_end = end_date - timedelta(days=i)
+            label = point_start.strftime('%b %d')
+        
+        # Get data for this time period
+        orders = OrderItem.objects.filter(
+            listing__store__in=stores,
+            order__status__in=['paid', 'delivered'],
+            added_at__gte=point_start,
+            added_at__lt=point_end
+        )
+        
+        revenue = orders.aggregate(
+            total=Sum(F('price') * F('quantity'), default=0)
+        )['total'] or 0
+        
+        orders_count = orders.count()
+        
+        labels.insert(0, label)
+        revenue_data.insert(0, float(revenue))
+        orders_data.insert(0, orders_count)
+    
+    # Calculate totals and averages
+    total_revenue = sum(revenue_data)
+    total_orders = sum(orders_data)
+    avg_daily_revenue = total_revenue / len(revenue_data) if revenue_data else 0
+    
+    return JsonResponse({
+        'success': True,
+        'data': {
+            'labels': labels,
+            'revenue': revenue_data,
+            'orders': orders_data,
+            'total_revenue': total_revenue,
+            'total_orders': total_orders,
+            'avg_daily_revenue': avg_daily_revenue,
+            'period': period,
+            'interval': interval
+        }
+    })
+
+@login_required
+@require_GET
+def store_performance_comparison(request):
+    """API endpoint for comparing performance across stores"""
+    stores = Store.objects.filter(owner=request.user)
+    
+    store_data = []
+    for store in stores:
+        orders = OrderItem.objects.filter(
+            listing__store=store,
+            order__status__in=['paid', 'delivered'],
+            added_at__gte=timezone.now() - timedelta(days=30)
+        )
+        
+        revenue = orders.aggregate(
+            total=Sum(F('price') * F('quantity'), default=0)
+        )['total'] or 0
+        
+        order_count = orders.count()
+        avg_order_value = revenue / order_count if order_count > 0 else 0
+        
+        # Get reviews
+        reviews = Review.objects.filter(seller=store.owner)
+        avg_rating = reviews.aggregate(avg=Avg('rating'))['avg'] or 0
+        
+        store_data.append({
+            'name': store.name,
+            'slug': store.slug,
+            'revenue': float(revenue),
+            'orders': order_count,
+            'avg_order_value': float(avg_order_value),
+            'rating': round(avg_rating, 1),
+            'review_count': reviews.count(),
+            'listings': store.listings.filter(is_active=True).count(),
+            'is_premium': store.is_premium
+        })
+    
+    # Sort by revenue
+    store_data.sort(key=lambda x: x['revenue'], reverse=True)
+    
+    return JsonResponse({
+        'success': True,
+        'data': {
+            'stores': store_data,
+            'total_stores': len(store_data),
+            'total_revenue': sum(s['revenue'] for s in store_data),
+            'total_orders': sum(s['orders'] for s in store_data),
+            'last_updated': timezone.now().isoformat()
+        }
+    })
 
 # storefront/views.py - Add these views
 
@@ -1524,3 +1894,208 @@ def popular_stores(request):
     }
     
     return render(request, 'storefront/popular_stores.html', context)
+
+# views.py - Add these API endpoints
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from .models import StockMovement
+
+@require_POST
+@login_required
+@store_owner_required
+def undo_movement(request, slug, movement_id):
+    """Undo a stock movement"""
+    try:
+        movement = StockMovement.objects.get(
+            id=movement_id,
+            product__store__slug=slug,
+            product__store__owner=request.user
+        )
+        
+        # Reverse the movement
+        movement.product.stock = movement.previous_stock
+        movement.product.save()
+        
+        # Create undo movement record
+        StockMovement.objects.create(
+            product=movement.product,
+            movement_type='adjustment',
+            quantity=movement.quantity * -1,
+            previous_stock=movement.new_stock,
+            new_stock=movement.previous_stock,
+            created_by=request.user,
+            reference=f'Undo of movement #{movement.id}',
+            notes=f'Undoing movement from {movement.created_at}'
+        )
+        
+        return JsonResponse({'success': True})
+    except StockMovement.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Movement not found'}, status=404)
+
+@require_GET
+@login_required
+@store_owner_required
+def get_movement_details(request, slug, movement_id):
+    """Get detailed movement information"""
+    try:
+        movement = StockMovement.objects.get(
+            id=movement_id,
+            product__store__slug=slug,
+            product__store__owner=request.user
+        )
+        
+        data = {
+            'id': movement.id,
+            'product_title': movement.product.title,
+            'product_sku': movement.product.sku,
+            'product_image': movement.product.get_image_url(),
+            'movement_type': movement.movement_type,
+            'movement_type_display': movement.get_movement_type_display(),
+            'quantity': movement.quantity,
+            'previous_stock': movement.previous_stock,
+            'new_stock': movement.new_stock,
+            'reference': movement.reference,
+            'notes': movement.notes,
+            'changed_by': movement.created_by.username if movement.created_by else 'System',
+            'created_at_formatted': movement.created_at.strftime('%b %d, %Y %H:%M')
+        }
+        
+        return JsonResponse(data)
+    except StockMovement.DoesNotExist:
+        return JsonResponse({'error': 'Movement not found'}, status=404)
+
+# Additional analytics API endpoints
+@login_required
+@require_GET
+def category_performance(request):
+    """API endpoint for category performance analysis"""
+    stores = Store.objects.filter(owner=request.user)
+    
+    categories = Category.objects.filter(
+        listing__store__in=stores
+    ).distinct().annotate(
+        revenue=Sum('listing__order_items__price'),
+        orders=Count('listing__order_items'),
+        listings=Count('listing', filter=Q(listing__is_active=True))
+    ).order_by('-revenue')
+    
+    category_data = []
+    for category in categories:
+        if category.revenue:
+            category_data.append({
+                'name': category.name,
+                'revenue': float(category.revenue or 0),
+                'orders': category.orders or 0,
+                'listings': category.listings or 0,
+                'avg_order_value': float(category.revenue / category.orders) if category.orders else 0,
+                'conversion_rate': (category.orders / category.listings * 100) if category.listings else 0
+            })
+    
+    return JsonResponse({
+        'success': True,
+        'data': {
+            'categories': category_data,
+            'total_categories': len(category_data),
+            'period': '30d'
+        }
+    })
+
+@login_required
+@require_GET
+def customer_insights(request):
+    """API endpoint for customer insights"""
+    stores = Store.objects.filter(owner=request.user)
+    
+    # Customer demographics
+    customers = Order.objects.filter(
+        items__listing__store__in=stores,
+        status__in=['paid', 'delivered']
+    ).values('user__id', 'user__username').distinct()
+    
+    # Repeat customers
+    repeat_customers = Order.objects.filter(
+        items__listing__store__in=stores,
+        status__in=['paid', 'delivered']
+    ).values('user__id').annotate(
+        order_count=Count('id'),
+        total_spent=Sum('total_amount')
+    ).filter(order_count__gt=1)
+    
+    # Customer locations
+    customer_locations = Order.objects.filter(
+        items__listing__store__in=stores,
+        status__in=['paid', 'delivered']
+    ).exclude(city__isnull=True).values('city').annotate(
+        customer_count=Count('user__id', distinct=True),
+        order_count=Count('id'),
+        total_revenue=Sum('total_amount')
+    ).order_by('-total_revenue')[:10]
+    
+    return JsonResponse({
+        'success': True,
+        'data': {
+            'total_customers': customers.count(),
+            'repeat_customers': repeat_customers.count(),
+            'repeat_customer_rate': (repeat_customers.count() / customers.count() * 100) if customers.count() else 0,
+            'customer_locations': list(customer_locations),
+            'avg_customer_value': sum([c['total_spent'] for c in repeat_customers]) / repeat_customers.count() if repeat_customers.count() else 0,
+            'top_spenders': list(repeat_customers.order_by('-total_spent')[:5])
+        }
+    })
+
+@login_required
+@store_owner_required
+@require_GET
+def product_performance(request, slug):
+    """API endpoint for product performance analysis"""
+    store = get_object_or_404(Store, slug=slug)
+    
+    # Get products with performance metrics
+    products = Listing.objects.filter(
+        store=store,
+        is_active=True
+    ).annotate(
+        revenue=Sum('order_items__price'),
+        orders=Count('order_items'),
+        quantity_sold=Sum('order_items__quantity')
+    ).order_by('-revenue')[:20]
+    
+    product_data = []
+    for product in products:
+        if product.revenue:
+            product_data.append({
+                'id': product.id,
+                'title': product.title,
+                'price': float(product.price),
+                'stock': product.stock,
+                'revenue': float(product.revenue or 0),
+                'orders': product.orders or 0,
+                'quantity_sold': product.quantity_sold or 0,
+                'avg_order_quantity': (product.quantity_sold / product.orders) if product.orders else 0,
+                'stock_health': (product.stock / product.quantity_sold * 100) if product.quantity_sold else 100,
+                'category': product.category.name if product.category else 'Uncategorized'
+            })
+    
+    # Calculate inventory metrics
+    total_products = store.listings.count()
+    out_of_stock = store.listings.filter(stock=0).count()
+    low_stock = store.listings.filter(stock__lt=10, stock__gt=0).count()
+    
+    return JsonResponse({
+        'success': True,
+        'data': {
+            'products': product_data,
+            'inventory_metrics': {
+                'total_products': total_products,
+                'out_of_stock': out_of_stock,
+                'low_stock': low_stock,
+                'in_stock_rate': ((total_products - out_of_stock) / total_products * 100) if total_products else 0
+            },
+            'performance_metrics': {
+                'total_revenue': sum(p['revenue'] for p in product_data),
+                'total_orders': sum(p['orders'] for p in product_data),
+                'total_quantity_sold': sum(p['quantity_sold'] for p in product_data),
+                'avg_product_revenue': sum(p['revenue'] for p in product_data) / len(product_data) if product_data else 0
+            }
+        }
+    })

@@ -27,5 +27,6 @@ inventory_patterns = [
 
     # AJAX Endpoints
     path('dashboard/store/<slug:slug>/product/<int:product_id>/variants/json/', views_inventory.get_product_variants, name='get_product_variants'),
+    path('dashboard/store/<slug:slug>/inventory/search/', views_inventory.inventory_search, name='inventory_search'),
     path('dashboard/store/<slug:slug>/product/<int:product_id>/quick-stock/', views_inventory.quick_stock_update, name='quick_stock_update'),
 ]

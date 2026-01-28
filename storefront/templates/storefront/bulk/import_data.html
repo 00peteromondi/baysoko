@@ -1,0 +1,876 @@
+<!-- storefront/templates/storefront/bulk/import_data.html -->
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Import Products - {{ store.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .import-wizard {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 30px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 30px;
+    }
+    
+    .wizard-steps {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 40px;
+        position: relative;
+    }
+    
+    .wizard-steps::before {
+        content: '';
+        position: absolute;
+        top: 20px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: var(--border-color);
+        z-index: 1;
+    }
+    
+    .wizard-step {
+        position: relative;
+        z-index: 2;
+        text-align: center;
+        flex: 1;
+    }
+    
+    .step-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: var(--bg-secondary);
+        border: 2px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 10px;
+        font-weight: 700;
+        color: var(--text-secondary);
+        transition: all 0.3s ease;
+    }
+    
+    .step-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-weight: 600;
+    }
+    
+    .wizard-step.active .step-circle {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+    }
+    
+    .wizard-step.completed .step-circle {
+        background: #10b981;
+        border-color: #10b981;
+        color: white;
+    }
+    
+    .wizard-content {
+        min-height: 300px;
+    }
+    
+    .step-content {
+        display: none;
+    }
+    
+    .step-content.active {
+        display: block;
+    }
+    
+    .upload-zone {
+        border: 2px dashed var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 60px 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background: var(--bg-secondary);
+        margin-bottom: 20px;
+    }
+    
+    .upload-zone:hover {
+        border-color: var(--primary);
+        background: rgba(79, 70, 229, 0.05);
+    }
+    
+    .upload-zone.dragover {
+        border-color: var(--primary);
+        background: rgba(79, 70, 229, 0.1);
+    }
+    
+    .upload-icon {
+        font-size: 48px;
+        color: var(--text-tertiary);
+        margin-bottom: 16px;
+    }
+    
+    .upload-info {
+        margin-bottom: 20px;
+    }
+    
+    .file-preview {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 20px;
+        margin-top: 20px;
+        border-left: 4px solid var(--primary);
+    }
+    
+    .file-info {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+    
+    .file-icon {
+        font-size: 24px;
+        color: var(--primary);
+    }
+    
+    .file-details {
+        flex: 1;
+    }
+    
+    .file-name {
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+    
+    .file-size {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+    
+    .preview-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+    
+    .preview-table th {
+        background: var(--bg-tertiary);
+        padding: 10px;
+        text-align: left;
+        font-weight: 600;
+        color: var(--text-primary);
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .preview-table td {
+        padding: 10px;
+        border-bottom: 1px solid var(--border-color);
+        color: var(--text-secondary);
+    }
+    
+    .preview-table tr:hover {
+        background: var(--bg-tertiary);
+    }
+    
+    .mapping-container {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 20px;
+        margin-top: 20px;
+    }
+    
+    .mapping-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 15px;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .mapping-row:last-child {
+        border-bottom: none;
+    }
+    
+    .csv-column {
+        font-weight: 600;
+        color: var(--text-primary);
+        font-size: 13px;
+    }
+    
+    .mapping-select {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 8px 12px;
+        color: var(--text-primary);
+        width: 100%;
+    }
+    
+    .mapping-sample {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-style: italic;
+    }
+    
+    .wizard-actions {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border-color);
+    }
+    
+    .template-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        border: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+        margin-bottom: 15px;
+        cursor: pointer;
+    }
+    
+    .template-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-sm);
+        border-color: var(--primary);
+    }
+    
+    .template-card.selected {
+        border-color: var(--primary);
+        background: rgba(79, 70, 229, 0.05);
+    }
+    
+    .template-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    
+    .template-icon {
+        font-size: 24px;
+        color: var(--primary);
+        margin-right: 12px;
+    }
+    
+    .template-name {
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+    
+    .template-desc {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+    
+    /* Form styling for Django form */
+    .form-group {
+        margin-bottom: 20px;
+    }
+    
+    .form-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+        display: block;
+    }
+    
+    .form-control, .form-select {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        border-radius: var(--radius-md);
+        padding: 10px 14px;
+        font-size: 14px;
+        width: 100%;
+        transition: all 0.2s ease;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        background: var(--card-bg);
+        outline: none;
+    }
+    
+    .error-message {
+        color: #dc3545;
+        font-size: 12px;
+        margin-top: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-custom py-3">
+    <!-- Header -->
+    <div class="bulk-header">
+        <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
+            <div>
+                <h1 class="bulk-title">Import Products</h1>
+                <p class="bulk-subtitle">Upload CSV or Excel files to import products</p>
+            </div>
+            <div>
+                <a href="{% url 'storefront:bulk_dashboard' slug=store.slug %}" class="btn-custom btn-outline text-primary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Wizard -->
+    <form method="POST" enctype="multipart/form-data" class="import-wizard" id="importForm">
+        {% csrf_token %}
+        
+        <!-- Wizard Steps -->
+        <div class="wizard-steps">
+            <div class="wizard-step active" data-step="1">
+                <div class="step-circle">1</div>
+                <div class="step-label">Upload File</div>
+            </div>
+            <div class="wizard-step" data-step="2">
+                <div class="step-circle">2</div>
+                <div class="step-label">Map Fields</div>
+            </div>
+            <div class="wizard-step" data-step="3">
+                <div class="step-circle">3</div>
+                <div class="step-label">Configure</div>
+            </div>
+            <div class="wizard-step" data-step="4">
+                <div class="step-circle">4</div>
+                <div class="step-label">Review</div>
+            </div>
+        </div>
+
+        <!-- Wizard Content -->
+        <div class="wizard-content">
+            <!-- Step 1: Upload -->
+            <div class="step-content active" id="step1">
+                <h4 class="mb-4">Upload Your File</h4>
+                
+                <!-- File Upload Zone -->
+                <div class="upload-zone" id="uploadZone">
+                    <div class="upload-icon">
+                        <i class="bi bi-cloud-arrow-up"></i>
+                    </div>
+                    <div class="upload-info">
+                        <h5 class="mb-2">Drop your file here</h5>
+                        <p class="text-muted mb-0" style="font-size: 13px;">
+                            Supports CSV, XLS, XLSX files up to 10MB
+                        </p>
+                    </div>
+                    <div class="form-group">
+                        {{ form.file }}
+                        {% if form.file.errors %}
+                        <div class="error-message">{{ form.file.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <button type="button" class="btn-custom btn-primary" onclick="document.getElementById('id_file').click()">
+                        <i class="bi bi-folder2-open me-2"></i>Browse Files
+                    </button>
+                </div>
+                
+                <!-- Template Selection -->
+                <div class="mt-4">
+                    <h6 class="mb-3">Or use a template:</h6>
+                    <div class="form-group">
+                        {{ form.template }}
+                        {% if form.template.errors %}
+                        <div class="error-message">{{ form.template.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    {% if templates %}
+                    <div class="row mt-3">
+                        {% for template in templates %}
+                        <div class="col-md-6">
+                            <div class="template-card" onclick="selectTemplate('{{ template.id }}', '{{ template.name }}')">
+                                <div class="template-header">
+                                    <div class="template-icon">
+                                        <i class="bi bi-file-earmark-text"></i>
+                                    </div>
+                                    <div>
+                                        <div class="template-name">{{ template.name }}</div>
+                                        <div class="template-desc">{{ template.get_template_type_display }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-file-earmark-text text-muted" style="font-size: 48px;"></i>
+                        <p class="text-muted mt-2">No templates available</p>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Selected File Preview -->
+                <div class="file-preview" id="filePreview" style="display: none;">
+                    <div class="file-info">
+                        <div class="file-icon">
+                            <i class="bi bi-file-earmark-spreadsheet"></i>
+                        </div>
+                        <div class="file-details">
+                            <div class="file-name" id="fileName"></div>
+                            <div class="file-size" id="fileSize"></div>
+                        </div>
+                        <button type="button" class="btn-custom btn-sm btn-outline text-danger" onclick="removeFile()">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="preview-table-container" style="max-height: 200px; overflow-y: auto;">
+                        <table class="preview-table" id="dataPreview">
+                            <!-- Preview rows will be inserted here -->
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Map Fields -->
+            <div class="step-content" id="step2">
+                <h4 class="mb-4">Map CSV Columns to Fields</h4>
+                
+                <div class="mapping-container" id="mappingContainer">
+                    <div class="mapping-row" style="grid-template-columns: 2fr 1fr 1fr;">
+                        <div class="csv-column">CSV Column</div>
+                        <div class="csv-column">Map to Field</div>
+                        <div class="csv-column">Sample Data</div>
+                    </div>
+                    <!-- Mapping rows will be inserted here -->
+                </div>
+                
+                <div class="mt-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="skipHeader" checked>
+                        <label class="form-check-label" for="skipHeader">
+                            First row contains column headers
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Configure -->
+            <div class="step-content" id="step3">
+                <h4 class="mb-4">Import Configuration</h4>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">Template Type</label>
+                            {{ form.template_type }}
+                            {% if form.template_type.errors %}
+                            <div class="error-message">{{ form.template_type.errors }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Update Existing Products</label>
+                            {{ form.update_existing }}
+                            {% if form.update_existing.errors %}
+                            <div class="error-message">{{ form.update_existing.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">Create New Products</label>
+                            {{ form.create_new }}
+                            {% if form.create_new.errors %}
+                            <div class="error-message">{{ form.create_new.errors }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Skip Rows with Errors</label>
+                            {{ form.skip_errors }}
+                            {% if form.skip_errors.errors %}
+                            <div class="error-message">{{ form.skip_errors.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: Review -->
+            <div class="step-content" id="step4">
+                <h4 class="mb-4">Review Import Settings</h4>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="info-box">
+                            <h6 class="mb-3">Import Summary</h6>
+                            <div class="action-preview-item">
+                                <span>File:</span>
+                                <span id="reviewFileName">-</span>
+                            </div>
+                            <div class="action-preview-item">
+                                <span>Rows:</span>
+                                <span id="reviewRowCount">-</span>
+                            </div>
+                            <div class="action-preview-item">
+                                <span>Columns:</span>
+                                <span id="reviewColumnCount">-</span>
+                            </div>
+                            <div class="action-preview-item">
+                                <span>Template Type:</span>
+                                <span id="reviewTemplateType">-</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="info-box">
+                            <h6 class="mb-3">Configuration</h6>
+                            <div id="reviewConfig">
+                                <!-- Configuration will be inserted here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <div class="alert alert-warning" role="alert" style="background: rgba(255, 193, 7, 0.1); border-color: rgba(255, 193, 7, 0.3);">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Note:</strong> This import will run in the background. You can continue working while it processes.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Wizard Actions -->
+        <div class="wizard-actions">
+            <button type="button" class="btn-custom btn-outline text-secondary" id="prevBtn" style="display: none;">
+                <i class="bi bi-arrow-left me-2"></i>Previous
+            </button>
+            <button type="button" class="btn-custom btn-primary" id="nextBtn">
+                Next Step<i class="bi bi-arrow-right ms-2"></i>
+            </button>
+            <button type="submit" class="btn-custom btn-success" id="submitBtn" style="display: none;">
+                <i class="bi bi-play-circle me-2"></i>Start Import
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        let currentStep = 1;
+        let fileData = null;
+        let csvColumns = [];
+        
+        const steps = document.querySelectorAll('.wizard-step');
+        const stepContents = document.querySelectorAll('.step-content');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const submitBtn = document.getElementById('submitBtn');
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('id_file');
+        const filePreview = document.getElementById('filePreview');
+        const templateSelect = document.getElementById('id_template');
+        
+        // Step navigation
+        function updateStep(newStep) {
+            // Update steps UI
+            steps.forEach((step, index) => {
+                const stepNum = parseInt(step.dataset.step);
+                step.classList.remove('active', 'completed');
+                
+                if (stepNum < newStep) {
+                    step.classList.add('completed');
+                } else if (stepNum === newStep) {
+                    step.classList.add('active');
+                }
+            });
+            
+            // Update content
+            stepContents.forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`step${newStep}`).classList.add('active');
+            
+            // Update buttons
+            prevBtn.style.display = newStep === 1 ? 'none' : 'inline-block';
+            nextBtn.style.display = newStep === 4 ? 'none' : 'inline-block';
+            submitBtn.style.display = newStep === 4 ? 'inline-block' : 'none';
+            
+            // Update step-specific content
+            if (newStep === 2 && fileData) {
+                generateFieldMapping();
+            } else if (newStep === 4) {
+                generateReview();
+            }
+            
+            currentStep = newStep;
+        }
+        
+        prevBtn.addEventListener('click', () => updateStep(currentStep - 1));
+        nextBtn.addEventListener('click', () => {
+            if (validateStep(currentStep)) {
+                updateStep(currentStep + 1);
+            }
+        });
+        
+        // File upload handling
+        uploadZone.addEventListener('click', () => fileInput.click());
+        
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+        
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+        
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            
+            if (e.dataTransfer.files.length) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) {
+                handleFile(e.target.files[0]);
+            }
+        });
+        
+        function handleFile(file) {
+            // Validate file
+            const validTypes = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+            const maxSize = 10 * 1024 * 1024; // 10MB
+            
+            if (!validTypes.includes(file.type) && !file.name.match(/\.(csv|xls|xlsx)$/i)) {
+                alert('Please upload a CSV or Excel file.');
+                return;
+            }
+            
+            if (file.size > maxSize) {
+                alert('File size must be less than 10MB.');
+                return;
+            }
+            
+            // Show file preview
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = formatFileSize(file.size);
+            filePreview.style.display = 'block';
+            
+            // Clear template selection if any
+            if (templateSelect) {
+                templateSelect.value = '';
+            }
+            
+            // Read file
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                parseCSV(content);
+            };
+            
+            if (file.name.match(/\.csv$/i)) {
+                reader.readAsText(file);
+            } else {
+                // For Excel files, we'd need a library like SheetJS
+                alert('Excel file preview requires additional libraries. CSV files are recommended.');
+                filePreview.style.display = 'none';
+            }
+        }
+        
+        function parseCSV(content) {
+            const lines = content.split('\n').slice(0, 6); // Preview first 5 rows
+            csvColumns = lines[0].split(',').map(col => col.trim().replace(/"/g, ''));
+            
+            // Show preview
+            const previewTable = document.getElementById('dataPreview');
+            previewTable.innerHTML = '';
+            
+            // Add header
+            const headerRow = previewTable.insertRow();
+            csvColumns.forEach((col, index) => {
+                const th = document.createElement('th');
+                th.textContent = col || `Column ${index + 1}`;
+                headerRow.appendChild(th);
+            });
+            
+            // Add data rows
+            lines.slice(1, 4).forEach(line => {
+                if (line.trim()) {
+                    const row = previewTable.insertRow();
+                    line.split(',').forEach(cell => {
+                        const td = document.createElement('td');
+                        td.textContent = cell.trim().replace(/"/g, '');
+                        row.appendChild(td);
+                    });
+                }
+            });
+        }
+        
+        function removeFile() {
+            fileInput.value = '';
+            filePreview.style.display = 'none';
+            fileData = null;
+        }
+        
+        function generateFieldMapping() {
+            const container = document.getElementById('mappingContainer');
+            // Clear existing mapping rows except header
+            const rows = container.querySelectorAll('.mapping-row');
+            for (let i = 1; i < rows.length; i++) {
+                rows[i].remove();
+            }
+            
+            // Add mapping rows for each column
+            csvColumns.forEach((column, index) => {
+                const row = document.createElement('div');
+                row.className = 'mapping-row';
+                
+                // CSV Column
+                const colDiv = document.createElement('div');
+                colDiv.className = 'csv-column';
+                colDiv.textContent = column || `Column ${index + 1}`;
+                
+                // Mapping select
+                const selectDiv = document.createElement('div');
+                const select = document.createElement('select');
+                select.className = 'mapping-select';
+                select.name = `mapping_${index}`;
+                select.innerHTML = `
+                    <option value="">Don't import</option>
+                    <option value="title">Product Title</option>
+                    <option value="sku">SKU</option>
+                    <option value="description">Description</option>
+                    <option value="price">Price</option>
+                    <option value="stock">Stock</option>
+                    <option value="category">Category</option>
+                    <option value="condition">Condition</option>
+                    <option value="tags">Tags</option>
+                `;
+                selectDiv.appendChild(select);
+                
+                // Sample data
+                const sampleDiv = document.createElement('div');
+                sampleDiv.className = 'mapping-sample';
+                sampleDiv.textContent = 'Sample data...';
+                
+                row.appendChild(colDiv);
+                row.appendChild(selectDiv);
+                row.appendChild(sampleDiv);
+                
+                container.appendChild(row);
+            });
+        }
+        
+        function generateReview() {
+            // File info
+            const fileName = document.getElementById('fileName').textContent || 
+                            (fileInput.files[0] ? fileInput.files[0].name : '-');
+            document.getElementById('reviewFileName').textContent = fileName;
+            document.getElementById('reviewRowCount').textContent = 'Estimated from file';
+            document.getElementById('reviewColumnCount').textContent = csvColumns.length;
+            
+            // Template type
+            const templateTypeSelect = document.getElementById('id_template_type');
+            const templateType = templateTypeSelect ? templateTypeSelect.selectedOptions[0].text : '-';
+            document.getElementById('reviewTemplateType').textContent = templateType;
+            
+            // Configuration
+            const configDiv = document.getElementById('reviewConfig');
+            configDiv.innerHTML = '';
+            
+            const configs = [
+                { label: 'Update Existing', value: document.getElementById('id_update_existing').checked ? 'Yes' : 'No' },
+                { label: 'Create New', value: document.getElementById('id_create_new').checked ? 'Yes' : 'No' },
+                { label: 'Skip Errors', value: document.getElementById('id_skip_errors').checked ? 'Yes' : 'No' }
+            ];
+            
+            configs.forEach(config => {
+                const div = document.createElement('div');
+                div.className = 'action-preview-item';
+                div.innerHTML = `
+                    <span>${config.label}:</span>
+                    <span>${config.value}</span>
+                `;
+                configDiv.appendChild(div);
+            });
+        }
+        
+        function validateStep(step) {
+            switch(step) {
+                case 1:
+                    const file = document.getElementById('id_file').files[0];
+                    const template = document.getElementById('id_template');
+                    
+                    if (!file && (!template || !template.value)) {
+                        alert('Please select a file to upload or choose a template.');
+                        return false;
+                    }
+                    return true;
+                    
+                case 2:
+                    // Check if at least one field is mapped
+                    const mappings = document.querySelectorAll('.mapping-select');
+                    const hasMapping = Array.from(mappings).some(select => select.value);
+                    
+                    if (!hasMapping) {
+                        alert('Please map at least one field to import.');
+                        return false;
+                    }
+                    return true;
+                    
+                case 3:
+                    const templateType = document.getElementById('id_template_type');
+                    if (!templateType || !templateType.value) {
+                        alert('Please select a template type.');
+                        return false;
+                    }
+                    return true;
+                    
+                default:
+                    return true;
+            }
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        window.selectTemplate = function(templateId, templateName) {
+            if (templateSelect) {
+                templateSelect.value = templateId;
+                
+                // Clear file input if any
+                if (fileInput) {
+                    fileInput.value = '';
+                    filePreview.style.display = 'none';
+                }
+                
+                alert(`Template "${templateName}" selected. Using this template for import.`);
+            }
+        };
+        
+        // Initialize form styling
+        document.querySelectorAll('input, select, textarea').forEach(element => {
+            if (!element.classList.contains('form-control') && !element.classList.contains('form-select')) {
+                element.classList.add('form-control');
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,375 @@
+<!-- storefront/templates/storefront/bulk/job_list.html -->
+{% extends 'base.html' %}
+{% load humanize math_extras %}
+
+{% block title %}Batch Jobs - {{ store.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .jobs-filter-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+    }
+
+    .filter-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 16px;
+    }
+
+    .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+    }
+
+    .filter-group {
+        margin-bottom: 0;
+    }
+
+    .filter-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+        display: block;
+    }
+
+    .filter-select {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-size: 13px;
+    }
+
+    .filter-select:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+    }
+
+    .date-input-group {
+        display: flex;
+        gap: 8px;
+    }
+
+    .date-input {
+        flex: 1;
+        padding: 8px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-size: 13px;
+    }
+
+    .pagination-container {
+        display: flex;
+        justify-content: center;
+        margin-top: 30px;
+    }
+
+    .pagination {
+        display: flex;
+        gap: 4px;
+    }
+
+    .page-link {
+        padding: 8px 14px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        text-decoration: none;
+        font-size: 13px;
+        transition: all 0.2s ease;
+    }
+
+    .page-link:hover {
+        background: var(--bg-tertiary);
+        border-color: var(--primary);
+    }
+
+    .page-link.active {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+
+    .job-actions-dropdown {
+        position: relative;
+    }
+
+    .job-actions-menu {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-md);
+        min-width: 150px;
+        z-index: 1000;
+        display: none;
+    }
+
+    .job-actions-menu.show {
+        display: block;
+    }
+
+    .job-action-item {
+        display: block;
+        padding: 10px 16px;
+        color: var(--text-primary);
+        text-decoration: none;
+        font-size: 13px;
+        transition: all 0.2s ease;
+    }
+
+    .job-action-item:hover {
+        background: var(--bg-secondary);
+    }
+
+    .job-action-item.danger {
+        color: var(--danger);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-custom py-3">
+    <!-- Header -->
+    <div class="bulk-header">
+        <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
+            <div>
+                <h1 class="bulk-title">Batch Jobs</h1>
+                <p class="bulk-subtitle">Monitor and manage all bulk operations</p>
+            </div>
+            <div class="btn-group">
+                <a href="{% url 'storefront:bulk_dashboard' slug=store.slug %}" class="btn-custom btn-outline-primary">
+                    <i class="bi bi-arrow-left-circle me-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="jobs-filter-card">
+        <form method="get" id="jobsFilterForm">
+            <h6 class="filter-title">Filter Jobs</h6>
+            <div class="filter-grid">
+                <div class="filter-group">
+                    <label class="filter-label">Status</label>
+                    <select name="status" class="filter-select">
+                        <option value="">All Status</option>
+                        {% for status_code, status_name in status_choices %}
+                        <option value="{{ status_code }}" {% if request.GET.status == status_code %}selected{% endif %}>
+                            {{ status_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label class="filter-label">Type</label>
+                    <select name="type" class="filter-select">
+                        <option value="">All Types</option>
+                        {% for type_code, type_name in type_choices %}
+                        <option value="{{ type_code }}" {% if request.GET.type == type_code %}selected{% endif %}>
+                            {{ type_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label class="filter-label">Date From</label>
+                    <input type="date" name="date_from" class="date-input" value="{{ request.GET.date_from }}">
+                </div>
+                
+                <div class="filter-group">
+                    <label class="filter-label">Date To</label>
+                    <input type="date" name="date_to" class="date-input" value="{{ request.GET.date_to }}">
+                </div>
+                
+                <div class="filter-group d-flex align-items-end">
+                    <button type="submit" class="btn-custom btn-primary" style="height: 38px;">
+                        <i class="bi bi-filter me-2"></i>Apply Filters
+                    </button>
+                    {% if request.GET %}
+                    <a href="{% url 'storefront:bulk_job_list' slug=store.slug %}" class="btn-custom btn-outline text-secondary ms-2" style="height: 38px;">
+                        Clear
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Jobs Table -->
+    <div class="jobs-card">
+        <div class="jobs-header">
+            <h3 class="jobs-title">All Batch Jobs ({{ page_obj.paginator.count }})</h3>
+        </div>
+        <div class="table-responsive">
+            <table class="jobs-table">
+                <thead>
+                    <tr>
+                        <th>Job ID</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th>Created</th>
+                        <th>Started By</th>
+                        <th>Duration</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in page_obj %}
+                    <tr>
+                        <td>#{{ job.id }}</td>
+                        <td>
+                            <span class="job-badge badge-pending">{{ job.get_job_type_display }}</span>
+                        </td>
+                        <td>
+                            <span class="job-badge {% if job.status == 'completed' %}badge-completed{% elif job.status == 'processing' %}badge-processing{% elif job.status == 'failed' %}badge-failed{% else %}badge-pending{% endif %}">
+                                {{ job.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if job.total_items > 0 %}
+                                <div class="d-flex align-items-center">
+                                    <div class="progress flex-grow-1 mr-2" style="height: 8px;">
+                                        <div class="progress-bar {% if job.status == 'completed' %}bg-success{% elif job.status == 'processing' %}bg-warning{% else %}bg-secondary{% endif %}"
+                                             role="progressbar"
+                                             style="width: {{ job.processed_items|div:job.total_items|mul:100 }}%">
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">{{ job.processed_items }}/{{ job.total_items }}</small>
+                                </div>
+                            {% else %}
+                                <small class="text-muted">-</small>
+                            {% endif %}
+                        </td>
+                        <td>{{ job.created_at|date:"M d, H:i" }}</td>
+                        <td>{{ job.created_by.username|truncatechars:10 }}</td>
+                        <td>
+                            {% if job.duration %}
+                                {{ job.duration|time:"H:i:s" }}
+                            {% else %}
+                                <small class="text-muted">-</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="d-flex gap-2">
+                                <a href="{% url 'storefront:bulk_job_detail' slug=store.slug job_id=job.id %}" class="btn-custom btn-sm btn-outline text-primary">
+                                    Details
+                                </a>
+                                {% if job.status in 'pending,processing' %}
+                                <button type="button" class="btn-custom btn-sm btn-outline text-danger" onclick="cancelJob({{ job.id }})">
+                                    Cancel
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-4">
+                            <div class="empty-bulk">
+                                <div class="empty-icon">
+                                    <i class="bi bi-clock-history"></i>
+                                </div>
+                                <p class="text-muted">No batch jobs found</p>
+                                <a href="{% url 'storefront:bulk_dashboard' slug=store.slug %}" class="btn-custom btn-primary mt-3">
+                                    Start a Bulk Operation
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="pagination-container">
+        <div class="pagination">
+            {% if page_obj.has_previous %}
+                <a href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="page-link">
+                    <i class="bi bi-chevron-double-left"></i>
+                </a>
+                <a href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="page-link">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+            {% endif %}
+
+            {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                    <span class="page-link active">{{ num }}</span>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <a href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="page-link">{{ num }}</a>
+                {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="page-link">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+                <a href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="page-link">
+                    <i class="bi bi-chevron-double-right"></i>
+                </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-refresh for processing jobs
+    {% if page_obj %}
+        {% for job in page_obj %}
+            {% if job.status == 'processing' %}
+                setTimeout(() => location.reload(), 30000);
+                break;
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+
+    // Cancel job function
+    window.cancelJob = function(jobId) {
+        if (confirm('Are you sure you want to cancel this job?')) {
+            fetch(`{% url 'storefront:cancel_job' slug=store.slug job_id=0 %}`.replace('0', jobId), {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success || response.ok) {
+                    location.reload();
+                } else {
+                    alert('Failed to cancel job');
+                }
+            })
+            .catch(error => {
+                alert('Error cancelling job');
+            });
+        }
+    };
+});
+</script>
+{% endblock %}

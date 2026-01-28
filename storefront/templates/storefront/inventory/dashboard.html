@@ -4,367 +4,810 @@
 
 {% block title %}Inventory Dashboard - {{ store.name }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* ===== INVENTORY DASHBOARD STYLES ===== */
+    .inventory-header {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .inventory-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #4f46e5, #7c3aed);
+    }
+
+    .inventory-title {
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .inventory-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
+    /* ===== INVENTORY METRICS ===== */
+    .inventory-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    @media (min-width: 768px) {
+        .inventory-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+
+    .inventory-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+        text-align: center;
+    }
+
+    .inventory-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .inventory-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: var(--primary);
+        opacity: 0.3;
+    }
+
+    .inventory-icon {
+        font-size: 24px;
+        margin-bottom: 12px;
+        color: var(--primary);
+        background: rgba(255, 107, 53, 0.1);
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 16px;
+    }
+
+    .inventory-value {
+        font-size: 24px;
+        font-weight: 800;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+    }
+
+    .inventory-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+    }
+
+    /* ===== QUICK ACTIONS ===== */
+    .actions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 16px;
+        margin-bottom: 30px;
+    }
+
+    .action-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        text-align: center;
+        text-decoration: none !important;
+        color: var(--text-primary) !important;
+        display: block;
+    }
+
+    .action-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+        text-decoration: none;
+    }
+
+    .action-icon {
+        font-size: 20px;
+        color: white;
+        background: var(--primary);
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 12px;
+    }
+
+    .action-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+    }
+
+    .action-desc {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-bottom: 0;
+    }
+
+    /* ===== INVENTORY CHARTS ===== */
+    .inventory-charts {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 24px;
+        margin-bottom: 30px;
+    }
+
+    @media (min-width: 992px) {
+        .inventory-charts {
+            grid-template-columns: 2fr 1fr;
+        }
+    }
+
+    .inventory-chart-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        height: 100%;
+    }
+
+    .inventory-chart-card:hover {
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+    }
+
+    .inventory-chart-header {
+        margin-bottom: 20px;
+    }
+
+    .inventory-chart-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+
+    .inventory-chart-subtitle {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    .inventory-chart-canvas {
+        position: relative;
+        height: 300px;
+        width: 100%;
+    }
+
+    /* ===== STOCK HEALTH ===== */
+    .health-item {
+        margin-bottom: 20px;
+    }
+
+    .health-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .health-label {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .health-value {
+        font-size: 16px;
+        font-weight: 800;
+    }
+
+    .health-progress {
+        height: 8px;
+        background: var(--bg-secondary);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .health-progress-bar {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+
+    /* ===== CATEGORY DISTRIBUTION ===== */
+    .category-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+    }
+
+    .category-item {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        border: 1px solid var(--border-color);
+    }
+
+    .category-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+
+    .category-name {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .category-count {
+        font-size: 11px;
+        font-weight: 700;
+        color: white;
+        background: var(--primary);
+        padding: 2px 8px;
+        border-radius: 10px;
+    }
+
+    .category-progress {
+        height: 4px;
+        background: var(--bg-tertiary);
+        border-radius: 2px;
+        overflow: hidden;
+        margin-top: 8px;
+    }
+
+    .category-progress-bar {
+        height: 100%;
+        background: var(--primary);
+        border-radius: 2px;
+    }
+
+    /* ===== STOCK MOVEMENTS ===== */
+    .movements-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 30px;
+        scrollbar-width: thin;
+        scrollbar-color: var(--primary) transparent;
+    }
+
+    .movements-header {
+        background: var(--bg-secondary);
+        padding: 20px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .movements-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 0;
+    }
+
+    .movements-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .movements-table th {
+        background: var(--bg-secondary);
+        padding: 12px 16px;
+        text-align: left;
+        font-weight: 700;
+        color: var(--text-primary);
+        border-bottom: 2px solid var(--border-color);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .movements-table td {
+        padding: 16px;
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: middle;
+    }
+
+    .movements-table tbody tr {
+        transition: all 0.2s ease;
+    }
+
+    .movements-table tbody tr:hover {
+        background: var(--bg-secondary);
+    }
+
+    .movement-badge {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .badge-sale {
+        background: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+        border: 1px solid rgba(40, 167, 69, 0.3);
+    }
+
+    .badge-purchase {
+        background: rgba(0, 123, 255, 0.1);
+        color: #007bff;
+        border: 1px solid rgba(0, 123, 255, 0.3);
+    }
+
+    .badge-adjustment {
+        background: rgba(255, 193, 7, 0.1);
+        color: #ffc107;
+        border: 1px solid rgba(255, 193, 7, 0.3);
+    }
+
+    /* ===== EMPTY STATES ===== */
+    .empty-inventory {
+        padding: 40px 20px;
+        text-align: center;
+    }
+
+    .empty-icon {
+        font-size: 48px;
+        color: var(--text-tertiary);
+        margin-bottom: 16px;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .inventory-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .actions-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .movements-table {
+            display: block;
+            overflow-x: auto;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .inventory-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .actions-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .inventory-charts {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1 class="h2 mb-1">Inventory Dashboard</h1>
-            <p class="text-muted mb-0">Manage your store inventory</p>
-        </div>
-        <div class="btn-group">
-            <a href="{% url 'storefront:adjust_stock' slug=store.slug %}" class="btn btn-primary">
-                <i class="bi bi-plus-circle me-2"></i>Adjust Stock
-            </a>
-            <a href="{% url 'storefront:bulk_stock_update' slug=store.slug %}" class="btn btn-outline-primary">
-                <i class="bi bi-arrow-up-down me-2"></i>Bulk Update
-            </a>
+<div class="container-custom py-3">
+    <!-- Header -->
+    <div class="inventory-header">
+        <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
+            <div>
+                <h1 class="inventory-title">Inventory Dashboard</h1>
+                <p class="inventory-subtitle">Manage your store inventory and stock levels</p>
+            </div>
+            <div class="btn-group">
+                <a href="{% url 'storefront:adjust_stock' slug=store.slug %}" class="btn-custom btn-primary">
+                    <i class="bi bi-plus-circle me-2"></i>Adjust Stock
+                </a>
+                <a href="{% url 'storefront:bulk_stock_update' slug=store.slug %}" class="btn-custom btn-outline text-primary">
+                    <i class="bi bi-arrow-up-down me-2"></i>Bulk Update
+                </a>
+                <a href="{% url 'storefront:seller_dashboard' %}" class="btn-custom btn-outline-primary">
+                    <i class="bi bi-arrow-left-circle me-2"></i>Back to Seller Dashboard
+                </a>
+            </div>
         </div>
     </div>
 
-    <!-- Stats Cards -->
-    <div class="row mb-4">
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Total Products
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_products }}</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="bi bi-box-seam fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
+    <!-- Inventory Metrics -->
+    <div class="inventory-grid">
+        <div class="inventory-card">
+            <div class="inventory-icon" style="background: rgba(79, 70, 229, 0.1); color: #4f46e5;">
+                <i class="bi bi-box-seam"></i>
             </div>
+            <div class="inventory-value">{{ total_products|intcomma }}</div>
+            <div class="inventory-label">Total Products</div>
         </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                Low Stock
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ low_stock_items }}</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="bi bi-exclamation-triangle fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
+        
+        <div class="inventory-card">
+            <div class="inventory-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
+                <i class="bi bi-exclamation-triangle"></i>
             </div>
+            <div class="inventory-value">{{ low_stock_items|intcomma }}</div>
+            <div class="inventory-label">Low Stock</div>
         </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-danger shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                                Out of Stock
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ out_of_stock_items }}</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="bi bi-x-circle fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
+        
+        <div class="inventory-card">
+            <div class="inventory-icon" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;">
+                <i class="bi bi-x-circle"></i>
             </div>
+            <div class="inventory-value">{{ out_of_stock_items|intcomma }}</div>
+            <div class="inventory-label">Out of Stock</div>
         </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-success shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                Stock Value
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">KSh {{ stock_value|intcomma }}</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="bi bi-currency-dollar fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
+        
+        <div class="inventory-card">
+            <div class="inventory-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+                <i class="bi bi-currency-dollar"></i>
             </div>
+            <div class="inventory-value">KSh {{ stock_value|intcomma }}</div>
+            <div class="inventory-label">Stock Value</div>
         </div>
     </div>
 
     <!-- Quick Actions -->
-    <div class="row mb-4">
-        <div class="col-lg-8">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                    <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-3 mb-3">
-                            <a href="{% url 'storefront:inventory_list' slug=store.slug %}" class="btn btn-light btn-block text-left">
-                                <i class="bi bi-list-ul text-primary mr-2"></i>
-                                View All Products
-                            </a>
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <a href="{% url 'storefront:inventory_alerts' slug=store.slug %}" class="btn btn-light btn-block text-left">
-                                <i class="bi bi-bell text-warning mr-2"></i>
-                                Manage Alerts
-                            </a>
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <a href="{% url 'storefront:export_inventory' slug=store.slug %}" class="btn btn-light btn-block text-left">
-                                <i class="bi bi-download text-success mr-2"></i>
-                                Export to CSV
-                            </a>
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <a href="{% url 'storefront:import_inventory' slug=store.slug %}" class="btn btn-light btn-block text-left">
-                                <i class="bi bi-upload text-info mr-2"></i>
-                                Import from CSV
-                            </a>
-                        </div>
-                    </div>
-                </div>
+    <div class="actions-grid">
+        <a href="{% url 'storefront:inventory_list' slug=store.slug %}" class="action-card">
+            <div class="action-icon" style="background: #4f46e5;">
+                <i class="bi bi-list-ul"></i>
             </div>
-        </div>
+            <div class="action-title">View All Products</div>
+            <p class="action-desc">Browse and manage inventory</p>
+        </a>
         
-        <div class="col-lg-4">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Inventory Health</h6>
+        <a href="{% url 'storefront:inventory_alerts' slug=store.slug %}" class="action-card">
+            <div class="action-icon" style="background: #f59e0b;">
+                <i class="bi bi-bell"></i>
+            </div>
+            <div class="action-title">Manage Alerts</div>
+            <p class="action-desc">Set up stock notifications</p>
+        </a>
+        
+        <a href="{% url 'storefront:export_inventory' slug=store.slug %}" class="action-card">
+            <div class="action-icon" style="background: #10b981;">
+                <i class="bi bi-download"></i>
+            </div>
+            <div class="action-title">Export to CSV</div>
+            <p class="action-desc">Download inventory data</p>
+        </a>
+        
+        <a href="{% url 'storefront:import_inventory' slug=store.slug %}" class="action-card">
+            <div class="action-icon" style="background: #3b82f6;">
+                <i class="bi bi-upload"></i>
+            </div>
+            <div class="action-title">Import from CSV</div>
+            <p class="action-desc">Bulk update inventory</p>
+        </a>
+    </div>
+
+    <!-- Inventory Charts -->
+    <div class="inventory-charts">
+        <!-- Inventory Health -->
+        <div class="inventory-chart-card">
+            <div class="inventory-chart-header">
+                <h3 class="inventory-chart-title">Inventory Health</h3>
+                <p class="inventory-chart-subtitle">Monitor stock levels and turnover rate</p>
+            </div>
+            <div class="health-item">
+                <div class="health-label">
+                    <span>Turnover Rate</span>
+                    <span class="health-value {% if turnover_rate > 50 %}text-success{% elif turnover_rate > 20 %}text-warning{% else %}text-danger{% endif %}">
+                        {{ turnover_rate|floatformat:1 }}%
+                    </span>
                 </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <span class="font-weight-bold">Turnover Rate:</span>
-                        <span class="float-right {% if turnover_rate > 50 %}text-success{% else %}text-warning{% endif %}">
-                            {{ turnover_rate }}%
-                        </span>
-                        <div class="progress mt-2">
-                            <div class="progress-bar {% if turnover_rate > 50 %}bg-success{% else %}bg-warning{% endif %}" 
-                                 role="progressbar" style="width: {{ turnover_rate|default:0 }}%">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="mb-0">
-                        <span class="font-weight-bold">Active Alerts:</span>
-                        <span class="float-right text-primary">{{ active_alerts }}</span>
+                <div class="health-progress">
+                    <div class="health-progress-bar {% if turnover_rate > 50 %}bg-success{% elif turnover_rate > 20 %}bg-warning{% else %}bg-danger{% endif %}" 
+                         style="width: {{ turnover_rate|default:0 }}%">
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <!-- Recent Stock Movements -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-            <h6 class="m-0 font-weight-bold text-primary">Recent Stock Movements</h6>
-            <a href="{% url 'storefront:stock_movements' slug=store.slug %}" class="btn btn-sm btn-primary">
-                View All
-            </a>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-bordered" width="100%" cellspacing="0">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Product</th>
-                            <th>Type</th>
-                            <th>Quantity</th>
-                            <th>Previous</th>
-                            <th>New</th>
-                            <th>Changed By</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for movement in recent_movements %}
-                        <tr>
-                            <td>{{ movement.created_at|date:"M d, H:i" }}</td>
-                            <td>
-                                <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=movement.product.slug %}">
-                                    {{ movement.product.title }}
-                                </a>
-                            </td>
-                            <td>
-                                <span class="badge badge-{% if movement.movement_type == 'sale' %}success{% elif movement.movement_type == 'purchase' %}primary{% else %}warning{% endif %}">
-                                    {{ movement.get_movement_type_display }}
-                                </span>
-                            </td>
-                            <td class="{% if movement.quantity > 0 %}text-success{% else %}text-danger{% endif %}">
-                                {% if movement.quantity > 0 %}+{% endif %}{{ movement.quantity }}
-                            </td>
-                            <td>{{ movement.previous_stock }}</td>
-                            <td>{{ movement.new_stock }}</td>
-                            <td>{{ movement.created_by.username|default:"System" }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="7" class="text-center py-4">No stock movements yet</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <div class="health-item">
+                <div class="health-label">
+                    <span>Active Alerts</span>
+                    <span class="health-value text-primary">{{ active_alerts }}</span>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Category Distribution -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Stock by Category</h6>
-        </div>
-        <div class="card-body">
-            <div class="row">
+        <!-- Category Distribution -->
+        <div class="inventory-chart-card">
+            <div class="inventory-chart-header">
+                <h3 class="inventory-chart-title">Stock by Category</h3>
+                <p class="inventory-chart-subtitle">Distribution across product categories</p>
+            </div>
+            <div class="category-grid">
                 {% for category in category_distribution %}
-                <div class="col-md-4 mb-3">
-                    <div class="card border-left-info shadow h-100">
-                        <div class="card-body">
-                            <div class="row no-gutters align-items-center">
-                                <div class="col mr-2">
-                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                        {{ category.category__name|default:"Uncategorized" }}
-                                    </div>
-                                    <div class="row no-gutters align-items-center">
-                                        <div class="col-auto">
-                                            <div class="h5 mb-0 mr-3 font-weight-bold text-gray-800">
-                                                {{ category.count }} products
-                                            </div>
-                                        </div>
-                                        <div class="col">
-                                            <div class="progress progress-sm mr-2">
-                                                <div class="progress-bar bg-info" role="progressbar"
-                                                    style="width: {{ category.total_stock|default:0 }}%">
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="mt-2">
-                                        <small class="text-muted">{{ category.total_stock|default:0 }} units in stock</small>
-                                    </div>
-                                </div>
-                            </div>
+                <div class="category-item">
+                    <div class="category-header">
+                        <span class="category-name">{{ category.category__name|default:"Uncategorized"|truncatechars:15 }}</span>
+                        <span class="category-count">{{ category.count }}</span>
+                    </div>
+                    <div class="small text-muted">{{ category.total_stock|default:0 }} units</div>
+                    <div class="category-progress">
+                        <div class="category-progress-bar" 
+                             style="width: {% widthratio category.total_stock total_products 100 %}%">
                         </div>
                     </div>
                 </div>
                 {% empty %}
-                <div class="col-12 text-center py-4">
-                    <p class="text-muted">No category distribution data available</p>
+                <div class="empty-inventory">
+                    <div class="empty-icon">
+                        <i class="bi bi-grid"></i>
+                    </div>
+                    <p class="text-muted">No category data available</p>
                 </div>
                 {% endfor %}
             </div>
         </div>
     </div>
-</div>
 
-<style>
-.card {
-    border-radius: 0.35rem;
-    border: 1px solid #e3e6f0;
-}
-
-.border-left-primary {
-    border-left: 0.25rem solid #4e73df !important;
-}
-
-.border-left-warning {
-    border-left: 0.25rem solid #f6c23e !important;
-}
-
-.border-left-danger {
-    border-left: 0.25rem solid #e74a3b !important;
-}
-
-.border-left-success {
-    border-left: 0.25rem solid #1cc88a !important;
-}
-
-.border-left-info {
-    border-left: 0.25rem solid #36b9cc !important;
-}
-
-.progress {
-    border-radius: 0.35rem;
-}
-
-.progress-sm {
-    height: 0.5rem;
-}
-</style>
-
-<script>
-// Auto-refresh every 30 seconds
-setTimeout(function() {
-    window.location.reload();
-}, 30000);
-
-// Quick stock update via modal
-function openQuickStockModal(productId, currentStock, productName) {
-    $('#quickStockProductName').text(productName);
-    $('#quickStockCurrent').text(currentStock);
-    $('#quickStockProductId').val(productId);
-    $('#quickStockInput').val(currentStock);
-    $('#quickStockModal').modal('show');
-}
-
-$('#quickStockForm').on('submit', function(e) {
-    e.preventDefault();
-    
-    const productId = $('#quickStockProductId').val();
-    const newStock = $('#quickStockInput').val();
-    
-    $.ajax({
-        url: '{% url "storefront:quick_stock_update" slug=store.slug product_id=0 %}'.replace('0', productId),
-        method: 'POST',
-        data: JSON.stringify({ stock: newStock }),
-        contentType: 'application/json',
-        headers: {
-            'X-CSRFToken': '{{ csrf_token }}'
-        },
-        success: function(response) {
-            if (response.success) {
-                location.reload();
-            } else {
-                alert('Error: ' + response.error);
-            }
-        },
-        error: function() {
-            alert('Error updating stock');
-        }
-    });
-});
-</script>
-
-<!-- Quick Stock Modal -->
-<div class="modal fade" id="quickStockModal" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Quick Stock Update</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <p>Update stock for: <strong id="quickStockProductName"></strong></p>
-                <p>Current stock: <span id="quickStockCurrent" class="font-weight-bold"></span></p>
-                
-                <form id="quickStockForm">
-                    {% csrf_token %}
-                    <input type="hidden" id="quickStockProductId">
-                    <div class="form-group">
-                        <label for="quickStockInput">New Stock Level</label>
-                        <input type="number" min="0" class="form-control" id="quickStockInput" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Update Stock</button>
-                </form>
-            </div>
+    <!-- Recent Stock Movements -->
+    <div class="movements-card">
+        <div class="movements-header">
+            <h3 class="movements-title">Recent Stock Movements</h3>
+            <a href="{% url 'storefront:stock_movements' slug=store.slug %}" class="btn-custom btn-sm btn-outline text-primary">
+                View All
+            </a>
+        </div>
+        <div class="table-responsive">
+            <table class="movements-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Product</th>
+                        <th>Type</th>
+                        <th>Quantity</th>
+                        <th>Previous</th>
+                        <th>New</th>
+                        <th>Changed By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for movement in recent_movements %}
+                    <tr>
+                        <td>{{ movement.created_at|date:"M d, H:i" }}</td>
+                        <td>
+                            <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=movement.product.slug %}" class="text-decoration-none">
+                                {{ movement.product.title|truncatechars:20 }}
+                            </a>
+                        </td>
+                        <td>
+                            {% if movement.movement_type == 'sale' %}
+                            <span class="movement-badge badge-sale">{{ movement.get_movement_type_display }}</span>
+                            {% elif movement.movement_type == 'purchase' %}
+                            <span class="movement-badge badge-purchase">{{ movement.get_movement_type_display }}</span>
+                            {% else %}
+                            <span class="movement-badge badge-adjustment">{{ movement.get_movement_type_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="{% if movement.quantity > 0 %}text-success{% else %}text-danger{% endif %}">
+                            {% if movement.quantity > 0 %}+{% endif %}{{ movement.quantity }}
+                        </td>
+                        <td>{{ movement.previous_stock }}</td>
+                        <td>{{ movement.new_stock }}</td>
+                        <td>
+                            {% if movement.created_by %}
+                            <span class="text-muted">{{ movement.created_by.username|truncatechars:10 }}</span>
+                            {% else %}
+                            <span class="text-muted">System</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4">
+                            <div class="empty-inventory">
+                                <div class="empty-icon">
+                                    <i class="bi bi-clock-history"></i>
+                                </div>
+                                <p class="text-muted">No stock movements yet</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
+
+<!-- Chart.js Library -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Auto-refresh every 30 seconds
+        setTimeout(function() {
+            window.location.reload();
+        }, 30000);
+
+        // Table row hover effects
+        document.querySelectorAll('.movements-table tbody tr').forEach(row => {
+            row.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateX(4px)';
+                this.style.boxShadow = 'var(--shadow-sm)';
+            });
+            
+            row.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateX(0)';
+                this.style.boxShadow = 'none';
+            });
+        });
+
+        // Quick stock update functionality
+        window.openQuickStockModal = function(productId, currentStock, productName) {
+            // Create modal HTML
+            const modalHTML = `
+                <div class="modal fade" id="quickStockModal" tabindex="-1" data-theme="light">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content text-secondary">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Quick Stock Update</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p>Update stock for: <strong>${productName}</strong></p>
+                                <p class="text-muted mb-3">Current stock: <span class="fw-bold">${currentStock}</span></p>
+                                <form id="quickStockForm">
+                                    {% csrf_token %}
+                                    <input type="hidden" id="quickStockProductId" value="${productId}">
+                                    <div class="mb-3">
+                                        <label class="form-label">New Stock Level</label>
+                                        <input type="number" min="0" class="form-control" id="quickStockInput" value="${currentStock}" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Notes (Optional)</label>
+                                        <textarea class="form-control" id="quickStockNotes" rows="2" placeholder="Reason for adjustment..."></textarea>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button type="submit" class="btn-custom btn-primary flex-grow-1">Update Stock</button>
+                                        <button type="button" class="btn-custom btn-outline text-danger" data-bs-dismiss="modal">Cancel</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Remove existing modal if any
+            const existingModal = document.getElementById('quickStockModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            // Add modal to DOM
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('quickStockModal'));
+            modal.show();
+
+            // Handle form submission
+            document.getElementById('quickStockForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                updateStock(productId);
+            });
+        };
+
+        function updateStock(productId) {
+            const newStock = document.getElementById('quickStockInput').value;
+            const notes = document.getElementById('quickStockNotes').value;
+
+            if (!newStock || newStock < 0) {
+                alert('Please enter a valid stock level');
+                return;
+            }
+
+            fetch(`{% url 'storefront:quick_stock_update' slug=store.slug product_id=0 %}`.replace('0', productId), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    stock: parseInt(newStock),
+                    notes: notes
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Error updating stock');
+            });
+        }
+
+        // Export functionality
+        function exportInventory(type) {
+            if (type === 'csv') {
+                window.location.href = '{% url "storefront:export_inventory" slug=store.slug %}';
+            }
+        }
+
+        // Add export dropdown to header
+        const exportDropdown = `
+            <div class="dropdown d-inline-block ms-2">
+                <button class="btn-custom btn-outline dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-download me-2"></i>Export
+                </button>
+                <div class="dropdown-menu dropdown-menu-end">
+                    <button class="dropdown-item" onclick="exportInventory('csv')">
+                        <i class="bi bi-file-earmark-spreadsheet me-2"></i>CSV
+                    </button>
+                    <button class="dropdown-item" onclick="window.print()">
+                        <i class="bi bi-printer me-2"></i>Print Report
+                    </button>
+                </div>
+            </div>
+        `;
+
+        // Insert export button after the action buttons
+        const btnGroup = document.querySelector('.btn-group');
+        if (btnGroup) {
+            btnGroup.insertAdjacentHTML('afterend', exportDropdown);
+        }
+    });
+
+    // Make exportInventory function global
+    window.exportInventory = function(type) {
+        if (type === 'csv') {
+            window.location.href = '{% url "storefront:export_inventory" slug=store.slug %}';
+        }
+    };
+</script>
 {% endblock %}

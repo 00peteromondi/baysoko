@@ -171,67 +171,6 @@ class BulkProductUpdateForm(forms.Form):
         
         return cleaned_data
 
-class BulkImportForm(forms.ModelForm):
-    """Form for bulk importing data"""
-    class Meta:
-        model = BatchJob
-        fields = ['file']
-        widgets = {
-            'file': forms.FileInput(attrs={
-                'accept': '.csv,.xlsx,.xls',
-                'class': 'form-control-file'
-            })
-        }
-    
-    template_type = forms.ChoiceField(
-        choices=ImportTemplate.TEMPLATE_TYPES,
-        initial='products'
-    )
-    template = forms.ModelChoiceField(
-        queryset=ImportTemplate.objects.none(),
-        required=False,
-        empty_label="No Template (Use Default)"
-    )
-    update_existing = forms.BooleanField(
-        initial=True,
-        required=False,
-        help_text="Update existing records if found"
-    )
-    create_new = forms.BooleanField(
-        initial=True,
-        required=False,
-        help_text="Create new records if not found"
-    )
-    skip_errors = forms.BooleanField(
-        initial=True,
-        required=False,
-        help_text="Skip rows with errors and continue"
-    )
-    
-    def __init__(self, store, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.store = store
-        self.fields['template'].queryset = ImportTemplate.objects.filter(
-            store=store,
-            is_active=True
-        )
-    
-    def clean_file(self):
-        file = self.cleaned_data.get('file')
-        if file:
-            # Check file size (10MB limit)
-            max_size = 10 * 1024 * 1024
-            if file.size > max_size:
-                raise forms.ValidationError(f'File size must be under {max_size//1024//1024}MB')
-            
-            # Check file extension
-            valid_extensions = ['.csv', '.xlsx', '.xls']
-            import os
-            ext = os.path.splitext(file.name)[1]
-            if ext.lower() not in valid_extensions:
-                raise forms.ValidationError('File must be CSV or Excel format')
-        
-        return file
 
 class ExportSettingsForm(forms.Form):
     """Form for configuring export settings"""

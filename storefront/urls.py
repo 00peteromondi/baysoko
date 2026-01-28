@@ -48,6 +48,9 @@ urlpatterns = [
     path('dashboard/store/<slug:slug>/subscription/invoice/<int:payment_id>/', views_subscription.subscription_invoice, name='subscription_invoice'),
     path('dashboard/store/<slug:slug>/subscription/settings/', views_subscription.subscription_settings, name='subscription_settings'),
     path('dashboard/store/<slug:slug>/subscription/retry/', views_subscription.retry_payment, name='retry_payment'),
+    # Movement APIs
+    path('store/<slug:slug>/inventory/movements/<int:movement_id>/undo/', views.undo_movement, name='undo_movement'),
+    path('store/<slug:slug>/inventory/movements/<int:movement_id>/',  views.get_movement_details, name='movement_details'),
     
     # Admin subscription views
     path('admin/subscriptions/', views.admin_subscription_list, name='admin_subscription_list'),
@@ -56,6 +59,11 @@ urlpatterns = [
     # Analytics
     path('dashboard/analytics/', views.seller_analytics, name='seller_analytics'),
     path('dashboard/store/<slug:slug>/analytics/', views.store_analytics, name='store_analytics'),
+    path('api/analytics/seller/summary/', views.seller_analytics_summary, name='seller_analytics_summary'),
+    path('api/analytics/store/<slug:slug>/summary/', views.store_analytics_summary, name='store_analytics_summary'),
+    path('api/analytics/revenue-trend/', views.revenue_trend_data, name='revenue_trend_data'),
+    path('api/analytics/customer-insights/', views.customer_insights, name='customer_insights'),
+    path('api/analytics/store/<slug:slug>/product-performance/', views.product_performance, name='product_performance'),
     
     # Payment monitoring
     path('dashboard/monitor/payments/', views.payment_monitor, name='payment_monitor'),

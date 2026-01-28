@@ -3,66 +3,420 @@
 
 {% block title %}Product Variants - {{ product.title }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* ===== VARIANTS STYLES ===== */
+    .variants-header {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .variants-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #8b5cf6, #ec4899);
+    }
+
+    .variants-title {
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .variants-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
+    /* ===== PRODUCT INFO CARD ===== */
+    .product-info-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+    }
+
+    .product-image {
+        width: 120px;
+        height: 120px;
+        border-radius: var(--radius-md);
+        object-fit: cover;
+        background: var(--bg-secondary);
+    }
+
+    .product-details {
+        flex: 1;
+    }
+
+    .product-name {
+        font-size: 20px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .product-description {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 16px;
+    }
+
+    .product-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 16px;
+    }
+
+    .product-stat {
+        text-align: center;
+    }
+
+    .stat-value {
+        font-size: 20px;
+        font-weight: 800;
+        margin-bottom: 4px;
+    }
+
+    .stat-label {
+        font-size: 11px;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* ===== VARIANTS TABLE ===== */
+    .variants-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 30px;
+    }
+
+    .variants-table-header {
+        background: var(--bg-secondary);
+        padding: 20px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .variants-table-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 0;
+    }
+
+    .variants-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .variants-table th {
+        background: var(--bg-secondary);
+        padding: 12px 16px;
+        text-align: left;
+        font-weight: 700;
+        color: var(--text-primary);
+        border-bottom: 2px solid var(--border-color);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .variants-table td {
+        padding: 16px;
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: middle;
+    }
+
+    .variants-table tbody tr {
+        transition: all 0.2s ease;
+    }
+
+    .variants-table tbody tr:hover {
+        background: var(--bg-secondary);
+    }
+
+    /* ===== VARIANT BADGES ===== */
+    .variant-badge {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 4px 8px;
+        border-radius: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .variant-active {
+        background: rgba(16, 185, 129, 0.1);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .variant-inactive {
+        background: rgba(107, 114, 128, 0.1);
+        color: #6b7280;
+        border: 1px solid rgba(107, 114, 128, 0.3);
+    }
+
+    .variant-value-badge {
+        background: rgba(59, 130, 246, 0.1);
+        color: #3b82f6;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 6px;
+    }
+
+    /* ===== PRICE DISPLAY ===== */
+    .price-display {
+        font-weight: 800;
+        font-size: 14px;
+    }
+
+    .price-adjustment {
+        font-size: 11px;
+    }
+
+    .price-positive {
+        color: #10b981;
+    }
+
+    .price-negative {
+        color: #ef4444;
+    }
+
+    .price-neutral {
+        color: var(--text-secondary);
+    }
+
+    /* ===== STOCK MANAGEMENT ===== */
+    .stock-management {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .stock-value {
+        font-weight: 800;
+        font-size: 14px;
+        min-width: 40px;
+        text-align: center;
+    }
+
+    /* ===== VARIANTS METRICS ===== */
+    .variants-metrics {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-top: 24px;
+    }
+
+    .variant-metric-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+
+    .variant-metric-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .variant-metric-icon {
+        font-size: 24px;
+        margin-bottom: 12px;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 16px;
+    }
+
+    .variant-metric-value {
+        font-size: 24px;
+        font-weight: 800;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+    }
+
+    .variant-metric-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* ===== EMPTY STATE ===== */
+    .empty-variants {
+        padding: 60px 20px;
+        text-align: center;
+    }
+
+    .empty-icon {
+        font-size: 48px;
+        color: var(--text-tertiary);
+        margin-bottom: 16px;
+    }
+
+    /* ===== MODAL STYLES ===== */
+    .variant-modal .form-control-custom {
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 10px 14px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        background: var(--card-bg);
+        color: var(--text-primary);
+    }
+
+    .variant-modal .form-control-custom:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        outline: none;
+    }
+
+    .variant-modal .form-label-custom {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .variant-modal .form-help {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-top: 4px;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .product-info {
+            flex-direction: column;
+            text-align: center;
+        }
+        
+        .product-image {
+            margin: 0 auto 20px;
+        }
+        
+        .product-stats {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .variants-table {
+            display: block;
+            overflow-x: auto;
+        }
+        
+        .variants-metrics {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 576px) {
+        .product-stats {
+            grid-template-columns: 1fr;
+        }
+        
+        .variants-metrics {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-custom py-3">
     <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1 class="h2 mb-1">Product Variants</h1>
-            <p class="text-muted mb-0">{{ product.title }}</p>
-        </div>
-        <div class="btn-group">
-            <a href="{% url 'storefront:inventory_list' slug=store.slug %}" 
-               class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left me-2"></i>Back to Inventory
-            </a>
-            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createVariantModal">
-                <i class="bi bi-plus-circle me-2"></i>Add Variant
-            </button>
+    <div class="variants-header">
+        <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
+            <div>
+                <h1 class="variants-title">Product Variants</h1>
+                <p class="variants-subtitle">Manage product options, sizes, colors, and more</p>
+            </div>
+            <div class="btn-group">
+                <a href="{% url 'storefront:inventory_list' slug=store.slug %}" 
+                   class="btn-custom btn-outline text-primary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Inventory
+                </a>
+                <button type="button" class="btn-custom btn-primary" data-bs-toggle="modal" data-bs-target="#createVariantModal">
+                    <i class="bi bi-plus-circle me-2"></i>Add Variant
+                </button>
+            </div>
         </div>
     </div>
 
     <!-- Product Info Card -->
-    <div class="card shadow mb-4">
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-2">
-                    <img src="{{ product.get_image_url }}" 
-                         class="img-fluid rounded" 
-                         style="max-height: 150px; object-fit: cover;"
-                         onerror="this.src='https://placehold.co/300x300/c2c2c2/1f1f1f?text=Product'">
-                </div>
-                <div class="col-md-10">
-                    <h4>{{ product.title }}</h4>
-                    <p class="text-muted mb-2">{{ product.description|truncatechars:200 }}</p>
-                    <div class="row">
-                        <div class="col-md-3">
-                            <small class="text-muted">Base Price</small>
-                            <p class="mb-0 fw-bold">KSh {{ product.price|intcomma }}</p>
+    <div class="product-info-card">
+        <div class="d-flex align-items-start gap-4 product-info">
+            <img src="{{ product.get_image_url }}" 
+                 class="product-image" 
+                 onerror="this.src='https://placehold.co/120x120/c2c2c2/1f1f1f?text=Product'">
+            
+            <div class="product-details">
+                <h2 class="product-name">{{ product.title }}</h2>
+                <p class="product-description">{{ product.description|truncatechars:200 }}</p>
+                
+                <div class="product-stats">
+                    <div class="product-stat">
+                        <div class="stat-value text-primary">KSh {{ product.price|intcomma }}</div>
+                        <div class="stat-label">Base Price</div>
+                    </div>
+                    
+                    <div class="product-stat">
+                        <div class="stat-value text-info">{{ product.stock|intcomma }}</div>
+                        <div class="stat-label">Base Stock</div>
+                    </div>
+                    
+                    <div class="product-stat">
+                        <div class="stat-value text-success">
+                            {% if variants.exists %}
+                            {{ variants_total_stock|default:0 }}
+                            {% else %}
+                            0
+                            {% endif %}
                         </div>
-                        <div class="col-md-3">
-                            <small class="text-muted">Total Stock</small>
-                            <p class="mb-0 fw-bold">
-                                {{ product.stock|intcomma }} units
-                                {% if variants.exists %}
-                                ({{ variants_total_stock|default:0 }} in variants)
-                                {% endif %}
-                            </p>
+                        <div class="stat-label">Variant Stock</div>
+                    </div>
+                    
+                    <div class="product-stat">
+                        <div class="stat-value">
+                            {% if product.is_active %}
+                            <span class="variant-badge variant-active">Active</span>
+                            {% else %}
+                            <span class="variant-badge variant-inactive">Inactive</span>
+                            {% endif %}
                         </div>
-                        <div class="col-md-3">
-                            <small class="text-muted">SKU</small>
-                            <p class="mb-0 fw-bold">{{ product.sku|default:"-" }}</p>
-                        </div>
-                        <div class="col-md-3">
-                            <small class="text-muted">Status</small>
-                            <p class="mb-0">
-                                {% if product.is_active %}
-                                <span class="badge bg-success">Active</span>
-                                {% else %}
-                                <span class="badge bg-secondary">Inactive</span>
-                                {% endif %}
-                            </p>
-                        </div>
+                        <div class="stat-label">Status</div>
                     </div>
                 </div>
             </div>
@@ -70,75 +424,74 @@
     </div>
 
     <!-- Variants Table -->
-    <div class="card shadow">
-        <div class="card-header py-3 d-flex justify-content-between align-items-center">
-            <h6 class="m-0 font-weight-bold text-primary">Product Variants</h6>
+    <div class="variants-card">
+        <div class="variants-table-header">
+            <h3 class="variants-table-title">Product Variants</h3>
             <span class="badge bg-primary">{{ variants.count }} variants</span>
         </div>
         
-        <div class="card-body">
-            {% if variants %}
-            <div class="table-responsive">
-                <table class="table table-hover" id="variantsTable">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Value</th>
-                            <th>SKU</th>
-                            <th>Price Adjustment</th>
-                            <th>Final Price</th>
-                            <th>Stock</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+        <div class="table-responsive">
+            <table class="variants-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Value</th>
+                        <th>SKU</th>
+                        <th>Price Adjustment</th>
+                        <th>Final Price</th>
+                        <th>Stock</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if variants %}
                         {% for variant in variants %}
                         <tr data-variant-id="{{ variant.id }}">
                             <td>
                                 <span class="fw-bold">{{ variant.name }}</span>
                             </td>
                             <td>
-                                <span class="badge bg-info">{{ variant.value }}</span>
+                                <span class="variant-value-badge">{{ variant.value }}</span>
                             </td>
                             <td>
-                                <span class="font-monospace">{{ variant.sku|default:"-" }}</span>
+                                <code>{{ variant.sku|default:"-" }}</code>
                             </td>
                             <td>
-                                {% if variant.price_adjustment > 0 %}
-                                <span class="text-success">+KSh {{ variant.price_adjustment|intcomma }}</span>
-                                {% elif variant.price_adjustment < 0 %}
-                                <span class="text-danger">-KSh {{ variant.price_adjustment|abs|intcomma }}</span>
-                                {% else %}
-                                <span class="text-muted">No adjustment</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <span class="fw-bold text-primary">KSh {{ variant.final_price|intcomma }}</span>
-                            </td>
-                            <td>
-                                <div class="d-flex align-items-center">
-                                    <span class="variant-stock me-2">{{ variant.stock }}</span>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-primary btn-sm quick-stock-btn"
-                                                data-variant-id="{{ variant.id }}"
-                                                data-variant-name="{{ variant.name }}: {{ variant.value }}"
-                                                data-current-stock="{{ variant.stock }}">
-                                            <i class="bi bi-pencil"></i>
-                                        </button>
-                                    </div>
+                                <div class="price-display">
+                                    {% if variant.price_adjustment > 0 %}
+                                    <span class="price-positive">+KSh {{ variant.price_adjustment|intcomma }}</span>
+                                    {% elif variant.price_adjustment < 0 %}
+                                    <span class="price-negative">-KSh {{ variant.price_adjustment|abs|intcomma }}</span>
+                                    {% else %}
+                                    <span class="price-neutral">No adjustment</span>
+                                    {% endif %}
                                 </div>
                             </td>
                             <td>
-                                {% if variant.is_active %}
-                                <span class="badge bg-success">Active</span>
-                                {% else %}
-                                <span class="badge bg-secondary">Inactive</span>
-                                {% endif %}
+                                <div class="price-display text-primary">
+                                    KSh {{ variant.final_price|intcomma }}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="stock-management">
+                                    <span class="stock-value">{{ variant.stock }}</span>
+                                    <button class="btn-custom btn-sm btn-outline text-primary quick-stock-btn"
+                                            data-variant-id="{{ variant.id }}"
+                                            data-variant-name="{{ variant.name }}: {{ variant.value }}"
+                                            data-current-stock="{{ variant.stock }}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="variant-badge {% if variant.is_active %}variant-active{% else %}variant-inactive{% endif %}">
+                                    {% if variant.is_active %}Active{% else %}Inactive{% endif %}
+                                </span>
                             </td>
                             <td>
                                 <div class="btn-group btn-group-sm">
-                                    <button type="button" class="btn btn-outline-primary edit-variant-btn"
+                                    <button type="button" class="btn-custom btn-sm btn-outline text-primary edit-variant-btn"
                                             data-variant-id="{{ variant.id }}"
                                             data-variant-name="{{ variant.name }}"
                                             data-variant-value="{{ variant.value }}"
@@ -154,7 +507,7 @@
                                           class="d-inline"
                                           onsubmit="return confirm('Are you sure you want to delete this variant?')">
                                         {% csrf_token %}
-                                        <button type="submit" class="btn btn-outline-danger">
+                                        <button type="submit" class="btn-custom btn-sm btn-outline-danger">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </form>
@@ -162,106 +515,71 @@
                             </td>
                         </tr>
                         {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            
-            <!-- Variants Summary -->
-            <div class="row mt-4">
-                <div class="col-md-3">
-                    <div class="card border-left-primary shadow h-100 py-2">
-                        <div class="card-body">
-                            <div class="row no-gutters align-items-center">
-                                <div class="col mr-2">
-                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                        Total Variants
-                                    </div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ variants.count }}</div>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5">
+                            <div class="empty-variants">
+                                <div class="empty-icon">
+                                    <i class="bi bi-box-seam"></i>
                                 </div>
-                                <div class="col-auto">
-                                    <i class="bi bi-list-ul fa-2x text-gray-300"></i>
-                                </div>
+                                <h5>No variants yet</h5>
+                                <p class="text-muted mb-4">
+                                    Variants allow you to offer different options for this product (like size, color, etc.)
+                                </p>
+                                <button type="button" class="btn-custom btn-primary" data-bs-toggle="modal" data-bs-target="#createVariantModal">
+                                    <i class="bi bi-plus-circle me-2"></i>Add Your First Variant
+                                </button>
                             </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-3">
-                    <div class="card border-left-success shadow h-100 py-2">
-                        <div class="card-body">
-                            <div class="row no-gutters align-items-center">
-                                <div class="col mr-2">
-                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                        Active Variants
-                                    </div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                        {{ variants_active_count }}
-                                    </div>
-                                </div>
-                                <div class="col-auto">
-                                    <i class="bi bi-check-circle fa-2x text-gray-300"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-3">
-                    <div class="card border-left-info shadow h-100 py-2">
-                        <div class="card-body">
-                            <div class="row no-gutters align-items-center">
-                                <div class="col mr-2">
-                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                        Total Stock in Variants
-                                    </div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ variants_total_stock }}</div>
-                                </div>
-                                <div class="col-auto">
-                                    <i class="bi bi-box-seam fa-2x text-gray-300"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-3">
-                    <div class="card border-left-warning shadow h-100 py-2">
-                        <div class="card-body">
-                            <div class="row no-gutters align-items-center">
-                                <div class="col mr-2">
-                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                        Out of Stock
-                                    </div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ out_of_stock_variants }}</div>
-                                </div>
-                                <div class="col-auto">
-                                    <i class="bi bi-exclamation-triangle fa-2x text-gray-300"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% else %}
-            <div class="text-center py-5">
-                <i class="bi bi-box-seam display-4 text-muted mb-3"></i>
-                <h5>No variants yet</h5>
-                <p class="text-muted mb-4">
-                    Variants allow you to offer different options for this product (like size, color, etc.)
-                </p>
-                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createVariantModal">
-                    <i class="bi bi-plus-circle me-2"></i>Add Your First Variant
-                </button>
-            </div>
-            {% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
         </div>
     </div>
+
+    <!-- Variants Metrics -->
+    {% if variants %}
+    <div class="variants-metrics">
+        <div class="variant-metric-card">
+            <div class="variant-metric-icon" style="background: rgba(79, 70, 229, 0.1); color: #4f46e5;">
+                <i class="bi bi-list-ul"></i>
+            </div>
+            <div class="variant-metric-value">{{ variants.count }}</div>
+            <div class="variant-metric-label">Total Variants</div>
+        </div>
+        
+        <div class="variant-metric-card">
+            <div class="variant-metric-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+                <i class="bi bi-check-circle"></i>
+            </div>
+            <div class="variant-metric-value">{{ variants_active_count }}</div>
+            <div class="variant-metric-label">Active Variants</div>
+        </div>
+        
+        <div class="variant-metric-card">
+            <div class="variant-metric-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+                <i class="bi bi-box-seam"></i>
+            </div>
+            <div class="variant-metric-value">{{ variants_total_stock }}</div>
+            <div class="variant-metric-label">Total Stock in Variants</div>
+        </div>
+        
+        <div class="variant-metric-card">
+            <div class="variant-metric-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
+                <i class="bi bi-exclamation-triangle"></i>
+            </div>
+            <div class="variant-metric-value">{{ out_of_stock_variants }}</div>
+            <div class="variant-metric-label">Out of Stock</div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Create Variant Modal -->
-<div class="modal fade" id="createVariantModal" tabindex="-1">
+<div class="modal fade variant-modal" id="createVariantModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content">
+        <div class="modal-content text-secondary">
             <div class="modal-header">
                 <h5 class="modal-title">Add Variant</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -271,51 +589,51 @@
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Name *</label>
-                            <input type="text" class="form-control" name="name" required 
+                            <label class="form-label-custom">Name</label>
+                            <input type="text" class="form-control-custom" name="name" required 
                                    placeholder="e.g., Color, Size, Material">
-                            <small class="text-muted">The attribute name (e.g., Color, Size)</small>
+                            <div class="form-help">The attribute name (e.g., Color, Size)</div>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Value *</label>
-                            <input type="text" class="form-control" name="value" required 
+                            <label class="form-label-custom">Value</label>
+                            <input type="text" class="form-control-custom" name="value" required 
                                    placeholder="e.g., Red, Large, Cotton">
-                            <small class="text-muted">The specific value (e.g., Red, Large)</small>
+                            <div class="form-help">The specific value (e.g., Red, Large)</div>
                         </div>
                     </div>
                     
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">SKU</label>
-                            <input type="text" class="form-control" name="sku" 
+                            <label class="form-label-custom">SKU</label>
+                            <input type="text" class="form-control-custom" name="sku" 
                                    placeholder="Leave empty to auto-generate">
-                            <small class="text-muted">Unique identifier for this variant</small>
+                            <div class="form-help">Unique identifier for this variant</div>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Price Adjustment</label>
+                            <label class="form-label-custom">Price Adjustment</label>
                             <div class="input-group">
                                 <span class="input-group-text">KSh</span>
-                                <input type="number" class="form-control" name="price_adjustment" 
+                                <input type="number" class="form-control-custom" name="price_adjustment" 
                                        value="0" step="0.01" placeholder="0.00">
                             </div>
-                            <small class="text-muted">Positive to increase, negative to decrease from base price</small>
+                            <div class="form-help">Positive to increase, negative to decrease from base price</div>
                         </div>
                     </div>
                     
                     <div class="row">
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">Stock *</label>
-                            <input type="number" class="form-control" name="stock" required 
+                            <label class="form-label-custom">Stock</label>
+                            <input type="number" class="form-control-custom" name="stock" required 
                                    value="0" min="0">
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">Weight (grams)</label>
-                            <input type="number" class="form-control" name="weight" 
+                            <label class="form-label-custom">Weight (grams)</label>
+                            <input type="number" class="form-control-custom" name="weight" 
                                    placeholder="e.g., 500">
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">Dimensions (LxWxH cm)</label>
-                            <input type="text" class="form-control" name="dimensions" 
+                            <label class="form-label-custom">Dimensions (LxWxH cm)</label>
+                            <input type="text" class="form-control-custom" name="dimensions" 
                                    placeholder="e.g., 10x5x3">
                         </div>
                     </div>
@@ -330,8 +648,8 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Variant</button>
+                    <button type="button" class="btn-custom btn-outline text-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-custom btn-primary">Add Variant</button>
                 </div>
             </form>
         </div>
@@ -339,9 +657,9 @@
 </div>
 
 <!-- Edit Variant Modal -->
-<div class="modal fade" id="editVariantModal" tabindex="-1">
+<div class="modal fade variant-modal" id="editVariantModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content">
+        <div class="modal-content text-secondary">
             <div class="modal-header">
                 <h5 class="modal-title">Edit Variant</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -352,25 +670,25 @@
                     <input type="hidden" id="edit_variant_id" name="variant_id">
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Name *</label>
-                            <input type="text" class="form-control" id="edit_name" name="name" required>
+                            <label class="form-label-custom">Name</label>
+                            <input type="text" class="form-control-custom" id="edit_name" name="name" required>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Value *</label>
-                            <input type="text" class="form-control" id="edit_value" name="value" required>
+                            <label class="form-label-custom">Value</label>
+                            <input type="text" class="form-control-custom" id="edit_value" name="value" required>
                         </div>
                     </div>
                     
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">SKU</label>
-                            <input type="text" class="form-control" id="edit_sku" name="sku">
+                            <label class="form-label-custom">SKU</label>
+                            <input type="text" class="form-control-custom" id="edit_sku" name="sku">
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Price Adjustment</label>
+                            <label class="form-label-custom">Price Adjustment</label>
                             <div class="input-group">
                                 <span class="input-group-text">KSh</span>
-                                <input type="number" class="form-control" id="edit_price_adjustment" 
+                                <input type="number" class="form-control-custom" id="edit_price_adjustment" 
                                        name="price_adjustment" step="0.01">
                             </div>
                         </div>
@@ -378,16 +696,16 @@
                     
                     <div class="row">
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">Stock *</label>
-                            <input type="number" class="form-control" id="edit_stock" name="stock" required min="0">
+                            <label class="form-label-custom">Stock</label>
+                            <input type="number" class="form-control-custom" id="edit_stock" name="stock" required min="0">
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">Weight (grams)</label>
-                            <input type="number" class="form-control" id="edit_weight" name="weight">
+                            <label class="form-label-custom">Weight (grams)</label>
+                            <input type="number" class="form-control-custom" id="edit_weight" name="weight">
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">Dimensions (LxWxH cm)</label>
-                            <input type="text" class="form-control" id="edit_dimensions" name="dimensions">
+                            <label class="form-label-custom">Dimensions (LxWxH cm)</label>
+                            <input type="text" class="form-control-custom" id="edit_dimensions" name="dimensions">
                         </div>
                     </div>
                     
@@ -401,8 +719,8 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                    <button type="button" class="btn-custom btn-outline text-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-custom btn-primary">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -410,9 +728,9 @@
 </div>
 
 <!-- Quick Stock Modal -->
-<div class="modal fade" id="quickStockModal" tabindex="-1">
+<div class="modal fade variant-modal" id="quickStockModal" tabindex="-1">
     <div class="modal-dialog">
-        <div class="modal-content">
+        <div class="modal-content text-secondary">
             <div class="modal-header">
                 <h5 class="modal-title">Quick Stock Update</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -420,36 +738,21 @@
             <div class="modal-body">
                 <p>Update stock for: <strong id="modalVariantName"></strong></p>
                 <div class="mb-3">
-                    <label class="form-label">Current Stock</label>
-                    <input type="text" class="form-control" id="currentVariantStock" readonly>
+                    <label class="form-label-custom">Current Stock</label>
+                    <input type="text" class="form-control-custom" id="currentVariantStock" readonly>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">New Stock Level</label>
-                    <input type="number" class="form-control" id="newVariantStock" min="0" required>
+                    <label class="form-label-custom">New Stock Level</label>
+                    <input type="number" class="form-control-custom" id="newVariantStock" min="0" required>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="saveVariantStockBtn">Update Stock</button>
+                <button type="button" class="btn-custom btn-outline text-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn-custom btn-primary" id="saveVariantStockBtn">Update Stock</button>
             </div>
         </div>
     </div>
 </div>
-
-<style>
-#variantsTable tbody tr:hover {
-    background-color: rgba(0,0,0,.02);
-}
-
-.badge {
-    font-size: 0.85em;
-}
-
-.variant-stock {
-    min-width: 30px;
-    text-align: center;
-}
-</style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -551,7 +854,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (data.success) {
                 // Update the table cell without reloading
-                const stockCell = document.querySelector(`tr[data-variant-id="${currentVariantId}"] .variant-stock`);
+                const stockCell = document.querySelector(`tr[data-variant-id="${currentVariantId}"] .stock-value`);
                 if (stockCell) {
                     stockCell.textContent = newStock;
                 }
@@ -563,6 +866,19 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .catch(error => {
             alert('Error updating stock');
+        });
+    });
+    
+    // Table row hover effects
+    document.querySelectorAll('.variants-table tbody tr').forEach(row => {
+        row.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateX(4px)';
+            this.style.boxShadow = 'var(--shadow-sm)';
+        });
+        
+        row.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateX(0)';
+            this.style.boxShadow = 'none';
         });
     });
     

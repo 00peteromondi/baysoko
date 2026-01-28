@@ -13,3 +13,19 @@ def abs_value(value):
             return abs(float(value))
         except Exception:
             return value
+        
+@register.filter(name='div')
+def div(value, arg):
+    """Divide value by arg."""
+    try:
+        return float(value) / float(arg)
+    except (ValueError, TypeError, ZeroDivisionError):
+        return value
+    
+@register.filter(name='mul')
+def mul(value, arg):
+    """Multiply value by arg."""
+    try:
+        return float(value) * float(arg)
+    except (ValueError, TypeError):
+        return value

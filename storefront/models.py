@@ -784,3 +784,39 @@ class InventoryAudit(models.Model):
 
 # Import bulk models to ensure they're discovered by Django
 from . import models_bulk
+
+# models.py - Add these analytics models
+from django.db import models
+from django.db.models import Sum, Count, Avg
+from django.utils import timezone
+
+class SellerAnalytics(models.Model):
+    """Track seller analytics data"""
+    seller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='analytics')
+    date = models.DateField(default=timezone.now)
+    total_revenue = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_orders = models.IntegerField(default=0)
+    active_stores = models.IntegerField(default=0)
+    active_listings = models.IntegerField(default=0)
+    revenue_trend = models.FloatField(default=0)  # Percentage change
+    orders_trend = models.FloatField(default=0)   # Percentage change
+    
+    class Meta:
+        unique_together = ['seller', 'date']
+        ordering = ['-date']
+
+class StoreAnalytics(models.Model):
+    """Track individual store analytics"""
+    store = models.ForeignKey('storefront.Store', on_delete=models.CASCADE, related_name='analytics')
+    date = models.DateField(default=timezone.now)
+    revenue = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    orders_count = models.IntegerField(default=0)
+    active_listings = models.IntegerField(default=0)
+    avg_order_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    views = models.IntegerField(default=0)
+    conversion_rate = models.FloatField(default=0)
+    
+    class Meta:
+        unique_together = ['store', 'date']
+        ordering = ['-date']
+

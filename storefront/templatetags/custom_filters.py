@@ -22,3 +22,11 @@ def in_cart(listing, user):
     except Exception:
         # Return None if anything goes wrong
         return None
+
+@register.filter
+def isinstance(obj, class_name):
+    """
+    Check if an object is an instance of a class given its name as a string.
+    Usage: {% if some_object|isinstance:"DesiredClassName" %} ... {% endif %}
+    """
+    return obj.__class__.__name__ == class_name
