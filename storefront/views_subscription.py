@@ -526,6 +526,8 @@ def store_upgrade(request, slug):
                         return redirect('storefront:subscription_manage', slug=slug)
                     
                     subscription = Subscription.objects.filter(store=store).first()
+                    # Normalize phone to avoid DB truncation
+                    phone_norm = mpesa._normalize_phone(phone_number)
                     if not subscription:
                         subscription = Subscription.objects.create(
                             store=store,
@@ -533,13 +535,13 @@ def store_upgrade(request, slug):
                             status='trialing',
                             amount=amount,
                             trial_ends_at=timezone.now() + timedelta(days=7),
-                            mpesa_phone=phone_number,
+                            mpesa_phone=phone_norm,
                             metadata={'plan_selected': selected_plan}
                         )
                     else:
                         subscription.plan = selected_plan
                         subscription.amount = amount
-                        subscription.mpesa_phone = phone_number
+                        subscription.mpesa_phone = phone_norm
                         subscription.metadata['plan_selected'] = selected_plan
                         subscription.status = 'trialing'
                         subscription.trial_ends_at = timezone.now() + timedelta(days=7)
@@ -558,25 +560,26 @@ def store_upgrade(request, slug):
                 ).first()
                 
                 if not subscription:
+                    phone_norm = mpesa._normalize_phone(phone_number)
                     subscription = Subscription.objects.create(
                         store=store,
                         plan=selected_plan,
                         status='trialing',
                         amount=amount,
                         trial_ends_at=timezone.now() + timedelta(days=7),
-                        mpesa_phone=phone_number,
+                        mpesa_phone=phone_norm,
                         metadata={'plan_selected': selected_plan}
                     )
                 else:
                     subscription.plan = selected_plan
                     subscription.amount = amount
-                    subscription.mpesa_phone = phone_number
+                    subscription.mpesa_phone = mpesa._normalize_phone(phone_number)
                     subscription.metadata['plan_selected'] = selected_plan
                     subscription.save()
                 
                 # Initiate M-Pesa payment
                 response = mpesa.initiate_stk_push(
-                    phone=phone_number,
+                    phone=mpesa._normalize_phone(phone_number),
                     amount=amount,
                     account_reference=f"Store-{store.id}-{selected_plan}"
                 )
@@ -586,7 +589,7 @@ def store_upgrade(request, slug):
                     subscription=subscription,
                     checkout_request_id=response['CheckoutRequestID'],
                     merchant_request_id=response['MerchantRequestID'],
-                    phone_number=phone_number,
+                    phone_number=mpesa._normalize_phone(phone_number),
                     amount=amount,
                     status='pending'
                 )
@@ -701,7 +704,8 @@ def subscription_settings(request, slug):
             # Validate phone number
             if len(phone_number) == 9 and phone_number.startswith('7'):
                 if subscription:
-                    subscription.mpesa_phone = f"+254{phone_number}"
+                    mpesa = MpesaGateway()
+                    subscription.mpesa_phone = mpesa._normalize_phone(phone_number)
                     subscription.save()
                     messages.success(request, "Payment method updated successfully.")
                 else:

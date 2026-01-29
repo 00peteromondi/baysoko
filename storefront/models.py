@@ -532,7 +532,13 @@ class Subscription(models.Model):
         self.current_period_end = timezone.now() + timezone.timedelta(days=30)
         
         if payment:
-            self.mpesa_phone = payment.phone_number
+            # Normalize phone before saving to avoid DB truncation errors
+            try:
+                from .utils.phone import normalize_phone
+                self.mpesa_phone = normalize_phone(payment.phone_number)
+            except Exception:
+                # Fallback to raw value if normalization fails
+                self.mpesa_phone = payment.phone_number
         
         self.save()
         
