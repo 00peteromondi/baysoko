@@ -119,7 +119,15 @@ def seller_dashboard(request):
 
     # Get plan limits for display
     limits = PlanPermissions.get_plan_limits(request.user)
-    free_limit = limits['max_products']
+    # Use the plan's max_products when present; otherwise fall back to global setting (default free limit)
+    free_limit = limits.get('max_products')
+    if free_limit is None:
+        free_limit = getattr(settings, 'STORE_FREE_LISTING_LIMIT', 5)
+    try:
+        free_limit = int(free_limit)
+    except Exception:
+        free_limit = getattr(settings, 'STORE_FREE_LISTING_LIMIT', 5)
+
     remaining = max(free_limit - total_listings, 0)
     percentage_used = (total_listings / free_limit * 100) if free_limit > 0 else 0
 

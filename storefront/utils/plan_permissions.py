@@ -132,7 +132,14 @@ class PlanPermissions:
         limits = cls.get_plan_limits(user)
         
         current_stores = Store.objects.filter(owner=user).count()
-        return current_stores < limits['max_stores']
+        max_stores = limits.get('max_stores')
+        # None means unlimited
+        if max_stores is None:
+            return True
+        try:
+            return current_stores < int(max_stores)
+        except Exception:
+            return current_stores < 1
 
     @classmethod
     def can_create_listing(cls, user, store=None):
@@ -143,7 +150,15 @@ class PlanPermissions:
             current_listings = Listing.objects.filter(seller=user, store=store).count()
         else:
             current_listings = Listing.objects.filter(seller=user).count()
-        return current_listings < limits['max_products']
+        max_products = limits.get('max_products')
+        # None indicates unlimited products
+        if max_products is None:
+            return True
+        try:
+            return current_listings < int(max_products)
+        except Exception:
+            # If invalid limit, be conservative and allow up to global free limit of 5
+            return current_listings < 5
 
     @classmethod
     def get_visible_stores(cls, user):
@@ -152,9 +167,14 @@ class PlanPermissions:
         limits = cls.get_plan_limits(user)
         stores = Store.objects.filter(owner=user).order_by('-created_at')
 
-        if limits['max_stores'] and stores.count() > limits['max_stores']:
-            # Only show allowed number of stores
-            return stores[:limits['max_stores']]
+        max_stores = limits.get('max_stores')
+        if max_stores is None:
+            return stores
+        try:
+            if stores.count() > int(max_stores):
+                return stores[:int(max_stores)]
+        except Exception:
+            pass
 
         return stores
 
@@ -169,9 +189,14 @@ class PlanPermissions:
         else:
             listings = Listing.objects.filter(seller=user).order_by('-date_created')
 
-        if limits['max_products'] and listings.count() > limits['max_products']:
-            # Only show allowed number of listings
-            return listings[:limits['max_products']]
+        max_products = limits.get('max_products')
+        if max_products is None:
+            return listings
+        try:
+            if listings.count() > int(max_products):
+                return listings[:int(max_products)]
+        except Exception:
+            pass
 
         return listings
 

@@ -1606,6 +1606,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize variables for image handling
     let mainImageFile = null;
     let additionalImageFiles = [];
+    // flags to detect whether programmatic assignment to input.files succeeded
+    let mainInputAssigned = false;
+    let additionalInputAssigned = false;
     const maxAdditionalImages = 9;
     
     // AI Toggle
@@ -1740,13 +1743,16 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             mainImageFile = file;
+            mainInputAssigned = false;
             // Attach file to the actual input so form submission includes it
             try {
                 const dt = new DataTransfer();
                 dt.items.add(file);
                 if (mainImageInput) mainImageInput.files = dt.files;
+                mainInputAssigned = true;
             } catch (e) {
                 console.warn('Could not attach file to input programmatically', e);
+                mainInputAssigned = false;
             }
             displayImagePreview(file, mainImagePreview, true);
             
@@ -1782,6 +1788,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             // Sync DataTransfer into the additional images input so the files are submitted
+            additionalInputAssigned = false;
             try {
                 const dt = new DataTransfer();
                 // preserve any existing files from the input
@@ -1790,8 +1797,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 validFiles.forEach(f => dt.items.add(f));
                 if (additionalImagesInput) additionalImagesInput.files = dt.files;
+                additionalInputAssigned = true;
             } catch (e) {
                 console.warn('Could not sync additional images into input', e);
+                additionalInputAssigned = false;
             }
             
             showToast(`${validFiles.length} additional image(s) uploaded`, 'success');
@@ -2001,6 +2010,46 @@ document.addEventListener('DOMContentLoaded', function() {
                 loadingOverlay.classList.add('show');
                 submitBtn.disabled = true;
                 submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i> Processing...';
+                // If programmatic assignment to input.files failed, fall back to AJAX upload
+                if ((mainImageFile && !mainInputAssigned) || (additionalImageFiles.length > 0 && !additionalInputAssigned)) {
+                    e.preventDefault();
+                    // Build FormData from form and append files manually
+                    const fd = new FormData(form);
+                    if (mainImageFile && !mainInputAssigned) {
+                        fd.set('image', mainImageFile, mainImageFile.name);
+                    }
+                    if (additionalImageFiles.length > 0 && !additionalInputAssigned) {
+                        // append multiple files with same field name
+                        additionalImageFiles.forEach(f => fd.append('images', f, f.name));
+                    }
+
+                    // include csrf token header is not necessary when using FormData, token included as form field
+                    fetch(form.action || window.location.href, {
+                        method: 'POST',
+                        body: fd,
+                        credentials: 'same-origin',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    }).then(response => {
+                        if (response.redirected) {
+                            window.location.href = response.url;
+                        } else {
+                            return response.text().then(html => {
+                                document.open();
+                                document.write(html);
+                                document.close();
+                            });
+                        }
+                    }).catch(err => {
+                        console.error('AJAX upload failed', err);
+                        showToast('Upload failed. Please try again.', 'error');
+                        loadingOverlay.classList.remove('show');
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = 'Submit';
+                    });
+                    return;
+                }
             });
         }
     }

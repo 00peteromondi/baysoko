@@ -1075,6 +1075,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const coverInput = document.getElementById('id_cover_image');
     const logoPreviewContainer = document.getElementById('logoPreviewContainer');
     const coverPreviewContainer = document.getElementById('coverPreviewContainer');
+    // keep references to files when programmatic assignment to input.files fails
+    let logoFile = null;
+    let coverFile = null;
+    let logoInputAssigned = false;
+    let coverInputAssigned = false;
     
     function setupDragDrop(uploadArea, input, previewContainer) {
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -1127,8 +1132,22 @@ document.addEventListener('DOMContentLoaded', function() {
             const dt = new DataTransfer();
             dt.items.add(file);
             if (input) input.files = dt.files;
+            if (type === 'logo') {
+                logoInputAssigned = true;
+                logoFile = file;
+            } else {
+                coverInputAssigned = true;
+                coverFile = file;
+            }
         } catch (e) {
             console.warn('Could not attach file to input programmatically', e);
+            if (type === 'logo') {
+                logoInputAssigned = false;
+                logoFile = file;
+            } else {
+                coverInputAssigned = false;
+                coverFile = file;
+            }
         }
 
         displayImagePreview(file, input, previewContainer, type);
@@ -1233,6 +1252,36 @@ document.addEventListener('DOMContentLoaded', function() {
     // Form validation
     const form = document.getElementById('storeForm');
     if (form) {
+        form.addEventListener('submit', function(e) {
+            // If programmatic assignment to input.files failed, do AJAX submit with files appended
+            if ((logoFile && !logoInputAssigned) || (coverFile && !coverInputAssigned)) {
+                e.preventDefault();
+                const fd = new FormData(form);
+                if (logoFile && !logoInputAssigned) fd.set('logo', logoFile, logoFile.name);
+                if (coverFile && !coverInputAssigned) fd.set('cover_image', coverFile, coverFile.name);
+
+                fetch(form.action || window.location.href, {
+                    method: 'POST',
+                    body: fd,
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                }).then(response => {
+                    if (response.redirected) {
+                        window.location.href = response.url;
+                    } else {
+                        return response.text().then(html => {
+                            document.open();
+                            document.write(html);
+                            document.close();
+                        });
+                    }
+                }).catch(err => {
+                    console.error('AJAX upload failed', err);
+                    showToast('Upload failed. Please try again.', 'error');
+                });
+                return;
+            }
+        });
         form.addEventListener('submit', function(e) {
             const requiredFields = form.querySelectorAll('[required]');
             let isValid = true;
