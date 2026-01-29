@@ -12,8 +12,10 @@ from datetime import timedelta
 import json
 from io import BytesIO
 import csv
+import logging
 
 from .models import Store, InventoryAlert, ProductVariant, StockMovement, InventoryAudit
+from listings.models import Order, OrderItem
 from .forms_inventory import (
     InventoryAlertForm, ProductVariantForm, 
     StockAdjustmentForm, InventoryAuditForm,
@@ -21,6 +23,8 @@ from .forms_inventory import (
 )
 from listings.models import Listing, Category
 from .decorators import store_owner_required, plan_required
+
+logger = logging.getLogger(__name__)
 
 @login_required
 @store_owner_required('inventory')
@@ -39,10 +43,59 @@ def inventory_dashboard(request, slug):
         total_value=Sum(F('price') * F('stock'))
     )['total_value'] or 0
     
-    # Recent stock movements
-    recent_movements = StockMovement.objects.filter(
-        store=store
-    ).select_related('product', 'created_by')[:10]
+    # Recent stock movements (include StockMovement records and recent successful orders)
+    stock_moves = list(StockMovement.objects.filter(store=store).select_related('product', 'created_by').order_by('-created_at')[:10])
+
+    # Recent successful orders that affect this store
+    recent_orders = Order.objects.filter(
+        order_items__listing__store=store,
+        status__in=['paid', 'delivered']
+    ).distinct().order_by('-created_at')[:10]
+
+    # Convert orders into movement-like dicts for unified display
+    order_movements = []
+    for order in recent_orders:
+        # sum quantities for items in this store
+        items = order.order_items.filter(listing__store=store)
+        total_qty = 0
+        first_listing = None
+        for it in items:
+            total_qty += it.quantity
+            if not first_listing:
+                first_listing = it.listing
+
+        if not first_listing:
+            continue
+
+        # For display, sales reduce stock -> represent as negative quantity
+        qty = -total_qty
+
+        # previous_stock approximated as current stock + items sold
+        prev_stock = None
+        try:
+            prev_stock = (first_listing.stock or 0) + total_qty
+        except Exception:
+            prev_stock = None
+
+        order_movements.append({
+            'created_at': order.created_at,
+            'product': first_listing,
+            'movement_type': 'order',
+            'get_movement_type_display': 'Order',
+            'quantity': qty,
+            'previous_stock': prev_stock,
+            'new_stock': first_listing.stock,
+            'created_by': getattr(order, 'user', None),
+            'notes': f'Order #{order.id}'
+        })
+
+    # Merge and sort movements by timestamp
+    recent_combined = []
+    # include model instances and dicts together
+    recent_combined.extend(stock_moves)
+    recent_combined.extend(order_movements)
+    recent_combined.sort(key=lambda x: x.created_at if hasattr(x, 'created_at') else x.get('created_at'), reverse=True)
+    recent_movements = recent_combined[:10]
     
     # Active alerts
     active_alerts = InventoryAlert.objects.filter(
@@ -50,19 +103,21 @@ def inventory_dashboard(request, slug):
         is_active=True
     ).count()
     
-    # Stock turnover (last 30 days)
+    # Stock turnover (last 30 days) - use order items sold across store listings
     thirty_days_ago = timezone.now() - timedelta(days=30)
-    sales_movements = StockMovement.objects.filter(
-        store=store,
-        movement_type='sale',
-        created_at__gte=thirty_days_ago
+    sales_items = OrderItem.objects.filter(
+        listing__store=store,
+        order__status__in=['paid', 'delivered'],
+        order__created_at__gte=thirty_days_ago
     ).aggregate(total_sold=Sum('quantity'))['total_sold'] or 0
-    
-    # Calculate stock turnover rate
+
+    # Calculate average stock across products (current average)
     avg_stock = store.listings.aggregate(
         avg_stock=Avg('stock')
     )['avg_stock'] or 0
-    turnover_rate = (sales_movements / (avg_stock * 30)) * 100 if avg_stock > 0 else 0
+
+    # Turnover rate: units sold / average stock over the period; express as percentage
+    turnover_rate = (sales_items / avg_stock * 100) if avg_stock > 0 else 0
     
     # Category distribution
     category_distribution = store.listings.values(
@@ -227,6 +282,9 @@ def adjust_stock(request, slug):
                 variant = data['variant']
                 quantity = data['quantity']
                 notes = data['notes']
+                quick_flag = bool(request.POST.get('quick_adjust'))
+                if quick_flag:
+                    notes = (notes or '') + (' ' if notes else '') + '[Quick Adjustment]'
                 adjustment_type = request.POST.get('adjustment_type', 'add')
                 
                 # Determine which stock to adjust
@@ -277,7 +335,7 @@ def adjust_stock(request, slug):
                 messages.success(request, 'Stock adjusted successfully.')
                 # If request came from AJAX (frontend expects JSON), return JSON
                 if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest':
-                    return JsonResponse({'success': True, 'product_id': product.id, 'variant_id': variant.id if variant else None, 'new_stock': variant.stock if variant else product.stock})
+                    return JsonResponse({'success': True, 'product_id': product.id, 'variant_id': variant.id if variant else None, 'new_stock': variant.stock if variant else product.stock, 'quick_adjust': quick_flag})
                 return redirect('storefront:inventory_dashboard', slug=slug)
         else:
             # Form invalid
@@ -316,12 +374,18 @@ def bulk_stock_update(request, slug):
             update_type = data['update_type']
             value = float(data['value'])
             apply_to = data['apply_to']
+            # additional flags from template
+            skip_out_of_stock = bool(request.POST.get('skip_out_of_stock'))
+            prevent_negative = bool(request.POST.get('prevent_negative'))
+            notes = request.POST.get('notes', '')
             
             # Get products to update
             if apply_to == 'all':
                 products = store.listings.all()
-            elif apply_to == 'category' and data['category']:
+            elif apply_to == 'category' and data.get('category'):
                 products = store.listings.filter(category=data['category'])
+            elif apply_to == 'selected' and data.get('selected_products'):
+                products = data.get('selected_products')
             elif apply_to == 'low_stock':
                 products = store.listings.filter(stock__lte=5, stock__gt=0)
             elif apply_to == 'out_of_stock':
@@ -332,14 +396,52 @@ def bulk_stock_update(request, slug):
             # Apply updates
             updated_count = 0
             for product in products:
+                # skip out of stock products if requested
+                if skip_out_of_stock and (product.stock == 0):
+                    continue
+
+                # compute new stock as float then coerce to int based on flags
                 if update_type == 'percentage':
-                    product.stock = max(0, int(product.stock * (1 + value / 100)))
+                    computed = product.stock * (1 + value / 100)
                 elif update_type == 'fixed':
-                    product.stock = max(0, product.stock + int(value))
+                    computed = product.stock + value
                 else:  # set
-                    product.stock = max(0, int(value))
-                
+                    computed = value
+
+                if prevent_negative:
+                    new_stock = max(0, int(computed))
+                else:
+                    new_stock = int(computed)
+
+                previous_stock = product.stock
+                # Persist new stock
+                product.stock = new_stock
                 product.save()
+
+                # Create StockMovement record to track the bulk change
+                try:
+                    StockMovement.objects.create(
+                        store=store,
+                        product=product,
+                        variant=None,
+                        movement_type='adjustment',
+                        quantity=(new_stock - previous_stock),
+                        previous_stock=previous_stock,
+                        new_stock=new_stock,
+                        notes=(f'Bulk update. {notes}' if notes else 'Bulk update'),
+                        created_by=request.user
+                    )
+                except Exception as e:
+                    # Log the failure with context so we can investigate without failing the bulk run
+                    logger.exception(
+                        "Failed creating StockMovement for product id=%s store=%s new_stock=%s prev_stock=%s: %s",
+                        getattr(product, 'id', None),
+                        getattr(store, 'id', None),
+                        new_stock,
+                        previous_stock,
+                        str(e)
+                    )
+
                 updated_count += 1
             
             messages.success(request, f'Updated stock for {updated_count} products.')
@@ -348,9 +450,33 @@ def bulk_stock_update(request, slug):
     else:
         form = BulkStockUpdateForm(store)
     
+    # helper stats for template
+    products_qs = store.listings.all()
+    total_products = products_qs.count()
+    average_stock = products_qs.aggregate(avg=Avg('stock'))['avg'] or 0
+    low_stock_count = products_qs.filter(stock__lte=5, stock__gt=0).count()
+    out_of_stock_count = products_qs.filter(stock=0).count()
+    good_count = products_qs.filter(stock__gt=10).count()
+    # distribution percentages (safe)
+    if total_products > 0:
+        stock_distribution = {
+            'good': int(good_count / total_products * 100),
+            'low': int(low_stock_count / total_products * 100),
+            'out': int(out_of_stock_count / total_products * 100),
+        }
+    else:
+        stock_distribution = {'good': 0, 'low': 0, 'out': 0}
+
     context = {
         'store': store,
         'form': form,
+        'products': products_qs.order_by('title'),
+        'categories': Category.objects.filter(listing__store=store).distinct(),
+        'total_products': total_products,
+        'average_stock': average_stock,
+        'low_stock_count': low_stock_count,
+        'out_of_stock_count': out_of_stock_count,
+        'stock_distribution': stock_distribution,
     }
     
     return render(request, 'storefront/inventory/bulk_update.html', context)
@@ -481,39 +607,97 @@ def stock_movements(request, slug):
     """View stock movement history"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
     
-    movements = StockMovement.objects.filter(store=store).select_related(
-        'product', 'variant', 'created_by'
-    ).order_by('-created_at')
-    
-    # Apply filters
+    # Base stock movement queryset
+    stock_qs = StockMovement.objects.filter(store=store).select_related('product', 'variant', 'created_by')
+
+    # Filters
     movement_type = request.GET.get('type')
     date_from = request.GET.get('date_from')
     date_to = request.GET.get('date_to')
-    
-    if movement_type:
-        movements = movements.filter(movement_type=movement_type)
-    
+
     if date_from:
-        movements = movements.filter(created_at__date__gte=date_from)
-    
+        stock_qs = stock_qs.filter(created_at__date__gte=date_from)
+
     if date_to:
-        movements = movements.filter(created_at__date__lte=date_to)
-    
-    # Pagination
-    paginator = Paginator(movements, 50)
+        stock_qs = stock_qs.filter(created_at__date__lte=date_to)
+
+    if movement_type and movement_type != 'order':
+        stock_qs = stock_qs.filter(movement_type=movement_type)
+
+    stock_moves = list(stock_qs.order_by('-created_at'))
+
+    # Include orders as movements when requested or by default
+    order_qs = Order.objects.filter(order_items__listing__store=store, status__in=['paid', 'delivered']).distinct()
+    if date_from:
+        order_qs = order_qs.filter(created_at__date__gte=date_from)
+    if date_to:
+        order_qs = order_qs.filter(created_at__date__lte=date_to)
+    if movement_type == 'order':
+        # only orders
+        order_qs = order_qs.order_by('-created_at')
+    else:
+        order_qs = order_qs.order_by('-created_at')
+
+    order_movements = []
+    for order in order_qs:
+        items = order.order_items.filter(listing__store=store)
+        total_qty = 0
+        first_listing = None
+        for it in items:
+            total_qty += it.quantity
+            if not first_listing:
+                first_listing = it.listing
+        if not first_listing:
+            continue
+        qty = -total_qty
+        prev_stock = None
+        try:
+            prev_stock = (first_listing.stock or 0) + total_qty
+        except Exception:
+            prev_stock = None
+
+        order_movements.append({
+            'created_at': order.created_at,
+            'product': first_listing,
+            'movement_type': 'order',
+            'get_movement_type_display': 'Order',
+            'quantity': qty,
+            'previous_stock': prev_stock,
+            'new_stock': first_listing.stock,
+            'created_by': getattr(order, 'user', None),
+            'notes': f'Order #{order.id}'
+        })
+
+    # Merge stock movements (model instances) and order dicts
+    combined = []
+    combined.extend(stock_moves)
+    combined.extend(order_movements)
+    combined.sort(key=lambda x: x.created_at if hasattr(x, 'created_at') else x.get('created_at'), reverse=True)
+
+    # If filtering by movement_type == 'order', only include order entries
+    if movement_type == 'order':
+        combined = [c for c in combined if (not hasattr(c, 'movement_type') and c.get('movement_type') == 'order') or (hasattr(c, 'movement_type') and getattr(c, 'movement_type') == 'order')]
+
+    # Pagination over combined list
+    paginator = Paginator(combined, 50)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    # Compute simple stats for display
-    stock_added = movements.filter(quantity__gt=0).aggregate(total=Sum('quantity'))['total'] or 0
-    stock_removed = movements.filter(quantity__lt=0).aggregate(total=Sum('quantity'))['total'] or 0
-    # stock_removed is negative; present as positive number
-    stock_removed = abs(stock_removed)
+
+    # Compute simple stats for display from combined items
+    stock_added = 0
+    stock_removed = 0
+    for mv in combined:
+        qty = mv.quantity if hasattr(mv, 'quantity') else mv.get('quantity', 0)
+        if qty and qty > 0:
+            stock_added += qty
+        elif qty and qty < 0:
+            stock_removed += abs(qty)
     net_change = stock_added - stock_removed
 
     context = {
         'store': store,
         'page_obj': page_obj,
-        'movement_types': StockMovement.MOVEMENT_TYPES,
+        'movement_types': StockMovement.MOVEMENT_TYPES + [('order', 'Order')],
         'stock_added': stock_added,
         'stock_removed': stock_removed,
         'net_change': net_change,

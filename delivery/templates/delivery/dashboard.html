@@ -3,384 +3,638 @@
 
 {% block title %}Dashboard - Delivery Management{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* ===== DASHBOARD STATS ===== */
+    .stats-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    
+    .stat-card {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        box-shadow: var(--shadow-sm);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .stat-card:hover {
+        border-color: var(--primary);
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
+    }
+    
+    .stat-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: linear-gradient(to bottom, var(--primary), var(--primary-dark));
+    }
+    
+    .stat-value {
+        font-size: 32px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+        line-height: 1;
+    }
+    
+    .stat-label {
+        font-size: 14px;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .stat-icon {
+        font-size: 24px;
+        opacity: 0.8;
+    }
+    
+    .stat-trend {
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 12px;
+        display: inline-block;
+        margin-top: 4px;
+    }
+    
+    .trend-up { background: rgba(40, 167, 69, 0.2); color: #28a745; }
+    .trend-down { background: rgba(220, 53, 69, 0.2); color: #dc3545; }
+    
+    /* ===== QUICK ACTIONS ===== */
+    .quick-actions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    
+    .action-card {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        border: 1px solid var(--border-color);
+        text-decoration: none;
+        transition: all 0.3s ease;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+    }
+    
+    .action-card:hover {
+        border-color: var(--primary);
+        background: var(--bg-tertiary);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .action-icon {
+        font-size: 32px;
+        color: var(--primary);
+    }
+    
+    .action-title {
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0;
+    }
+    
+    .action-desc {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin: 0;
+    }
+    
+    /* ===== RECENT DELIVERIES ===== */
+    .deliveries-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 16px;
+    }
+    
+    .delivery-card {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+    
+    .delivery-card:hover {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .delivery-header {
+        background: var(--bg-tertiary);
+        padding: 16px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .delivery-id {
+        font-weight: 700;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+    }
+    
+    .delivery-meta {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+    
+    .delivery-content {
+        padding: 16px;
+    }
+    
+    .delivery-info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .delivery-info-row:last-child {
+        border-bottom: none;
+    }
+    
+    .info-label {
+        color: var(--text-secondary);
+        font-size: 13px;
+    }
+    
+    .info-value {
+        color: var(--text-primary);
+        font-weight: 500;
+        font-size: 13px;
+    }
+    
+    .delivery-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 16px;
+    }
+    
+    /* ===== CHARTS ===== */
+    .charts-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 16px;
+        margin-top: 24px;
+    }
+    
+    .chart-card {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        padding: 20px;
+    }
+    
+    .chart-title {
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    /* ===== STORE FILTER ===== */
+    .store-filter {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        margin-bottom: 16px;
+        border: 1px solid var(--border-color);
+    }
+    
+    .filter-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    
+    .filter-btn {
+        padding: 8px 16px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        background: var(--bg-tertiary);
+        color: var(--text-secondary);
+        font-size: 13px;
+        text-decoration: none;
+        transition: all 0.2s ease;
+    }
+    
+    .filter-btn:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+    
+    .filter-btn.active {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        border-color: var(--primary);
+        color: white;
+    }
+    
+    /* ===== EMPTY STATE ===== */
+    .empty-state {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        padding: 48px 24px;
+        text-align: center;
+        border: 1px solid var(--border-color);
+        margin-top: 20px;
+    }
+    
+    .empty-icon {
+        font-size: 48px;
+        color: var(--text-secondary);
+        margin-bottom: 16px;
+    }
+    
+    .empty-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+    
+    .empty-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 24px;
+    }
+    
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .stats-container {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .deliveries-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .quick-actions {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    
+    @media (max-width: 576px) {
+        .stats-container {
+            grid-template-columns: 1fr;
+        }
+        
+        .quick-actions {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row mb-4">
-    <div class="col-md-8">
-        <h2 class="mb-0">Delivery Dashboard</h2>
-        <p class="text-muted">
-            Welcome back, {{ user.get_full_name|default:user.username }}
-            {% if is_seller and stores %}
-            | 
-            <span class="badge bg-info">
-                <i class="fas fa-store"></i> Seller
-            </span>
-            {% endif %}
-        </p>
-    </div>
-    <div class="col-md-4 text-md-end">
-        {% if is_admin or is_seller or is_delivery_person %}
-        <a href="{% url 'delivery:create_delivery' %}" class="btn btn-delivery">
-            <i class="fas fa-plus-circle"></i> Create New Delivery
-        </a>
+<div class="content-header">
+    <h1 class="page-title">
+        <i class="bi bi-speedometer2"></i> Delivery Dashboard
+    </h1>
+    <p class="page-subtitle">
+        Welcome back, {{ user.get_full_name|default:user.username }}
+        {% if is_seller %}
+        <span class="badge bg-info ms-1">Seller</span>
         {% endif %}
-    </div>
+        {% if is_delivery_person %}
+        <span class="badge bg-warning ms-1">Driver</span>
+        {% endif %}
+    </p>
 </div>
 
 <!-- Store Filter for Sellers -->
-{% if is_seller and stores.count > 0 %}
-<div class="row mb-3">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body py-2">
-                <div class="d-flex align-items-center">
-                    <span class="me-2"><i class="fas fa-filter"></i> Filter by Store:</span>
-                    <div class="btn-group" role="group">
-                        <a href="?{% if filter_status %}status={{ filter_status }}&{% endif %}" 
-                           class="btn btn-sm {% if not selected_store_id %}btn-primary{% else %}btn-outline-primary{% endif %}">
-                            All Stores ({{ stores.count }})
-                        </a>
-                        {% for store in stores %}
-                        <a href="?{% if filter_status %}status={{ filter_status }}&{% endif %}store_id={{ store.id }}" 
-                           class="btn btn-sm {% if selected_store_id == store.id|stringformat:"i" %}btn-primary{% else %}btn-outline-primary{% endif %}">
-                            {{ store.name }}
-                        </a>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
+{% if is_seller and stores %}
+<div class="store-filter">
+    <div class="d-flex align-items-center mb-2">
+        <i class="bi bi-filter me-2"></i>
+        <span class="small">Filter by Store:</span>
+    </div>
+    <div class="filter-buttons">
+        <a href="?{% if filter_status %}status={{ filter_status }}{% endif %}" 
+           class="filter-btn {% if not selected_store_id %}active{% endif %}">
+            All Stores ({{ stores.count }})
+        </a>
+        {% for store in stores %}
+        <a href="?{% if filter_status %}status={{ filter_status }}&{% endif %}store_id={{ store.id }}" 
+           class="filter-btn {% if selected_store_id == store.id|stringformat:"i" %}active{% endif %}">
+            {{ store.name }}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Quick Create from Order -->
+{% if request.GET.order_id and is_seller %}
+<div class="alert alert-info d-flex align-items-center">
+    <i class="bi bi-info-circle fs-4 me-3"></i>
+    <div>
+        <strong>Quick action:</strong> Create a delivery for Order #{{ request.GET.order_id }}
+        <div class="mt-1">
+            <a href="{% url 'delivery:create_delivery' %}?order_id={{ request.GET.order_id }}" 
+               class="btn btn-sm btn-primary">
+                <i class="bi bi-plus-circle"></i> Create Delivery
+            </a>
+            <a href="{% url 'order_detail' request.GET.order_id %}" 
+               class="btn btn-sm btn-outline-primary ms-2">
+                <i class="bi bi-eye"></i> View Order
+            </a>
         </div>
     </div>
 </div>
 {% endif %}
 
-{# Quick create for order context when redirected from orders list #}
-{% if request.GET.order_id %}
-    {% if is_admin or is_seller %}
-    <div class="row mb-3">
-        <div class="col-12">
-            <div class="alert alert-info">
-                <strong>Quick action:</strong> Create a delivery for Order #{{ request.GET.order_id }}
-                <a href="{% url 'delivery:create_delivery' %}?order_id={{ request.GET.order_id }}" class="btn btn-sm btn-primary ms-3">Create Delivery</a>
-            </div>
+<!-- Stats Cards -->
+<div class="stats-container">
+    <div class="stat-card">
+        <div class="stat-value">{{ total_deliveries|intcomma }}</div>
+        <div class="stat-label">
+            <i class="bi bi-box-seam stat-icon"></i>
+            Total Deliveries
         </div>
+        {% if is_seller and selected_store_id %}
+        <small class="text-info">
+            <i class="bi bi-shop"></i> For selected store
+        </small>
+        {% endif %}
     </div>
+    
+    <div class="stat-card">
+        <div class="stat-value">{{ pending_deliveries|intcomma }}</div>
+        <div class="stat-label">
+            <i class="bi bi-clock stat-icon"></i>
+            Pending
+        </div>
+        <span class="stat-trend trend-up">Awaiting processing</span>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-value">{{ in_transit_deliveries|intcomma }}</div>
+        <div class="stat-label">
+            <i class="bi bi-truck stat-icon"></i>
+            In Transit
+        </div>
+        <span class="stat-trend trend-up">On the way</span>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-value">{{ completed_deliveries|intcomma }}</div>
+        <div class="stat-label">
+            <i class="bi bi-check-circle stat-icon"></i>
+            Completed
+        </div>
+        {% if monthly_revenue > 0 %}
+        <span class="stat-trend trend-up">KES {{ monthly_revenue|intcomma }} revenue</span>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="quick-actions">
+    <a href="{% url 'delivery:create_delivery' %}" class="action-card">
+        <i class="bi bi-plus-circle action-icon"></i>
+        <h6 class="action-title">New Delivery</h6>
+        <p class="action-desc">Create a new delivery request</p>
+    </a>
+    
+    <a href="{% url 'delivery:delivery_list' %}" class="action-card">
+        <i class="bi bi-list-check action-icon"></i>
+        <h6 class="action-title">All Deliveries</h6>
+        <p class="action-desc">View all deliveries</p>
+    </a>
+    
+    {% if is_delivery_person %}
+    <a href="{% url 'delivery:driver_dashboard' %}" class="action-card">
+        <i class="bi bi-person-badge action-icon"></i>
+        <h6 class="action-title">Driver Tools</h6>
+        <p class="action-desc">Driver dashboard</p>
+    </a>
     {% endif %}
-{% endif %}
+    
+    <a href="#" onclick="promptTracking()" class="action-card">
+        <i class="bi bi-search action-icon"></i>
+        <h6 class="action-title">Track Package</h6>
+        <p class="action-desc">Track any delivery</p>
+    </a>
+    
+    {% if is_seller or is_delivery_person %}
+    <a href="{% url 'delivery:reports' %}" class="action-card">
+        <i class="bi bi-bar-chart action-icon"></i>
+        <h6 class="action-title">Reports</h6>
+        <p class="action-desc">View delivery reports</p>
+    </a>
+    {% endif %}
+    
+    {% if is_delivery_person %}
+    <a href="#" onclick="updateDriverStatus('available')" class="action-card">
+        <i class="bi bi-circle-fill text-success action-icon"></i>
+        <h6 class="action-title">Mark Available</h6>
+        <p class="action-desc">Set status to available</p>
+    </a>
+    {% endif %}
+</div>
 
-<!-- Statistics Cards -->
-<div class="row mb-4">
-    <div class="col-md-3 mb-3">
-        <div class="card stat-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h6 class="text-muted mb-0">Total Deliveries</h6>
-                        <h3 class="mb-0">{{ total_deliveries|intcomma }}</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-boxes fa-2x text-primary"></i>
-                    </div>
+<!-- Recent Deliveries -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+            <i class="bi bi-clock-history me-2"></i>
+            Recent Deliveries
+            {% if is_seller %}
+            <span class="badge bg-info ms-2">Your Stores</span>
+            {% endif %}
+        </h5>
+        <a href="{% url 'delivery:delivery_list' %}{% if selected_store_id %}?store={{ selected_store_id }}{% endif %}" 
+           class="btn btn-sm btn-outline-primary">
+            View All
+        </a>
+    </div>
+    <div class="card-body">
+        <!-- Status Filter -->
+        <div class="mb-3">
+            <form method="get" class="row g-2">
+                <div class="col-md-4">
+                    <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">All Statuses</option>
+                        {% for key, label in status_choices %}
+                        <option value="{{ key }}" {% if filter_status == key %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
                 </div>
-                {% if is_seller and selected_store_id %}
-                <small class="text-info">
-                    <i class="fas fa-store"></i> For selected store
-                </small>
+                {% if selected_store_id %}
+                <input type="hidden" name="store_id" value="{{ selected_store_id }}">
                 {% endif %}
-            </div>
+            </form>
         </div>
-    </div>
-    
-    <div class="col-md-3 mb-3">
-        <div class="card stat-card pending">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h6 class="text-muted mb-0">Pending</h6>
-                        <h3 class="mb-0">{{ pending_deliveries|intcomma }}</h3>
+        
+        {% if recent_deliveries %}
+        <div class="deliveries-grid">
+            {% for delivery in recent_deliveries %}
+            <div class="delivery-card">
+                <div class="delivery-header">
+                    <div class="delivery-id">
+                        {{ delivery.tracking_number|truncatechars:15 }}
+                        <span class="status-badge status-{{ delivery.status }}">
+                            {{ delivery.get_status_display }}
+                        </span>
                     </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-clock fa-2x text-warning"></i>
-                    </div>
-                </div>
-                <small>Awaiting processing</small>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3 mb-3">
-        <div class="card stat-card in-transit">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h6 class="text-muted mb-0">In Transit</h6>
-                        <h3 class="mb-0">{{ in_transit_deliveries|intcomma }}</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-truck fa-2x text-info"></i>
-                    </div>
-                </div>
-                <small>On the way to customers</small>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3 mb-3">
-        <div class="card stat-card delivered">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h6 class="text-muted mb-0">Completed</h6>
-                        <h3 class="mb-0">{{ completed_deliveries|intcomma }}</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-check-circle fa-2x text-success"></i>
-                    </div>
-                </div>
-                <small>Successfully delivered</small>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Revenue Card (for sellers and admins) -->
-{% if monthly_revenue > 0 or is_admin %}
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card bg-light">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="text-muted mb-0">Monthly Revenue</h6>
-                        <h2 class="mb-0">KES {{ monthly_revenue|intcomma }}</h2>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-money-bill-wave fa-2x text-success"></i>
-                    </div>
-                </div>
-                <small class="text-muted">
-                    {% if is_seller %}
-                    Revenue from your store{% if selected_store_id %} (selected){% endif %} deliveries
-                    {% else %}
-                    Total delivery revenue
-                    {% endif %}
-                </small>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
-
-<div class="row">
-    <!-- Recent Deliveries -->
-    <div class="col-lg-8 mb-4">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    Recent Deliveries
-                    {% if is_seller and stores %}
-                    <span class="badge bg-info ms-2">Your Stores</span>
-                    {% endif %}
-                </h5>
-                <a href="{% url 'delivery:delivery_list' %}{% if selected_store_id %}?store={{ selected_store_id }}{% endif %}" class="btn btn-sm btn-outline-primary">View All</a>
-            </div>
-            <div class="card-body">
-                <!-- Status Filter -->
-                {% if is_admin or total_deliveries > 0 %}
-                <div class="mb-3">
-                    <form method="get" class="row g-2">
-                        <div class="col-md-4">
-                            <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
-                                <option value="">All Statuses</option>
-                                {% for key, label in status_choices %}
-                                <option value="{{ key }}" {% if filter_status == key %}selected{% endif %}>
-                                    {{ label }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        {% if selected_store_id %}
-                        <input type="hidden" name="store_id" value="{{ selected_store_id }}">
+                    <div class="delivery-meta">
+                        <span>{{ delivery.created_at|date:"M d" }}</span>
+                        {% if delivery.delivery_person %}
+                        <span><i class="bi bi-person"></i> {{ delivery.delivery_person.user.get_short_name }}</span>
                         {% endif %}
-                    </form>
-                </div>
-                {% endif %}
-                
-                <div class="table-responsive">
-                    <table class="table table-delivery table-hover">
-                        <thead>
-                            <tr>
-                                <th>Tracking #</th>
-                                <th>Order ID</th>
-                                <th>Recipient</th>
-                                <th>Status</th>
-                                <th>Created</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for delivery in recent_deliveries %}
-                            <tr>
-                                <td>
-                                    <strong>{{ delivery.tracking_number|truncatechars:12 }}</strong>
-                                    {% if delivery.metadata.store_id and is_seller %}
-                                    <br><small class="text-info">Store: {{ delivery.metadata.store_id }}</small>
-                                    {% endif %}
-                                </td>
-                                <td>{{ delivery.order_id|default:"-" }}</td>
-                                <td>
-                                    {{ delivery.recipient_name }}<br>
-                                    <small class="text-muted">{{ delivery.recipient_phone }}</small>
-                                </td>
-                                <td>
-                                    <span class="status-badge status-{{ delivery.status }}">
-                                        {{ delivery.get_status_display }}
-                                    </span>
-                                </td>
-                                <td>{{ delivery.created_at|date:"M d, Y" }}</td>
-                                <td>
-                                    <a href="{% url 'delivery:delivery_detail' delivery.pk %}" class="btn btn-sm btn-outline-primary">
-                                        <i class="fas fa-eye"></i>
-                                    </a>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="6" class="text-center py-4">
-                                    <i class="fas fa-box-open fa-2x text-muted mb-3"></i>
-                                    <p class="text-muted">
-                                        {% if is_seller %}
-                                        No deliveries found for your stores
-                                        {% else %}
-                                        No deliveries yet
-                                        {% endif %}
-                                    </p>
-                                    {% if is_seller %}
-                                    <a href="{% url 'delivery:create_delivery' %}" class="btn btn-delivery btn-sm">
-                                        <i class="fas fa-plus"></i> Create Your First Delivery
-                                    </a>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Right Column -->
-    <div class="col-lg-4">
-        {% if is_delivery_person %}
-        <!-- Driver Statistics -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">My Statistics</h5>
-            </div>
-            <div class="card-body">
-                <!-- ... existing driver stats code ... -->
-            </div>
-        </div>
-        {% elif is_seller and stores %}
-        <!-- Seller Store Info -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">Your Stores</h5>
-            </div>
-            <div class="card-body">
-                <div class="list-group list-group-flush">
-                    {% for store in stores %}
-                    <div class="list-group-item">
-                        <div class="d-flex w-100 justify-content-between">
-                            <h6 class="mb-1">{{ store.name }}</h6>
-                            {% if selected_store_id == store.id|stringformat:"i" %}
-                            <span class="badge bg-primary">Selected</span>
-                            {% endif %}
-                        </div>
-                        <p class="mb-1 small">{{ store.address|truncatechars:30|default:"No address" }}</p>
-                        <div class="mt-2">
-                            <a href="?store_id={{ store.id }}" class="btn btn-sm btn-outline-primary">
-                                <i class="fas fa-filter"></i> Filter
-                            </a>
-                        </div>
                     </div>
-                    {% endfor %}
+                </div>
+                <div class="delivery-content">
+                    <div class="delivery-info-row">
+                        <span class="info-label">Order ID</span>
+                        <span class="info-value">{{ delivery.order_id|default:"-" }}</span>
+                    </div>
+                    <div class="delivery-info-row">
+                        <span class="info-label">Recipient</span>
+                        <span class="info-value">{{ delivery.recipient_name|truncatechars:20 }}</span>
+                    </div>
+                    <div class="delivery-info-row">
+                        <span class="info-label">Fee</span>
+                        <span class="info-value">KES {{ delivery.delivery_fee|intcomma }}</span>
+                    </div>
+                    <div class="delivery-actions">
+                        <a href="{% url 'delivery:delivery_detail' delivery.pk %}" 
+                           class="btn btn-sm btn-outline-primary w-100">
+                            <i class="bi bi-eye"></i> View Details
+                        </a>
+                    </div>
                 </div>
             </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-box-seam fs-1 text-muted mb-3"></i>
+            <p class="text-muted">
+                {% if is_seller %}
+                No deliveries found for your stores
+                {% else %}
+                No recent deliveries
+                {% endif %}
+            </p>
+            {% if is_seller %}
+            <a href="{% url 'delivery:create_delivery' %}" class="btn btn-primary">
+                <i class="bi bi-plus"></i> Create Your First Delivery
+            </a>
+            {% endif %}
         </div>
         {% endif %}
-        
-        <!-- Quick Actions -->
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Quick Actions</h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-6 mb-3">
-                        <a href="{% url 'delivery:create_delivery' %}" class="btn btn-outline-primary w-100">
-                            <i class="fas fa-plus"></i><br>
-                            <small>New Delivery</small>
-                        </a>
-                    </div>
-                    <div class="col-6 mb-3">
-                        <a href="{% url 'delivery:delivery_list' %}" class="btn btn-outline-success w-100">
-                            <i class="fas fa-list"></i><br>
-                            <small>All Deliveries</small>
-                        </a>
-                    </div>
-                    <div class="col-6">
-                        <a href="#" onclick="promptTracking()" class="btn btn-outline-info w-100">
-                            <i class="fas fa-search"></i><br>
-                            <small>Track Package</small>
-                        </a>
-                    </div>
-                    <div class="col-6">
-                        {% if is_admin %}
-                        <a href="{% url 'delivery:analytics' %}" class="btn btn-outline-warning w-100">
-                            <i class="fas fa-chart-bar"></i><br>
-                            <small>Analytics</small>
-                        </a>
-                        {% else %}
-                        <a href="mailto:support@homabaysouq.com" class="btn btn-outline-secondary w-100">
-                            <i class="fas fa-question-circle"></i><br>
-                            <small>Help</small>
-                        </a>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 
-<!-- Charts Section (only show if there's data) -->
-{% if total_deliveries > 0 %}
-<div class="row mt-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Status Distribution</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="statusChart" height="250"></canvas>
-            </div>
-        </div>
+<!-- Driver Statistics (if driver) -->
+{% if is_delivery_person and my_assignments %}
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0">
+            <i class="bi bi-person-badge me-2"></i>
+            My Active Assignments
+        </h5>
     </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Weekly Activity</h5>
+    <div class="card-body">
+        <div class="deliveries-grid">
+            {% for delivery in my_assignments %}
+            <div class="delivery-card">
+                <div class="delivery-header">
+                    <div class="delivery-id">
+                        {{ delivery.tracking_number|truncatechars:12 }}
+                        <span class="badge bg-warning">Priority: {{ delivery.priority }}</span>
+                    </div>
+                </div>
+                <div class="delivery-content">
+                    <div class="delivery-info-row">
+                        <span class="info-label">To</span>
+                        <span class="info-value">{{ delivery.recipient_name }}</span>
+                    </div>
+                    <div class="delivery-info-row">
+                        <span class="info-label">Address</span>
+                        <span class="info-value">{{ delivery.recipient_address|truncatechars:30 }}</span>
+                    </div>
+                    {% if delivery.estimated_delivery_time %}
+                    <div class="delivery-info-row">
+                        <span class="info-label">Est. Delivery</span>
+                        <span class="info-value">{{ delivery.estimated_delivery_time|time }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="delivery-actions">
+                        <a href="{% url 'delivery:delivery_detail' delivery.pk %}" 
+                           class="btn btn-sm btn-primary w-100">
+                            <i class="bi bi-eye"></i> View & Update
+                        </a>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <canvas id="weeklyChart" height="250"></canvas>
-            </div>
+            {% endfor %}
         </div>
     </div>
 </div>
 {% endif %}
 
+<!-- Charts Section -->
+{% if total_deliveries > 0 %}
+<div class="charts-container mt-4">
+    <div class="chart-card">
+        <h6 class="chart-title">
+            <i class="bi bi-pie-chart"></i>
+            Status Distribution
+        </h6>
+        <div class="chart-container" style="position: relative; height: 250px;">
+            <canvas id="statusChart"></canvas>
+        </div>
+    </div>
+    
+    <div class="chart-card">
+        <h6 class="chart-title">
+            <i class="bi bi-bar-chart"></i>
+            Weekly Activity
+        </h6>
+        <div class="chart-container" style="position: relative; height: 250px;">
+            <canvas id="weeklyChart"></canvas>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+
 {% block extra_js %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     // Status Distribution Chart
     {% if total_deliveries > 0 %}
@@ -400,8 +654,12 @@
                     {% endfor %}
                 ],
                 backgroundColor: [
-                    '#ffc107', '#17a2b8', '#20c997', '#6f42c1',
-                    '#fd7e14', '#e83e8c', '#28a745'
+                    'rgba(255, 193, 7, 0.8)',
+                    'rgba(23, 162, 184, 0.8)',
+                    'rgba(0, 123, 255, 0.8)',
+                    'rgba(40, 167, 69, 0.8)',
+                    'rgba(255, 107, 53, 0.8)',
+                    'rgba(108, 117, 125, 0.8)'
                 ],
                 borderWidth: 1
             }]
@@ -411,7 +669,10 @@
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    position: 'bottom'
+                    position: 'bottom',
+                    labels: {
+                        color: 'var(--text-primary)'
+                    }
                 }
             }
         }
@@ -434,7 +695,7 @@
                     {{ day.count }},
                     {% endfor %}
                 ],
-                backgroundColor: '#3498db',
+                backgroundColor: 'rgba(255, 107, 53, 0.8)',
                 borderRadius: 5
             }]
         },
@@ -445,7 +706,26 @@
                 y: {
                     beginAtZero: true,
                     ticks: {
-                        stepSize: 1
+                        stepSize: 1,
+                        color: 'var(--text-secondary)'
+                    },
+                    grid: {
+                        color: 'var(--border-color)'
+                    }
+                },
+                x: {
+                    ticks: {
+                        color: 'var(--text-secondary)'
+                    },
+                    grid: {
+                        color: 'var(--border-color)'
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: {
+                        color: 'var(--text-primary)'
                     }
                 }
             }
@@ -453,5 +733,4 @@
     });
     {% endif %}
 </script>
-{% endblock %}
 {% endblock %}

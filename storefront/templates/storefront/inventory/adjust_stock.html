@@ -292,8 +292,10 @@
         .form-row .col-md-6:last-child {
             margin-bottom: 0;
         }
+         /* Modal theming to respect card background */
+       
+
     }
-</style>
     /* Modal theming to respect card background */
     .modal-custom .modal-content {
         background: var(--card-bg);
@@ -310,6 +312,8 @@
     .modal-custom .modal-body {
         background: transparent;
     }
+    
+</style>
 {% endblock %}
 
 {% block content %}
@@ -341,6 +345,7 @@
                 
                 <form method="post" id="adjustStockForm">
                     {% csrf_token %}
+                    <input type="hidden" name="quick_adjust" id="quickAdjustFlag" value="">
                     
                     <div class="row mb-4">
                         <div class="col-md-8">
@@ -571,12 +576,13 @@
                 <p class="text-muted mb-3">Quickly adjust stock for a product without filling the full form.</p>
                 
                 <div class="mb-3">
-                    <label class="form-label-custom">Product Name or SKU</label>
-                    <input type="text" class="form-control-custom" id="quickSearch" 
-                           placeholder="Start typing to search...">
-                    <div id="quickSearchResults" class="mt-2 d-none">
-                        <div class="list-group" id="searchResultsList"></div>
-                    </div>
+                    <label class="form-label-custom">Product</label>
+                    <select class="form-control-custom" id="quickProductSelect">
+                        <option value="">Select a product</option>
+                        {% for p in products %}
+                        <option value="{{ p.id }}" data-stock="{{ p.stock }}">{{ p.title }} (SKU: {{ p.sku|default:"-" }}) — {{ p.stock }} in stock</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 
                 <div class="mb-3">
@@ -721,125 +727,88 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Quick search in modal
-    const quickSearch = document.getElementById('quickSearch');
-    const searchResults = document.getElementById('quickSearchResults');
-    const searchResultsList = document.getElementById('searchResultsList');
-    
-    let searchTimeout;
-    quickSearch.addEventListener('input', function() {
-        clearTimeout(searchTimeout);
-        const query = this.value.trim();
-        
-        if (query.length < 2) {
-            searchResults.classList.add('d-none');
-            return;
-        }
-        
-        searchTimeout = setTimeout(() => {
-            const searchUrl = `{% url 'storefront:inventory_search' slug=store.slug %}`;
-            fetch(`${searchUrl}?q=${encodeURIComponent(query)}`)
-                .then(response => response.json())
-                .then(data => {
-                    searchResultsList.innerHTML = '';
-                    
-                    if (data.products && data.products.length > 0) {
-                        data.products.forEach(product => {
-                            const item = document.createElement('a');
-                            item.href = '#';
-                            item.className = 'list-group-item list-group-item-action';
-                            item.dataset.productId = product.id;
-                            item.innerHTML = `
-                                <div class="d-flex w-100 justify-content-between">
-                                    <h6 class="mb-1">${product.title}</h6>
-                                    <small class="text-muted">${product.stock} in stock</small>
-                                </div>
-                                <p class="mb-1 small">${product.sku ? 'SKU: ' + product.sku : 'No SKU'}</p>
-                                <small class="text-muted">KSh ${product.price}</small>
-                            `;
+    // Quick selection in modal (dropdown)
+    const quickProductSelect = document.getElementById('quickProductSelect');
+    const quickNewStock = document.getElementById('quickNewStock');
 
-                            item.addEventListener('click', function(e) {
-                                e.preventDefault();
-                                quickSearch.value = product.title;
-                                quickSearch.dataset.productId = product.id;
-                                // prefill quick new stock with current stock value
-                                const quickNew = document.getElementById('quickNewStock');
-                                if (quickNew) quickNew.value = product.stock || '';
-                                searchResults.classList.add('d-none');
-                            });
-
-                            searchResultsList.appendChild(item);
-                        });
-                        searchResults.classList.remove('d-none');
-                    } else {
-                        searchResults.classList.add('d-none');
-                    }
-                });
-        }, 300);
-    });
+    if (quickProductSelect) {
+        quickProductSelect.addEventListener('change', function() {
+            const opt = this.options[this.selectedIndex];
+            const stock = opt ? opt.dataset.stock : '';
+            if (quickNewStock) quickNewStock.value = stock || '';
+            // store selected product id on the select element for apply handler
+            quickProductSelect.dataset.selectedProduct = this.value || '';
+        });
+    }
     
-    // Close search results when clicking outside
-    document.addEventListener('click', function(e) {
-        if (!searchResults.contains(e.target) && e.target !== quickSearch) {
-            searchResults.classList.add('d-none');
-        }
-    });
-    
-    // Apply quick adjustment
+    // Apply quick adjustment: interpret the modal value as the desired new stock level
+    // and convert it to an add/remove quantity so the main form receives the delta.
     document.getElementById('applyQuickAdjust').addEventListener('click', function() {
-        const productIdFromSearch = quickSearch.dataset.productId;
-        const newStockValue = document.getElementById('quickNewStock').value;
+        const selectedProductId = quickProductSelect ? quickProductSelect.value : null;
+        const newStockValueRaw = document.getElementById('quickNewStock').value;
+        const newStockValue = newStockValueRaw !== '' ? parseInt(newStockValueRaw, 10) : NaN;
 
-        if ((!productIdFromSearch || productIdFromSearch === '') || !newStockValue) {
-            alert('Please select a product and enter stock level');
+        if (!selectedProductId || isNaN(newStockValue)) {
+            alert('Please select a product and enter a valid stock level');
             return;
         }
 
-        // Select the product by id
-        let productId = productIdFromSearch || null;
-
-        if (productId) {
-            // ensure option exists; if not, try to reload options via fetch
-            let optionFound = false;
-            for (let option of productSelect.options) {
-                if (option.value === String(productId)) {
-                    productSelect.value = productId;
-                    optionFound = true;
-                    break;
-                }
+        // Find or append the product option in the main form select so the rest of the form code works
+        let optionFound = false;
+        for (let option of productSelect.options) {
+            if (option.value === String(selectedProductId)) {
+                productSelect.value = selectedProductId;
+                optionFound = true;
+                break;
             }
+        }
 
-            if (!optionFound) {
-                // If product isn't in the select options (large catalogs), fetch product list and append this one
-                fetch(`{% url 'storefront:inventory_search' slug=store.slug %}?q=${encodeURIComponent(quickSearch.value)}`)
-                    .then(r => r.json())
-                    .then(d => {
-                        const p = d.products.find(x => String(x.id) === String(productId));
-                        if (p) {
-                            const opt = document.createElement('option');
-                            opt.value = p.id;
-                            opt.text = `${p.title} (SKU: ${p.sku || '-'}, Stock: ${p.stock})`;
-                            opt.dataset.stock = p.stock || 0;
-                            productSelect.appendChild(opt);
-                            productSelect.value = p.id;
-                            productSelect.dispatchEvent(new Event('change'));
-                        }
-                    });
-            } else {
-                productSelect.dispatchEvent(new Event('change'));
+        if (!optionFound) {
+            const selectedOpt = quickProductSelect.options[quickProductSelect.selectedIndex];
+            if (selectedOpt) {
+                const opt = document.createElement('option');
+                opt.value = selectedOpt.value;
+                opt.text = selectedOpt.text;
+                opt.dataset.stock = selectedOpt.dataset.stock || 0;
+                productSelect.appendChild(opt);
+                productSelect.value = selectedOpt.value;
             }
+        }
 
-            adjustmentType.value = 'set';
-            quantityInput.value = newStockValue;
-            calculateNewStock();
+        // Ensure productSelect change handler updates currentStock before computing delta
+        productSelect.dispatchEvent(new Event('change'));
 
+        // Read current stock from the selected option (dataset set by productSelect change)
+        const mainSelectedOption = productSelect.options[productSelect.selectedIndex];
+        const currentStockValue = parseInt(mainSelectedOption.dataset.stock || '0', 10) || 0;
+
+        const diff = newStockValue - currentStockValue;
+
+        if (diff === 0) {
+            showToast('No change detected — current stock already matches the value entered.', 'info');
             const modal = bootstrap.Modal.getInstance(document.getElementById('quickAdjustModal'));
             modal.hide();
-
-            showToast('Product selected. Please review and submit the form.', 'success');
-        } else {
-            alert('Product not found. Please try again.');
+            return;
         }
+
+        if (diff > 0) {
+            adjustmentType.value = 'add';
+            quantityInput.value = diff;
+        } else {
+            adjustmentType.value = 'remove';
+            quantityInput.value = Math.abs(diff);
+        }
+
+        // mark as quick adjust so server can annotate movement notes
+        const quickFlag = document.getElementById('quickAdjustFlag');
+        if (quickFlag) quickFlag.value = '1';
+
+        calculateNewStock();
+
+        const modal = bootstrap.Modal.getInstance(document.getElementById('quickAdjustModal'));
+        modal.hide();
+
+        showToast('Product selected. Please review and submit the form.', 'success');
     });
     
     // Form submission

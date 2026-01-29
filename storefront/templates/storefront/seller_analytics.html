@@ -648,9 +648,56 @@
         // Revenue & Orders Chart
         const revenueOrdersCtx = document.getElementById('revenueOrdersChart').getContext('2d');
         
-        // Use data provided by Django view (JSON-serialized in context)
-        const revenueOrdersData = {{ revenue_orders_trend_data|safe }};
-        
+        // Revenue data: support either `revenue_trend_data` (store view)
+        // or legacy `revenue_orders_trend_data` (seller view).
+        {% if revenue_trend_data %}
+        let revenueOrdersDataRaw = {{ revenue_trend_data|safe }};
+        {% else %}
+        let revenueOrdersDataRaw = {{ revenue_orders_trend_data|default:'null'|safe }};
+        {% endif %}
+        let revenueOrdersData = revenueOrdersDataRaw;
+        try {
+            if (typeof revenueOrdersDataRaw === 'string') {
+                revenueOrdersData = JSON.parse(revenueOrdersDataRaw);
+            }
+        } catch (e) {
+            revenueOrdersData = null;
+        }
+
+        // Fallback: if the view did not provide trend points, show totals as a single-point series
+        const revenueDataMissing = (
+            !revenueOrdersData ||
+            !Array.isArray(revenueOrdersData.labels) ||
+            revenueOrdersData.labels.length === 0 ||
+            !Array.isArray(revenueOrdersData.datasets) ||
+            revenueOrdersData.datasets.length === 0 ||
+            (revenueOrdersData.datasets[0] && Array.isArray(revenueOrdersData.datasets[0].data) && revenueOrdersData.datasets[0].data.length === 0)
+        );
+
+        if (revenueDataMissing) {
+            revenueOrdersData = {
+                labels: ['Now'],
+                datasets: [
+                    {
+                        label: 'Revenue',
+                        data: [{{ total_revenue|default:0|floatformat:2 }}],
+                        borderColor: '#4CAF50',
+                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                        yAxisID: 'y',
+                        tension: 0.4,
+                    },
+                    {
+                        label: 'Orders',
+                        data: [{{ total_orders|default:0 }}],
+                        borderColor: '#2196F3',
+                        backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                        yAxisID: 'y1',
+                        tension: 0.4,
+                    }
+                ]
+            };
+        }
+
         new Chart(revenueOrdersCtx, {
             type: 'line',
             data: revenueOrdersData,
@@ -707,18 +754,57 @@
         // Store Performance Chart
         const storePerformanceCtx = document.getElementById('storePerformanceChart').getContext('2d');
         
-        // Use data provided by Django view (JSON-serialized in context)
-        const storePerformanceData = {{ store_performance_data|safe }};
-        
+        // Right-hand chart: prefer `category_data` (store view pie chart),
+        // otherwise accept `store_performance_data` (legacy) and fall back
+        // to building from `top_stores`.
+        {% if category_data %}
+        let storePerformanceDataRaw = {{ category_data|safe }};
+        let storePerformanceIsCategory = true;
+        {% else %}
+        let storePerformanceDataRaw = {{ store_performance_data|default:'null'|safe }};
+        let storePerformanceIsCategory = false;
+        {% endif %}
+
+        let storePerformanceData = storePerformanceDataRaw;
+        try {
+            if (typeof storePerformanceDataRaw === 'string') {
+                storePerformanceData = JSON.parse(storePerformanceDataRaw);
+            }
+        } catch (e) {
+            storePerformanceData = null;
+        }
+
+        // If category data (labels/datasets suitable for pie) is missing,
+        // fall back to top_stores dataset build used previously.
+        const storePerfMissing = (
+            !storePerformanceData ||
+            !Array.isArray(storePerformanceData.datasets) ||
+            storePerformanceData.datasets.length === 0 ||
+            (storePerformanceData.datasets[0] && Array.isArray(storePerformanceData.datasets[0].data) && storePerformanceData.datasets[0].data.length === 0)
+        );
+
+        if (storePerfMissing) {
+            storePerformanceData = {
+                labels: [{% for s in top_stores %}'{{ s.name|escapejs }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+                datasets: [{
+                    data: [{% for s in top_stores %}{{ s.revenue|default:0|floatformat:2 }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+                    backgroundColor: [
+                        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'
+                    ]
+                }]
+            };
+            storePerformanceIsCategory = false;
+        }
+
         new Chart(storePerformanceCtx, {
-            type: 'doughnut',
+            type: storePerformanceIsCategory ? 'pie' : 'doughnut',
             data: storePerformanceData,
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        position: 'right',
+                        position: storePerformanceIsCategory ? 'right' : 'right',
                         labels: {
                             padding: 20,
                             usePointStyle: true,
@@ -726,7 +812,7 @@
                         }
                     }
                 },
-                cutout: '60%'
+                cutout: storePerformanceIsCategory ? '0%' : '60%'
             }
         });
         

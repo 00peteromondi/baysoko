@@ -1609,8 +1609,9 @@ def checkout(request):
                 'postal_code': latest_order.postal_code,
             })
         
-        # Check if using alternate shipping
-        use_alternate = request.POST.get('use_alternate_shipping') == 'on'
+        # Check if using alternate shipping (support multiple truthy values)
+        raw_alt = request.POST.get('use_alternate_shipping')
+        use_alternate = str(raw_alt).lower() in ['on', 'true', '1', 'yes']
 
         # If not using alternate shipping, merge user's account info into POST before binding
         if not use_alternate:
@@ -1623,7 +1624,9 @@ def checkout(request):
         
         if form.is_valid():
             logger.info('Checkout form is valid for user=%s; cleaned keys=%s', request.user, list(form.cleaned_data.keys()))
-            request.session['selected_payment_method'] = form.cleaned_data.get('payment_method', 'mpesa')
+            # Use payment_method from form if provided, default to mpesa
+            selected_pm = form.cleaned_data.get('payment_method') or request.session.get('selected_payment_method') or 'mpesa'
+            request.session['selected_payment_method'] = selected_pm
             try:
                 with transaction.atomic():
                     # Create order
@@ -1742,53 +1745,39 @@ def process_payment(request, order_id):
     
     if request.method == 'POST':
         payment_method = request.POST.get('payment_method')
-        
-        if payment_method == 'mpesa':
+        # Enforce server-side: only M-Pesa payments are allowed
+        if payment_method != 'mpesa' and payment_method is not None:
+            messages.error(request, "Only M-Pesa payments are accepted at this time.")
+            return render(request, 'listings/payment.html', {'order': order})
+
+        if payment_method == 'mpesa' or payment_method is None:
             phone_number = request.POST.get('phone_number')
-            
             if not phone_number:
                 messages.error(request, "Please provide your M-Pesa phone number.")
                 return render(request, 'listings/payment.html', {'order': order})
-            
+
+            # Format phone like in AJAX path
+            formatted_phone = phone_number.replace(' ', '')
+            if formatted_phone.startswith('0'):
+                formatted_phone = '254' + formatted_phone[1:]
+            elif not formatted_phone.startswith('254'):
+                formatted_phone = '254' + formatted_phone
+
+            # Allow re-initiation: log previous mpesa ids if present
+            prev_checkout = order.payment.mpesa_checkout_request_id
+            if prev_checkout:
+                logger.info('Re-initiating M-Pesa for order %s; previous checkout id=%s', order.id, prev_checkout)
+
             # Initiate M-Pesa payment
-            success, message = order.payment.initiate_mpesa_payment(phone_number)
-            
+            success, message = order.payment.initiate_mpesa_payment(formatted_phone)
+
             if success:
                 messages.success(request, f"M-Pesa payment initiated: {message}")
                 return render(request, 'listings/payment.html', {'order': order})
             else:
                 messages.error(request, f"Failed to initiate M-Pesa payment: {message}")
                 return render(request, 'listings/payment.html', {'order': order})
-                
-        elif payment_method == 'cash':
-            # For cash on delivery, mark as paid immediately
-            order.payment.method = 'cash'
-            order.payment.status = 'completed'
-            order.payment.transaction_id = f"CASH{order.id}{int(timezone.now().timestamp())}"
-            order.payment.completed_at = timezone.now()
-            order.payment.save()
-            
-            # Mark order as paid and notify sellers
-            order.mark_as_paid()
-            _notify_sellers_after_payment(order)
-            
-            messages.success(request, "Order confirmed! You will pay with cash on delivery.")
-            return redirect('order_detail', order_id=order.id)
-            
-        elif payment_method == 'card':
-            # For card payments (simulated for now)
-            order.payment.method = 'card'
-            order.payment.status = 'completed'
-            order.payment.transaction_id = f"CARD{order.id}{int(timezone.now().timestamp())}"
-            order.payment.completed_at = timezone.now()
-            order.payment.save()
-            
-            # Mark order as paid and notify sellers
-            order.mark_as_paid()
-            _notify_sellers_after_payment(order)
-            
-            messages.success(request, "Card payment processed successfully!")
-            return redirect('order_detail', order_id=order.id)
+        # end POST handling
     
     return render(request, 'listings/payment.html', {'order': order})
 
@@ -1839,6 +1828,15 @@ def initiate_mpesa_payment(request, order_id):
             formatted_phone = '254' + formatted_phone
         
         # Initiate payment
+        # Allow re-initiation: clear previous checkout id so a fresh STK push is performed
+        if order.payment.mpesa_checkout_request_id:
+            logger.info('Clearing previous mpesa_checkout_request_id for order %s before re-initiation', order.id)
+            order.payment.mpesa_checkout_request_id = ''
+            order.payment.mpesa_merchant_request_id = ''
+            order.payment.mpesa_result_code = None
+            order.payment.mpesa_result_desc = ''
+            order.payment.save()
+
         success, message = order.payment.initiate_mpesa_payment(formatted_phone)
         
         if success:
@@ -1893,6 +1891,13 @@ def check_payment_status(request, order_id):
             
             # Update payment record based on MPESA response
             if result_code == '0':  # Success
+                # Persist MPesa response details onto the payment record
+                payment.mpesa_result_code = result_code
+                payment.mpesa_result_desc = status_response.get('result_desc', '')
+                payment.mpesa_callback_data = status_response.get('response_data') or status_response
+                # Save intermediate fields before marking completed so DB has trace
+                payment.save()
+
                 payment.mark_as_completed(
                     status_response.get('response_data', {}).get('MpesaReceiptNumber')
                 )
@@ -2157,6 +2162,7 @@ def order_list(request):
         'buyer_orders_count': buyer_orders_count,
         'seller_orders_count': seller_orders_count,
         'total_orders_count': buyer_orders_count + seller_orders_count,
+        'delivery_app_order_url': getattr(settings, 'DELIVERY_APP_ORDER_URL', None),
     }
     
     return render(request, 'listings/order_list.html', context)
@@ -2193,6 +2199,7 @@ def order_detail(request, order_id):
         'can_ship': is_seller and order.status == 'paid',
         'can_confirm': is_buyer and order.status == 'shipped',
         'can_dispute': is_buyer and order.status in ['shipped', 'delivered'],
+        'delivery_app_order_url': getattr(settings, 'DELIVERY_APP_ORDER_URL', None),
     }
     # Attach delivery request information if available (for display of status/proof)
     try:
@@ -2217,147 +2224,33 @@ def seller_orders(request):
         seller_items=Count('order_items', filter=Q(order_items__listing__seller=request.user))
     ).filter(total_items=F('seller_items')).order_by('-created_at')
 
-    return render(request, 'listings/seller_orders.html', {'orders': orders})
+    return render(request, 'listings/seller_orders.html', {
+        'orders': orders,
+        'delivery_app_order_url': getattr(settings, 'DELIVERY_APP_ORDER_URL', None)
+    })
 
 @login_required
 def mark_order_shipped(request, order_id):
+    # Shipping is managed by the Delivery app. Do not modify order state here.
     order = get_object_or_404(Order, id=order_id)
-    
-    # Check if the user is the seller of any item in this order
+
+    # Check permission briefly and then redirect with an informational message
     if not order.order_items.filter(listing__seller=request.user).exists():
         messages.error(request, "You don't have permission to modify this order.")
         return redirect('seller_orders')
-    
-    # Shipping must be handled via the Delivery app; redirect sellers there
-    # Informational note: if you use the Delivery app you can manage shipments there,
-    # but still allow marking items as shipped here so multi-seller orders work.
-    messages.info(request, "If you use the Delivery app you can manage shipments there, but you can also mark your items as shipped here.")
 
-    # Mark only the items that belong to this seller as shipped
-    seller_items = order.order_items.filter(listing__seller=request.user, shipped=False)
-    if not seller_items.exists():
-        messages.info(request, "There are no unshipped items for this order belonging to you.")
-        return redirect('seller_orders')
+    # Prefer explicit Delivery app URL if configured
+    from django.conf import settings
+    delivery_app_url = getattr(settings, 'DELIVERY_APP_ORDER_URL', None)
 
-    from django.utils import timezone
-    now = timezone.now()
+    messages.info(request, "Shipping is handled via the Delivery app. Please use the Delivery app to mark shipments.")
 
-    for item in seller_items:
-        item.shipped = True
-        item.shipped_at = now
-        # Allow seller to provide a tracking number via POST (optional)
-        tracking_number = request.POST.get('tracking_number') or ''
-        if tracking_number:
-            item.tracking_number = tracking_number
-        item.save()
-
-    # If any items remain unshipped by other sellers, mark order as partially_shipped
-    remaining = order.order_items.filter(shipped=False)
-    if remaining.exists():
-        order.status = 'partially_shipped'
-        order.save()
-
-        # Notify buyer about the partial shipment by this seller
-        # Use the first tracking number if provided
-        first_tracking = seller_items.filter(tracking_number__isnull=False).first()
-        notify_order_shipped(order.user, request.user, order, first_tracking.tracking_number if first_tracking else None)
-
-        messages.success(request, f"Your items for Order #{order.id} have been marked as shipped. Waiting on other sellers to complete their shipments.")
-
-
-
-        # Remind remaining sellers when only a few are left
+    if delivery_app_url:
         try:
-            from notifications.utils import NotificationService, create_notification
-            from django.conf import settings
+            return redirect(delivery_app_url.format(order_id=order.id))
         except Exception:
-            NotificationService = None
-
-        remaining_sellers = set(item.listing.seller for item in remaining)
-        REMINDER_THRESHOLD = getattr(settings, 'SELLER_SHIPMENT_REMINDER_THRESHOLD', 2)
-
-        if NotificationService and 0 < len(remaining_sellers) <= REMINDER_THRESHOLD:
-            ns = NotificationService()
-            for seller in remaining_sellers:
-                # SMS reminder if configured
-                try:
-                    sms_msg = f"Order #{order.id} has most sellers shipped. Please mark your items as shipped so the buyer can receive their order."
-                    ns.send_sms(getattr(seller, 'phone_number', ''), sms_msg)
-                except Exception:
-                    logger.exception("Failed to send shipment reminder SMS")
-
-                # In-app/system notification
-                try:
-                    create_notification(
-                        recipient=seller,
-                        notification_type='system',
-                        title='Action required: Ship items',
-                        message=f'Order #{order.id} still has unshipped items assigned to you. Please mark them as shipped.',
-                        sender=request.user,
-                        related_object_id=order.id,
-                        related_content_type='order',
-                        action_url=reverse('order_detail', args=[order.id]),
-                        action_text='View Order'
-                    )
-                except Exception:
-                    logger.exception("Failed to create in-app shipment reminder")
-
-        # Activity log
-        Activity.objects.create(
-            user=request.user,
-            action=f"Order #{order.id} items marked as shipped (seller: {request.user.username})"
-        )
-
-        return redirect('seller_orders')
-
-    # If no remaining items, finalize order as shipped
-    order.status = 'shipped'
-    order.shipped_at = now
-    # After marking as shipped, send webhook
-    from .webhook_service import webhook_service
-    
-    if order.status == 'shipped' and webhook_service.send_order_event(order, 'order_shipped'):
-        # Log successful webhook
-        Activity.objects.create(
-            user=request.user,
-            action=f"Order #{order.id} shipped and sent to delivery system"
-        )
-        
-        # If tracking number was provided by webhook service, update messages
-        if order.tracking_number:
-            messages.success(request, f"Order #{order.id} shipped! Tracking: {order.tracking_number}")
-        else:
-            messages.success(request, f"Order #{order.id} shipped successfully!")
-    
-    order.save()
-
-    # Consolidated delivery request for whole order (for single-seller orders this behaves as before)
-    delivery_response = _create_delivery_request(order)
-
-    tracking_number = None
-    if delivery_response and delivery_response.get('success'):
-        tracking_number = delivery_response.get('tracking_number')
-        driver_info = delivery_response.get('driver', {})
-
-        order.tracking_number = tracking_number or order.tracking_number
-        order.save()
-
-        # Notify buyer
-        notify_order_shipped(order.user, request.user, order, tracking_number)
-
-        if driver_info:
-            notify_delivery_assigned(order, driver_info.get('name', 'Delivery Partner'), driver_info.get('estimated_delivery', 'Soon'))
-
-        messages.success(request, f"Order #{order.id} marked as shipped. Tracking: {tracking_number}")
-    else:
-        # Notify buyer that order is shipped but delivery integration lacked tracking
-        notify_order_shipped(order.user, request.user, order, None)
-        messages.success(request, f"Order #{order.id} marked as shipped. Delivery system may not have provided tracking.")
-
-    Activity.objects.create(
-        user=request.user,
-        action=f"Order #{order.id} marked as shipped by {request.user.username}"
-    )
+            # Fall back to seller_orders if formatting fails
+            return redirect('seller_orders')
 
     return redirect('seller_orders')
 

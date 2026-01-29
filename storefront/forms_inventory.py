@@ -78,7 +78,7 @@ class BulkStockUpdateForm(forms.Form):
         choices=[
             ('percentage', 'Percentage Change'),
             ('fixed', 'Fixed Amount'),
-            ('set', 'Set Exact Price')
+            ('set', 'Set Exact Quantity')
         ],
         initial='percentage'
     )
@@ -87,6 +87,7 @@ class BulkStockUpdateForm(forms.Form):
         choices=[
             ('all', 'All Products'),
             ('category', 'Specific Category'),
+            ('selected', 'Selected Products'),
             ('low_stock', 'Low Stock Items'),
             ('out_of_stock', 'Out of Stock Items')
         ],
@@ -97,6 +98,11 @@ class BulkStockUpdateForm(forms.Form):
         required=False,
         empty_label="Select Category"
     )
+    selected_products = forms.ModelMultipleChoiceField(
+        queryset=None,
+        required=False,
+        widget=forms.CheckboxSelectMultiple
+    )
     
     def __init__(self, store, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -104,3 +110,5 @@ class BulkStockUpdateForm(forms.Form):
         self.fields['category'].queryset = Category.objects.filter(
             listing__store=store
         ).distinct()
+        from listings.models import Listing
+        self.fields['selected_products'].queryset = Listing.objects.filter(store=store)

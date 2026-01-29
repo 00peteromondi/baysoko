@@ -355,6 +355,8 @@
         </div>
     </div>
 
+    <form id="bulkUpdateForm" method="post" action="{% url 'storefront:bulk_stock_update' slug=store.slug %}">
+        {% csrf_token %}
     <div class="row">
         <!-- Left Column - Main Form -->
         <div class="col-lg-8">
@@ -658,6 +660,8 @@
             </div>
         </div>
     </div>
+    </div>
+    </form>
 </div>
 
 <!-- Preview Modal -->
@@ -923,28 +927,29 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 1000);
     });
     
-    // Confirm bulk update
+    // Confirm bulk update and submit the form to server
     document.getElementById('confirmBulkUpdate').addEventListener('click', function() {
         const modal = bootstrap.Modal.getInstance(previewModal);
         modal.hide();
-        
-        // Submit the form
+
+        // Trigger native submit button click after populating hidden value
         document.getElementById('submitBulkUpdate').click();
     });
-    
-    // Form submission
+
+    // Form submission: populate unified fields and submit
     document.getElementById('submitBulkUpdate').addEventListener('click', function(e) {
         e.preventDefault();
-        
-        // Validate
+
+        // Determine selected update type and value
         const updateType = updateTypeInput.value;
-        const value = document.getElementById(updateType + 'Value').value;
-        
-        if (!value) {
+        const valueInput = document.getElementById(updateType + 'Value');
+        const value = valueInput ? valueInput.value : '';
+
+        if (value === '' || value === null) {
             showToast('Please enter a value', 'error');
             return;
         }
-        
+
         if (applyToSelect.value === 'selected') {
             const selected = document.querySelectorAll('.product-checkbox:checked').length;
             if (selected === 0) {
@@ -952,18 +957,55 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
         }
-        
-        // Show confirmation
+
         if (!confirm('Are you sure you want to apply this bulk update? This action cannot be undone.')) {
             return;
         }
-        
-        // Here you would submit the form data
-        // For now, we'll just show a success message
-        showToast('Bulk update applied successfully!', 'success');
-        setTimeout(() => {
-            window.location.href = '{% url "storefront:inventory_list" slug=store.slug %}';
-        }, 2000);
+
+        // Ensure form has hidden inputs the server expects: 'update_type' (already present) and 'value'
+        let unifiedValue = document.getElementById('bulkValueField');
+        if (!unifiedValue) {
+            unifiedValue = document.createElement('input');
+            unifiedValue.type = 'hidden';
+            unifiedValue.name = 'value';
+            unifiedValue.id = 'bulkValueField';
+            document.getElementById('bulkUpdateForm').appendChild(unifiedValue);
+        }
+        unifiedValue.value = value;
+
+        // Add notes and flags
+        let notesField = document.getElementById('bulkNotesField');
+        if (!notesField) {
+            notesField = document.createElement('input');
+            notesField.type = 'hidden';
+            notesField.name = 'notes';
+            notesField.id = 'bulkNotesField';
+            document.getElementById('bulkUpdateForm').appendChild(notesField);
+        }
+        notesField.value = document.getElementById('notes').value || '';
+
+        let skipField = document.getElementById('skipOutOfStockField');
+        if (!skipField) {
+            skipField = document.createElement('input');
+            skipField.type = 'hidden';
+            skipField.name = 'skip_out_of_stock';
+            skipField.id = 'skipOutOfStockField';
+            document.getElementById('bulkUpdateForm').appendChild(skipField);
+        }
+        skipField.value = document.getElementById('skipOutOfStock').checked ? '1' : '';
+
+        let preventField = document.getElementById('preventNegativeField');
+        if (!preventField) {
+            preventField = document.createElement('input');
+            preventField.type = 'hidden';
+            preventField.name = 'prevent_negative';
+            preventField.id = 'preventNegativeField';
+            document.getElementById('bulkUpdateForm').appendChild(preventField);
+        }
+        preventField.value = document.getElementById('preventNegative').checked ? '1' : '';
+
+        // Finally submit the form to the server
+        document.getElementById('bulkUpdateForm').submit();
     });
     
     function resetForm() {

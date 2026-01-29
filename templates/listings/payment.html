@@ -50,6 +50,7 @@
         padding: 16px;
         color: white;
         text-align: center;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     }
     
     .payment-header h1 {
@@ -826,43 +827,13 @@
                     </div>
                 </div>
                 
-                <!-- Card Option -->
-                <div class="payment-method-card" data-method="card">
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="payment_method" id="card" value="card"
-                               {% if order.payment.method == 'card' or selected_payment_method == 'card' %}checked{% endif %}>
-                        <label class="form-check-label w-100" for="card">
-                            <div class="d-flex align-items-center">
-                                <div class="payment-method-icon card-icon">
-                                    <i class="bi bi-credit-card"></i>
-                                </div>
-                                <div class="method-details">
-                                    <h6>Credit/Debit Card</h6>
-                                    <p>Pay securely with your credit or debit card.</p>
-                                </div>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-                
-                <!-- Cash on Delivery Option -->
-                <div class="payment-method-card" data-method="cash">
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="payment_method" id="cash" value="cash"
-                               {% if order.payment.method == 'cash' or selected_payment_method == 'cash' %}checked{% endif %}>
-                        <label class="form-check-label w-100" for="cash">
-                            <div class="d-flex align-items-center">
-                                <div class="payment-method-icon cash-icon">
-                                    <i class="bi bi-cash-coin"></i>
-                                </div>
-                                <div class="method-details">
-                                    <h6>Cash on Delivery</h6>
-                                    <p>Pay with cash when your order is delivered.</p>
-                                </div>
-                            </div>
-                        </label>
-                    </div>
-                </div>
+                <!-- Card and Cash options are hidden — M-Pesa only in this deployment -->
+                <style>
+                    .payment-method-card[data-method="card"],
+                    .payment-method-card[data-method="cash"] {
+                        display: none !important;
+                    }
+                </style>
             </div>
             
             <!-- Payment Form (Dynamic based on selection) -->
@@ -882,7 +853,7 @@
                                 <span class="input-group-text">+254</span>
                                 <input type="tel" class="form-control" id="mpesaNumber" 
                                        placeholder="7XX XXX XXX" 
-                                       value="{% if order.phone_number %}{{ order.phone_number|slice:'3:' }}{% endif %}">
+                                       value="{% if order.phone_number %}{{ order.phone_number|slice:'4:' }}{% endif %}">
                             </div>
                             <small class="text-white-50">Enter your M-Pesa registered phone number</small>
                         </div>
@@ -939,9 +910,35 @@
                     {% if order.payment.transaction_id %}
                     <p class="mb-2"><strong>Transaction ID:</strong> {{ order.payment.transaction_id }}</p>
                     {% endif %}
+                    {% if order.payment.mpesa_callback_data %}
+                    <div class="mt-2 text-start bg-light p-2 rounded" style="overflow:auto; max-height:200px;">
+                        <strong>M-Pesa Response:</strong>
+                        <pre class="small mb-0">{{ order.payment.mpesa_callback_data }}</pre>
+                    </div>
+                    {% endif %}
                     <a href="{% url 'order_detail' order.id %}" class="btn-payment mt-2">
                         <i class="bi bi-eye me-2"></i> View Order Details
                     </a>
+                </div>
+            </div>
+
+            <!-- Payment Failed / Retry Section -->
+            <div id="paymentFailedSection" {% if order.payment.status != 'failed' %}style="display: none;"{% endif %}>
+                <div class="alert alert-danger text-center">
+                    <i class="bi bi-x-circle display-4 text-danger mb-3"></i>
+                    <h5>Payment Failed</h5>
+                    <p class="mb-2">Your payment could not be completed. You can retry the payment below.</p>
+                    {% if order.payment.mpesa_result_code or order.payment.mpesa_result_desc or order.payment.mpesa_callback_data %}
+                    <div class="mt-3 text-start bg-light p-2 rounded" style="overflow:auto; max-height:200px;">
+                        <strong>Debug info</strong>
+                        <p class="mb-1"><strong>Result code:</strong> {{ order.payment.mpesa_result_code }}</p>
+                        <p class="mb-1"><strong>Result desc:</strong> {{ order.payment.mpesa_result_desc }}</p>
+                        <pre class="small mb-0">{{ order.payment.mpesa_callback_data }}</pre>
+                    </div>
+                    {% endif %}
+                    <button type="button" class="btn-payment mt-2" id="retryPaymentBtn">
+                        <i class="bi bi-arrow-repeat me-2"></i> Retry Payment
+                    </button>
                 </div>
             </div>
             
@@ -1093,6 +1090,28 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     initializePaymentMethods();
+
+    // Enforce M-Pesa-only: disable/hide other options and force selection
+    try {
+        document.querySelectorAll('input[name="payment_method"]').forEach(r => {
+            if (r.value !== 'mpesa') {
+                r.checked = false;
+                r.disabled = true;
+                const card = r.closest('.payment-method-card');
+                if (card) card.style.display = 'none';
+            }
+        });
+
+        const mpesaRadio = document.querySelector('input[name="payment_method"][value="mpesa"]');
+        if (mpesaRadio) {
+            mpesaRadio.checked = true;
+            const mpesaCard = mpesaRadio.closest('.payment-method-card');
+            if (mpesaCard) mpesaCard.classList.add('selected');
+        }
+        updatePaymentFormDisplay();
+    } catch (err) {
+        console.warn('Failed to enforce M-Pesa-only on payment page', err);
+    }
     
     // Format phone number input
     const phoneInput = document.getElementById('mpesaNumber');
@@ -1264,8 +1283,27 @@ document.addEventListener('DOMContentLoaded', function() {
         processPaymentBtn.style.display = 'block';
         processPaymentBtn.innerHTML = '<i class="bi bi-lock-fill me-2"></i> Complete Payment - KSh {{ order.total_price }}';
         processPaymentBtn.disabled = false;
-        
+        document.getElementById('paymentFailedSection') && (document.getElementById('paymentFailedSection').style.display = 'block');
         showToast('Payment failed: ' + reason, 'error');
+    }
+
+    // Retry payment button handler (reinitiate MPesa)
+    const retryPaymentBtn = document.getElementById('retryPaymentBtn');
+    if (retryPaymentBtn) {
+        retryPaymentBtn.addEventListener('click', function() {
+            // Hide failed section and re-initiate
+            document.getElementById('paymentFailedSection').style.display = 'none';
+            // Use current mpesaNumber value or order phone
+            const mpesaNumberRaw = document.getElementById('mpesaNumber') ? document.getElementById('mpesaNumber').value.replace(/\s/g, '') : '';
+            const phone = (mpesaNumberRaw && mpesaNumberRaw.length === 9) ? mpesaNumberRaw : '{{ order.phone_number|slice:"3:" }}';
+            if (!phone) {
+                showToast('No phone number available to retry payment', 'error');
+                return;
+            }
+
+            // Initiate payment using the same AJAX function
+            initiateMpesaPayment(phone);
+        });
     }
     
     // CSRF token function

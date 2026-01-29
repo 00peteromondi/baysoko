@@ -605,6 +605,21 @@
                 <div>
                     <div class="order-id">
                         <i class="bi bi-receipt"></i>
+
+            {% block extra_js %}
+            <script>
+            document.addEventListener('DOMContentLoaded', function(){
+                document.querySelectorAll('.manage-order-link').forEach(el => {
+                    const tpl = el.getAttribute('data-delivery-url') || '';
+                    const orderId = el.getAttribute('data-order-id');
+                    if(tpl && orderId){
+                        el.href = tpl.replace('{order_id}', orderId);
+                        el.target = '_blank';
+                    }
+                });
+            });
+            </script>
+            {% endblock %}
                         Order #{{ order_data.order.id }}
                         {% if role_filter == 'seller' or role_filter == 'all' and order_data.seller_items_count > 0 and order_data.order.user != request.user %}
                         <span class="order-role-badge role-seller">Your Sale</span>
@@ -722,9 +737,15 @@
                     
                     {% if role_filter == 'seller' or role_filter == 'all' and order_data.seller_items_count > 0 and order_data.order.user != request.user %}
                         {% if order_data.order.status == 'paid' and order_data.shipped_count < order_data.seller_items_count %}
-                        <a href="{% url 'mark_order_shipped' order_data.order.id %}" class="order-action-btn btn-outline">
-                            <i class="bi bi-truck"></i> Mark Shipped
+                        {% if delivery_app_order_url %}
+                        <a href="#" class="order-action-btn btn-outline manage-order-link" data-delivery-url="{{ delivery_app_order_url }}" data-order-id="{{ order_data.order.id }}">
+                            <i class="bi bi-gear"></i> Manage Order
                         </a>
+                        {% else %}
+                        <button type="button" class="order-action-btn btn-outline disabled" title="Shipping is handled in the Delivery app; please use the Delivery app to mark shipments.">
+                            <i class="bi bi-truck"></i> Manage Order
+                        </button>
+                        {% endif %}
                         {% endif %}
                     {% else %}
                         {% if order_data.order.status == 'pending' %}
@@ -733,7 +754,7 @@
                         </a>
                         {% endif %}
                         
-                        {% if order_data.order.status == 'shipped' %}
+                        {% if order_data.order.status == 'delivered' %}
                         <form method="post" action="{% url 'confirm_delivery' order_data.order.id %}" class="order-action-btn" style="padding: 0;">
                             {% csrf_token %}
                             <button type="submit" class="order-action-btn btn-outline w-100" 

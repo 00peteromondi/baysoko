@@ -144,6 +144,7 @@ class CheckoutForm(forms.Form):
         max_length=15,
         help_text="Your phone number for delivery updates"
     )
+    use_alternate_shipping = forms.BooleanField(required=False, initial=False)
     
     first_name = forms.CharField(max_length=30,
         help_text="Your first name"
@@ -161,6 +162,9 @@ class CheckoutForm(forms.Form):
     postal_code = forms.CharField(max_length=20,
         help_text="Your postal code"
     )
+
+    # Optionally accept a payment method (kept for compatibility)
+    payment_method = forms.CharField(required=False, max_length=20)
 
 # listings/forms.py (add these forms)
 

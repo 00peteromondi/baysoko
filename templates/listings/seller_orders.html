@@ -1,282 +1,896 @@
 {% extends 'base.html' %}
 {% load humanize %}
+{% load static %}
 
-{% block title %}My Seller Orders - Souq{% endblock %}
+{% block title %}Seller Orders - Baysoko{% endblock %}
 
 {% block extra_css %}
 <style>
-    .stats-card {
-        background-color: var(--card-bg);
-        border-radius: 1rem;
-        padding: 1.5rem;
-        box-shadow: var(--shadow);
+    /* ===== GLOBAL STYLES ===== */
+    .container-custom {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+    
+    /* ===== BREADCRUMB ===== */
+    .breadcrumb {
+        background: var(--bg-secondary);
+        padding: 10px 12px;
+        border-radius: var(--radius-md);
+        margin-bottom: 16px;
+        border: 1px solid var(--border-color);
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        font-size: 12px;
+    }
+    
+    .breadcrumb-item a {
+        text-decoration: none;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+    }
+    
+    /* ===== PAGE HEADER ===== */
+    .page-header {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .page-title {
+        font-size: 24px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+    
+    .page-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 16px;
+    }
+    
+    /* ===== STATS CARDS ===== */
+    .stats-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    
+    .stat-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
         border: 1px solid var(--border-color);
         transition: all 0.3s ease;
+        box-shadow: var(--shadow-sm);
     }
-    .stats-card:hover {
-        transform: translateY(-5px);
-        box-shadow: var(--shadow-hover);
+    
+    .stat-card:hover {
+        border-color: var(--primary);
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
     }
+    
+    .stat-value {
+        font-size: 28px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+    
+    .stat-label {
+        font-size: 14px;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    
     .stat-icon {
-        font-size: 2rem;
-        margin-bottom: 0.5rem;
+        font-size: 20px;
         opacity: 0.7;
     }
-    .stat-value {
-        font-size: 2rem;
-        font-weight: 700;
-        color: var(--text-color);
+    
+    .stat-revenue {
+        color: var(--success);
     }
-    .stat-label {
-        font-size: 0.9rem;
-        color: var(--text-color);
-        opacity: 0.8;
+    
+    .stat-warning {
+        color: var(--warning);
     }
-
-    .order-table-container {
-        background-color: var(--card-bg);
-        border-radius: 1rem;
-        padding: 1.5rem;
-        box-shadow: var(--shadow);
+    
+    /* ===== FILTER CONTROLS ===== */
+    .filter-controls {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        margin-bottom: 20px;
         border: 1px solid var(--border-color);
     }
-
-    .table th {
+    
+    .filter-tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+    
+    .filter-tab {
+        padding: 8px 16px;
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-size: 14px;
         font-weight: 600;
-        color: var(--text-color);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s ease;
+    }
+    
+    .filter-tab:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+        transform: translateY(-1px);
+    }
+    
+    .filter-tab.active {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        border-color: var(--primary);
+        color: white;
+    }
+    
+    .filter-badge {
+        background: rgba(255, 255, 255, 0.2);
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        margin-left: 4px;
+    }
+    
+    .filter-tab.active .filter-badge {
+        background: rgba(255, 255, 255, 0.3);
+    }
+    
+    /* ===== ORDER CARDS ===== */
+    .order-list-container {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    
+    .order-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .order-card:hover {
+        border-color: var(--primary);
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
+    }
+    
+    .order-card-header {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        padding: 16px;
+        color: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    
+    .order-id {
+        font-size: 18px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .order-meta {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 12px;
         opacity: 0.9;
     }
     
-    .table-responsive {
-        min-height: 300px;
+    /* ===== ORDER CONTENT ===== */
+    .order-content {
+        padding: 16px;
     }
-
-    .status-badge {
-        padding: 0.4em 0.7em;
-        border-radius: 50px;
-        font-weight: 600;
-        font-size: 0.8rem;
+    
+    .order-items-section {
+        margin-bottom: 20px;
     }
-    .status-pending { background-color: var(--primary-gemini-25); color: var(--accent-blue); }
-    .status-paid { background-color: rgba(251, 188, 4, 0.2); color: #b48000; }
-    .status-shipped { background-color: rgba(52, 168, 83, 0.2); color: var(--accent-green); }
-    .status-delivered { background-color: rgba(0, 128, 128, 0.2); color: var(--accent-teal); }
-    .status-disputed { background-color: rgba(234, 67, 53, 0.2); color: var(--accent-red); }
-    .status-cancelled { background-color: rgba(108, 117, 125, 0.2); color: var(--text-muted); }
-
-    .customer-info img {
-        width: 40px;
-        height: 40px;
-        object-fit: cover;
-        border-radius: 50%;
+    
+    .items-preview {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 12px;
+        margin-top: 12px;
     }
+    
+    .item-card {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+    }
+    
+    .item-card:hover {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+    }
+    
     .item-image {
-        width: 50px;
-        height: 50px;
+        width: 100%;
+        height: 100px;
+        overflow: hidden;
+    }
+    
+    .item-image img {
+        width: 100%;
+        height: 100%;
         object-fit: cover;
-        border-radius: 0.5rem;
+        transition: transform 0.3s ease;
+    }
+    
+    .item-card:hover .item-image img {
+        transform: scale(1.05);
+    }
+    
+    .item-info {
+        padding: 10px;
+    }
+    
+    .item-title {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 6px;
+        color: var(--text-primary);
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    
+    .item-meta {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+    
+    /* ===== DELIVERY SECTION ===== */
+    .delivery-section {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        margin-top: 20px;
+        border: 1px solid var(--border-color);
+    }
+    
+    .delivery-status {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    
+    .delivery-badge {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 12px;
+        display: inline-block;
+    }
+    
+    .delivery-pending { background-color: #ffefc6; color: #856404; }
+    .delivery-accepted { background-color: #cce5ff; color: #004085; }
+    .delivery-picked_up { background-color: #d1ecf1; color: #0c5460; }
+    .delivery-in_transit { background-color: #d1ecf1; color: #0c5460; }
+    .delivery-out_for_delivery { background-color: #fff3cd; color: #856404; }
+    .delivery-delivered { background-color: #d4edda; color: #155724; }
+    .delivery-failed { background-color: #f8d7da; color: #721c24; }
+    .delivery-cancelled { background-color: #f8f9fa; color: #6c757d; }
+    
+    .tracking-info {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        font-family: monospace;
+        font-size: 14px;
+        color: var(--text-primary);
+    }
+    
+    /* ===== ORDER SUMMARY ===== */
+    .order-summary {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        margin-top: 16px;
+        border: 1px solid var(--border-color);
+    }
+    
+    .summary-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .summary-row:last-child {
+        border-bottom: none;
+    }
+    
+    .summary-label {
+        font-size: 14px;
+        color: var(--text-secondary);
+    }
+    
+    .summary-value {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+    
+    .summary-total .summary-value {
+        font-size: 18px;
+        color: var(--primary);
+        font-weight: 800;
+    }
+    
+    /* ===== ORDER ACTIONS ===== */
+    .order-actions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 8px;
+        margin-top: 16px;
+    }
+    
+    .order-action-btn {
+        padding: 10px;
+        border-radius: var(--radius-md);
+        font-size: 13px;
+        font-weight: 600;
+        text-align: center;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        border: none;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+        color: white;
+    }
+    
+    .btn-outline {
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        background: transparent;
+    }
+    
+    .btn-outline:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+        background: rgba(255, 107, 53, 0.05);
+    }
+    
+    /* ===== EMPTY STATE ===== */
+    .empty-state {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 48px 24px;
+        text-align: center;
+        border: 1px solid var(--border-color);
+        margin-top: 20px;
+    }
+    
+    .empty-icon {
+        font-size: 48px;
+        color: var(--text-secondary);
+        margin-bottom: 16px;
+    }
+    
+    .empty-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+    
+    .empty-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 24px;
+    }
+    
+    .empty-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    /* ===== PAGINATION ===== */
+    .pagination-container {
+        margin-top: 32px;
+        display: flex;
+        justify-content: center;
+    }
+    
+    .pagination {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .page-link {
+        padding: 8px 12px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        text-decoration: none;
+        font-size: 14px;
+        transition: all 0.2s ease;
+    }
+    
+    .page-link:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+    
+    .page-item.active .page-link {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+    }
+    
+    /* ===== RESPONSIVE DESIGN ===== */
+    @media (max-width: 768px) {
+        .stats-container {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .order-card-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        
+        .items-preview {
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        }
+        
+        .order-actions {
+            grid-template-columns: 1fr;
+        }
+        
+        .empty-actions {
+            flex-direction: column;
+        }
+    }
+    
+    @media (max-width: 576px) {
+        .stats-container {
+            grid-template-columns: 1fr;
+        }
+        
+        .page-header {
+            padding: 16px;
+        }
+        
+        .page-title {
+            font-size: 20px;
+        }
+        
+        .filter-tabs {
+            justify-content: center;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container py-4">
-    <nav aria-label="breadcrumb" class="mb-4">
+<div class="container-custom py-3">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
         <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'home' %}"><i class="bi bi-house"></i> Home</a></li>
             <li class="breadcrumb-item"><a href="{% url 'profile' user.pk %}">Profile</a></li>
-            <li class="breadcrumb-item active" aria-current="page">Seller Dashboard</li>
+            <li class="breadcrumb-item active" aria-current="page">Seller Orders</li>
         </ol>
     </nav>
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h2">My Seller Orders</h1>
-        <a href="{% url 'my-listings' %}" class="btn btn-modern btn-modern-primary">View My Listings</a>
-    </div>
-
-    <!-- Stats Cards -->
-    <div class="row mb-4 g-4">
-        <div class="col-md-6 col-lg-3">
-            <div class="stats-card">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="stat-value">{{ total_orders_count|default:0 }}</div>
-                        <div class="stat-label">Total Orders</div>
-                    </div>
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h1 class="page-title">
+                    <i class="bi bi-bag-check"></i> Seller Orders Dashboard
+                </h1>
+                <p class="page-subtitle">
+                    Manage your sales and shipping through the Delivery System
+                </p>
+            </div>
+            <a href="{% url 'delivery:dashboard' %}" class="btn btn-primary">
+                <i class="bi bi-truck"></i> Delivery Dashboard
+            </a>
+        </div>
+        
+        <!-- Stats Cards -->
+        <div class="stats-container">
+            <div class="stat-card">
+                <div class="stat-value">{{ total_orders_count|default:0 }}</div>
+                <div class="stat-label">
                     <i class="bi bi-journal-text stat-icon"></i>
+                    Total Orders
                 </div>
             </div>
-        </div>
-        <div class="col-md-6 col-lg-3">
-            <div class="stats-card">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="stat-value">{{ pending_orders_count|default:0 }}</div>
-                        <div class="stat-label">Ready to Ship</div>
-                    </div>
+            
+            <div class="stat-card">
+                <div class="stat-value">{{ pending_orders_count|default:0 }}</div>
+                <div class="stat-label">
                     <i class="bi bi-box-seam stat-icon"></i>
+                    Ready to Ship
                 </div>
             </div>
-        </div>
-        <div class="col-md-6 col-lg-3">
-            <div class="stats-card">
-                 <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="stat-value">{{ disputed_orders_count|default:0 }}</div>
-                        <div class="stat-label">Disputed Orders</div>
-                    </div>
-                    <i class="bi bi-exclamation-octagon stat-icon"></i>
+            
+            <div class="stat-card">
+                <div class="stat-value">{{ disputed_orders_count|default:0 }}</div>
+                <div class="stat-label">
+                    <i class="bi bi-exclamation-octagon stat-icon stat-warning"></i>
+                    Disputed Orders
                 </div>
             </div>
-        </div>
-        <div class="col-md-6 col-lg-3">
-            <div class="stats-card">
-                 <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="stat-value">KSh 0</div>
-                        <div class="stat-label">Total Revenue</div>
-                    </div>
+            
+            <div class="stat-card">
+                <div class="stat-value stat-revenue">KSh {{ total_revenue|intcomma|default:"0" }}</div>
+                <div class="stat-label">
                     <i class="bi bi-cash-stack stat-icon"></i>
+                    Total Revenue
                 </div>
             </div>
         </div>
-    </div>
-    
-    <!-- Orders Table -->
-    <div class="order-table-container">
-        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
-            <h2 class="h4 mb-0">Order History</h2>
-            <form>
+        
+        <!-- Filter Controls -->
+        <div class="filter-controls">
+            <!-- Status Tabs -->
+            <div class="filter-tabs">
+                <a href="?{% if request.GET.q %}q={{ request.GET.q }}{% endif %}" 
+                   class="filter-tab {% if not request.GET.status or request.GET.status == 'all' %}active{% endif %}">
+                    <i class="bi bi-grid"></i> All Orders
+                    <span class="filter-badge">{{ total_orders_count|default:0 }}</span>
+                </a>
+                <a href="?status=pending{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}" 
+                   class="filter-tab {% if request.GET.status == 'pending' %}active{% endif %}">
+                    <i class="bi bi-clock"></i> Pending
+                    <span class="filter-badge">{{ pending_orders_count|default:0 }}</span>
+                </a>
+                <a href="?status=paid{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}" 
+                   class="filter-tab {% if request.GET.status == 'paid' %}active{% endif %}">
+                    <i class="bi bi-credit-card"></i> Paid
+                    <span class="filter-badge">{{ paid_orders_count|default:0 }}</span>
+                </a>
+                <a href="?status=shipped{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}" 
+                   class="filter-tab {% if request.GET.status == 'shipped' %}active{% endif %}">
+                    <i class="bi bi-truck"></i> Shipped
+                    <span class="filter-badge">{{ shipped_orders_count|default:0 }}</span>
+                </a>
+                <a href="?status=delivered{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}" 
+                   class="filter-tab {% if request.GET.status == 'delivered' %}active{% endif %}">
+                    <i class="bi bi-check-circle"></i> Delivered
+                    <span class="filter-badge">{{ delivered_orders_count|default:0 }}</span>
+                </a>
+            </div>
+            
+            <!-- Search Box -->
+            <form method="get" class="mt-2">
                 <div class="input-group">
-                    <select class="form-select" name="status" onchange="this.form.submit()">
-                        <option value="">All Statuses</option>
-                        <option value="pending" {% if request.GET.status == 'pending' %}selected{% endif %}>Pending</option>
-                        <option value="paid" {% if request.GET.status == 'paid' %}selected{% endif %}>Paid</option>
-                        <option value="shipped" {% if request.GET.status == 'shipped' %}selected{% endif %}>Shipped</option>
-                        <option value="delivered" {% if request.GET.status == 'delivered' %}selected{% endif %}>Delivered</option>
-                        <option value="cancelled" {% if request.GET.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
-                        <option value="disputed" {% if request.GET.status == 'disputed' %}selected{% endif %}>Disputed</option>
-                    </select>
+                    <input type="text" name="q" class="form-control" 
+                           placeholder="Search by Order ID, Customer, or Item..." 
+                           value="{{ request.GET.q|default:'' }}">
+                    <button class="btn btn-outline-secondary" type="submit">
+                        <i class="bi bi-search"></i>
+                    </button>
                 </div>
             </form>
         </div>
+    </div>
 
-        {% if orders %}
-        <div class="table-responsive">
-            <table class="table table-hover align-middle">
-                <thead>
-                    <tr>
-                        <th>Order ID</th>
-                        <th>Customer</th>
-                        <th>My Items</th>
-                        <th>Total</th>
-                        <th>Status</th>
-                        <th>Date</th>
-                        <th>Actions</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for order in orders %}
-                    <tr>
-                        <td><a href="{% url 'order_detail' order.id %}" class="fw-bold text-decoration-none">#{{ order.id }}</a></td>
-                        <td>
-                            <div class="d-flex align-items-center customer-info">
-                                <img src="{{ order.user.get_profile_picture|default:'https://placehold.co/40x40' }}" alt="{{ order.user.username }}" class="me-2">
-                                <div>
-                                    <strong>{{ order.user.username }}</strong>
-                                    <div class="small text-muted">{{ order.user.email }}</div>
+    <!-- Orders List -->
+    {% if orders %}
+    <div class="order-list-container">
+        {% for order in orders %}
+        <div class="order-card">
+            <!-- Order Header -->
+            <div class="order-card-header">
+                <div>
+                    <div class="order-id">
+                        <i class="bi bi-receipt"></i>
+                        Order #{{ order.id }}
+                        <span class="badge bg-info ms-2">Seller</span>
+                    </div>
+                    <div class="order-meta">
+                        <span>{{ order.created_at|date:"M d, Y · g:i A" }}</span>
+                        <span class="badge bg-secondary">{{ order.get_status_display }}</span>
+                    </div>
+                </div>
+                
+                <div class="text-end">
+                    <div class="text-white fw-bold">KSh {{ order.total_price|intcomma }}</div>
+                    <small class="text-white opacity-75">Order Total</small>
+                </div>
+            </div>
+
+            <!-- Order Content -->
+            <div class="order-content">
+                <!-- Customer Info -->
+                <div class="mb-3">
+                    <h6 class="mb-2"><i class="bi bi-person-circle"></i> Customer</h6>
+                    <div class="d-flex align-items-center">
+                        <img src="{{ order.user.get_profile_picture|default:'https://placehold.co/40x40/c2c2c2/1f1f1f?text=User' }}" 
+                             alt="{{ order.user.username }}" 
+                             class="rounded-circle me-2" 
+                             style="width: 40px; height: 40px; object-fit: cover;">
+                        <div>
+                            <strong>{{ order.user.get_full_name|default:order.user.username }}</strong>
+                            <div class="small text-muted">{{ order.user.email }}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Seller Items -->
+                <div class="order-items-section">
+                    <h6 class="mb-2">
+                        <i class="bi bi-box-seam"></i>
+                        Your Items ({{ order.seller_items_count }})
+                    </h6>
+                    
+                    <div class="items-preview">
+                        {% for item in order.order_items.all %}
+                            {% if item.listing.seller == request.user %}
+                            <div class="item-card">
+                                <div class="item-image">
+                                    <img src="{{ item.listing.get_image_url|default:'https://placehold.co/300x100/c2c2c2/1f1f1f?text=Product' }}" 
+                                         alt="{{ item.listing.title }}">
+                                </div>
+                                <div class="item-info">
+                                    <div class="item-title">{{ item.listing.title|truncatechars:40 }}</div>
+                                    <div class="item-meta">
+                                        <span>Qty: {{ item.quantity }}</span>
+                                        <span>KSh {{ item.price|intcomma }}</span>
+                                    </div>
+                                    {% if item.shipped %}
+                                    <small class="text-success mt-1 d-block">
+                                        <i class="bi bi-check-circle"></i> Shipped
+                                        {% if item.tracking_number %}
+                                        • {{ item.tracking_number }}
+                                        {% endif %}
+                                    </small>
+                                    {% endif %}
                                 </div>
                             </div>
-                        </td>
-                        <td>
-                                {% for item in order.order_items.all %}
-                                    {% if item.listing.seller == user %}
-                                    <div class="d-flex align-items-center mb-2">
-                                        <img src="{{ item.listing.get_image_url }}" class="item-image me-2" alt="{{ item.listing.title }}">
-                                        <div>
-                                            <div>{{ item.listing.title|truncatewords:4 }} (Qty: {{ item.quantity }})</div>
-                                            {% if item.shipped %}
-                                                <small class="text-success">Shipped{% if item.tracking_number %} — Tracking: {{ item.tracking_number }}{% endif %}{% if item.shipped_at %} on {{ item.shipped_at|date:"M d, Y" }}{% endif %}</small>
-                                            {% else %}
-                                                <small class="text-muted">Not shipped yet</small>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                    {% endif %}
-                                {% endfor %}
-                        </td>
-                        <td class="fw-bold">KSh {{ order.total_price|intcomma }}</td>
-                        <td>
-                            <span class="badge status-badge status-{{ order.status }}">{{ order.get_status_display }}</span>
-                        </td>
-                        <td>
-                            <span class="d-block">{{ order.created_at|date:"M d, Y" }}</span>
-                            <span class="small text-muted">{{ order.created_at|date:"H:i" }}</span>
-                        </td>
-                        <td>
-                            <a href="{% url 'order_detail' order.id %}" class="btn btn-sm btn-outline-primary">View</a>
-                            {% if order.status == 'paid' or order.status == 'partially_shipped' %}
-                            <form method="post" action="{% url 'mark_order_shipped' order.id %}" class="d-inline-block ms-1">
-                                {% csrf_token %}
-                                <input type="text" name="tracking_number" placeholder="Optional tracking number" class="form-control form-control-sm d-inline-block me-2" style="width: 180px;">
-                                <button type="submit" class="btn btn-sm btn-accent-blue">Ship</button>
-                            </form>
                             {% endif %}
-                        </td>
-                        <td>
-                            <span class="badge status-badge status-{{ order.status }}">{{ order.get_status_display }}</span>
-                            <!-- Add webhook indicator -->
-                            {% if order.tracking_number %}
-                            <br>
-                            <small class="text-success">
-                                <i class="bi bi-check-circle"></i> Tracking: {{ order.tracking_number }}
-                            </small>
-                            {% elif order.webhook_sent %}
-                            <br>
-                            <small class="text-info">
-                                <i class="bi bi-send-check"></i> Sent to delivery
-                            </small>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <!-- Delivery Information (from Delivery App) -->
+                {% with order.get_delivery_request as delivery %}
+                {% if delivery %}
+                <div class="delivery-section">
+                    <h6 class="mb-3"><i class="bi bi-truck"></i> Delivery Status</h6>
+                    
+                    <div class="delivery-status">
+                        <span class="delivery-badge delivery-{{ delivery.status }}">
+                            {{ delivery.get_status_display }}
+                        </span>
+                        {% if delivery.tracking_number %}
+                        <div class="tracking-info">
+                            <strong>Tracking:</strong> {{ delivery.tracking_number }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    {% if delivery.estimated_delivery_time %}
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            <i class="bi bi-calendar"></i>
+                            Estimated delivery: {{ delivery.estimated_delivery_time|date:"M d, Y" }}
+                        </small>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% endwith %}
+                
+                <!-- Order Summary -->
+                <div class="order-summary">
+                    <div class="summary-row">
+                        <span class="summary-label">Your Items Total</span>
+                        <span class="summary-value">KSh {{ order.seller_total|intcomma }}</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">Shipped Items</span>
+                        <span class="summary-value">{{ order.shipped_count }}/{{ order.seller_items_count }}</span>
+                    </div>
+                    {% if order.tracking_number %}
+                    <div class="summary-row">
+                        <span class="summary-label">Tracking Number</span>
+                        <span class="summary-value">{{ order.tracking_number }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="summary-row summary-total">
+                        <span class="summary-label">Your Revenue</span>
+                        <span class="summary-value">KSh {{ order.seller_total|intcomma }}</span>
+                    </div>
+                </div>
+                
+                <!-- Order Actions -->
+                <div class="order-actions">
+                    <a href="{% url 'order_detail' order.id %}" class="order-action-btn btn-primary">
+                        <i class="bi bi-eye"></i> View Details
+                    </a>
+                    
+                    {% if order.get_delivery_request %}
+                    <a href="{% url 'delivery:delivery_detail' order.get_delivery_request.id %}" 
+                       class="order-action-btn btn-outline">
+                        <i class="bi bi-truck"></i> View Delivery
+                    </a>
+                    {% endif %}
+                    
+                    {% if order.status == 'paid' and not order.get_delivery_request %}
+                    <a href="{% url 'delivery:create_delivery' %}?order_id={{ order.id }}" 
+                       class="order-action-btn btn-outline">
+                        <i class="bi bi-plus-circle"></i> Create Delivery
+                    </a>
+                    {% endif %}
+                    
+                    {% if request.user.is_staff %}
+                    <a href="{% url 'admin:listings_order_change' order.id %}" 
+                       class="order-action-btn btn-outline">
+                        <i class="bi bi-gear"></i> Admin
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
         </div>
-        {% else %}
-        <div class="text-center py-5">
-            <i class="bi bi-inbox fs-1 text-muted"></i>
-            <h4 class="mt-3">No Orders Yet</h4>
-            <p class="text-muted">You haven't received any orders yet. Keep your listings up to date!</p>
-        </div>
-        {% endif %}
+        {% endfor %}
+    </div>
 
-        {% if orders.has_other_pages %}
-        <nav aria-label="Page navigation" class="mt-4">
-            <ul class="pagination justify-content-center">
+    <!-- Pagination -->
+    {% if orders.has_other_pages %}
+    <div class="pagination-container">
+        <nav aria-label="Page navigation">
+            <ul class="pagination">
                 {% if orders.has_previous %}
-                <li class="page-item"><a class="page-link" href="?page={{ orders.previous_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">Previous</a></li>
-                {% else %}
-                <li class="page-item disabled"><span class="page-link">Previous</span></li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ orders.previous_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
                 {% endif %}
 
                 {% for i in orders.paginator.page_range %}
-                {% if orders.number == i %}
-                <li class="page-item active" aria-current="page"><span class="page-link">{{ i }}</span></li>
-                {% else %}
-                <li class="page-item"><a class="page-link" href="?page={{ i }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">{{ i }}</a></li>
-                {% endif %}
+                    {% if orders.number == i %}
+                    <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+                    {% elif i > orders.number|add:'-3' and i < orders.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ i }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">{{ i }}</a>
+                    </li>
+                    {% endif %}
                 {% endfor %}
 
                 {% if orders.has_next %}
-                <li class="page-item"><a class="page-link" href="?page={{ orders.next_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">Next</a></li>
-                {% else %}
-                <li class="page-item disabled"><span class="page-link">Next</span></li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ orders.next_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
                 {% endif %}
             </ul>
         </nav>
-        {% endif %}
     </div>
+    {% endif %}
+
+    {% else %}
+    <!-- Empty State -->
+    <div class="empty-state">
+        <div class="empty-icon">
+            <i class="bi bi-bag-x"></i>
+        </div>
+        <h3 class="empty-title">No Orders Yet</h3>
+        <p class="empty-subtitle">
+            You haven't received any orders yet. Keep your listings up to date and promote your store!
+        </p>
+        <div class="empty-actions">
+            <a href="{% url 'my-listings' %}" class="order-action-btn btn-primary">
+                <i class="bi bi-grid"></i> Manage Listings
+            </a>
+            <a href="{% url 'listing-create' %}" class="order-action-btn btn-outline">
+                <i class="bi bi-plus-circle"></i> Create New Listing
+            </a>
+            <a href="{% url 'delivery:dashboard' %}" class="order-action-btn btn-outline">
+                <i class="bi bi-truck"></i> Go to Delivery
+            </a>
+        </div>
+    </div>
+    {% endif %}
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Animate order cards on load
+    const orderCards = document.querySelectorAll('.order-card');
+    orderCards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+    
+    // Add hover effects
+    orderCards.forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-4px)';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+        });
+    });
+    
+    // Item card hover effects
+    const itemCards = document.querySelectorAll('.item-card');
+    itemCards.forEach(item => {
+        item.addEventListener('mouseenter', function() {
+            const img = this.querySelector('img');
+            if (img) {
+                img.style.transform = 'scale(1.08)';
+            }
+        });
+        
+        item.addEventListener('mouseleave', function() {
+            const img = this.querySelector('img');
+            if (img) {
+                img.style.transform = 'scale(1)';
+            }
+        });
+    });
+});
+</script>
 {% endblock %}

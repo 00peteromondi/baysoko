@@ -51,8 +51,9 @@
         background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
         padding: 16px;
         color: white;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     }
-    
+
     .checkout-header h1 {
         font-size: 18px;
         font-weight: 800;
@@ -767,11 +768,7 @@
         <!-- Left Column: Shipping Form -->
         <div class="form-section">
             {% if not checkout_form %}
-            <!-- Fallback form when no form is provided -->
-            <div class="alert alert-warning">
-                <i class="bi bi-exclamation-triangle me-2"></i>
-                Unable to load checkout form. Please try again.
-            </div>
+            <!-- Minimal checkout form (fallback) -->
             <form method="post" id="checkoutForm" novalidate>
                 {% csrf_token %}
                 
@@ -858,17 +855,17 @@
                 </h3>
                 
                 <div class="form-group">
-                    <label class="form-label">Select Payment Method *</label>
-                    <select name="payment_method" class="form-control" required>
-                        <option value="">Choose...</option>
-                        <option value="mpesa">M-Pesa</option>
-                        <option value="card">Credit/Debit Card</option>
-                        <option value="cash">Cash on Delivery</option>
-                    </select>
+                    <label class="form-label">Payment Method *</label>
+                    <!-- Enforce M-Pesa as the only allowed payment method in fallback -->
+                    <input type="hidden" name="payment_method" value="mpesa">
+                    <div class="info-card">
+                        <strong>M-Pesa</strong>
+                        <div class="small text-muted">Only available payment method</div>
+                    </div>
                 </div>
-                
+
                 <!-- M-Pesa Phone Number -->
-                <div id="mpesaFields" style="display: none;">
+                <div id="mpesaFields" style="display: block;">
                     <div class="form-group">
                         <label class="form-label">M-Pesa Phone Number *</label>
                         <input type="text" name="mpesa_phone" class="form-control" placeholder="0712345678">
@@ -1200,44 +1197,73 @@
         }
         
         // ===== ALTERNATE SHIPPING TOGGLE =====
-        if (useAlternateShipping) {
-            useAlternateShipping.addEventListener('change', function() {
-                if (this.checked) {
-                    accountInfo.style.display = 'none';
-                    alternateShippingForm.style.display = 'block';
-                    
-                    // Enable all alternate shipping form fields
-                    const alternateFields = alternateShippingForm.querySelectorAll('input, select, textarea');
-                    alternateFields.forEach(field => {
-                        field.disabled = false;
-                        field.required = true;
-                    });
-                    
-                    showToast('Enter different shipping address', 'info');
-                } else {
-                    accountInfo.style.display = 'block';
-                    alternateShippingForm.style.display = 'none';
-                    
-                    // Disable all alternate shipping form fields
-                    const alternateFields = alternateShippingForm.querySelectorAll('input, select, textarea');
-                    alternateFields.forEach(field => {
-                        field.disabled = true;
-                        field.required = false;
-                    });
-                    
-                    // Fill with user's account info if fields exist
-                    fillWithAccountInfo();
-                    
-                    showToast('Using your account details', 'info');
-                }
-            });
-            
-            // Initialize based on current state
-            if (useAlternateShipping.checked) {
+        // Centralized handler for alternate shipping UI/state
+        function setAlternateShippingState(checked) {
+            if (!accountInfo || !alternateShippingForm) return;
+
+            const alternateFields = alternateShippingForm.querySelectorAll('input, select, textarea');
+
+            if (checked) {
                 accountInfo.style.display = 'none';
                 alternateShippingForm.style.display = 'block';
+
+                alternateFields.forEach(field => {
+                    // Never disable CSRF or other hidden connector fields
+                    if (field.name && field.name.toLowerCase().includes('csrf')) return;
+                    field.disabled = false;
+                    // Mark required if field originally had required attribute or is a visible contact field
+                    if (field.hasAttribute('data-required') || ['first_name','last_name','email','phone_number'].includes(field.name)) {
+                        field.required = true;
+                    }
+                });
+
+                showToast('Enter different shipping address', 'info');
             } else {
+                accountInfo.style.display = 'block';
+                alternateShippingForm.style.display = 'none';
+
+                alternateFields.forEach(field => {
+                    if (field.name && field.name.toLowerCase().includes('csrf')) return;
+                    field.disabled = true;
+                    field.required = false;
+                });
+
+                // Fill visible form fields with account info where applicable
                 fillWithAccountInfo();
+
+                showToast('Using your account details', 'info');
+            }
+        }
+
+        if (useAlternateShipping) {
+            // Guard existence of alternateShippingForm/accountInfo
+            if (!alternateShippingForm) {
+                console.warn('alternateShippingForm not found in DOM');
+            }
+
+            useAlternateShipping.addEventListener('change', function() {
+                try {
+                    setAlternateShippingState(this.checked);
+                } catch (err) {
+                    console.warn('Error toggling alternate shipping', err);
+                }
+            });
+
+            // Initialize based on current checkbox state
+            try {
+                setAlternateShippingState(useAlternateShipping.checked);
+            } catch (err) {
+                console.warn('Error initializing alternate shipping state', err);
+            }
+        } else {
+            // If toggle control is missing, ensure alternate fields are disabled to avoid validation
+            if (alternateShippingForm) {
+                const alternateFields = alternateShippingForm.querySelectorAll('input, select, textarea');
+                alternateFields.forEach(field => {
+                    if (field.name && field.name.toLowerCase().includes('csrf')) return;
+                    field.disabled = true;
+                    field.required = false;
+                });
             }
         }
         
@@ -1263,39 +1289,38 @@
         
         // ===== PAYMENT METHOD TOGGLE =====
         if (paymentMethod && mpesaFields) {
-            paymentMethod.addEventListener('change', function() {
-                if (this.value === 'mpesa') {
-                    mpesaFields.style.display = 'block';
-                    if (mpesaPhoneField) {
-                        mpesaPhoneField.required = true;
-                        // Pre-fill with user's phone if available
-                        if (!mpesaPhoneField.value && '{{ request.user.phone_number|escapejs }}') {
-                            mpesaPhoneField.value = '{{ request.user.phone_number|escapejs }}';
+            // Ensure only M-Pesa is selectable/used. If paymentMethod is a select, disable other options.
+            try {
+                if (paymentMethod.tagName && paymentMethod.tagName.toLowerCase() === 'select') {
+                    // Disable non-mpesa options
+                    Array.from(paymentMethod.options).forEach(opt => {
+                        if (opt.value !== 'mpesa') {
+                            opt.disabled = true;
                         }
-                    }
-                    showToast('M-Pesa selected. Enter your phone number.', 'info');
-                } else {
-                    mpesaFields.style.display = 'none';
-                    if (mpesaPhoneField) {
-                        mpesaPhoneField.required = false;
-                    }
-                    showToast('Payment method updated', 'info');
+                    });
+                    paymentMethod.value = 'mpesa';
+                } else if (paymentMethod.type === 'hidden' || paymentMethod.tagName.toLowerCase() === 'input') {
+                    paymentMethod.value = 'mpesa';
                 }
-                
-                // Update hidden field with selected payment method
-                if (selectedPaymentMethodField) {
-                    selectedPaymentMethodField.value = this.value;
-                }
-            });
-            
-            // Initialize on page load
-            if (paymentMethod.value === 'mpesa') {
+
+                // Always show mpesa fields and require phone
                 mpesaFields.style.display = 'block';
-            }
-            
-            // Set initial value in hidden field
-            if (selectedPaymentMethodField && paymentMethod.value) {
-                selectedPaymentMethodField.value = paymentMethod.value;
+                if (mpesaPhoneField) {
+                    mpesaPhoneField.required = true;
+                    if (!mpesaPhoneField.value && '{{ request.user.phone_number|escapejs }}') {
+                        mpesaPhoneField.value = '{{ request.user.phone_number|escapejs }}';
+                    }
+                }
+
+                // Update hidden selectedPaymentMethodField
+                if (selectedPaymentMethodField) selectedPaymentMethodField.value = 'mpesa';
+
+                // Attach change listener only to update hidden field if user somehow changes it
+                paymentMethod.addEventListener && paymentMethod.addEventListener('change', function() {
+                    if (selectedPaymentMethodField) selectedPaymentMethodField.value = this.value || 'mpesa';
+                });
+            } catch (err) {
+                console.warn('Payment method enforcement failed', err);
             }
         }
         

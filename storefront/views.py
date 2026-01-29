@@ -776,7 +776,7 @@ def seller_analytics(request):
         time_period = end_date - timedelta(hours=24)
         previous_period = end_date - timedelta(hours=48)
         interval = 'hour'
-        trend_days = 1
+        trend_days = 24
     elif period == '7d':
         time_period = end_date - timedelta(days=7)
         previous_period = end_date - timedelta(days=14)
@@ -794,15 +794,16 @@ def seller_analytics(request):
         interval = 'month'
         trend_days = 12
     
-    # Base queryset for orders across all stores
+    # Base queryset for orders across all stores (include all statuses so
+    # analytics reflect created orders even if not paid yet)
     orders_qs = OrderItem.objects.filter(
-        listing__store__in=stores,
-        order__status__in=['paid', 'delivered']
+        listing__store__in=stores
     )
     
     # Current period metrics
     if time_period:
-        current_orders = orders_qs.filter(added_at__gte=time_period)
+        # Use order created time for period filtering
+        current_orders = orders_qs.filter(order__created_at__gte=time_period)
         current_revenue = current_orders.aggregate(
             total=Sum(F('price') * F('quantity'), default=0)
         )['total'] or 0
@@ -810,8 +811,8 @@ def seller_analytics(request):
         
         # Previous period for trend calculation
         previous_orders = orders_qs.filter(
-            added_at__gte=previous_period,
-            added_at__lt=time_period
+            order__created_at__gte=previous_period,
+            order__created_at__lt=time_period
         )
         previous_revenue = previous_orders.aggregate(
             total=Sum(F('price') * F('quantity'), default=0)
@@ -854,16 +855,16 @@ def seller_analytics(request):
             hour_start = end_date - timedelta(hours=i)
             hour_end = hour_start + timedelta(hours=1)
             day_orders = orders_qs.filter(
-                added_at__gte=hour_start,
-                added_at__lt=hour_end
+                order__created_at__gte=hour_start,
+                order__created_at__lt=hour_end
             )
             label = hour_start.strftime('%H:%M')
         else:  # day or month
             day_start = end_date - timedelta(days=i)
             day_end = day_start + timedelta(days=1)
             day_orders = orders_qs.filter(
-                added_at__gte=day_start,
-                added_at__lt=day_end
+                order__created_at__gte=day_start,
+                order__created_at__lt=day_end
             )
             label = day_start.strftime('%b %d')
         
@@ -980,12 +981,18 @@ def seller_analytics(request):
     
     # Recent orders
     recent_orders = Order.objects.filter(
-        order_items__listing__store__in=stores,
-        status__in=['paid', 'delivered']
+        order_items__listing__store__in=stores
     ).distinct().order_by('-created_at')[:5]
 
     for order in recent_orders:
-        store_name = order.items.first().listing.store.name if order.items.exists() else "Unknown Store"
+        # `order.items.first()` returns a `Listing` instance (not a wrapper),
+        # so access `.store` directly. Guard against missing relationships.
+        store_name = "Unknown Store"
+        if order.items.exists():
+            first_listing = order.items.first()
+            if first_listing and getattr(first_listing, 'store', None):
+                store_name = first_listing.store.name
+
         recent_activity.append({
             'timestamp': order.created_at,
             'store': store_name,
@@ -1020,13 +1027,9 @@ def seller_analytics(request):
             'description': f'New listing: {listing.title}'
         })
     
-    # Sort by timestamp
+    # Sort by timestamp and limit
     recent_activity.sort(key=lambda x: x['timestamp'], reverse=True)
     recent_activity = recent_activity[:10]
-    
-    # Format timestamps for template
-    for activity in recent_activity:
-        activity['timestamp'] = activity['timestamp'].strftime('%b %d, %H:%M')
     
     # Customer location data
     customer_locations = orders_qs.values(
@@ -1096,12 +1099,12 @@ def store_analytics(request, slug):
     # Base queryset for the store's listings
     listings_qs = Listing.objects.filter(store=store)
     orders_qs = OrderItem.objects.filter(
-        listing__store=store,
-        order__status__in=['paid', 'delivered']
+        listing__store=store
     )
     
     if time_period:
-        orders_qs = orders_qs.filter(added_at__gte=time_period)
+        # Use order created time for period filtering to include recent orders
+        orders_qs = orders_qs.filter(order__created_at__gte=time_period)
     
     # Basic metrics
     revenue_result = orders_qs.aggregate(
@@ -1126,16 +1129,16 @@ def store_analytics(request, slug):
             hour_start = end_date - timedelta(hours=i)
             hour_end = hour_start + timedelta(hours=1)
             day_orders = orders_qs.filter(
-                added_at__gte=hour_start,
-                added_at__lt=hour_end
+                order__created_at__gte=hour_start,
+                order__created_at__lt=hour_end
             )
             label = hour_start.strftime('%H:%M')
         else:  # day or month
             day_start = end_date - timedelta(days=i)
             day_end = day_start + timedelta(days=1)
             day_orders = orders_qs.filter(
-                added_at__gte=day_start,
-                added_at__lt=day_end
+                order__created_at__gte=day_start,
+                order__created_at__lt=day_end
             )
             label = day_start.strftime('%b %d')
         
@@ -1188,18 +1191,19 @@ def store_analytics(request, slug):
     
     # Recent activity (orders, reviews, listings)
     recent_activity = []
-    stores = Store.objects.filter(owner=request.user)
-    # Add recent orders
-    recent_orders = Order.objects.filter(
-        order_items__listing__store__in=stores,
-        status__in=['paid', 'delivered']
-    ).distinct().order_by('-created_at')[:5]
+    # Add recent orders for this store
+    recent_orders_qs = Order.objects.filter(
+        order_items__listing__store=store
+    )
+    if time_period:
+        recent_orders_qs = recent_orders_qs.filter(created_at__gte=time_period)
+    recent_orders = recent_orders_qs.distinct().order_by('-created_at')[:5]
     
     for order in recent_orders:
         recent_activity.append({
             'timestamp': order.created_at,
             'type': 'Order',
-            'description': f'Order #{order.id} - KSh {order.total_amount}'
+            'description': f'Order #{order.id} - KSh {order.total_price} from {order.user.username}'
         })
     
     # Add recent reviews
@@ -1223,13 +1227,9 @@ def store_analytics(request, slug):
             'description': f'New listing: {listing.title}'
         })
     
-    # Sort combined activity by timestamp
+    # Sort combined activity by timestamp and limit — keep timestamps as datetimes
     recent_activity.sort(key=lambda x: x['timestamp'], reverse=True)
     recent_activity = recent_activity[:10]
-    
-    # Format timestamps for template
-    for activity in recent_activity:
-        activity['timestamp'] = activity['timestamp'].strftime('%b %d, %H:%M')
     
     context = {
         'store': store,

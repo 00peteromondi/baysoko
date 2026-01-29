@@ -1,239 +1,337 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Delivery Management System{% endblock %} | HomaBay Souq</title>
+    <title>{% block title %}Delivery Management{% endblock %} | Baysoko</title>
     
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- Custom CSS -->
     <style>
         :root {
-            --primary-color: #2c3e50;
-            --secondary-color: #3498db;
-            --accent-color: #e74c3c;
-            --success-color: #27ae60;
-            --warning-color: #f39c12;
-            --light-bg: #f8f9fa;
-            --dark-bg: #2c3e50;
+            /* Dark Theme Variables */
+            --bg-primary: #121212;
+            --bg-secondary: #1e1e1e;
+            --bg-tertiary: #2d2d2d;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --text-muted: #888888;
+            --border-color: #404040;
+            --primary: #ff6b35;
+            --primary-dark: #e55a2b;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --info: #17a2b8;
+            --radius-sm: 4px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
         }
         
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f5f7fa;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* ===== NAVBAR ===== */
+        .navbar-delivery {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 12px 0;
+            box-shadow: var(--shadow-md);
         }
         
         .navbar-brand {
-            font-weight: 700;
-            color: var(--primary-color);
-        }
-        
-        .sidebar {
-            background: var(--primary-color);
+            font-weight: 800;
+            font-size: 1.25rem;
             color: white;
-            min-height: calc(100vh - 56px);
-            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         
-        .sidebar .nav-link {
-            color: rgba(255,255,255,0.8);
-            padding: 12px 20px;
-            margin: 5px 0;
-            border-radius: 5px;
-            transition: all 0.3s;
-        }
-        
-        .sidebar .nav-link:hover {
-            background: rgba(255,255,255,0.1);
+        .navbar-brand:hover {
             color: white;
+            opacity: 0.9;
         }
         
-        .sidebar .nav-link.active {
-            background: var(--secondary-color);
-            color: white;
-        }
-        
-        .sidebar .nav-link i {
-            width: 20px;
-            margin-right: 10px;
-        }
-        
-        .card {
-            border: none;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            transition: transform 0.3s;
-        }
-        
-        .card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .stat-card {
-            border-left: 4px solid var(--secondary-color);
-        }
-        
-        .stat-card.pending {
-            border-left-color: var(--warning-color);
-        }
-        
-        .stat-card.in-transit {
-            border-left-color: var(--secondary-color);
-        }
-        
-        .stat-card.delivered {
-            border-left-color: var(--success-color);
-        }
-        
-        .status-badge {
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 0.85rem;
+        .nav-link {
+            color: rgba(255, 255, 255, 0.85);
             font-weight: 500;
+            padding: 8px 16px;
+            border-radius: var(--radius-md);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
         
-        .status-pending { background-color: #ffefc6; color: #856404; }
-        .status-accepted { background-color: #cce5ff; color: #004085; }
-        .status-assigned { background-color: #d4edda; color: #155724; }
-        .status-picked_up { background-color: #d1ecf1; color: #0c5460; }
-        .status-in_transit { background-color: #d1ecf1; color: #0c5460; }
-        .status-out_for_delivery { background-color: #fff3cd; color: #856404; }
-        .status-delivered { background-color: #d4edda; color: #155724; }
-        .status-failed { background-color: #f8d7da; color: #721c24; }
-        .status-cancelled { background-color: #f8f9fa; color: #6c757d; }
-        
-        .driver-status {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-right: 5px;
-        }
-        
-        .status-available { background-color: #28a745; }
-        .status-busy { background-color: #ffc107; }
-        .status-offline { background-color: #dc3545; }
-        .status-on_break { background-color: #6c757d; }
-        
-        .map-container {
-            height: 300px;
-            background: #e9ecef;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        
-        .timeline {
-            position: relative;
-            padding-left: 30px;
-        }
-        
-        .timeline::before {
-            content: '';
-            position: absolute;
-            left: 10px;
-            top: 0;
-            bottom: 0;
-            width: 2px;
-            background: #dee2e6;
-        }
-        
-        .timeline-item {
-            position: relative;
-            margin-bottom: 20px;
-        }
-        
-        .timeline-item::before {
-            content: '';
-            position: absolute;
-            left: -25px;
-            top: 5px;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: var(--secondary-color);
-            border: 2px solid white;
-        }
-        
-        .btn-delivery {
-            background: var(--secondary-color);
+        .nav-link:hover {
             color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: 500;
-            transition: all 0.3s;
+            background: rgba(255, 255, 255, 0.1);
         }
         
-        .btn-delivery:hover {
-            background: #2980b9;
+        .nav-link.active {
             color: white;
-            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.15);
         }
         
-        .table-delivery {
-            background: white;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        
-        .table-delivery thead {
-            background: var(--primary-color);
-            color: white;
-        }
-        
-        .table-delivery th {
-            border: none;
-            font-weight: 600;
-            padding: 15px;
-        }
-        
-        .table-delivery td {
-            padding: 15px;
-            vertical-align: middle;
-        }
-        
-        .table-delivery tbody tr {
-            transition: background 0.3s;
-        }
-        
-        .table-delivery tbody tr:hover {
-            background: rgba(52, 152, 219, 0.05);
-        }
-        
-        .filter-card {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        
+        /* ===== NOTIFICATION BADGE ===== */
         .notification-badge {
             position: absolute;
             top: -5px;
             right: -5px;
-            background: var(--accent-color);
+            background: var(--danger);
             color: white;
             font-size: 0.7rem;
-            width: 18px;
+            min-width: 18px;
             height: 18px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 0 4px;
         }
         
+        /* ===== SIDEBAR ===== */
+        .sidebar {
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            min-height: calc(100vh - 72px);
+            padding: 20px 0;
+            width: 250px;
+            position: sticky;
+            top: 72px;
+        }
+        
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 0 16px;
+        }
+        
+        .sidebar-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s ease;
+        }
+        
+        .sidebar-link:hover {
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+        }
+        
+        .sidebar-link.active {
+            color: white;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        }
+        
+        .sidebar-divider {
+            border-top: 1px solid var(--border-color);
+            margin: 16px;
+        }
+        
+        .sidebar-section-title {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 8px 16px;
+            margin-bottom: 4px;
+        }
+        
+        /* ===== MAIN CONTENT ===== */
+        .main-content {
+            flex: 1;
+            padding: 24px;
+            background: var(--bg-primary);
+        }
+        
+        .content-header {
+            margin-bottom: 24px;
+        }
+        
+        .page-title {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+        
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+        
+        /* ===== CARDS ===== */
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+        
+        .card-header {
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 20px;
+            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        }
+        
+        .card-title {
+            font-weight: 700;
+            margin: 0;
+            color: var(--text-primary);
+        }
+        
+        .card-body {
+            padding: 20px;
+        }
+        
+        /* ===== BUTTONS ===== */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border: none;
+            color: white;
+            font-weight: 600;
+            padding: 10px 20px;
+            border-radius: var(--radius-md);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            color: white;
+        }
+        
+        .btn-outline-primary {
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            background: transparent;
+        }
+        
+        .btn-outline-primary:hover {
+            background: rgba(255, 107, 53, 0.1);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        
+        /* ===== STATUS BADGES ===== */
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 12px;
+            display: inline-block;
+        }
+        
+        .status-pending { background-color: rgba(255, 193, 7, 0.2); color: #ffc107; }
+        .status-accepted { background-color: rgba(23, 162, 184, 0.2); color: #17a2b8; }
+        .status-assigned { background-color: rgba(0, 123, 255, 0.2); color: #007bff; }
+        .status-picked_up { background-color: rgba(40, 167, 69, 0.2); color: #28a745; }
+        .status-in_transit { background-color: rgba(23, 162, 184, 0.2); color: #17a2b8; }
+        .status-out_for_delivery { background-color: rgba(255, 193, 7, 0.2); color: #ffc107; }
+        .status-delivered { background-color: rgba(40, 167, 69, 0.2); color: #28a745; }
+        .status-failed { background-color: rgba(220, 53, 69, 0.2); color: #dc3545; }
+        .status-cancelled { background-color: rgba(108, 117, 125, 0.2); color: #6c757d; }
+        
+        /* ===== TABLES ===== */
+        .table-delivery {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+        
+        .table-delivery thead {
+            background: var(--bg-tertiary);
+        }
+        
+        .table-delivery th {
+            border: none;
+            font-weight: 600;
+            color: var(--text-primary);
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .table-delivery td {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+        
+        .table-delivery tbody tr:hover {
+            background: rgba(255, 107, 53, 0.05);
+        }
+        
+        /* ===== FOOTER ===== */
+        .footer {
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            padding: 20px 0;
+            margin-top: auto;
+        }
+        
+        /* ===== RESPONSIVE ===== */
         @media (max-width: 768px) {
             .sidebar {
-                min-height: auto;
-                margin-bottom: 20px;
+                position: fixed;
+                top: 72px;
+                left: -250px;
+                z-index: 1000;
+                transition: left 0.3s ease;
+            }
+            
+            .sidebar.active {
+                left: 0;
+            }
+            
+            .sidebar-overlay {
+                display: none;
+                position: fixed;
+                top: 72px;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 999;
+            }
+            
+            .sidebar-overlay.active {
+                display: block;
+            }
+            
+            .main-content {
+                padding: 16px;
             }
         }
     </style>
@@ -242,10 +340,11 @@
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark" style="background-color: var(--primary-color);">
+    <nav class="navbar navbar-expand-lg navbar-delivery">
         <div class="container-fluid">
             <a class="navbar-brand" href="{% url 'delivery:dashboard' %}">
-                <i class="fas fa-truck"></i> Delivery Management
+                <i class="bi bi-truck"></i>
+                Delivery Management
             </a>
             
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -255,41 +354,68 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     {% if user.is_authenticated %}
-                        {% if is_delivery_person %}
-                            <li class="nav-item">
-                                <a class="nav-link" href="{% url 'delivery:driver_dashboard' %}">
-                                    <i class="fas fa-user"></i> Driver Dashboard
-                                </a>
-                            </li>
-                        {% endif %}
-                        
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
-                                <i class="fas fa-user-circle"></i> {{ user.get_full_name|default:user.username }}
+                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-person-circle"></i>
+                                {{ user.get_full_name|default:user.username }}
+                                {% if is_delivery_person %}
+                                <span class="badge bg-warning ms-1">Driver</span>
+                                {% elif is_seller %}
+                                <span class="badge bg-info ms-1">Seller</span>
+                                {% endif %}
                             </a>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="{% url 'delivery:dashboard' %}"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
-                                <li><a class="dropdown-item" href="{% url 'delivery:delivery_list' %}"><i class="fas fa-list"></i> All Deliveries</a></li>
-                                {% if user.is_staff or is_seller %}
-                                <li><a class="dropdown-item" href="{% url 'delivery:reports' %}"><i class="fas fa-chart-bar"></i> Reports</a></li>
-                                <li><a class="dropdown-item" href="{% url 'delivery:analytics' %}"><i class="fas fa-chart-line"></i> Analytics</a></li>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="{% url 'delivery:dashboard' %}"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
+                                <li><a class="dropdown-item" href="{% url 'delivery:delivery_list' %}"><i class="bi bi-list"></i> All Deliveries</a></li>
+                                {% if is_delivery_person %}
+                                <li><a class="dropdown-item" href="{% url 'delivery:driver_dashboard' %}"><i class="bi bi-person-badge"></i> Driver Dashboard</a></li>
+                                {% endif %}
+                                {% if is_seller %}
+                                <li><a class="dropdown-item" href="{% url 'seller_orders' %}"><i class="bi bi-bag-check"></i> Seller Orders</a></li>
                                 {% endif %}
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{% url 'logout' %}"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+                                <li><a class="dropdown-item" href="{% url 'order_list' %}"><i class="bi bi-arrow-left"></i> Back to Shop</a></li>
+                                <li><a class="dropdown-item" href="{% url 'logout' %}"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
                             </ul>
                         </li>
                         
-                        <li class="nav-item position-relative">
-                            <a class="nav-link" href="#" id="notificationBell">
-                                <i class="fas fa-bell"></i>
+                        <!-- Notifications -->
+                        <li class="nav-item dropdown">
+                            <a class="nav-link position-relative" href="#" id="notificationsDropdown" role="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-bell"></i>
                                 {% if unread_notifications_count %}
                                 <span class="notification-badge">{{ unread_notifications_count }}</span>
                                 {% endif %}
                             </a>
+                            <ul class="dropdown-menu dropdown-menu-end" style="min-width: 300px;">
+                                <li><h6 class="dropdown-header">Notifications</h6></li>
+                                {% if unread_notifications_count %}
+                                    {% for notification in unread_notifications %}
+                                    <li>
+                                        <a class="dropdown-item" href="#">
+                                            <div class="d-flex">
+                                                <div class="flex-shrink-0">
+                                                    <i class="bi bi-info-circle text-primary"></i>
+                                                </div>
+                                                <div class="flex-grow-1 ms-2">
+                                                    <div class="fw-bold">{{ notification.title }}</div>
+                                                    <div class="small">{{ notification.message|truncatechars:50 }}</div>
+                                                    <div class="text-muted small">{{ notification.created_at|timesince }} ago</div>
+                                                </div>
+                                            </div>
+                                        </a>
+                                    </li>
+                                    {% endfor %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item text-center" href="#">View all notifications</a></li>
+                                {% else %}
+                                    <li><a class="dropdown-item text-center text-muted" href="#">No new notifications</a></li>
+                                {% endif %}
+                            </ul>
                         </li>
                     {% else %}
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'delivery:login' %}"><i class="fas fa-sign-in-alt"></i> Login</a>
+                            <a class="nav-link" href="{% url 'delivery:login' %}"><i class="bi bi-box-arrow-in-right"></i> Login</a>
                         </li>
                     {% endif %}
                 </ul>
@@ -299,54 +425,94 @@
 
     <div class="container-fluid">
         <div class="row">
-            {% if user.is_authenticated and not user.delivery_person %}
-            <!-- Sidebar for non-driver users -->
-            <div class="col-lg-2 col-md-3 d-none d-md-block sidebar">
-                <div class="sticky-top pt-3">
-                    <ul class="nav flex-column">
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'delivery:dashboard' %}">
-                                <i class="fas fa-tachometer-alt"></i> Dashboard
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'delivery_list' %}active{% endif %}" href="{% url 'delivery:delivery_list' %}">
-                                <i class="fas fa-list"></i> All Deliveries
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'create_delivery' %}active{% endif %}" href="{% url 'delivery:create_delivery' %}">
-                                <i class="fas fa-plus-circle"></i> Create Delivery
-                            </a>
-                        </li>
-                        {% if user.is_staff or is_seller %}
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" href="{% url 'delivery:reports' %}">
-                                <i class="fas fa-chart-bar"></i> Reports
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'analytics' %}active{% endif %}" href="{% url 'delivery:analytics' %}">
-                                <i class="fas fa-chart-line"></i> Analytics
-                            </a>
-                        </li>
-                        {% endif %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'delivery:track_delivery' 'tracking-number' %}" onclick="promptTracking()">
-                                <i class="fas fa-search"></i> Track Delivery
-                            </a>
-                        </li>
-                    </ul>
-                </div>
+            <!-- Sidebar -->
+            {% if user.is_authenticated %}
+            <div class="sidebar d-none d-md-block col-md-3 col-lg-2">
+                <nav class="sidebar-nav">
+                    <a class="sidebar-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" 
+                       href="{% url 'delivery:dashboard' %}">
+                        <i class="bi bi-speedometer2"></i>
+                        Dashboard
+                    </a>
+                    
+                    <a class="sidebar-link {% if request.resolver_match.url_name == 'delivery_list' %}active{% endif %}" 
+                       href="{% url 'delivery:delivery_list' %}">
+                        <i class="bi bi-list-check"></i>
+                        All Deliveries
+                    </a>
+                    
+                    <a class="sidebar-link {% if request.resolver_match.url_name == 'create_delivery' %}active{% endif %}" 
+                       href="{% url 'delivery:create_delivery' %}">
+                        <i class="bi bi-plus-circle"></i>
+                        Create Delivery
+                    </a>
+                    
+                    {% if is_delivery_person %}
+                    <div class="sidebar-divider"></div>
+                    <div class="sidebar-section-title">Driver Tools</div>
+                    
+                    <a class="sidebar-link {% if request.resolver_match.url_name == 'driver_dashboard' %}active{% endif %}" 
+                       href="{% url 'delivery:driver_dashboard' %}">
+                        <i class="bi bi-person-badge"></i>
+                        Driver Dashboard
+                    </a>
+                    
+                    <a class="sidebar-link" href="#" onclick="updateDriverStatus('available')">
+                        <i class="bi bi-circle-fill text-success"></i>
+                        Mark Available
+                    </a>
+                    {% endif %}
+                    
+                    {% if is_seller or user.is_staff %}
+                    <div class="sidebar-divider"></div>
+                    <div class="sidebar-section-title">Business</div>
+                    
+                    {% if is_seller %}
+                    <a class="sidebar-link" href="{% url 'seller_orders' %}">
+                        <i class="bi bi-bag-check"></i>
+                        Seller Orders
+                    </a>
+                    {% endif %}
+                    
+                    <a class="sidebar-link {% if request.resolver_match.url_name == 'reports' %}active{% endif %}" 
+                       href="{% url 'delivery:reports' %}">
+                        <i class="bi bi-bar-chart"></i>
+                        Reports
+                    </a>
+                    
+                    <a class="sidebar-link {% if request.resolver_match.url_name == 'analytics' %}active{% endif %}" 
+                       href="{% url 'delivery:analytics' %}">
+                        <i class="bi bi-graph-up"></i>
+                        Analytics
+                    </a>
+                    {% endif %}
+                    
+                    <div class="sidebar-divider"></div>
+                    <div class="sidebar-section-title">Tools</div>
+                    
+                    <a class="sidebar-link" href="#" onclick="promptTracking()">
+                        <i class="bi bi-search"></i>
+                        Track Delivery
+                    </a>
+                    
+                    <a class="sidebar-link" href="{% url 'order_list' %}">
+                        <i class="bi bi-shop"></i>
+                        Back to Shop
+                    </a>
+                </nav>
             </div>
+            
+            <!-- Mobile Sidebar Overlay -->
+            <div class="sidebar-overlay" id="sidebarOverlay"></div>
             {% endif %}
             
-            <!-- Main content -->
-            <div class="{% if user.is_authenticated and not user.delivery_person %}col-lg-10 col-md-9{% else %}col-12{% endif %}">
-                <div class="p-4">
+            <!-- Main Content -->
+            <div class="{% if user.is_authenticated %}col-md-9 col-lg-10{% else %}col-12{% endif %}">
+                <div class="main-content">
                     {% if messages %}
                         {% for message in messages %}
                         <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            <i class="bi bi-info-circle me-2"></i>
                             {{ message }}
                             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                         </div>
@@ -360,16 +526,23 @@
     </div>
 
     <!-- Footer -->
-    <footer class="bg-dark text-white py-4 mt-5">
-        <div class="container">
-            <div class="row">
+    <footer class="footer">
+        <div class="container-fluid">
+            <div class="row align-items-center">
                 <div class="col-md-6">
-                    <h5>Delivery Management System</h5>
-                    <p>Part of HomaBay Souq E-commerce Platform</p>
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-truck fs-4 me-2"></i>
+                        <div>
+                            <h6 class="mb-0">Delivery Management System</h6>
+                            <p class="text-muted small mb-0">Part of Baysoko E-commerce Platform</p>
+                        </div>
+                    </div>
                 </div>
                 <div class="col-md-6 text-md-end">
-                    <p>&copy; {% now "Y" %} HomaBay Souq. All rights reserved.</p>
-                    <p>Version 1.0.0</p>
+                    <p class="text-muted small mb-0">
+                        &copy; {% now "Y" %} Baysoko. All rights reserved.
+                        <span class="ms-2">v1.0.0</span>
+                    </p>
                 </div>
             </div>
         </div>
@@ -377,18 +550,8 @@
 
     <!-- Bootstrap JS Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <script>
-        function promptTracking() {
-            event.preventDefault();
-            const trackingNumber = prompt('Enter tracking number:');
-            if (trackingNumber) {
-                window.location.href = `/delivery/track/${trackingNumber}/`;
-            }
-        }
-        
         // Auto-dismiss alerts after 5 seconds
         setTimeout(() => {
             const alerts = document.querySelectorAll('.alert');
@@ -398,21 +561,55 @@
             });
         }, 5000);
         
+        // Toggle mobile sidebar
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+        }
+        
+        // Close sidebar when clicking overlay
+        document.getElementById('sidebarOverlay')?.addEventListener('click', () => {
+            toggleSidebar();
+        });
+        
+        // Prompt for tracking number
+        function promptTracking() {
+            event.preventDefault();
+            const trackingNumber = prompt('Enter tracking number:');
+            if (trackingNumber) {
+                window.location.href = `/delivery/track/${trackingNumber}/`;
+            }
+        }
+        
         // Update driver status
         function updateDriverStatus(status) {
-            fetch('/delivery/driver/update-status/', {
+            if (!confirm(`Update your status to ${status}?`)) return;
+            
+            fetch('/delivery/driver/update-location/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': getCookie('csrftoken')
                 },
-                body: JSON.stringify({ status: status })
+                body: JSON.stringify({ 
+                    status: status,
+                    latitude: null,
+                    longitude: null 
+                })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
                     location.reload();
+                } else {
+                    alert('Failed to update status');
                 }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to update status');
             });
         }
         

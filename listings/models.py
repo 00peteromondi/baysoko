@@ -688,12 +688,23 @@ class Payment(models.Model):
     def __str__(self):
         return f"Payment for Order #{self.order.id}"
 
-    def mark_as_completed(self, transaction_id):
+    def mark_as_completed(self, transaction_id=None):
+        """Mark the payment completed.
+
+        transaction_id may be None if the upstream provider did not supply
+        a receipt number. The DB column is NOT NULL, so coerce None to an
+        empty string and store a string representation for debugging.
+        """
         self.status = 'completed'
-        self.transaction_id = transaction_id
+        # Ensure we never write NULL into the non-nullable DB column
+        if transaction_id is None:
+            self.transaction_id = ''
+        else:
+            # store as string to be safe (could be int in some providers)
+            self.transaction_id = str(transaction_id)
         self.completed_at = timezone.now()
         self.save()
-        
+
         # Mark order as paid
         self.order.mark_as_paid()
 
@@ -701,6 +712,7 @@ class Payment(models.Model):
     def initiate_mpesa_payment(self, phone_number):
         """Initiate M-Pesa STK push with proper error handling"""
         from .mpesa_utils import mpesa_gateway
+        from django.conf import settings as _settings
         
         result = mpesa_gateway.stk_push(
             phone_number=phone_number,
@@ -718,7 +730,8 @@ class Payment(models.Model):
             self.save()
             
             # For simulation mode, auto-complete after delay
-            if not mpesa_gateway.has_valid_credentials:
+            if (not mpesa_gateway.has_valid_credentials and
+                getattr(_settings, 'MPESA_SIMULATE_PAYMENTS', False)):
                 self._simulate_payment_completion()
             
             return True, result['response_description']

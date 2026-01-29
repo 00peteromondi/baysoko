@@ -11,16 +11,21 @@ from .dispute_utils import DisputeManager
 def mark_order_shipped(request, order_id):
     try:
         order = get_object_or_404(Order, id=order_id)
-        
-        # Check if user is a seller for this order
+
+        # Shipping is managed via the Delivery app; do not change order state here.
         if not order.order_items.filter(listing__seller=request.user).exists():
             messages.error(request, "You don't have permission to modify this order.")
             return redirect('seller_orders')
 
-        tracking_number = request.POST.get('tracking_number')
-        OrderManager.mark_items_shipped(order, request.user, tracking_number)
+        from django.conf import settings
+        delivery_app_url = getattr(settings, 'DELIVERY_APP_ORDER_URL', None)
 
-        messages.success(request, f"Your items for Order #{order.id} have been marked as shipped.")
+        messages.info(request, "Shipping actions must be performed in the Delivery app. Please use the Delivery app to mark shipments.")
+        if delivery_app_url:
+            try:
+                return redirect(delivery_app_url.format(order_id=order.id))
+            except Exception:
+                pass
         
     except Exception as e:
         messages.error(request, str(e))
@@ -31,8 +36,24 @@ def mark_order_shipped(request, order_id):
 def confirm_delivery(request, order_id):
     try:
         order = get_object_or_404(Order, id=order_id)
+        # Only allow buyers to confirm delivery after the Delivery app
+        # has marked the order as delivered. If the delivery system has
+        # not yet reported delivery, redirect the user to the Delivery app
+        # manage page (if configured) so they can track progress.
+        from django.conf import settings
+        delivery_app_url = getattr(settings, 'DELIVERY_APP_ORDER_URL', None)
+
+        if order.status != 'delivered':
+            messages.info(request, "Delivery has not been confirmed by the delivery provider yet. Please check the Delivery app for latest status.")
+            if delivery_app_url:
+                try:
+                    return redirect(delivery_app_url.format(order_id=order.id))
+                except Exception:
+                    # fallback to order detail
+                    pass
+            return redirect('order_detail', order_id=order.id)
+
         OrderManager.confirm_delivery(order, request.user)
-        
         messages.success(request, "Delivery confirmed successfully! The sellers have been notified.")
         
     except Exception as e:

@@ -49,6 +49,7 @@
         background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
         padding: 16px;
         color: white;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     }
     
     .order-header h1 {
@@ -657,9 +658,25 @@
                         {% endif %}
                         {% if is_seller and not is_buyer and not item.shipped and order.status == 'paid' %}
                         <div class="mt-3">
-                            <a href="{% url 'mark_order_shipped' order.id %}" class="btn-outline-primary w-100">
-                                <i class="bi bi-truck"></i> Mark as Shipped
-                            </a>
+                            {% if delivery_app_order_url %}
+                                <a href="#" class="btn-outline-primary w-100 manage-order-link" data-delivery-url="{{ delivery_app_order_url }}" data-order-id="{{ order.id }}">
+                                    <i class="bi bi-gear"></i> Manage Order
+                                </a>
+                                <script>
+                                    (function(){
+                                        const el = document.querySelector('.manage-order-link[data-order-id="{{ order.id }}"]');
+                                        if(el){
+                                            const tpl = el.getAttribute('data-delivery-url') || '';
+                                            el.href = tpl.replace('{order_id}', '{{ order.id }}');
+                                            el.target = '_blank';
+                                        }
+                                    })();
+                                </script>
+                            {% else %}
+                                <button type="button" class="btn-outline-primary w-100 disabled" title="Shipping managed in the Delivery app; please use the Delivery app to mark shipments.">
+                                    <i class="bi bi-truck"></i> Manage Order
+                                </button>
+                            {% endif %}
                         </div>
                         {% endif %}
                     </div>
@@ -787,10 +804,10 @@
                     </div>
                     {% endif %}
                     
-                    {% if order.status == 'shipped' and is_buyer %}
+                    {% if order.status == 'delivered' and is_buyer %}
                     <div class="alert alert-warning mt-4">
                         <h6><i class="bi bi-truck me-2"></i>Confirm Delivery</h6>
-                        <p class="mb-3">Your order has been shipped. Please confirm delivery once you receive the items to release payment to the seller.</p>
+                        <p class="mb-3">Delivery has been reported by the delivery provider. Please confirm receipt to release payment to the seller.</p>
                         
                         <form method="post" action="{% url 'confirm_delivery' order.id %}">
                             {% csrf_token %}
@@ -823,7 +840,7 @@
                     <a href="{% url 'process_payment' order.id %}" class="btn-action">Complete Payment</a>
                 {% endif %}
                 
-                {% if order.status == 'shipped' and is_buyer %}
+                {% if order.status == 'delivered' and is_buyer %}
                     <form method="post" action="{% url 'confirm_delivery' order.id %}">
                         {% csrf_token %}
                         <button type="submit" class="btn-action btn-success">Confirm Delivery</button>
@@ -837,9 +854,9 @@
                 {% if order.status == 'paid' and is_seller and not is_buyer %}
                     {% for item in order_items %}
                         {% if not item.shipped %}
-                        <a href="{% url 'mark_order_shipped' order.id %}" class="btn-action btn-info">
+                        <button type="button" class="btn-action btn-info disabled" title="Shipping must be performed in the Delivery app.">
                             <i class="bi bi-truck me-2"></i>Mark Items as Shipped
-                        </a>
+                        </button>
                         {% endif %}
                     {% endfor %}
                 {% endif %}

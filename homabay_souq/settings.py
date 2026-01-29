@@ -579,6 +579,7 @@ DELIVERY_SYSTEM_ENABLED = config('DELIVERY_SYSTEM_ENABLED', default=True, cast=b
 DELIVERY_SYSTEM_URL = config('DELIVERY_SYSTEM_URL', default='')
 DELIVERY_SYSTEM_API_KEY = config('DELIVERY_SYSTEM_API_KEY', default='')
 DELIVERY_WEBHOOK_KEY = config('DELIVERY_WEBHOOK_KEY', default='')
+DELIVERY_APP_ORDER_URL = "{DELIVERY_SYSTEM_URL}/{order_id}/manage/"
 
 # Default pickup information
 DEFAULT_PICKUP_ADDRESS = config('DEFAULT_PICKUP_ADDRESS', default='Main Store, HomaBay')
@@ -677,6 +678,7 @@ MPESA_PASSKEY = os.environ.get('MPESA_PASSKEY', '')
 # Use localhost for development, production URL for production
 MPESA_CALLBACK_URL = os.environ.get('MPESA_CALLBACK_URL', '')
 MPESA_ENVIRONMENT = os.environ.get('MPESA_ENVIRONMENT', 'sandbox')  # or 'production'
+MPESA_SIMULATE_PAYMENTS = False 
 
 # How many remaining sellers (with unshipped items) should trigger reminder notifications
 SELLER_SHIPMENT_REMINDER_THRESHOLD = int(os.environ.get('SELLER_SHIPMENT_REMINDER_THRESHOLD', '2'))

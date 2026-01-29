@@ -118,8 +118,11 @@ class OrderManager:
         """
         Confirm order delivery and release funds
         """
-        if order.status != 'shipped':
-            raise ValidationError("Can only confirm delivery for shipped orders")
+        # Only allow user confirmation once the delivery system marks the
+        # order as delivered. The Delivery app is authoritative for delivery
+        # state transitions.
+        if order.status != 'delivered':
+            raise ValidationError("Delivery has not been confirmed by the delivery provider yet")
 
         if confirming_user != order.user:
             raise ValidationError("Only the buyer can confirm delivery")
