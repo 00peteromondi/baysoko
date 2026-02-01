@@ -1,5 +1,5 @@
 """
-AI-powered listing assistant for HomaBay Souq
+AI-powered listing assistant for Baysoko
 Updated for OpenAI API v1.0+
 """
 import os
@@ -72,7 +72,7 @@ class ListingAIHelper:
                 messages=[
                     {
                         "role": "system",
-                        "content": """You are an expert e-commerce assistant for HomaBay Souq in Homa Bay, Kenya.
+                        "content": """You are an expert e-commerce assistant for Baysoko in Homa Bay, Kenya.
                         Your task is to create complete, detailed product listings from minimal information.
                         
                         IMPORTANT RULES:
@@ -126,7 +126,7 @@ class ListingAIHelper:
         description = user_input.get('description', '').strip()
         
         prompt = f"""
-        Create a complete product listing for HomaBay Souq e-commerce marketplace in Homa Bay, Kenya.
+        Create a complete product listing for Baysoko e-commerce marketplace in Homa Bay, Kenya.
         
         PRODUCT INFORMATION:
         Title: {title if title else "Not provided"}

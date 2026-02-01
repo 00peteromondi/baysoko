@@ -6,7 +6,7 @@ import sys
 
 # Add the project to the path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'homabay_souq.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'baysoko.settings')
 django.setup()
 
 from django.contrib.sites.models import Site
@@ -19,7 +19,7 @@ def setup_oauth():
     site, created = Site.objects.get_or_create(
         id=1,
         defaults={
-            'domain': 'homabaysouq.onrender.com',
+            'domain': 'baysoko.onrender.com',
             'name': 'Baysoko Marketplace'
         }
     )
@@ -27,7 +27,7 @@ def setup_oauth():
     if created:
         print(f"✅ Created new site: {site.name}")
     else:
-        site.domain = 'homabaysouq.onrender.com'
+        site.domain = 'baysoko.onrender.com'
         site.name = 'Baysoko Marketplace'
         site.save()
         print(f"✅ Updated site: {site.name}")
@@ -82,8 +82,8 @@ def setup_oauth():
     
     print("\n✅ OAuth setup complete!")
     print(f"🌐 Site Domain: {site.domain}")
-    print(f"🔗 Google Callback: https://homabaysouq.onrender.com/accounts/google/callback/")
-    print(f"🔗 Facebook Callback: https://homabaysouq.onrender.com/accounts/facebook/callback/")
+    print(f"🔗 Google Callback: https://baysoko.onrender.com/accounts/google/callback/")
+    print(f"🔗 Facebook Callback: https://baysoko.onrender.com/accounts/facebook/callback/")
 
 if __name__ == '__main__':
     setup_oauth()

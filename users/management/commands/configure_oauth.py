@@ -12,7 +12,7 @@ class Command(BaseCommand):
         
         # 1. Configure the Site
         site = Site.objects.get_current()
-        site.domain = 'homabaysouq.onrender.com'
+        site.domain = 'baysoko.onrender.com'
         site.name = 'Baysoko Marketplace'
         site.save()
         
@@ -31,10 +31,10 @@ class Command(BaseCommand):
         self.stdout.write("\n📋 Redirect URIs to configure in provider dashboards:")
         self.stdout.write("-" * 50)
         self.stdout.write("Google OAuth Console:")
-        self.stdout.write(f"  Redirect URI: https://homabaysouq.onrender.com/accounts/google/callback/")
+        self.stdout.write(f"  Redirect URI: https://baysoko.onrender.com/accounts/google/callback/")
         self.stdout.write("")
         self.stdout.write("Facebook Developer Console:")
-        self.stdout.write(f"  Redirect URI: https://homabaysouq.onrender.com/accounts/facebook/callback/")
+        self.stdout.write(f"  Redirect URI: https://baysoko.onrender.com/accounts/facebook/callback/")
         
         self.stdout.write("\n💡 Tip: Make sure these URIs are EXACTLY as shown above.")
         

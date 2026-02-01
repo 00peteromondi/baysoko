@@ -14,7 +14,7 @@ class WebhookConfig:
         configs = {
             'development': {
                 'enabled': True,
-                'url': 'http://localhost:8001/webhook/homabay-souq/',
+                'url': 'http://localhost:8001/webhook/baysoko/',
                 'simulate': True,  # Simulate responses for development
             },
             'staging': {
@@ -24,7 +24,7 @@ class WebhookConfig:
             },
             'production': {
                 'enabled': True,
-                'url': 'https://api.delivery-partner.com/webhook/homabay-souq/',
+                'url': 'https://api.delivery-partner.com/webhook/baysoko/',
                 'simulate': False,
             }
         }

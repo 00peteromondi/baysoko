@@ -101,13 +101,13 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         # For Google, use hardcoded render.com URL
         if provider == 'google':
             # Hardcoded Render.com URL
-            return "https://homabaysouq.onrender.com/accounts/google/callback/"
+            return "https://baysoko.onrender.com/accounts/google/callback/"
         
         # For Facebook
         if provider == 'facebook':
             # Hardcoded Render.com URL
-            return "https://homabaysouq.onrender.com/accounts/facebook/callback/"
+            return "https://baysoko.onrender.com/accounts/facebook/callback/"
         
         # Fallback - return the default allauth behavior for other providers
         # Note: DefaultSocialAccountAdapter doesn't have get_redirect_uri, so we return a default
-        return f"https://homabaysouq.onrender.com/accounts/{provider}/callback/"
+        return f"https://baysoko.onrender.com/accounts/{provider}/callback/"

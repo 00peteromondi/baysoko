@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=100)),
-                ('platform_type', models.CharField(choices=[('homabay_souq', 'HomaBay Souq'), ('shopify', 'Shopify'), ('woocommerce', 'WooCommerce'), ('magento', 'Magento'), ('custom', 'Custom Platform')], max_length=20)),
+                ('platform_type', models.CharField(choices=[('baysoko', 'Baysoko'), ('shopify', 'Shopify'), ('woocommerce', 'WooCommerce'), ('magento', 'Magento'), ('custom', 'Custom Platform')], max_length=20)),
                 ('base_url', models.URLField()),
                 ('api_key', models.CharField(max_length=255)),
                 ('api_secret', models.CharField(blank=True, max_length=255)),

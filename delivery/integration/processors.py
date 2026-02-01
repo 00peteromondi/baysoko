@@ -36,8 +36,8 @@ def verify_webhook_signature(platform, signature, payload):
         # Implementation depends on WooCommerce version
         return True  # Implement proper verification
     
-    elif platform.platform_type == 'homabay_souq':
-        # Custom verification for HomaBay Souq
+    elif platform.platform_type == 'baysoko':
+        # Custom verification for Baysoko
         expected_signature = hashlib.sha256(
             f"{platform.webhook_secret}{payload}".encode('utf-8')
         ).hexdigest()
@@ -287,8 +287,8 @@ def process_order_delivered(platform, payload):
 
 def extract_order_data(platform, payload):
     """Extract order data from webhook payload based on platform"""
-    if platform.platform_type == 'homabay_souq':
-        # HomaBay Souq webhook format
+    if platform.platform_type == 'baysoko':
+        # Baysoko webhook format
         return payload.get('data', {})
     
     elif platform.platform_type == 'shopify':
@@ -329,7 +329,7 @@ def extract_order_data(platform, payload):
 
 def extract_order_id(platform, payload):
     """Extract order ID from payload"""
-    if platform.platform_type == 'homabay_souq':
+    if platform.platform_type == 'baysoko':
         return str(payload.get('data', {}).get('id', ''))
     
     elif platform.platform_type == 'shopify':

@@ -560,7 +560,7 @@ def store_upgrade(request, slug):
                 ).first()
                 
                 if not subscription:
-                    phone_norm = mpesa._normalize_phone(phone_number)
+                    phone_norm = SubscriptionService.normalize_phone_number(mpesa._normalize_phone(phone_number))
                     subscription = Subscription.objects.create(
                         store=store,
                         plan=selected_plan,
@@ -573,23 +573,24 @@ def store_upgrade(request, slug):
                 else:
                     subscription.plan = selected_plan
                     subscription.amount = amount
-                    subscription.mpesa_phone = mpesa._normalize_phone(phone_number)
+                    subscription.mpesa_phone = SubscriptionService.normalize_phone_number(mpesa._normalize_phone(phone_number))
                     subscription.metadata['plan_selected'] = selected_plan
                     subscription.save()
-                
+
                 # Initiate M-Pesa payment
+                phone_for_push = SubscriptionService.normalize_phone_number(mpesa._normalize_phone(phone_number))
                 response = mpesa.initiate_stk_push(
-                    phone=mpesa._normalize_phone(phone_number),
+                    phone=phone_for_push,
                     amount=amount,
                     account_reference=f"Store-{store.id}-{selected_plan}"
                 )
-                
+
                 # Create payment record
                 MpesaPayment.objects.create(
                     subscription=subscription,
                     checkout_request_id=response['CheckoutRequestID'],
                     merchant_request_id=response['MerchantRequestID'],
-                    phone_number=mpesa._normalize_phone(phone_number),
+                    phone_number=SubscriptionService.normalize_phone_number(mpesa._normalize_phone(phone_number)),
                     amount=amount,
                     status='pending'
                 )
@@ -749,6 +750,7 @@ def retry_payment(request, slug):
     try:
         mpesa = MpesaGateway()
         phone_norm = mpesa._normalize_phone(last_payment.phone_number)
+        phone_norm = SubscriptionService.normalize_phone_number(phone_norm)
         
         # Use subscription amount, not hardcoded 999
         response = mpesa.initiate_stk_push(

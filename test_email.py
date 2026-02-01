@@ -10,7 +10,7 @@ import django
 sys.path.insert(0, os.path.dirname(__file__))
 
 # Set up Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'homabay_souq.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'baysoko.settings')
 django.setup()
 
 from django.core.mail import send_mail

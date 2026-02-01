@@ -7,7 +7,7 @@ import django
 from django.conf import settings
 
 # Force PostgreSQL configuration
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'homabay_souq.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'baysoko.settings')
 
 # Hardcoded configuration for Render
 DATABASES = {

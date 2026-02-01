@@ -23,7 +23,7 @@ class User(AbstractUser):
     if CLOUDINARY_AVAILABLE and hasattr(settings, 'CLOUDINARY_CLOUD_NAME') and settings.CLOUDINARY_CLOUD_NAME:
         profile_picture = CloudinaryField(
             'image',
-            folder='homabay_souq/profiles/',
+            folder='baysoko/profiles/',
             transformation=[
                 {'width': 300, 'height': 300, 'crop': 'fill'},
                 {'quality': 'auto'},
@@ -34,7 +34,7 @@ class User(AbstractUser):
         )
         cover_photo = CloudinaryField(
             'image',
-            folder='homabay_souq/covers/',
+            folder='baysoko/covers/',
             transformation=[
                 {'width': 1200, 'height': 400, 'crop': 'fill'},
                 {'quality': 'auto'},

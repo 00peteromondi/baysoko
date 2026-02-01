@@ -4,7 +4,7 @@ import sys
 
 # Setup Django
 sys.path.append('/opt/render/project/src')
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'homabay_souq.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'baysoko.settings')
 django.setup()
 
 from django.contrib.sites.models import Site

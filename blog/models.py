@@ -47,7 +47,7 @@ class BlogPost(models.Model):
     if CLOUDINARY_AVAILABLE and hasattr(settings, 'CLOUDINARY_CLOUD_NAME') and settings.CLOUDINARY_CLOUD_NAME:
         image = CloudinaryField(
             'image',
-            folder='homabay_souq/blog/',
+            folder='baysoko/blog/',
             transformation=[
                 {'width': 800, 'height': 400, 'crop': 'fill'},
                 {'quality': 'auto'},

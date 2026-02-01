@@ -1,5 +1,5 @@
 """
-Signals for integrating with HomaBay Souq e-commerce platform
+Signals for integrating with Baysoko e-commerce platform
 """
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 def create_delivery_on_order_creation(sender, instance, created, **kwargs):
     """
     Signal handler to automatically create delivery request when order is created
-    in HomaBay Souq e-commerce platform
+    in Baysoko e-commerce platform
     """
     if not created:
         return
@@ -27,11 +27,11 @@ def create_delivery_on_order_creation(sender, instance, created, **kwargs):
         if not getattr(settings, 'DELIVERY_AUTO_SYNC_ENABLED', True):
             return
         
-        # Get or create HomaBay Souq platform
+        # Get or create Baysoko platform
         platform, _ = EcommercePlatform.objects.get_or_create(
-            platform_type='homabay_souq',
+            platform_type='baysoko',
             defaults={
-                'name': 'HomaBay Souq',
+                'name': 'Baysoko',
                 'base_url': getattr(settings, 'SITE_URL', 'http://localhost:8000'),
                 'api_key': '',
                 'is_active': True,
@@ -59,7 +59,7 @@ def update_delivery_on_order_status_change(sender, instance, **kwargs):
     try:
         # Find delivery request for this order
         mapping = OrderMapping.objects.filter(
-            platform__platform_type='homabay_souq',
+            platform__platform_type='baysoko',
             platform_order_id=str(instance.id)
         ).first()
         
@@ -101,7 +101,7 @@ def update_order_on_delivery_status_change(sender, instance, **kwargs):
     try:
         # Find order mapping
         mapping = getattr(instance, 'order_mapping', None)
-        if not mapping or mapping.platform.platform_type != 'homabay_souq':
+        if not mapping or mapping.platform.platform_type != 'baysoko':
             return
         
         # Map delivery status to order status

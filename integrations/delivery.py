@@ -1,7 +1,7 @@
-# Integration example for Homabay Souq
-# Add this to your Homabay Souq project
+# Integration example for Baysoko
+# Add this to your Baysoko project
 
-# homabay_souq/integrations/delivery.py
+# baysoko/integrations/delivery.py
 import requests
 from django.conf import settings
 
@@ -11,10 +11,10 @@ class DeliverySystemIntegration:
         self.api_key = getattr(settings, 'DELIVERY_SYSTEM_API_KEY', '')
     
     def create_delivery_from_order(self, order):
-        """Create delivery in delivery system from Homabay Souq order"""
+        """Create delivery in delivery system from Baysoko order"""
         delivery_data = {
             'order_id': str(order.id),
-            'marketplace': 'homabay_souq',
+            'marketplace': 'baysoko',
             'order_total': float(order.total_price),
             'seller_name': order.order_items.first().listing.seller.get_full_name(),
             'seller_phone': order.order_items.first().listing.seller.phone_number,

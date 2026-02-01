@@ -1,6 +1,6 @@
 import django
 import os
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'homabay_souq.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'baysoko.settings')
 import sys
 
 django.setup()

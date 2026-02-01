@@ -11,8 +11,8 @@ def map_order_to_delivery(order_data, platform):
     # Extract common data
     platform_type = platform.platform_type
     
-    if platform_type == 'homabay_souq':
-        return _map_homabay_souq_order(order_data)
+    if platform_type == 'baysoko':
+        return _map_baysoko_order(order_data)
     elif platform_type == 'shopify':
         return _map_shopify_order(order_data)
     elif platform_type == 'woocommerce':
@@ -23,8 +23,8 @@ def map_order_to_delivery(order_data, platform):
         return _map_generic_order(order_data)
 
 
-def _map_homabay_souq_order(order_data):
-    """Map HomaBay Souq order to delivery request"""
+def _map_baysoko_order(order_data):
+    """Map Baysoko order to delivery request"""
     shipping = order_data.get('shipping_address', {})
     customer = order_data.get('customer', {})
     store = order_data.get('store', {})
@@ -47,7 +47,7 @@ def _map_homabay_souq_order(order_data):
         'platform_order_id': order_data.get('id'),
         
         # Pickup information (from store/seller)
-        'pickup_name': store.get('name', 'HomaBay Souq Store'),
+        'pickup_name': store.get('name', 'Baysoko Store'),
         'pickup_address': store.get('address', ''),
         'pickup_phone': store.get('phone', ''),
         'pickup_email': store.get('email', ''),
@@ -72,7 +72,7 @@ def _map_homabay_souq_order(order_data):
         'metadata': {
             'order_status': order_data.get('status'),
             'items_count': len(items),
-            'platform': 'homabay_souq',
+            'platform': 'baysoko',
             'order_created': order_data.get('created_at'),
         }
     }
@@ -260,9 +260,9 @@ def create_delivery_from_order(order_data, platform=None):
     # If platform not provided, try to find or create default
     if not platform:
         platform, _ = EcommercePlatform.objects.get_or_create(
-            platform_type='homabay_souq',
+            platform_type='baysoko',
             defaults={
-                'name': 'HomaBay Souq',
+                'name': 'Baysoko',
                 'base_url': settings.SITE_URL,
                 'api_key': '',
                 'is_active': True

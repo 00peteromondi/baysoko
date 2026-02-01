@@ -14,10 +14,10 @@ Quick start (local)
 Architecture & key patterns
 - This is a Django monolith with a few integration boundaries you should know:
   - HTTP/Django app: entrypoint is [manage.py](manage.py).
-  - ASGI / WebSockets: [homabay_souq/asgi.py](homabay_souq/asgi.py) + Channels. Websocket routes live in [delivery/routing.py](delivery/routing.py) and consumers in [delivery/consumers.py](delivery/consumers.py). Groups follow `order_<id>` and `user_<id>` naming.
+  - ASGI / WebSockets: [baysoko/asgi.py](baysoko/asgi.py) + Channels. Websocket routes live in [delivery/routing.py](delivery/routing.py) and consumers in [delivery/consumers.py](delivery/consumers.py). Groups follow `order_<id>` and `user_<id>` naming.
   - Background work: Celery configuration is in [celery_app.py](celery_app.py). Tasks are auto-discovered under `delivery.integration` and `delivery.tasks` falls back to a sync function if Celery is unavailable (see [delivery/tasks.py](delivery/tasks.py)).
   - Webhooks/outgoing integration: `listings/webhook_service.py` builds signed HMAC payloads and sends to `ECOMMERCE_WEBHOOK_URL` / `DELIVERY_SYSTEM_URL`. Look for headers `X-Webhook-Signature` and `X-Event-Type`.
-  - Media storage: Cloudinary is optional and configured in [homabay_souq/settings.py](homabay_souq/settings.py). If not configured, local `MEDIA_ROOT` is used.
+  - Media storage: Cloudinary is optional and configured in [baysoko/settings.py](baysoko/settings.py). If not configured, local `MEDIA_ROOT` is used.
 
 Environment & deployment cues
 - Uses `python-decouple` to read `.env`/env vars. Key env vars: `SECRET_KEY`, `DATABASE_URL` (Postgres on production), `CLOUDINARY_*`, `DELIVERY_WEBHOOK_SECRET`, `GOOGLE_OAUTH_CLIENT_ID/SECRET`.
@@ -33,7 +33,7 @@ Repository conventions (important for automated edits)
 Where to change behavior
 - To add a periodic job, update `app.conf.beat_schedule` in [celery_app.py](celery_app.py).
 - To add new webhook consumers or endpoints, follow `listings/webhook_service.py`'s payload structure and header verification.
-- To modify file storage behavior, update Cloudinary settings in [homabay_souq/settings.py](homabay_souq/settings.py).
+- To modify file storage behavior, update Cloudinary settings in [baysoko/settings.py](baysoko/settings.py).
 
 Tests and debugging tips
 - Tests run via `python manage.py test`. When debugging API/webhook flows, enable `DEBUG` and run the dev server.
@@ -43,7 +43,7 @@ If you edit code, keep changes minimal and local to the app unless cross-cutting
 
 Files to inspect first when onboarding
 - [manage.py](manage.py) — Django entrypoint
-- [homabay_souq/settings.py](homabay_souq/settings.py) — environment flags, Cloudinary, Channels
+- [baysoko/settings.py](baysoko/settings.py) — environment flags, Cloudinary, Channels
 - [celery_app.py](celery_app.py) — Celery/beat config
 - [delivery/consumers.py](delivery/consumers.py), [delivery/routing.py](delivery/routing.py) — WebSocket contracts
 - [listings/webhook_service.py](listings/webhook_service.py) — outgoing webhook format/signing

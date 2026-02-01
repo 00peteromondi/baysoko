@@ -127,7 +127,7 @@ except Exception:
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
-    ALLOWED_HOSTS.append('homabaysouq.onrender.com')
+    ALLOWED_HOSTS.append('baysoko.onrender.com')
 
 # Cloudinary configuration - prefer python-decouple (reads .env) but allow CLOUDINARY_URL
 # Use config() so values from `.env` are picked up in development when not exported to the shell
@@ -230,10 +230,10 @@ CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'homabay_souq.middleware_async_stream.StreamingContentFixMiddleware',
+    'baysoko.middleware_async_stream.StreamingContentFixMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'homabay_souq.middleware.ClearCorruptedSessionMiddleware',
+    'baysoko.middleware.ClearCorruptedSessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -248,7 +248,7 @@ MIDDLEWARE = [
     'chats.middleware.OnlineStatusMiddleware',
 ]
 
-ROOT_URLCONF = 'homabay_souq.urls'
+ROOT_URLCONF = 'baysoko.urls'
 
 TEMPLATES = [
     {
@@ -279,7 +279,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'homabay_souq.wsgi.application'
+WSGI_APPLICATION = 'baysoko.wsgi.application'
 # Database configuration - Robust version
 
 
@@ -324,7 +324,7 @@ os.makedirs(MEDIA_ROOT, exist_ok=True)
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Channels (WebSocket) configuration - in-memory layer for development
-ASGI_APPLICATION = 'homabay_souq.asgi.application'
+ASGI_APPLICATION = 'baysoko.asgi.application'
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels.layers.InMemoryChannelLayer'
@@ -584,7 +584,7 @@ DELIVERY_APP_ORDER_URL = "{DELIVERY_SYSTEM_URL}/{order_id}/manage/"
 # Default pickup information
 DEFAULT_PICKUP_ADDRESS = config('DEFAULT_PICKUP_ADDRESS', default='Main Store, HomaBay')
 DEFAULT_PICKUP_PHONE = config('DEFAULT_PICKUP_PHONE', default='+254700000000')
-DEFAULT_PICKUP_EMAIL = config('DEFAULT_PICKUP_EMAIL', default='store@homabaysouq.com')
+DEFAULT_PICKUP_EMAIL = config('DEFAULT_PICKUP_EMAIL', default='store@baysoko.com')
 
 # Delivery fee settings
 BASE_DELIVERY_FEE = Decimal('100.00')
@@ -598,13 +598,13 @@ GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')
 ENABLE_EMAIL_NOTIFICATIONS = config('ENABLE_EMAIL_NOTIFICATIONS', default=True, cast=bool)
 ENABLE_SMS_NOTIFICATIONS = config('ENABLE_SMS_NOTIFICATIONS', default=False, cast=bool)
 # E-commerce platform configuration
-ECOMMERCE_PLATFORM_NAME = config('ECOMMERCE_PLATFORM_NAME', default='HomaBay Souq')
-ECOMMERCE_WEBHOOK_URL = config('ECOMMERCE_WEBHOOK_URL', default='http://localhost:8000/api/delivery/webhook/homabay-souq/')
+ECOMMERCE_PLATFORM_NAME = config('ECOMMERCE_PLATFORM_NAME', default='Baysoko')
+ECOMMERCE_WEBHOOK_URL = config('ECOMMERCE_WEBHOOK_URL', default='http://localhost:8000/api/delivery/webhook/baysoko/')
 # E-commerce platforms
 ECOMMERCE_PLATFORMS = [
     {
-        'name': 'HomaBay Souq',
-        'platform_type': 'homabay_souq',
+        'name': 'Baysoko',
+        'platform_type': 'baysoko',
         'base_url': 'http://localhost:8000',
         'api_key': '',
         'webhook_secret': DELIVERY_WEBHOOK_KEY,
@@ -619,7 +619,7 @@ EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@homabaysouq.com')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@baysoko.com')
 
 # Debug email configuration
 print(f"📧 EMAIL_BACKEND: {EMAIL_BACKEND}")
@@ -657,8 +657,8 @@ X_FRAME_OPTIONS = 'DENY'
 SECURE_REFERRER_POLICY = 'same-origin'
 
 # Custom settings
-HOMABAY_SOUQ = {
-    'SITE_NAME': 'HomaBay Souq',
+baysoko = {
+    'SITE_NAME': 'Baysoko',
     'SITE_DESCRIPTION': 'Buy and sell with people in your Homabay community',
 }
 

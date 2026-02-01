@@ -37,7 +37,7 @@ class ListingImage(models.Model):
     if 'cloudinary' in settings.INSTALLED_APPS and hasattr(settings, 'CLOUDINARY_CLOUD_NAME') and settings.CLOUDINARY_CLOUD_NAME:
         image = CloudinaryField(
             'image',
-            folder='homabay_souq/listings/gallery/',
+            folder='baysoko/listings/gallery/',
             null=True,
             blank=True
         )
@@ -103,7 +103,7 @@ class Listing(models.Model):
     if 'cloudinary' in settings.INSTALLED_APPS and hasattr(settings, 'CLOUDINARY_CLOUD_NAME') and settings.CLOUDINARY_CLOUD_NAME:
         image = CloudinaryField(
             'image',
-            folder='homabay_souq/listings/',
+            folder='baysoko/listings/',
             null=True,
             blank=True
         )
@@ -961,7 +961,7 @@ class ReviewPhoto(models.Model):
     if 'cloudinary' in settings.INSTALLED_APPS and hasattr(settings, 'CLOUDINARY_CLOUD_NAME') and settings.CLOUDINARY_CLOUD_NAME:
         image = CloudinaryField(
             'image',
-            folder='homabay_souq/reviews/',
+            folder='baysoko/reviews/',
             null=True,
             blank=True
         )

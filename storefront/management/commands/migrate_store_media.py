@@ -41,7 +41,7 @@ class Command(BaseCommand):
 
         for idx, store in enumerate(qs, start=1):
             self.stdout.write(f'[{idx}/{total}] Processing Store id={store.pk} name={store.name}')
-            for field_name, folder in (('logo', 'homabay_souq/stores/logos'), ('cover_image', 'homabay_souq/stores/covers')):
+            for field_name, folder in (('logo', 'baysoko/stores/logos'), ('cover_image', 'baysoko/stores/covers')):
                 val = getattr(store, field_name)
                 if not val:
                     continue

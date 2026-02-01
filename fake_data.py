@@ -11,7 +11,7 @@ project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(project_root)
 
 # Setup Django environment
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'homabay_souq.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'baysoko.settings')
 django.setup()
 
 # Now import Django components
@@ -21,7 +21,7 @@ from django.contrib.auth import get_user_model
 from django.db import connection
 from django.core.management import call_command
 
-class HomabaySouqFaker:
+class baysokoFaker:
     def __init__(self):
         self.fake = Faker()
         self.users = []
@@ -52,7 +52,7 @@ class HomabaySouqFaker:
 
     def run(self, user_count=30, listings_per_user=5, clear_existing=False):
         """Run the complete data generation process"""
-        print("Starting to populate Homabay Souq with fake data...")
+        print("Starting to populate Baysoko with fake data...")
         
         # Check if database tables exist
         if not self.check_database_tables():
@@ -499,7 +499,7 @@ def main():
     """Main function to run the faker"""
     import argparse
     
-    parser = argparse.ArgumentParser(description='Populate Homabay Souq with fake data')
+    parser = argparse.ArgumentParser(description='Populate Baysoko with fake data')
     parser.add_argument('--users', type=int, default=30, help='Number of users to create')
     parser.add_argument('--listings-per-user', type=int, default=5, help='Listings per user')
     parser.add_argument('--clear', action='store_true', help='Clear existing data first')
@@ -507,7 +507,7 @@ def main():
     
     args = parser.parse_args()
     
-    faker = HomabaySouqFaker()
+    faker = baysokoFaker()
     faker.run(
         user_count=args.users,
         listings_per_user=args.listings_per_user,

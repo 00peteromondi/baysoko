@@ -14,16 +14,16 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='listing',
             name='image',
-            field=cloudinary.models.CloudinaryField(blank=True, folder='homabay_souq/listings/', null=True),
+            field=cloudinary.models.CloudinaryField(blank=True, folder='baysoko/listings/', null=True),
         ),
         migrations.AlterField(
             model_name='listingimage',
             name='image',
-            field=cloudinary.models.CloudinaryField(blank=True, folder='homabay_souq/listings/gallery/', null=True),
+            field=cloudinary.models.CloudinaryField(blank=True, folder='baysoko/listings/gallery/', null=True),
         ),
         migrations.AlterField(
             model_name='reviewphoto',
             name='image',
-            field=cloudinary.models.CloudinaryField(blank=True, folder='homabay_souq/reviews/', null=True),
+            field=cloudinary.models.CloudinaryField(blank=True, folder='baysoko/reviews/', null=True),
         ),
     ]

@@ -9,7 +9,7 @@ from listings.models import Category, Listing, Favorite, Review, Order, OrderIte
 from storefront.models import Store, Subscription, MpesaPayment
 
 class Command(BaseCommand):
-    help = 'Populate the database with fake data for Homabay Souq'
+    help = 'Populate the database with fake data for Baysoko'
 
     def __init__(self):
         super().__init__()

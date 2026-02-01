@@ -79,12 +79,12 @@ def platform_webhook(request, platform_id=None):
 
 @csrf_exempt
 @require_POST
-def homabay_souq_webhook(request):
-    """Webhook endpoint specifically for HomaBay Souq"""
+def baysoko_webhook(request):
+    """Webhook endpoint specifically for Baysoko"""
     try:
-        # Get HomaBay Souq platform
+        # Get Baysoko platform
         platform = EcommercePlatform.objects.get(
-            platform_type='homabay_souq',
+            platform_type='baysoko',
             is_active=True
         )
         
@@ -117,9 +117,9 @@ def homabay_souq_webhook(request):
         })
         
     except EcommercePlatform.DoesNotExist:
-        return JsonResponse({'error': 'HomaBay Souq platform not configured'}, status=404)
+        return JsonResponse({'error': 'Baysoko platform not configured'}, status=404)
     except Exception as e:
-        logger.error(f"HomaBay Souq webhook error: {str(e)}")
+        logger.error(f"Baysoko webhook error: {str(e)}")
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
@@ -299,7 +299,7 @@ class WebhookTestView(View):
             # Process test webhook
             from .models import EcommercePlatform
             platform, _ = EcommercePlatform.objects.get_or_create(
-                platform_type='homabay_souq',
+                platform_type='baysoko',
                 defaults={
                     'name': 'Test Platform',
                     'base_url': settings.SITE_URL,

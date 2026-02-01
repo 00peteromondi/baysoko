@@ -906,7 +906,7 @@ def send_stock_alert_email(alert_id):
         send_mail(
             subject=subject,
             message=text_message,
-            from_email='noreply@homabaysouq.com',
+            from_email='noreply@baysoko.com',
             recipient_list=[store.owner.email],
             html_message=html_message,
             fail_silently=True,

@@ -10,14 +10,14 @@ urlpatterns = [
     # Webhook endpoints
     path('webhook/', views.platform_webhook, name='platform_webhook'),
     path('webhook/<int:platform_id>/', views.platform_webhook, name='platform_webhook_with_id'),
-    path('webhook/homabay-souq/', views.homabay_souq_webhook, name='homabay_souq_webhook'),
+    path('webhook/baysoko/', views.baysoko_webhook, name='baysoko_webhook'),
     path('webhook/shopify/', views.shopify_webhook, name='shopify_webhook'),
     path('webhook/woocommerce/', views.woocommerce_webhook, name='woocommerce_webhook'),
 
     # Also register the shorter routes so callers that post to
     # /api/delivery/webhook/<platform>/ (without the extra 'webhook' segment)
     # continue to work for compatibility with tests and external integrations.
-    path('homabay-souq/', views.homabay_souq_webhook, name='homabay_souq_webhook_short'),
+    path('baysoko/', views.baysoko_webhook, name='baysoko_webhook_short'),
     path('shopify/', views.shopify_webhook, name='shopify_webhook_short'),
     path('woocommerce/', views.woocommerce_webhook, name='woocommerce_webhook_short'),
     path('', views.platform_webhook, name='platform_webhook_root'),

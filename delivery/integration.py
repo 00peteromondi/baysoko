@@ -1,5 +1,5 @@
 """
-Integration with HomaBay Souq e-commerce platform
+Integration with Baysoko e-commerce platform
 """
 import requests
 import json
@@ -42,10 +42,10 @@ def create_delivery_from_order(order):
             priority=2 if getattr(order, 'is_urgent', False) else 1,
             
             # Pickup information (use site/store defaults; Order has no store reference)
-            pickup_name=getattr(settings, 'HOMABAY_SOUQ', {}).get('SITE_NAME', 'HomaBay Souq'),
+            pickup_name=getattr(settings, 'baysoko', {}).get('SITE_NAME', 'Baysoko'),
             pickup_address=getattr(settings, 'DEFAULT_PICKUP_ADDRESS', 'Main Store, HomaBay'),
             pickup_phone=getattr(settings, 'DEFAULT_PICKUP_PHONE', '+254700000000'),
-            pickup_email=getattr(settings, 'DEFAULT_PICKUP_EMAIL', 'store@homabaysouq.com'),
+            pickup_email=getattr(settings, 'DEFAULT_PICKUP_EMAIL', 'store@baysoko.com'),
             
             # Delivery information (customer)
             recipient_name=f"{order.first_name} {order.last_name}".strip() or order.user.get_full_name() or order.user.username,

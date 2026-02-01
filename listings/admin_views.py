@@ -41,7 +41,7 @@ def test_webhook_connection():
             'timestamp': '2024-01-01T10:00:00Z',
             'data': {
                 'test': True,
-                'message': 'Test webhook from HomaBay Souq'
+                'message': 'Test webhook from Baysoko'
             }
         }
         

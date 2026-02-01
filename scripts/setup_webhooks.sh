@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🚀 Setting up HomaBay Souq Webhooks"
+echo "🚀 Setting up Baysoko Webhooks"
 
 # 1. Add environment variables
 echo "🔧 Adding environment variables..."
@@ -14,7 +14,7 @@ DELIVERY_WEBHOOK_KEY=$(openssl rand -hex 32)
 # DELIVERY_SYSTEM_API_KEY is used for Authorization Bearer when calling external delivery provider
 DELIVERY_SYSTEM_API_KEY=""
 DELIVERY_SYSTEM_URL="https://api.delivery-system.com"
-DELIVERY_WEBHOOK_URL=https://api.delivery-system.com/webhook/homabay-souq/
+DELIVERY_WEBHOOK_URL=https://api.delivery-system.com/webhook/baysoko/
 EOL
 
 # 2. Create webhook files
@@ -34,7 +34,7 @@ EOL
 echo "✏️ Updating existing files..."
 
 # Add to settings.py
-echo -e "\n# Webhook Settings\nWEBHOOKS_ENABLED = True\nWEBHOOK_SECRET_KEY = config('WEBHOOK_SECRET_KEY')\n" >> homabay_souq/settings.py
+echo -e "\n# Webhook Settings\nWEBHOOKS_ENABLED = True\nWEBHOOK_SECRET_KEY = config('WEBHOOK_SECRET_KEY')\n" >> baysoko/settings.py
 
 # 4. Run migrations
 echo "🗄️ Running migrations..."

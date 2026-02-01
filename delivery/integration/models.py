@@ -11,7 +11,7 @@ from django.conf import settings
 class EcommercePlatform(models.Model):
     """Registered e-commerce platforms"""
     PLATFORM_TYPES = [
-        ('homabay_souq', 'HomaBay Souq'),
+        ('baysoko', 'Baysoko'),
         ('shopify', 'Shopify'),
         ('woocommerce', 'WooCommerce'),
         ('magento', 'Magento'),

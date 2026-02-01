@@ -643,8 +643,9 @@ class SubscriptionService:
             return False, f"Payment failed: {payment_result}. Trial not converted."
 
         # Payment initiated successfully - subscription will be activated by webhook on payment success
-        # Update phone number for future reference
-        subscription.mpesa_phone = f"+254{phone_number}"
+        # Normalize and store phone number for future reference (fits DB max length)
+        normalized = cls.normalize_phone_number(phone_number)
+        subscription.mpesa_phone = normalized
         subscription.save()
 
         return True, "Payment initiated successfully. Trial will be converted upon payment confirmation."
@@ -973,8 +974,9 @@ class SubscriptionService:
             return False, f"Payment failed: {payment_result}. Subscription not renewed."
 
         # Payment initiated successfully - subscription will be activated by webhook on payment success
-        # Update phone number for future reference
-        subscription.mpesa_phone = f"+254{phone_number}"
+        # Normalize and store phone number for future reference (fits DB max length)
+        normalized = cls.normalize_phone_number(phone_number)
+        subscription.mpesa_phone = normalized
         subscription.save()
 
         return True, "Payment initiated successfully. Subscription will be renewed upon payment confirmation."
@@ -1086,7 +1088,14 @@ class SubscriptionService:
         
         try:
             mpesa = MpesaGateway()
-            phone_normalized = mpesa._normalize_phone(phone_number)
+            # Normalize using gateway then ensure it fits DB constraints
+            try:
+                phone_normalized = mpesa._normalize_phone(phone_number)
+            except Exception:
+                phone_normalized = cls.normalize_phone_number(phone_number)
+
+            # Final pass to ensure DB-safe length/format
+            phone_normalized = cls.normalize_phone_number(phone_normalized)
             
             # Initiate STK push
             response = mpesa.initiate_stk_push(

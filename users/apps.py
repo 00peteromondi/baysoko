@@ -26,7 +26,7 @@ class UsersConfig(AppConfig):
                     site_domain = os.environ.get('SITE_DOMAIN') or os.environ.get('RENDER_EXTERNAL_HOSTNAME')
                     if site_domain:
                         site.domain = site_domain
-                        site.name = os.environ.get('SITE_NAME', site.name or 'HomaBay Souq')
+                        site.name = os.environ.get('SITE_NAME', site.name or 'Baysoko')
                         site.save()
 
                     def ensure_social_app(provider, client_env, secret_env, display_name):

@@ -11,7 +11,7 @@ Note: Use only for local development. Don't use in production.
 import os
 import sys
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'homabay_souq.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'baysoko.settings')
 
 try:
     from django.core.wsgi import get_wsgi_application
@@ -55,9 +55,9 @@ def main():
         # safe on Windows.
         should_reload = True
 
-        # Run the project's ASGI application (homabay_souq.asgi.application)
+        # Run the project's ASGI application (baysoko.asgi.application)
         uvicorn.run(
-            "homabay_souq.asgi:application",
+            "baysoko.asgi:application",
             host=HOST,
             port=PORT,
             ssl_certfile=CERT_PATH,

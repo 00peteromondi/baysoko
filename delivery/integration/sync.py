@@ -27,8 +27,8 @@ class OrderSyncService:
     
     def _create_api_client(self, platform):
         """Create API client for the platform"""
-        if platform.platform_type == 'homabay_souq':
-            return HomaBaySouqClient(platform)
+        if platform.platform_type == 'baysoko':
+            return baysokoClient(platform)
         elif platform.platform_type == 'shopify':
             return ShopifyClient(platform)
         elif platform.platform_type == 'woocommerce':
@@ -209,8 +209,8 @@ class OrderSyncService:
 
 
 # API Clients for different platforms
-class HomaBaySouqClient:
-    """Client for HomaBay Souq platform"""
+class baysokoClient:
+    """Client for Baysoko platform"""
     
     def __init__(self, platform):
         self.platform = platform
@@ -222,7 +222,7 @@ class HomaBaySouqClient:
         }
     
     def fetch_orders(self, force=False):
-        """Fetch orders from HomaBay Souq"""
+        """Fetch orders from Baysoko"""
         try:
             # Calculate date range (last 24 hours or since last sync)
             if force or not self.platform.last_sync:
@@ -253,7 +253,7 @@ class HomaBaySouqClient:
             return formatted_orders
             
         except Exception as e:
-            logger.error(f"Failed to fetch orders from HomaBay Souq: {str(e)}")
+            logger.error(f"Failed to fetch orders from Baysoko: {str(e)}")
             raise
     
     def _format_order(self, order):

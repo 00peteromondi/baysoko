@@ -44,7 +44,7 @@ class DeliveryWebhookService:
                 'Content-Type': 'application/json',
                 'X-Webhook-Signature': signature,
                 'X-Event-Type': event_type,
-                'X-Platform': 'HomaBay Souq'
+                'X-Platform': 'Baysoko'
             }
 
             response = requests.post(

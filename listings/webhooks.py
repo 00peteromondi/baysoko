@@ -1,5 +1,5 @@
 """
-Webhook signals for order events in HomaBay Souq
+Webhook signals for order events in Baysoko
 """
 import json
 import hashlib

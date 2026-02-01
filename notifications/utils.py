@@ -107,7 +107,7 @@ def notify_new_order(seller, buyer, order):
     
     notification_service.send_email(
         seller.email,
-        f"New Order #{order.id} - HomaBay Souq",
+        f"New Order #{order.id} - Baysoko",
         'emails/new_order_seller.html',
         email_context
     )
@@ -143,7 +143,7 @@ def notify_order_shipped(buyer, seller, order, tracking_number=None):
     
     notification_service.send_email(
         buyer.email,
-        f"Order #{order.id} Shipped - HomaBay Souq",
+        f"Order #{order.id} Shipped - Baysoko",
         'emails/order_shipped.html',
         email_context
     )
