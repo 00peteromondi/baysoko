@@ -1,11 +1,10 @@
 """
 Proxy loader for the real installed `celery` package.
 
-This module existed and shadowed the external `celery` package, causing
-ImportError when third-party packages tried `from celery import Celery`.
-
-We dynamically locate and load the installed `celery` package from
-site-packages and re-export its public symbols so imports continue to work.
+This module used to be named `celery.py` and it shadowed the external
+`celery` package. Keeping a proxy under a different name avoids import
+shadowing while still providing a helper for environments where the
+packaged `celery` isn't discovered normally.
 """
 import sys
 import os

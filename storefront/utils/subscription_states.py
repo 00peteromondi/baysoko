@@ -78,38 +78,36 @@ class SubscriptionStateManager:
         
         now = timezone.now()
         
-        # Check subscription status
-        if subscription.status == 'active':
+        # Prefer Subscription.is_active() which treats valid trials as active
+        try:
+            is_active = subscription.is_active()
+        except Exception:
+            is_active = subscription.status == 'active'
+
+        if is_active:
+            # Active includes valid trials per model logic
             state['has_active_subscription'] = True
             state['can_change_plan'] = True
             state['can_start_trial'] = False
-            
-        elif subscription.status == 'trialing':
-            if subscription.trial_ends_at and now < subscription.trial_ends_at:
+
+            if subscription.status == 'trialing' and subscription.trial_ends_at and now < subscription.trial_ends_at:
                 state['has_valid_trial'] = True
-                state['can_start_trial'] = False
-                state['can_subscribe'] = True  # Can subscribe during trial
-            else:
-                state['has_expired_trial'] = True
-                state['needs_renewal'] = True
-                state['can_start_trial'] = False
-                
+
+        elif subscription.status == 'trialing':
+            # Expired trial
+            state['has_expired_trial'] = True
+            state['needs_renewal'] = True
+            state['can_start_trial'] = False
+
         elif subscription.status == 'past_due':
             state['has_past_due'] = True
             state['needs_renewal'] = True
             state['can_start_trial'] = False
-            
+
         elif subscription.status == 'canceled':
             state['has_cancelled_subscription'] = True
             state['needs_renewal'] = True
-            
-            # Check if this was a trial that was canceled
-            if subscription.trial_ends_at and subscription.trial_ends_at > now:
-                # User canceled during trial
-                state['has_expired_trial'] = False
-                state['can_start_trial'] = False
-            else:
-                state['can_start_trial'] = False
+            state['can_start_trial'] = False
         
         # User cannot start trial if they've ever had one that ended
         if state['has_expired_trial']:
@@ -147,10 +145,14 @@ class SubscriptionStateManager:
         
         now = timezone.now()
         
-        if subscription.status == 'active':
-            return 'manage'
-        
-        elif subscription.status == 'trialing':
+        try:
+            if subscription.is_active():
+                return 'manage'
+        except Exception:
+            if subscription.status == 'active':
+                return 'manage'
+
+        if subscription.status == 'trialing':
             if subscription.trial_ends_at and now < subscription.trial_ends_at:
                 # Still in trial
                 days_left = (subscription.trial_ends_at - now).days

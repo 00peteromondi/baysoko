@@ -975,18 +975,18 @@
                     <div>
                         <h3 class="fw-bold mb-1">
                             <i class="bi bi-award me-2"></i>
-                            {% if store.is_premium %}
-                                Premium Subscription
+                            {% if subscription and subscription.plan %}
+                                {{ subscription.plan|title }} Subscription
                             {% else %}
                                 Basic Subscription
                             {% endif %}
                         </h3>
                         <p class="mb-0">Manage your plan, payments, and features</p>
                     </div>
-                    <div class="store-status-badge {% if store.is_premium %}store-status-premium{% else %}store-status-basic{% endif %}">
-                        <i class="bi bi-{% if store.is_premium %}star-fill{% else %}star{% endif %}"></i>
-                        {% if store.is_premium %}
-                            Premium Store
+                    <div class="store-status-badge {% if subscription and subscription.plan in 'premium enterprise' %}store-status-premium{% else %}store-status-basic{% endif %}">
+                        <i class="bi bi-{% if subscription and subscription.plan in 'premium enterprise' %}star-fill{% else %}star{% endif %}"></i>
+                        {% if subscription and subscription.plan %}
+                            {{ subscription.plan|title }} Store
                         {% else %}
                             Basic Store
                         {% endif %}
@@ -1000,29 +1000,53 @@
                     View your subscription details, payment history, and manage premium features
                 </p>
 
+                {% if trial_status_message %}
+                <div class="alert-modern alert-info mt-3" role="status">
+                    <div class="alert-header">
+                        <i class="bi bi-gem alert-icon"></i>
+                        <h5 class="alert-title">{{ trial_status_message }}</h5>
+                    </div>
+                    {% if trial_days_remaining is not None %}
+                    <p class="alert-content mb-0">{{ trial_days_remaining }} day{{ trial_days_remaining|pluralize }} remaining.</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+
                 <!-- Status Grid -->
                 <div class="status-grid">
                     <div class="status-card hover-lift">
                         <div class="status-card-header">
-                            <div class="status-icon status-icon-{% if subscription.status == 'active' %}active{% elif subscription.status == 'trialing' %}trialing{% elif subscription.status == 'past_due' %}warning{% else %}danger{% endif %}">
+                            <div class="status-icon status-icon-{% if effective_status == 'active' %}active{% elif effective_status == 'trialing' or effective_status == 'trial_expired' %}trialing{% elif effective_status == 'past_due' %}warning{% else %}danger{% endif %}">
                                 <i class="bi 
-                                    {% if subscription.status == 'active' %}bi-check-circle-fill
-                                    {% elif subscription.status == 'trialing' %}bi-clock-fill
-                                    {% elif subscription.status == 'past_due' %}bi-exclamation-triangle-fill
+                                    {% if effective_status == 'active' %}bi-check-circle-fill
+                                    {% elif effective_status == 'trialing' %}bi-clock-fill
+                                    {% elif effective_status == 'trial_expired' %}bi-x-circle-fill
+                                    {% elif effective_status == 'past_due' %}bi-exclamation-triangle-fill
                                     {% else %}bi-x-circle-fill{% endif %}">
                                 </i>
                             </div>
                             <h4 class="status-title">Current Status</h4>
                         </div>
-                        <div class="status-value">{{ subscription.get_status_display }}</div>
+                        <div class="status-value">
+                            {% if effective_status == 'trial_expired' %}
+                                Trial Ended
+                            {% elif subscription %}
+                                {{ subscription.get_status_display }}
+                            {% else %}
+                                No Subscription
+                            {% endif %}
+                        </div>
                         <p class="status-subtext">
-                            {% if subscription.status == 'active' %}
+                            {% if effective_status == 'active' %}
                                 <i class="bi bi-calendar-check text-success me-1"></i>
                                 Active since {{ subscription.started_at|date:"M d, Y" }}
-                            {% elif subscription.status == 'trialing' %}
+                            {% elif effective_status == 'trialing' %}
                                 <i class="bi bi-gem text-info me-1"></i>
                                 Trial started {{ subscription.created_at|date:"M d, Y" }}
-                            {% elif subscription.status == 'past_due' %}
+                            {% elif effective_status == 'trial_expired' %}
+                                <i class="bi bi-x-circle-fill text-secondary me-1"></i>
+                                Trial ended on {{ subscription.trial_ends_at|date:"M d, Y" }}
+                            {% elif effective_status == 'past_due' %}
                                 <i class="bi bi-exclamation-triangle text-warning me-1"></i>
                                 Payment overdue
                             {% else %}
@@ -1044,6 +1068,9 @@
                             {% if subscription.trial_ends_at and subscription.trial_ends_at > now %}
                                 <i class="bi bi-gem text-info me-1"></i>
                                 Free during trial
+                            {% elif effective_status == 'trial_expired' %}
+                                <i class="bi bi-x-circle-fill text-secondary me-1"></i>
+                                Trial period ended
                             {% else %}
                                 <i class="bi bi-calendar-event me-1"></i>
                                 Billed monthly
@@ -1086,19 +1113,23 @@
                             <h4 class="status-title">Store Status</h4>
                         </div>
                         <div class="status-value">
-                            {% if store.is_premium %}
-                                Premium
+                            {% if subscription and subscription.plan in 'premium enterprise' %}
+                                {{ subscription.plan|title }}
                             {% else %}
                                 Basic
                             {% endif %}
+                            
                         </div>
                         <p class="status-subtext">
-                            {% if store.is_premium %}
+                            {% if features_active and store.is_premium %}
+                                <i class="bi bi-check-circle-fill text-success me-1"></i>
+                                All features active
+                            {% elif features_active and not store.is_premium %}
                                 <i class="bi bi-check-circle-fill text-success me-1"></i>
                                 All features active
                             {% else %}
-                                <i class="bi bi-info-circle-fill text-secondary me-1"></i>
-                                Limited features
+                                <i class="bi bi-x-circle-fill text-danger me-1"></i>
+                                Features deactivated
                             {% endif %}
                         </p>
                     </div>

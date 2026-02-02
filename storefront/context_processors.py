@@ -28,8 +28,35 @@ def store_context(request):
         # Check if user has premium store
         has_premium_store = user_stores.filter(is_premium=True).exists()
         
+        # Annotate each store with current subscription plan and badge class for templates
+        plan_color_map = {
+            'basic': 'bg-primary',
+            'premium': 'bg-warning',
+            'enterprise': 'bg-success',
+            'free': 'bg-secondary'
+        }
+
+        annotated_stores = []
+        for store in user_stores:
+            subscription = Subscription.objects.filter(store=store).order_by('-created_at').first()
+            if subscription and subscription.is_active():
+                plan_key = subscription.plan or 'free'
+                plan_label = subscription.get_plan_display()
+                is_trial = subscription.status == 'trialing'
+            else:
+                plan_key = 'free'
+                plan_label = 'Free'
+                is_trial = False
+
+            # Attach transient attributes for template use
+            setattr(store, 'current_plan', plan_key)
+            setattr(store, 'plan_label', plan_label)
+            setattr(store, 'plan_badge_class', plan_color_map.get(plan_key, 'bg-secondary'))
+            setattr(store, 'is_trialing_plan', is_trial)
+            annotated_stores.append(store)
+
         context.update({
-            'user_stores': user_stores,
+            'user_stores': annotated_stores,
             'active_subscriptions': active_subscriptions,
             'has_premium_store': has_premium_store,
             'total_user_stores': user_stores.count(),

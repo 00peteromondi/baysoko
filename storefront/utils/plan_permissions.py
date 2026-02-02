@@ -95,7 +95,7 @@ class PlanPermissions:
             'plan': subscription.plan,
             'status': subscription.status,
             'subscription': subscription,
-            'is_active': subscription.status == 'active',
+            'is_active': subscription.is_active(),
             'is_trialing': subscription.status == 'trialing',
         }
 
@@ -120,9 +120,21 @@ class PlanPermissions:
             }
 
         plan_details = SubscriptionService.PLAN_DETAILS.get(plan, {})
+        # Normalize sentinel values used for 'enterprise' plans.
+        # Historically enterprise used large numeric sentinels (e.g. 100 for stores,
+        # 500 for products) to mean "unlimited". Convert those to None so
+        # downstream callers can treat None as unlimited consistently.
+        raw_max_stores = plan_details.get('max_stores', 1)
+        raw_max_products = plan_details.get('max_products', 5)
+
+        max_stores = None if (raw_max_stores is None or int(raw_max_stores) >= 100) else int(raw_max_stores)
+        max_products = None if (raw_max_products is None or int(raw_max_products) >= 500) else int(raw_max_products)
+
         return {
-            'max_stores': plan_details.get('max_stores', 1),
-            'max_products': plan_details.get('max_products', 5),
+            'max_stores': max_stores,
+            'max_products': max_products,
+            'unlimited_stores': max_stores is None,
+            'unlimited_products': max_products is None,
             'features': cls.FEATURE_PERMISSIONS.get(plan, {})
         }
 
@@ -165,7 +177,7 @@ class PlanPermissions:
         """Get stores that should be visible to the user based on plan"""
         
         limits = cls.get_plan_limits(user)
-        stores = Store.objects.filter(owner=user).order_by('-created_at')
+        stores = Store.objects.filter(owner=user, is_active=True).order_by('-created_at')
 
         max_stores = limits.get('max_stores')
         if max_stores is None:
@@ -185,9 +197,9 @@ class PlanPermissions:
         limits = cls.get_plan_limits(user, store)
 
         if store:
-            listings = Listing.objects.filter(seller=user, store=store).order_by('-created_at')
+            listings = Listing.objects.filter(seller=user, store=store, is_active=True).order_by('-created_at')
         else:
-            listings = Listing.objects.filter(seller=user).order_by('-date_created')
+            listings = Listing.objects.filter(seller=user, is_active=True).order_by('-date_created')
 
         max_products = limits.get('max_products')
         if max_products is None:

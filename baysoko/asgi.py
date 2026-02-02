@@ -1,5 +1,5 @@
 """
-ASGI config for homabaysoqou project.
+ASGI config for baysoko project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
 

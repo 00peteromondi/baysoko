@@ -279,19 +279,14 @@ class SubscriptionService:
         
         for subscription in expired_trials:
             with transaction.atomic():
-                # Mark trial as expired in metadata
-                subscription.status = 'canceled'
-                subscription.cancelled_at = timezone.now()
+                # Mark trial as expired and sync store via centralized setter
+                subscription.metadata = subscription.metadata or {}
                 subscription.metadata.update({
                     'trial_expired_at': timezone.now().isoformat(),
                     'auto_downgraded': True,
                 })
                 subscription.save()
-                
-                # IMMEDIATELY disable premium features
-                subscription.store.is_premium = False
-                subscription.store.save()
-                
+                subscription.set_status('canceled')
                 logger.info(f"Trial expired and premium features disabled for store: {subscription.store.name}")
     
     @classmethod
@@ -304,41 +299,22 @@ class SubscriptionService:
         
         for subscription in expired_subs:
             with transaction.atomic():
-                subscription.status = 'past_due'
+                subscription.metadata = subscription.metadata or {}
                 subscription.metadata.update({
                     'subscription_expired_at': timezone.now().isoformat(),
                     'payment_required': True,
                 })
                 subscription.save()
-                
-                # IMMEDIATELY disable premium features for past-due subscriptions
-                subscription.store.is_premium = False
-                subscription.store.save()
-                
+                subscription.set_status('past_due')
                 logger.info(f"Subscription expired for store: {subscription.store.name}")
     
     @classmethod
     def can_user_access_premium(cls, user, store):
         """Check if user can access premium features with strict validation"""
-        # Check for active subscription
-        active_sub = Subscription.objects.filter(
-            store=store,
-            status='active'
-        ).first()
-        
-        if active_sub:
+        # Get latest subscription and rely on Subscription.is_active() which includes valid trials
+        subscription = Subscription.objects.filter(store=store).order_by('-created_at').first()
+        if subscription and subscription.is_active():
             return True
-        
-        # Check for active trial
-        active_trial = Subscription.objects.filter(
-            store=store,
-            status='trialing',
-            trial_ends_at__gt=timezone.now()
-        ).first()
-        
-        if active_trial:
-            return True
-        
         return False
     
     @classmethod
@@ -352,20 +328,19 @@ class SubscriptionService:
         if not subscription:
             return False, "No subscription found"
         
-        # Check if subscription is valid
-        if subscription.status == 'active':
-            return True, "Access granted"
-        
-        elif subscription.status == 'trialing':
-            if subscription.trial_ends_at and timezone.now() < subscription.trial_ends_at:
+        # Use is_active() first
+        if subscription.is_active():
+            if subscription.status == 'trialing' and subscription.trial_ends_at and timezone.now() < subscription.trial_ends_at:
                 return True, "Access granted during trial"
-            else:
-                # Trial expired - immediate denial
-                return False, "Trial period has ended. Please subscribe to continue."
-        
-        elif subscription.status in ['past_due', 'canceled']:
+            return True, "Access granted"
+
+        if subscription.status in ['past_due', 'canceled']:
             return False, "Subscription is not active. Please renew to access premium features."
-        
+
+        # Trial expired or unknown state
+        if subscription.status == 'trialing' and subscription.trial_ends_at and timezone.now() >= subscription.trial_ends_at:
+            return False, "Trial period has ended. Please subscribe to continue."
+
         return False, "Access denied"
     
     @classmethod
@@ -389,11 +364,16 @@ class SubscriptionService:
             ).order_by('-created_at').first()
             
             if subscription:
-                if subscription.status == 'active':
+                # Use subscription.is_active() to determine active subscriptions (includes valid trials)
+                try:
+                    is_active = subscription.is_active()
+                except Exception:
+                    is_active = subscription.status == 'active'
+
+                if is_active:
                     summary['active_subscriptions'] += 1
                     summary['premium_stores'] += 1
                     summary['total_revenue_potential'] += subscription.amount
-                
                 elif subscription.status == 'trialing':
                     if subscription.trial_ends_at and timezone.now() < subscription.trial_ends_at:
                         summary['trial_stores'] += 1
@@ -598,19 +578,15 @@ class SubscriptionService:
     def end_trial_with_tracking(cls, subscription, reason='ended'):
         """End a trial with comprehensive tracking"""
         with transaction.atomic():
-            # Update subscription
-            subscription.status = 'canceled'
-            subscription.cancelled_at = timezone.now()
+            # Update subscription metadata and cancel via centralized setter
+            subscription.metadata = subscription.metadata or {}
             subscription.metadata.update({
                 'trial_ended_at': timezone.now().isoformat(),
                 'trial_end_reason': reason,
                 'auto_downgraded': True,
             })
             subscription.save()
-            
-            # Disable premium features
-            subscription.store.is_premium = False
-            subscription.store.save()
+            subscription.set_status('canceled')
             
             # Record trial end
             trial_record = UserTrial.record_trial_end(subscription, reason)
@@ -1047,6 +1023,11 @@ class SubscriptionService:
                     'can_change_plan': False,
                 }
             
+            try:
+                is_active = subscription.is_active()
+            except Exception:
+                is_active = subscription.status == 'active'
+
             return {
                 'has_subscription': True,
                 'status': subscription.status,
@@ -1056,7 +1037,7 @@ class SubscriptionService:
                 'current_period_end': subscription.current_period_end,
                 'trial_ends_at': subscription.trial_ends_at,
                 'canceled_at': subscription.canceled_at,
-                'is_active': subscription.status == 'active',
+                'is_active': is_active,
                 'is_trialing': subscription.status == 'trialing',
                 'is_unpaid': subscription.status == 'unpaid',
                 'is_expired': subscription.status in ['past_due', 'canceled'],
@@ -1083,7 +1064,12 @@ class SubscriptionService:
             return False, "A payment is already pending for this subscription. Please wait for it to complete."
         
         # Validate that subscription is in a state that allows payment
-        if subscription.status == 'active' and not cls._is_payment_for_renewal(subscription):
+        try:
+            is_active = subscription.is_active()
+        except Exception:
+            is_active = subscription.status == 'active'
+
+        if is_active and not cls._is_payment_for_renewal(subscription):
             return False, "Subscription is already active and not due for renewal."
         
         try:
@@ -1185,10 +1171,17 @@ class SubscriptionService:
             return False, "Multiple successful payments detected for this subscription"
         
         # 5. Validate subscription state allows activation
-        if subscription.status not in ['canceled', 'past_due', 'trialing']:
-            # If subscription is already active, this might be a renewal payment
-            if subscription.status == 'active':
-                # Check if this is near billing period end
+        # Allow activation if subscription is canceled/past_due/trialing or unpaid (reactivation, trial conversion, or first-time activation)
+        if subscription.status in ['canceled', 'past_due', 'trialing', 'unpaid']:
+            pass
+        else:
+            # For active subscriptions, ensure payment is for renewal
+            try:
+                is_active = subscription.is_active()
+            except Exception:
+                is_active = subscription.status == 'active'
+
+            if is_active:
                 if subscription.current_period_end and (subscription.current_period_end - timezone.now()).days > 3:
                     return False, "Subscription is active and not due for renewal"
             else:
@@ -1253,7 +1246,7 @@ class SubscriptionService:
                 
                 logger.info(f"Trial #{subscription.trial_number} converted to paid for user {subscription.store.owner.id}")
             
-            elif original_status in ['canceled', 'past_due']:
+            elif original_status in ['canceled', 'past_due', 'unpaid']:
                 # Renewal or reactivation
                 subscription.metadata = subscription.metadata or {}
                 subscription.metadata.update({

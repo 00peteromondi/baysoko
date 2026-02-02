@@ -155,15 +155,19 @@ def store_create(request):
     Create a new store with enforced subscription-based limits.
     Users can only create multiple stores if they have a premium store or active subscription.
     """
-    # Check existing stores and subscription status
+    # Check existing stores and subscription status via PlanPermissions
     existing_stores = Store.objects.filter(owner=request.user)
-    has_premium = existing_stores.filter(is_premium=True).exists()
-    has_active_subscription = Subscription.objects.filter(store__owner=request.user, status='active').exists()
+    from .utils.plan_permissions import PlanPermissions
 
-    # Enforce store limit for free users
-    if existing_stores.exists() and not (has_premium or has_active_subscription):
+    # Use centralized plan logic (this respects trials via get_user_plan_status)
+    can_create = PlanPermissions.can_create_store(request.user)
+    plan_status = PlanPermissions.get_user_plan_status(request.user)
+    has_premium = existing_stores.filter(is_premium=True).exists()
+
+    # Enforce store limit for free users / expired trials
+    if existing_stores.exists() and not can_create:
         first_store = existing_stores.first()
-        messages.warning(request, 'You must upgrade to Pro (subscribe) to create additional storefronts.')
+        messages.warning(request, 'You must upgrade to create additional storefronts.')
         return redirect('storefront:store_edit', slug=first_store.slug)
 
     # Show store creation confirmation for users coming from listing creation
@@ -219,7 +223,8 @@ def store_create(request):
         'creating_store': True,
         'has_existing_store': existing_stores.exists(),
         'has_premium': has_premium,
-        'has_active_subscription': has_active_subscription,
+        'plan_status': plan_status,
+        'can_create_store': can_create,
         'can_be_featured': False,  # New stores cannot be featured
         'is_enterprise': False,     # New stores are not enterprise
     }

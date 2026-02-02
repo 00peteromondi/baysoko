@@ -120,6 +120,16 @@ def plan_required(feature, redirect_url='storefront:subscription_manage'):
 
             if not PlanPermissions.has_feature_access(request.user, feature, store):
                 plan_status = PlanPermissions.get_user_plan_status(request.user, store)
+                # Build a redirect URL that includes the requested feature so subscription_manage can show tailored messages
+                try:
+                    if store_slug:
+                        target = reverse(redirect_url, kwargs={'slug': store_slug}) + f"?feature={feature}"
+                    else:
+                        target = reverse(redirect_url) + f"?feature={feature}"
+                except Exception:
+                    # Fallback to simple redirect
+                    target = None
+
                 if plan_status['plan'] == 'free':
                     messages.warning(
                         request,
@@ -130,6 +140,9 @@ def plan_required(feature, redirect_url='storefront:subscription_manage'):
                         request,
                         f"This feature is not available on your {plan_status['plan'].title()} plan. Please upgrade to access it."
                     )
+
+                if target:
+                    return redirect(target)
                 return redirect(redirect_url, slug=store_slug) if store_slug else redirect(redirect_url)
             return view_func(request, *args, **kwargs)
         return _wrapped_view

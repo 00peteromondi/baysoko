@@ -269,15 +269,52 @@ def subscription_manage(request, slug):
         action_required = 'renew'
     elif requires_upgrade and current_subscription.plan == 'basic':
         action_required = 'upgrade_needed'
+
+    # Compute effective status and whether premium features should be active.
+    effective_status = None
+    features_active = False
+    if current_subscription:
+        # If on trial but trial ended, treat as 'trial_expired' for display and logic
+        if current_subscription.status == 'trialing' and current_subscription.trial_ends_at and now > current_subscription.trial_ends_at:
+            effective_status = 'trial_expired'
+        else:
+            effective_status = current_subscription.status
+
+        # Features are active only when subscription is active or still in a valid trial
+        if current_subscription.is_active():
+            features_active = True
+        elif current_subscription.status == 'trialing' and current_subscription.trial_ends_at and now <= current_subscription.trial_ends_at:
+            features_active = True
+        else:
+            features_active = False
+
+    else:
+        effective_status = 'none'
+
+    # Read requested feature from query string (sent by plan_required decorator)
+    requested_feature = request.GET.get('feature')
+    upgrade_message = None
+    if requested_feature:
+        # Provide an actionable message tailored to the feature
+        feature_map = {
+            'inventory': 'Inventory management (add/edit products) requires a Premium or higher plan.',
+            'bulk_operations': 'Bulk operations (bulk upload, bulk edits) require a Premium plan.',
+            'analytics': 'Advanced analytics requires Premium or Enterprise plans.',
+            'multiple_stores': 'Creating multiple storefronts requires an upgraded plan.',
+            'api_access': 'API access is available on Enterprise plans.',
+        }
+        upgrade_message = feature_map.get(requested_feature, 'This feature requires an upgraded subscription. Please upgrade to access it.')
     
     # Calculate trial info
     trial_info = None
-    if current_subscription and current_subscription.status == 'trialing' and current_subscription.trial_ends_at:
+    if current_subscription and current_subscription.trial_ends_at:
         remaining_days = (current_subscription.trial_ends_at - now).days
+        is_expired = now > current_subscription.trial_ends_at
+        # Provide trial info whether status is trialing or already transitioned
         trial_info = {
             'remaining_days': max(0, remaining_days),
             'ends_at': current_subscription.trial_ends_at,
-            'is_expired': remaining_days < 0,
+            'is_expired': is_expired,
         }
     
     # Format subscription history
@@ -303,6 +340,13 @@ def subscription_manage(request, slug):
         'subscription_history': formatted_history,
         'recent_payments': recent_payments,
         'trial_info': trial_info,
+        # Provide explicit trial display fields
+        'trial_days_remaining': (trial_info['remaining_days'] if trial_info else None),
+        'trial_status_message': (
+            f"{trial_info['remaining_days']} day(s) remaining" if trial_info and not trial_info.get('is_expired') else (
+                'Trial period ended' if trial_info and trial_info.get('is_expired') else None
+            )
+        ),
         'action_required': action_required,
         'limit_reached': requires_upgrade,
         'current_count': limit_info['current_count'],
@@ -310,14 +354,19 @@ def subscription_manage(request, slug):
         'remaining_slots': limit_info['remaining_slots'],
         'percentage_used': limit_info['percentage_used'],
         'plan_details': SubscriptionService.PLAN_DETAILS,
-        'is_active': current_subscription and current_subscription.status == 'active',
+        'is_active': current_subscription and current_subscription.is_active(),
         'is_trialing': current_subscription and current_subscription.status == 'trialing',
-        'is_expired': current_subscription and current_subscription.status in ['past_due', 'canceled'],
+        'is_expired': current_subscription and (not current_subscription.is_active()) and current_subscription.status in ['past_due', 'canceled'],
+        # Effective status accounts for trials that have ended but still marked 'trialing' in DB
+        'effective_status': effective_status,
+        'features_active': features_active,
         'trial_count': SubscriptionService.get_user_trial_status(request.user)['trial_count'],
         'remaining_trials': SubscriptionService.get_user_trial_status(request.user)['summary']['remaining_trials'],
         'trial_limit': SubscriptionService.get_user_trial_status(request.user)['trial_limit'],
         'trial_available': SubscriptionService.get_user_trial_status(request.user)['can_start_trial'],
         'can_change_plan': current_subscription and current_subscription.status in ['active', 'trialing'],
+        'requested_feature': requested_feature,
+        'upgrade_message': upgrade_message,
     }
     
     return render(request, 'storefront/subscription_manage.html', context)
@@ -451,7 +500,28 @@ def subscription_cancel(request, slug):
         messages.error(request, "No active subscription found.")
         return redirect('storefront:subscription_manage', slug=slug)
     
+    # Compute effective display status and whether features are active
+    now = timezone.now()
+    effective_status = subscription.status
+    features_active = False
+    if subscription.status == 'trialing' and subscription.trial_ends_at and now > subscription.trial_ends_at:
+        effective_status = 'trial_expired'
+
+    if subscription.is_active():
+        features_active = True
+    elif subscription.status == 'trialing' and subscription.trial_ends_at and now <= subscription.trial_ends_at:
+        features_active = True
+    else:
+        features_active = False
+
+    # Only allow cancellation when subscription is active or a valid running trial
+    can_cancel = effective_status in ['active', 'trialing'] and features_active
+
     if request.method == 'POST':
+        if not can_cancel:
+            messages.error(request, "Subscription cannot be cancelled in its current state.")
+            return redirect('storefront:subscription_manage', slug=slug)
+
         success = SubscriptionService.cancel_subscription(subscription, cancel_at_period_end=False)
         
         if success:
@@ -468,6 +538,9 @@ def subscription_cancel(request, slug):
     context = {
         'store': store,
         'subscription': subscription,
+        'effective_status': effective_status,
+        'features_active': features_active,
+        'can_cancel': can_cancel,
     }
     
     return render(request, 'storefront/subscription_cancel.html', context)
@@ -594,10 +667,7 @@ def store_upgrade(request, slug):
                     amount=amount,
                     status='pending'
                 )
-                
-                # Activate premium features
-                store.is_premium = True
-                store.save()
+                # NOTE: Do NOT enable premium features until payment is confirmed via webhook.
                 
                 # Clear session data
                 if 'selected_plan' in request.session:

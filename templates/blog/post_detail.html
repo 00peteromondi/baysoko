@@ -1,102 +1,128 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load humanize %}
 
 {% block title %}{{ post.title }} - Baysoko Blog{% endblock %}
 
 {% block extra_css %}
 <style>
-    .post-hero {
-        background: linear-gradient(135deg, 
-                        rgba(26, 115, 232, 0.9) 0%, 
-                        rgba(13, 71, 161, 0.9) 100%);
+    /* ===== BLOG DETAIL PAGE STYLES ===== */
+    .blog-detail-hero {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
         color: white;
-        padding: 4rem 0;
-        margin: -2rem -1rem 4rem;
-        border-radius: 0 0 2rem 2rem;
+        padding: var(--spacing-xxl) 0 var(--spacing-xl);
+        margin-bottom: var(--spacing-xxl);
+        border-radius: 0 0 var(--radius-xl) var(--radius-xl);
     }
 
-    .post-content {
-        background: var(--navbar-bg);
+    .blog-detail-hero-content {
+        max-width: 800px;
+        margin: 0 auto;
+        text-align: center;
+    }
+
+    .blog-detail-hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        background: rgba(255, 255, 255, 0.2);
         backdrop-filter: blur(10px);
-        border-radius: 1.5rem;
-        padding: 3rem;
-        margin-bottom: 3rem;
-        border: 1px solid rgba(255, 255, 255, 0.18);
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        margin-bottom: var(--spacing-md);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        font-weight: 600;
     }
 
-    .post-meta {
+    .blog-detail-title {
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin-bottom: var(--spacing-md);
+        line-height: 1.2;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .blog-detail-excerpt {
+        font-size: 1.1rem;
+        opacity: 0.9;
+        line-height: 1.6;
+        margin-bottom: var(--spacing-xl);
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .blog-detail-meta {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        margin-bottom: 2rem;
-        padding-bottom: 1.5rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        justify-content: center;
+        gap: var(--spacing-lg);
         flex-wrap: wrap;
-        gap: 1rem;
+        margin-bottom: var(--spacing-md);
     }
 
-    .post-author {
+    .blog-detail-meta-item {
         display: flex;
         align-items: center;
+        gap: 6px;
+        font-size: 0.9rem;
+        opacity: 0.9;
     }
 
-    .post-author-img {
-        width: 50px;
-        height: 50px;
-        border-radius: 50%;
-        object-fit: cover;
-        margin-right: 1rem;
-        border: 3px solid var(--primary-gemini);
+    /* Main Content */
+    .blog-detail-content {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        margin-bottom: var(--spacing-xl);
+        border: 1px solid var(--border-color);
+        box-shadow: var(--shadow-sm);
     }
 
-    .post-stats {
-        display: flex;
-        gap: 1.5rem;
-    }
-
-    .post-stat {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        color: white;
-    }
-
-    .post-featured-image {
+    .blog-featured-image {
         width: 100%;
         height: 400px;
         object-fit: cover;
-        border-radius: 1rem;
-        margin-bottom: 2rem;
+        border-radius: var(--radius-lg);
+        margin-bottom: var(--spacing-xl);
     }
 
-    .post-title {
-        font-weight: 800;
-        margin-bottom: 1.5rem;
-        color: var(--text-color);
-        font-size: 2.5rem;
-        line-height: 1.2;
-    }
-
-    .post-body {
-        color: var(--text-color);
-        line-height: 1.8;
+    .blog-body-content {
         font-size: 1.1rem;
+        line-height: 1.8;
+        color: var(--text-primary);
     }
 
-    .post-body p {
-        margin-bottom: 1.5rem;
+    .blog-body-content p {
+        margin-bottom: var(--spacing-md);
     }
 
-    .post-body h2, .post-body h3, .post-body h4 {
-        margin-top: 2.5rem;
-        margin-bottom: 1rem;
-        color: var(--text-color);
+    .blog-body-content h2,
+    .blog-body-content h3,
+    .blog-body-content h4 {
+        margin-top: var(--spacing-xl);
+        margin-bottom: var(--spacing-md);
+        color: var(--text-primary);
+        font-weight: 700;
     }
 
-    .post-actions {
+    .blog-body-content blockquote {
+        border-left: 4px solid var(--primary);
+        padding: var(--spacing-md) var(--spacing-lg);
+        background: var(--bg-secondary);
+        border-radius: 0 var(--radius-md) var(--radius-md) 0;
+        margin: var(--spacing-lg) 0;
+        font-style: italic;
+    }
+
+    /* Actions */
+    .blog-actions {
         display: flex;
-        gap: 1rem;
-        margin-top: 2rem;
+        gap: var(--spacing-md);
+        margin-top: var(--spacing-xl);
+        padding-top: var(--spacing-xl);
+        border-top: 1px solid var(--border-color);
         flex-wrap: wrap;
     }
 
@@ -105,22 +131,24 @@
     }
 
     .like-btn.liked {
-        background-color: var(--danger-gemini);
-        border-color: var(--danger-gemini);
+        background-color: var(--danger);
+        border-color: var(--danger);
+        color: white;
     }
 
+    /* Comments Section */
     .comments-section {
-        background: var(--navbar-bg);
-        backdrop-filter: blur(10px);
-        border-radius: 1.5rem;
-        padding: 2rem;
-        margin-bottom: 2rem;
-        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        margin-bottom: var(--spacing-xl);
+        border: 1px solid var(--border-color);
+        box-shadow: var(--shadow-sm);
     }
 
     .comment {
-        padding: 1.5rem 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding: var(--spacing-lg) 0;
+        border-bottom: 1px solid var(--border-color);
     }
 
     .comment:last-child {
@@ -128,15 +156,15 @@
     }
 
     .comment-reply {
-        margin-left: 3rem;
-        padding-left: 1rem;
-        border-left: 3px solid var(--primary-gemini);
+        margin-left: var(--spacing-xl);
+        padding-left: var(--spacing-md);
+        border-left: 3px solid var(--primary);
     }
 
     .comment-author {
         display: flex;
         align-items: center;
-        margin-bottom: 0.5rem;
+        margin-bottom: var(--spacing-sm);
     }
 
     .comment-author-img {
@@ -144,73 +172,201 @@
         height: 40px;
         border-radius: 50%;
         object-fit: cover;
-        margin-right: 1rem;
+        margin-right: var(--spacing-sm);
+        border: 2px solid var(--border-color);
     }
 
+    /* Sidebar */
+    .blog-detail-sidebar {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-lg);
+        border: 1px solid var(--border-color);
+        box-shadow: var(--shadow-sm);
+        margin-bottom: var(--spacing-xl);
+    }
+
+    .sidebar-section {
+        margin-bottom: var(--spacing-xl);
+    }
+
+    .sidebar-section:last-child {
+        margin-bottom: 0;
+    }
+
+    .sidebar-title {
+        font-size: 1rem;
+        font-weight: 700;
+        margin-bottom: var(--spacing-md);
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Responsive */
     @media (max-width: 768px) {
-        .post-hero {
-            padding: 2rem 0;
-        }
-        
-        .post-content {
-            padding: 2rem;
-        }
-        
-        .post-title {
+        .blog-detail-title {
             font-size: 2rem;
         }
         
-        .post-meta {
+        .blog-detail-excerpt {
+            font-size: 1rem;
+        }
+        
+        .blog-featured-image {
+            height: 300px;
+        }
+        
+        .blog-detail-meta {
+            gap: var(--spacing-md);
+        }
+        
+        .blog-actions {
             flex-direction: column;
-            align-items: flex-start;
         }
         
         .comment-reply {
-            margin-left: 1rem;
+            margin-left: var(--spacing-md);
         }
+    }
+
+    @media (max-width: 576px) {
+        .blog-detail-hero {
+            padding: var(--spacing-xl) 0 var(--spacing-lg);
+        }
+        
+        .blog-detail-title {
+            font-size: 1.8rem;
+        }
+        
+        .blog-detail-meta {
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+        
+        .blog-featured-image {
+            height: 200px;
+        }
+    }
+
+    /* Like button styling to match listing_detail */
+    .blog-like-btn {
+        position: relative;
+        width: 36px;
+        height: 36px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        color: var(--text-secondary);
+        font-size: 16px;
+        padding: 0;
+        margin: 0;
+        z-index: 2;
+        outline: none;
+    }
+
+    .blog-like-btn:hover {
+        background: rgba(239, 71, 111, 0.1);
+        color: var(--danger);
+        border-color: var(--danger);
+        transform: scale(1.1);
+    }
+
+    .blog-like-btn.liked {
+        background: var(--danger) !important;
+        color: white !important;
+        border-color: var(--danger) !important;
+        animation: heartBeat 2s infinite !important;
+        box-shadow: 0 4px 12px rgba(239, 71, 111, 0.3) !important;
+    }
+
+    .blog-like-btn.liked:hover {
+        background: #e63946 !important;
+        transform: scale(1.1) !important;
+        box-shadow: 0 6px 16px rgba(239, 71, 111, 0.4) !important;
+    }
+
+    .blog-like-count {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        background: linear-gradient(135deg, var(--danger) 0%, #e63946 100%);
+        color: white;
+        font-size: 10px;
+        font-weight: 800;
+        min-width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 5px;
+        z-index: 3;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        border: 2px solid var(--card-bg);
+        animation: pulse 2s infinite;
+        pointer-events: none;
+        white-space: nowrap;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Post Hero Section -->
-<section class="post-hero">
-    <div class="container">
-        <div class="row">
-            <div class="col-lg-10 mx-auto">
-                {% if post.category %}
-                <div class="mb-3">
-                    <a href="{{ post.category.get_absolute_url }}" class="badge bg-light text-primary text-decoration-none fs-6">
-                        {{ post.category.name }}
-                    </a>
+<!-- Blog Detail Hero Section -->
+<section class="blog-detail-hero">
+    <div class="container-custom">
+        <div class="blog-detail-hero-content">
+            {% if post.category %}
+            <div class="blog-detail-hero-badge">
+                <i class="bi bi-folder"></i>
+                <a href="{% url 'blog:post-list' %}?category={{ post.category.id }}" style="color: white; text-decoration: none;">
+                    {{ post.category.name }}
+                </a>
+            </div>
+            {% endif %}
+            
+            <h1 class="blog-detail-title">{{ post.title }}</h1>
+            <p class="blog-detail-excerpt">{{ post.excerpt }}</p>
+            
+            <div class="blog-detail-meta">
+                <div class="blog-detail-meta-item">
+                    <i class="bi bi-calendar"></i>
+                    {{ post.published_at|date:"F d, Y" }}
                 </div>
-                {% endif %}
-                <h1 class="display-5 fw-bold mb-3">{{ post.title }}</h1>
-                <p class="lead mb-4">{{ post.excerpt }}</p>
-                
-                <div class="post-meta">
-                    <div class="post-author">
-                        <img src="{{ post.author.profile.profile_picture.url|default:'https://placehold.co/50x50/c2c2c2/1f1f1f?text=HS' }}" 
-                             alt="{{ post.author.username }}" class="post-author-img">
-                        <div>
-                            <h5 class="mb-1">{{ post.author.username }}</h5>
-                            <small>{{ post.published_at|date:"F d, Y" }}</small>
-                        </div>
+                <div class="blog-detail-meta-item">
+                    <i class="bi bi-eye"></i>
+                    {{ post.view_count }} views
+                </div>
+                <div class="blog-detail-meta-item">
+                    <i class="bi bi-chat"></i>
+                    {{ post.comment_count }} comments
+                </div>
+                <div class="blog-detail-meta-item">
+                    <i class="bi bi-heart"></i>
+                    {{ post.like_count }} likes
+                </div>
+            </div>
+            
+            <div class="blog-detail-author d-flex align-items-center justify-content-center mt-4">
+                <div class="d-flex align-items-center gap-3" style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); padding: 12px 20px; border-radius: 50px; border: 1px solid rgba(255, 255, 255, 0.2);">
+                    {% if post.author.profile.profile_picture %}
+                    <img src="{{ post.author.profile.profile_picture.url }}" 
+                         alt="{{ post.author.username }}" 
+                         class="blog-author-avatar" style="width: 50px; height: 50px; border-radius: 50%; border: 3px solid white;">
+                    {% else %}
+                    <div class="blog-author-avatar" style="width: 50px; height: 50px; border-radius: 50%; background: white; color: var(--primary); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.2rem; border: 3px solid white;">
+                        {{ post.author.username|first|upper }}
                     </div>
-                    
-                    <div class="post-stats">
-                        <span class="post-stat">
-                            <i class="bi bi-eye"></i>
-                            {{ post.view_count }} views
-                        </span>
-                        <span class="post-stat">
-                            <i class="bi bi-heart"></i>
-                            {{ post.like_count }} likes
-                        </span>
-                        <span class="post-stat">
-                            <i class="bi bi-chat"></i>
-                            {{ post.comment_count }} comments
-                        </span>
+                    {% endif %}
+                    <div class="blog-author-info">
+                        <h5 style="margin: 0; font-size: 1rem; font-weight: 700; color: white;">{{ post.author.get_full_name|default:post.author.username }}</h5>
+                        <p style="margin: 0; font-size: 0.85rem; opacity: 0.8; color: white;">Author</p>
                     </div>
                 </div>
             </div>
@@ -218,57 +374,64 @@
     </div>
 </section>
 
-<div class="container">
+<div class="container-custom">
     <div class="row">
         <!-- Main Content -->
         <div class="col-lg-8">
-            <article class="post-content">
+            <article class="blog-detail-content">
                 {% if post.image %}
-                <img src="{{ post.get_image_url }}" alt="{{ post.title }}" class="post-featured-image">
+                <img src="{{ post.get_image_url }}" alt="{{ post.title }}" class="blog-featured-image">
                 {% endif %}
-
-                <div class="post-body">
+                
+                <div class="blog-body-content">
                     {{ post.content|linebreaks }}
                 </div>
-
+                
                 <!-- Post Actions -->
-                <div class="post-actions">
+                <div class="blog-actions">
                     {% if user.is_authenticated %}
-                    <button class="btn {% if user_liked %}btn-danger liked{% else %}btn-outline-danger{% endif %} like-btn" 
-                            data-post-slug="{{ post.slug }}" id="like-btn">
-                        <i class="bi bi-heart{% if user_liked %}-fill{% endif %}"></i>
-                        {% if user_liked %}Liked{% else %}Like{% endif %}
-                        <span class="badge bg-light text-dark ms-1" id="like-count">{{ post.like_count }}</span>
-                    </button>
+                    <div class="position-relative d-flex align-items-center gap-2">
+                        <button class="blog-like-btn {% if user_liked %}liked{% endif %}" 
+                                data-post-slug="{{ post.slug }}" 
+                                id="like-btn">
+                            <i class="bi {% if user_liked %}bi-heart-fill{% else %}bi-heart{% endif %}"></i>
+                        </button>
+                        <span class="blog-like-count" id="like-count">{{ post.like_count }}</span>
+                        <span class="ms-2">Likes</span>
+                    </div>
                     {% else %}
-                    <a href="{% url 'login' %}?next={{ request.path }}" class="btn btn-outline-danger">
-                        <i class="bi bi-heart"></i> Like
-                    </a>
+                    <div class="d-flex align-items-center gap-2">
+                        <a href="{% url 'login' %}?next={{ request.path }}" class="blog-like-btn">
+                            <i class="bi bi-heart"></i>
+                        </a>
+                        <span class="blog-like-count">{{ post.like_count }}</span>
+                        <span class="ms-2">Likes</span>
+                    </div>
                     {% endif %}
                     
-                    <a href="#comments" class="btn btn-outline-primary">
+                    <a href="#comments" class="btn-custom btn-primary">
                         <i class="bi bi-chat"></i> Comment
                     </a>
                     
                     <!-- Share buttons -->
                     <div class="btn-group">
-                        <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                        <button type="button" class="btn-custom btn-secondary dropdown-toggle" data-bs-toggle="dropdown">
                             <i class="bi bi-share"></i> Share
                         </button>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#"><i class="bi bi-facebook me-2"></i>Facebook</a></li>
-                            <li><a class="dropdown-item" href="#"><i class="bi bi-twitter me-2"></i>Twitter</a></li>
-                            <li><a class="dropdown-item" href="#"><i class="bi bi-link-45deg me-2"></i>Copy Link</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="shareOnFacebook()"><i class="bi bi-facebook me-2"></i>Facebook</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="shareOnTwitter()"><i class="bi bi-twitter me-2"></i>Twitter</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="copyPostLink()"><i class="bi bi-link-45deg me-2"></i>Copy Link</a></li>
                         </ul>
                     </div>
 
                     <!-- Edit/Delete for authors -->
                     {% if user == post.author or user.is_staff %}
                     <div class="btn-group ms-auto">
-                        <a href="{% url 'blog:post-update' post.slug %}" class="btn btn-outline-secondary">
+                        <a href="{% url 'blog:post-update' post.slug %}" class="btn-custom btn-secondary">
                             <i class="bi bi-pencil"></i> Edit
                         </a>
-                        <a href="{% url 'blog:post-delete' post.slug %}" class="btn btn-outline-danger">
+                        <a href="{% url 'blog:post-delete' post.slug %}" class="btn-custom btn-danger">
                             <i class="bi bi-trash"></i> Delete
                         </a>
                     </div>
@@ -276,28 +439,12 @@
                 </div>
             </article>
 
-            <!-- Author Bio -->
-            <div class="card border-0 shadow-sm mb-4" style="background: var(--navbar-bg); backdrop-filter: blur(10px);">
-                <div class="card-body">
-                    <div class="d-flex align-items-center mb-3">
-                        <img src="{{ post.author.get_profile_picture_url }}" 
-                             alt="{{ post.author.username }}" class="rounded-circle me-3" style="width: 60px; height: 60px;">
-                        <div>
-                            <h5 class="mb-1">{{ post.author.get_full_name|default:post.author.username }}</h5>
-                            <p class="text-muted mb-0">Author</p>
-                        </div>
-                    </div>
-                    {% if post.author.profile.bio %}
-                    <p class="text-muted">{{ post.author.profile.bio }}</p>
-                    {% else %}
-                    <p class="text-muted">This author hasn't written a bio yet.</p>
-                    {% endif %}
-                </div>
-            </div>
-
             <!-- Comments Section -->
             <section class="comments-section" id="comments">
-                <h3 class="mb-4">Comments ({{ post.comment_count }})</h3>
+                <h3 class="sidebar-title">
+                    <i class="bi bi-chat"></i>
+                    Comments ({{ post.comment_count }})
+                </h3>
                 
                 {% if post.allow_comments %}
                     <!-- Comment Form -->
@@ -306,13 +453,13 @@
                         {% csrf_token %}
                         <div class="mb-3">
                             <label for="comment-content" class="form-label">Add a comment</label>
-                            {{ comment_form.content }}
+                            <textarea name="content" id="comment-content" class="form-control" rows="3" placeholder="Write your comment..."></textarea>
                         </div>
-                        <button type="submit" class="btn btn-primary">Post Comment</button>
+                        <button type="submit" class="btn-custom btn-primary">Post Comment</button>
                     </form>
                     {% else %}
                     <div class="alert alert-info">
-                        <a href="{% url 'login' %}?next={{ request.path }}" class="btn btn-primary">Login</a> to post a comment.
+                        <a href="{% url 'login' %}?next={{ request.path }}" class="btn-custom btn-primary">Login</a> to post a comment.
                     </div>
                     {% endif %}
 
@@ -340,62 +487,65 @@
         <div class="col-lg-4">
             <!-- Related Posts -->
             {% if related_posts %}
-            <div class="card border-0 shadow-sm mb-4" style="background: var(--navbar-bg); backdrop-filter: blur(10px);">
-                <div class="card-body">
-                    <h5 class="card-title">Related Posts</h5>
-                    <div class="list-group list-group-flush">
-                        {% for related_post in related_posts %}
-                        <a href="{{ related_post.get_absolute_url }}" 
-                           class="list-group-item list-group-item-action border-0 px-0 py-3">
-                            <div class="d-flex align-items-center">
-                          <img src="{{ related_post.get_image_url }}" 
-                              alt="{{ related_post.title }}" class="rounded me-3" style="width: 40px; height: 40px; object-fit: cover;">
-                                <div>
-                                    <h6 class="mb-1">{{ related_post.title|truncatewords:5 }}</h6>
-                                    <small class="text-muted">{{ related_post.published_at|date:"M d, Y" }}</small>
-                                </div>
+            <div class="blog-detail-sidebar">
+                <h5 class="sidebar-title">
+                    <i class="bi bi-link"></i>
+                    Related Posts
+                </h5>
+                <div class="list-group list-group-flush">
+                    {% for related_post in related_posts %}
+                    <a href="{% url 'blog:post-detail' related_post.slug %}" 
+                       class="list-group-item list-group-item-action border-0 px-0 py-3">
+                        <div class="d-flex align-items-center">
+                            <img src="{{ related_post.get_image_url|default:'/static/images/blog_placeholder.svg' }}" 
+                                 alt="{{ related_post.title }}" class="rounded me-3" style="width: 40px; height: 40px; object-fit: cover;">
+                            <div>
+                                <h6 class="mb-1">{{ related_post.title|truncatewords:5 }}</h6>
+                                <small class="text-muted">{{ related_post.published_at|date:"M d, Y" }}</small>
                             </div>
-                        </a>
-                        {% endfor %}
-                    </div>
+                        </div>
+                    </a>
+                    {% endfor %}
                 </div>
             </div>
             {% endif %}
 
             <!-- Post Stats -->
-            <div class="card border-0 shadow-sm mb-4" style="background: var(--navbar-bg); backdrop-filter: blur(10px);">
-                <div class="card-body">
-                    <h5 class="card-title">Post Statistics</h5>
-                    <div class="row text-center">
-                        <div class="col-4">
-                            <div class="fs-2 fw-bold text-primary">{{ post.view_count }}</div>
-                            <small class="text-muted">Views</small>
-                        </div>
-                        <div class="col-4">
-                            <div class="fs-2 fw-bold text-danger">{{ post.like_count }}</div>
-                            <small class="text-muted">Likes</small>
-                        </div>
-                        <div class="col-4">
-                            <div class="fs-2 fw-bold text-success">{{ post.comment_count }}</div>
-                            <small class="text-muted">Comments</small>
-                        </div>
+            <div class="blog-detail-sidebar">
+                <h5 class="sidebar-title">
+                    <i class="bi bi-bar-chart"></i>
+                    Post Statistics
+                </h5>
+                <div class="row text-center">
+                    <div class="col-4">
+                        <div class="fs-2 fw-bold text-primary">{{ post.view_count }}</div>
+                        <small class="text-muted">Views</small>
+                    </div>
+                    <div class="col-4">
+                        <div class="fs-2 fw-bold text-danger">{{ post.like_count }}</div>
+                        <small class="text-muted">Likes</small>
+                    </div>
+                    <div class="col-4">
+                        <div class="fs-2 fw-bold text-success">{{ post.comment_count }}</div>
+                        <small class="text-muted">Comments</small>
                     </div>
                 </div>
             </div>
 
             <!-- Categories -->
-            <div class="card border-0 shadow-sm" style="background: var(--navbar-bg); backdrop-filter: blur(10px);">
-                <div class="card-body">
-                    <h5 class="card-title">Categories</h5>
-                    <div class="list-group list-group-flush">
-                        {% for category in categories %}
-                        <a href="{{ category.get_absolute_url }}" 
-                           class="list-group-item list-group-item-action border-0 px-0 py-2 d-flex justify-content-between align-items-center">
-                            {{ category.name }}
-                            <span class="badge bg-primary rounded-pill">{{ category.post_count }}</span>
-                        </a>
-                        {% endfor %}
-                    </div>
+            <div class="blog-detail-sidebar">
+                <h5 class="sidebar-title">
+                    <i class="bi bi-folder"></i>
+                    Categories
+                </h5>
+                <div class="list-group list-group-flush">
+                    {% for category in categories %}
+                    <a href="{% url 'blog:post-list' %}?category={{ category.id }}" 
+                       class="list-group-item list-group-item-action border-0 rounded px-2 py-2 mb-2 d-flex justify-content-between align-items-center {% if post.category and category.id == post.category.id %}active bg-primary text-white{% endif %}">
+                        {{ category.name }}
+                        <span class="badge {% if post.category and category.id == post.category.id %}bg-light text-dark{% else %}bg-primary{% endif %} rounded-pill">{{ category.post_count }}</span>
+                    </a>
+                    {% endfor %}
                 </div>
             </div>
         </div>
@@ -424,10 +574,22 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 if (data.liked) {
                     this.classList.add('liked');
-                    this.innerHTML = '<i class="bi bi-heart-fill"></i> Liked <span class="badge bg-light text-dark ms-1" id="like-count">' + data.like_count + '</span>';
+                    this.querySelector('i').className = 'bi bi-heart-fill';
+                    likeCount.textContent = data.like_count;
+                    
+                    // Show toast
+                    if (window.showToast) {
+                        window.showToast('Liked!', 'success');
+                    }
                 } else {
                     this.classList.remove('liked');
-                    this.innerHTML = '<i class="bi bi-heart"></i> Like <span class="badge bg-light text-dark ms-1" id="like-count">' + data.like_count + '</span>';
+                    this.querySelector('i').className = 'bi bi-heart';
+                    likeCount.textContent = data.like_count;
+                    
+                    // Show toast
+                    if (window.showToast) {
+                        window.showToast('Unliked!', 'info');
+                    }
                 }
             })
             .catch(error => console.error('Error:', error));
@@ -458,6 +620,33 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return cookieValue;
     }
+
+    // Share functions
+    window.shareOnFacebook = function() {
+        const url = encodeURIComponent(window.location.href);
+        const text = encodeURIComponent("Check out this blog post: {{ post.title }}");
+        window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${text}`, '_blank');
+    };
+
+    window.shareOnTwitter = function() {
+        const url = encodeURIComponent(window.location.href);
+        const text = encodeURIComponent("Check out this blog post: {{ post.title }}");
+        window.open(`https://twitter.com/intent/tweet?url=${url}&text=${text}`, '_blank');
+    };
+
+    window.copyPostLink = function() {
+        const url = window.location.href;
+        navigator.clipboard.writeText(url).then(() => {
+            if (window.showToast) {
+                window.showToast('Link copied to clipboard!', 'success');
+            }
+        }).catch(err => {
+            console.error('Failed to copy: ', err);
+            if (window.showToast) {
+                window.showToast('Failed to copy link', 'error');
+            }
+        });
+    };
 });
 </script>
 {% endblock %}

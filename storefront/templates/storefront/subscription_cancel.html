@@ -406,10 +406,14 @@
                     <div class="detail-item">
                         <span class="detail-label">Status</span>
                         <div class="detail-value">
-                            <span class="status-badge {% if subscription.status == 'active' %}status-active{% else %}status-trialing{% endif %}">
-                                {{ subscription.get_status_display }}
-                            </span>
-                        </div>
+                                <span class="status-badge {% if effective_status == 'active' %}status-active{% elif effective_status == 'trialing' %}status-trialing{% else %}status-inactive{% endif %}">
+                                    {% if effective_status == 'trial_expired' %}
+                                        Trial period ended
+                                    {% else %}
+                                        {{ subscription.get_status_display }}
+                                    {% endif %}
+                                </span>
+                            </div>
                     </div>
                     <div class="detail-item">
                         <span class="detail-label">Next Billing</span>
@@ -425,16 +429,23 @@
                     </div>
                 </div>
                 
-                {% if subscription.is_active %}
+                {% if features_active %}
                 <div class="text-center">
                     <small class="text-muted">
                         <i class="bi bi-info-circle me-1"></i>
                         Premium features will remain active until 
-                        {% if subscription.trial_ends_at %}
+                        {% if subscription.trial_ends_at and effective_status == 'trialing' %}
                             {{ subscription.trial_ends_at|date:"M d, Y" }}
                         {% else %}
                             the end of your current billing period
                         {% endif %}
+                    </small>
+                </div>
+                {% else %}
+                <div class="text-center">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Premium features are currently deactivated for this subscription.
                     </small>
                 </div>
                 {% endif %}
@@ -460,6 +471,7 @@
             </div>
 
             <!-- Cancellation Form -->
+            {% if can_cancel %}
             <form method="post" class="cancellation-form" id="cancellationForm">
                 {% csrf_token %}
                 
@@ -526,6 +538,16 @@
                     </a>
                 </div>
             </form>
+            {% else %}
+            <div class="alert alert-info p-3">
+                <strong>Cancellation not available:</strong>
+                This subscription cannot be cancelled in its current state ({{ effective_status }}).
+                <div class="mt-2">
+                    <a href="{% url 'storefront:subscription_manage' slug=store.slug %}" class="btn-custom btn-ghost">Back to Subscription</a>
+                    <a href="{% url 'storefront:subscription_renew' slug=store.slug %}" class="btn-custom ms-2">Renew / Resolve Payment</a>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         <!-- Alternative Options -->
@@ -598,16 +620,23 @@
             </div>
         </div>
         
-        <div class="confirmation-buttons">
-            <button type="button" class="keep-btn" onclick="hideConfirmation()">
-                <i class="bi bi-arrow-left"></i>
-                Keep Subscription
-            </button>
-            <button type="button" class="cancel-btn" onclick="submitCancellation()">
-                <i class="bi bi-check-circle"></i>
-                Yes, Cancel Subscription
-            </button>
-        </div>
+            <div class="confirmation-buttons">
+                <button type="button" class="keep-btn" onclick="hideConfirmation()">
+                    <i class="bi bi-arrow-left"></i>
+                    Keep Subscription
+                </button>
+                {% if can_cancel %}
+                <button type="button" class="cancel-btn" onclick="submitCancellation()">
+                    <i class="bi bi-check-circle"></i>
+                    Yes, Cancel Subscription
+                </button>
+                {% else %}
+                <button type="button" class="cancel-btn" disabled title="Cancellation not available"> 
+                    <i class="bi bi-check-circle"></i>
+                    Cancellation unavailable
+                </button>
+                {% endif %}
+            </div>
     </div>
 </div>
 {% endblock %}

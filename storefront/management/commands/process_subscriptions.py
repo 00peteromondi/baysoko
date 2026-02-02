@@ -29,8 +29,31 @@ class Command(BaseCommand):
             if not has_payment:
                 # No payment made during trial - deactivate
                 subscription.status = 'cancelled'
-                subscription.store.is_premium = False
-                subscription.store.save()
+                subscription.save()
+
+                # Lock stores for the owner except the first created store
+                try:
+                    owner = subscription.store.owner
+                    from storefront.models import Store
+                    from listings.models import Listing
+
+                    owner_stores = Store.objects.filter(owner=owner).order_by('created_at')
+                    first = owner_stores.first()
+                    # Deactivate all other stores and their listings
+                    for s in owner_stores:
+                        if first and s.id == first.id:
+                            # Ensure the first store remains active but not premium
+                            s.is_premium = False
+                            s.is_active = True
+                            s.save()
+                            continue
+                        s.is_premium = False
+                        s.is_active = False
+                        s.save()
+                        # Disable all listings for this store
+                        Listing.objects.filter(store=s).update(is_active=False)
+                except Exception as e:
+                    print(f"Error locking stores after trial expiry: {e}")
             else:
                 # Payment received - convert to active
                 subscription.status = 'active'

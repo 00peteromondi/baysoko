@@ -85,23 +85,19 @@ print(f"🔍 DATABASES['default'] type: {type(DATABASES.get('default'))}")
 print(f"🔍 DATABASES['default'] keys: {DATABASES.get('default', {}).keys()}")
 print(f"🔍 DATABASES['default']['ENGINE']: {DATABASES.get('default', {}).get('ENGINE', 'NOT SET')}")
 
-# Force verification
-if 'default' in DATABASES and 'ENGINE' in DATABASES['default']:
+# Force verification: ensure a valid DATABASES dict with ENGINE is present
+if 'default' in DATABASES and DATABASES.get('default', {}).get('ENGINE'):
     print(f"✅ DATABASE ENGINE CONFIRMED: {DATABASES['default']['ENGINE']}")
 else:
-    print("❌ DATABASE ENGINE NOT FOUND!")
-    # Emergency fallback
+    print("❌ DATABASE ENGINE NOT FOUND or invalid. Falling back to SQLite for safety.")
+    # Safe fallback to local SQLite to allow manage.py commands to run
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'baysoko2',
-            'USER': 'baysoko2_user',
-            'PASSWORD': 'Da8a4VMjdk7X0QOuJtBxtZs3Q4ym7VzG',
-            'HOST': 'dpg-d5gd8m7pm1nc73e44la0-a',
-            'PORT': '5432',
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
-    print("⚠️  Using hardcoded PostgreSQL configuration as emergency fallback")
+    print("⚠️  Using SQLite as emergency fallback database for local operations")
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-default-key-for-dev')
 
@@ -274,6 +270,7 @@ TEMPLATES = [
                 'storefront.context_processors.subscription_context',
                 'storefront.context_processors.bulk_operations_context',
                 'storefront.context_processors.subscription_context',
+                'blog.context_processors.blog_sidebar',
             ],
         },
     },
@@ -454,9 +451,9 @@ ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
 # Keep email verification and uniqueness as configured
 ACCOUNT_EMAIL_VERIFICATION = 'optional'
 ACCOUNT_UNIQUE_EMAIL = True
-ACCOUNT_EMAIL_REQUIRED = True
-ACCOUNT_AUTHENTICATION_METHOD = 'username_email'
-ACCOUNT_USERNAME_REQUIRED = True
+# Deprecated settings removed: use ACCOUNT_LOGIN_METHODS and ACCOUNT_SIGNUP_FIELDS above.
+# ACCOUNT_EMAIL_REQUIRED, ACCOUNT_AUTHENTICATION_METHOD, and ACCOUNT_USERNAME_REQUIRED
+# have been replaced by the new Allauth configuration keys.
 
 # Add this after the existing SOCIALACCOUNT_PROVIDERS configuration
 # Update SOCIALACCOUNT_PROVIDERS with the improved structure

@@ -3,6 +3,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
+from django.db.models import F
 import os
 from django.conf import settings
 
@@ -106,9 +107,15 @@ class BlogPost(models.Model):
             return '/static/images/image_placeholder.svg'
     
     def increment_view_count(self):
-        """Increment view count for the post"""
-        self.view_count += 1
-        self.save(update_fields=['view_count'])
+        """Atomically increment view count and refresh from DB."""
+        try:
+            self.__class__.objects.filter(pk=self.pk).update(view_count=F('view_count') + 1)
+            # Refresh local instance so templates see the updated value
+            self.refresh_from_db(fields=['view_count'])
+        except Exception as e:
+            print(f"Error incrementing view count for post {self.pk}: {e}")
+
+    
     
     def like_count(self):
         return self.likes.count()

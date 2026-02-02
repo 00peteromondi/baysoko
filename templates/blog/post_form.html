@@ -5,172 +5,672 @@
 
 {% block extra_css %}
 <style>
-    .form-hero {
-        background: linear-gradient(135deg, 
-                        rgba(26, 115, 232, 0.9) 0%, 
-                        rgba(13, 71, 161, 0.9) 100%);
+    /* ===== POST FORM PAGE STYLES ===== */
+    .post-form-hero {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
         color: white;
-        padding: 3rem 0;
-        margin: -2rem -1rem 3rem;
-        border-radius: 0 0 2rem 2rem;
+        padding: var(--spacing-xxl) 0 var(--spacing-xl);
+        margin-bottom: var(--spacing-xxl);
+        border-radius: 0 0 var(--radius-xl) var(--radius-xl);
     }
 
-    .blog-form-container {
-        background: var(--navbar-bg);
-        backdrop-filter: blur(10px);
-        border-radius: 1.5rem;
-        padding: 3rem;
-        margin-bottom: 3rem;
-        border: 1px solid rgba(255, 255, 255, 0.18);
+    .post-form-hero-content {
+        max-width: 800px;
+        margin: 0 auto;
+        text-align: center;
     }
 
+    .post-form-hero-title {
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin-bottom: var(--spacing-md);
+        line-height: 1.2;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .post-form-hero-subtitle {
+        font-size: 1.1rem;
+        opacity: 0.9;
+        line-height: 1.6;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    /* Form Container */
+    .post-form-container {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        margin-bottom: var(--spacing-xl);
+        border: 1px solid var(--border-color);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .form-section {
+        margin-bottom: var(--spacing-xl);
+        padding-bottom: var(--spacing-xl);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .form-section:last-child {
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: none;
+    }
+
+    .form-section-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: var(--spacing-lg);
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    <!-- Categories Container -->
+    <div class="categories-container">
+        <h5 class="sidebar-title">
+            <i class="bi bi-folder"></i>
+            Categories
+        </h5>
+        <div class="list-group list-group-flush">
+            {% if all_categories %}
+                {% for category in all_categories %}
+                <a href="{% url 'blog:post-list' %}?category={{ category.id }}" 
+                   class="list-group-item list-group-item-action border-0 px-0 py-2 d-flex justify-content-between align-items-center {% if form.instance.category and category.id == form.instance.category.id %}active bg-primary text-white{% endif %}">
+                    {{ category.name }}
+                    <span class="badge {% if form.instance.category and category.id == form.instance.category.id %}bg-light text-dark{% else %}bg-primary{% endif %} rounded-pill">{{ category.post_count|default:'' }}</span>
+                </a>
+                {% endfor %}
+            {% else %}
+                {% for category in categories %}
+                <a href="{% url 'blog:post-list' %}?category={{ category.id }}" 
+                   class="list-group-item list-group-item-action border-0 px-0 py-2 d-flex justify-content-between align-items-center {% if form.instance.category and category.id == form.instance.category.id %}active bg-primary text-white{% endif %}">
+                    {{ category.name }}
+                    <span class="badge {% if form.instance.category and category.id == form.instance.category.id %}bg-light text-dark{% else %}bg-primary{% endif %} rounded-pill">{{ category.post_count|default:'' }}</span>
+                </a>
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+    .form-section-title i {
+        color: var(--primary);
+    }
+
+    /* Form Fields */
+    .form-group {
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .form-label {
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+        display: block;
+    }
+
+    .form-control, .form-select {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        padding: 10px 12px;
+        border-radius: var(--radius-md);
+        transition: var(--transition);
+        font-size: 0.95rem;
+    }
+
+    .form-control:focus, .form-select:focus {
+        background: var(--card-bg);
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.1);
+        outline: none;
+    }
+
+    .form-control::placeholder {
+        color: var(--text-secondary);
+    }
+
+    /* Rich Text Editor */
+    .rich-text-editor {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+    }
+
+    .editor-toolbar {
+        background: var(--card-bg);
+        border-bottom: 1px solid var(--border-color);
+        padding: 8px 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .editor-button {
+        background: transparent;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        padding: 6px 10px;
+        color: var(--text-primary);
+        cursor: pointer;
+        transition: var(--transition);
+        font-size: 0.9rem;
+    }
+
+    .editor-button:hover {
+        background: var(--bg-secondary);
+        border-color: var(--primary);
+    }
+
+    .editor-content {
+        min-height: 300px;
+        padding: 12px;
+        font-size: 1rem;
+        line-height: 1.6;
+    }
+
+    /* Switch Styling */
+    .form-check {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .form-check-input {
+        width: 48px;
+        height: 24px;
+        cursor: pointer;
+    }
+
+    .form-check-input:checked {
+        background-color: var(--primary);
+        border-color: var(--primary);
+    }
+
+    .form-check-label {
+        font-weight: 500;
+        color: var(--text-primary);
+        cursor: pointer;
+    }
+
+    /* Image Upload */
+    .image-upload-container {
+        border: 2px dashed var(--border-color);
+        border-radius: var(--radius-md);
+        padding: var(--spacing-lg);
+        text-align: center;
+        background: var(--bg-secondary);
+        transition: var(--transition);
+        cursor: pointer;
+    }
+
+    .image-upload-container:hover {
+        border-color: var(--primary);
+        background: var(--card-bg);
+    }
+
+    .image-upload-icon {
+        font-size: 3rem;
+        color: var(--text-tertiary);
+        margin-bottom: var(--spacing-md);
+    }
+
+    .image-upload-text {
+        color: var(--text-secondary);
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .image-upload-hint {
+        font-size: 0.85rem;
+        color: var(--text-tertiary);
+    }
+
+    .image-preview {
+        max-width: 100%;
+        max-height: 200px;
+        border-radius: var(--radius-md);
+        margin-top: var(--spacing-md);
+        display: none;
+    }
+
+    /* Form Actions */
     .form-actions {
-        background: var(--navbar-bg);
-        backdrop-filter: blur(10px);
-        border-radius: 1rem;
-        padding: 1.5rem;
-        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-lg);
+        border: 1px solid var(--border-color);
         position: sticky;
-        bottom: 2rem;
+        bottom: 20px;
         z-index: 100;
+        box-shadow: var(--shadow-lg);
+        margin-top: var(--spacing-xl);
     }
 
+    /* Tips Card */
+    .form-tips-card {
+        background: linear-gradient(135deg, var(--primary-light) 0%, rgba(var(--primary-rgb), 0.1) 100%);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-lg);
+        border: 1px solid rgba(var(--primary-rgb), 0.2);
+        margin-top: var(--spacing-xl);
+    }
+
+    .tips-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin-bottom: var(--spacing-md);
+        color: var(--primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .tips-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .tips-list li {
+        padding: 6px 0;
+        color: var(--text-primary);
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+
+    .tips-list li i {
+        color: var(--success);
+        margin-top: 2px;
+    }
+
+    /* Responsive */
     @media (max-width: 768px) {
-        .form-hero {
-            padding: 2rem 0;
+        .post-form-hero-title {
+            font-size: 2rem;
         }
         
-        .blog-form-container {
-            padding: 2rem;
+        .post-form-hero-subtitle {
+            font-size: 1rem;
+        }
+        
+        .post-form-container {
+            padding: var(--spacing-lg);
         }
         
         .form-actions {
             position: static;
-            margin-top: 2rem;
+            margin-top: var(--spacing-lg);
         }
+        
+        .editor-toolbar {
+            gap: 4px;
+        }
+        
+        .editor-button {
+            padding: 4px 8px;
+            font-size: 0.85rem;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .post-form-hero {
+            padding: var(--spacing-xl) 0 var(--spacing-lg);
+        }
+        
+        .post-form-hero-title {
+            font-size: 1.8rem;
+        }
+        
+        .post-form-container {
+            padding: var(--spacing-md);
+        }
+        
+        .form-section {
+            margin-bottom: var(--spacing-lg);
+            padding-bottom: var(--spacing-lg);
+        }
+    }
+    /* Action buttons scroller for small screens */
+    .action-scroller {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .action-scroller .btn-custom {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    .categories-container {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-lg);
+        border: 1px solid var(--border-color);
+        box-shadow: var(--shadow-sm);
+        margin-bottom: var(--spacing-xl);
+    }
+    form input, form textarea {
+        color: var(--text-primary) !important;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Form Hero Section -->
-<section class="form-hero">
-    <div class="container">
-        <div class="row">
-            <div class="col-lg-8 mx-auto text-center">
-                <h1 class="display-5 fw-bold mb-3">
-                    {% if form.instance.pk %}
-                    Edit Blog Post
-                    {% else %}
-                    Create New Blog Post
-                    {% endif %}
-                </h1>
-                <p class="lead">
-                    {% if form.instance.pk %}
-                    Make changes to your blog post
-                    {% else %}
-                    Share your knowledge with the Baysoko community
-                    {% endif %}
-                </p>
-            </div>
+<!-- Post Form Hero Section -->
+<section class="post-form-hero">
+    <div class="container-custom">
+        <div class="post-form-hero-content">
+            <h1 class="post-form-hero-title">
+                {% if form.instance.pk %}
+                Edit Blog Post
+                {% else %}
+                Create New Blog Post
+                {% endif %}
+            </h1>
+            <p class="post-form-hero-subtitle">
+                {% if form.instance.pk %}
+                Make changes to your blog post
+                {% else %}
+                Share your knowledge with the Baysoko community
+                {% endif %}
+            </p>
         </div>
     </div>
 </section>
 
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-lg-10">
-            <div class="blog-form-container">
-                <form method="post" enctype="multipart/form-data" novalidate>
-                    {% csrf_token %}
-                    
-                    <div class="row">
-                        <div class="col-md-8">
-                            {{ form.title|as_crispy_field }}
-                        </div>
-                        <div class="col-md-4">
-                            {{ form.slug|as_crispy_field }}
-                        </div>
-                    </div>
-
-                    {{ form.excerpt|as_crispy_field }}
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            {{ form.category|as_crispy_field }}
-                        </div>
-                        <div class="col-md-6">
-                            {{ form.image|as_crispy_field }}
-                        </div>
-                    </div>
-
-                    {{ form.content|as_crispy_field }}
-
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="form-check form-switch mb-3">
-                                {{ form.featured }}
-                                <label class="form-check-label" for="{{ form.featured.id_for_label }}">
-                                    Featured Post
-                                </label>
+<div class="container-custom">
+    <div class="post-form-container">
+        <form method="post" enctype="multipart/form-data" novalidate>
+            {% csrf_token %}
+            
+            <!-- Basic Information Section -->
+            <div class="form-section">
+                <h3 class="form-section-title">
+                    <i class="bi bi-info-circle"></i>
+                    Basic Information
+                </h3>
+                
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="form-group">
+                            <label for="{{ form.title.id_for_label }}" class="form-label">Post Title *</label>
+                            <input type="text" 
+                                   name="{{ form.title.name }}" 
+                                   id="{{ form.title.id_for_label }}" 
+                                   class="form-control" 
+                                   value="{{ form.title.value|default:'' }}"
+                                   placeholder="Enter a descriptive title for your post"
+                                   required>
+                            {% if form.title.errors %}
+                            <div class="text-danger mt-2" style="font-size: 0.85rem;">
+                                {{ form.title.errors }}
                             </div>
-                        </div>
-                        <div class="col-md-4">
-                            {{ form.status|as_crispy_field }}
-                        </div>
-                        <div class="col-md-4">
-                            {{ form.allow_comments|as_crispy_field }}
+                            {% endif %}
                         </div>
                     </div>
-
-                    <div class="form-actions mt-4">
-                        <div class="d-flex gap-2 justify-content-between">
-                            <div>
-                                <a href="{% if form.instance.pk %}{{ form.instance.get_absolute_url }}{% else %}{% url 'blog:post-list' %}{% endif %}" 
-                                   class="btn btn-outline-secondary">
-                                    <i class="bi bi-arrow-left me-2"></i>Cancel
-                                </a>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="{{ form.slug.id_for_label }}" class="form-label">URL Slug</label>
+                            <input type="text" 
+                                   name="{{ form.slug.name }}" 
+                                   id="{{ form.slug.id_for_label }}" 
+                                   class="form-control" 
+                                   value="{{ form.slug.value|default:'' }}"
+                                   placeholder="auto-generated-slug">
+                            {% if form.slug.errors %}
+                            <div class="text-danger mt-2" style="font-size: 0.85rem;">
+                                {{ form.slug.errors }}
                             </div>
-                            <div class="d-flex gap-2">
-                                {% if form.instance.pk %}
-                                <a href="{% url 'blog:post-delete' form.instance.slug %}" class="btn btn-outline-danger">
-                                    <i class="bi bi-trash me-2"></i>Delete
-                                </a>
-                                {% endif %}
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="bi bi-{% if form.instance.pk %}check-lg{% else %}plus-lg{% endif %} me-2"></i>
-                                    {% if form.instance.pk %}Update Post{% else %}Create Post{% endif %}
-                                </button>
-                            </div>
+                            {% endif %}
                         </div>
                     </div>
-                </form>
-            </div>
+                </div>
 
-            <!-- Form Tips -->
-            <div class="card border-0 shadow-sm" style="background: var(--navbar-bg); backdrop-filter: blur(10px);">
-                <div class="card-body">
-                    <h5 class="card-title"><i class="bi bi-lightbulb me-2"></i>Writing Tips</h5>
-                    <ul class="list-unstyled mb-0">
-                        <li><i class="bi bi-check text-success me-2"></i> Write a clear and descriptive title</li>
-                        <li><i class="bi bi-check text-success me-2"></i> Add a compelling excerpt to hook readers</li>
-                        <li><i class="bi bi-check text-success me-2"></i> Use high-quality images</li>
-                        <li><i class="bi bi-check text-success me-2"></i> Break content into sections with headings</li>
-                        <li><i class="bi bi-check text-success me-2"></i> Proofread before publishing</li>
-                    </ul>
+                <div class="form-group">
+                    <label for="{{ form.excerpt.id_for_label }}" class="form-label">Excerpt *</label>
+                    <textarea name="{{ form.excerpt.name }}" 
+                              id="{{ form.excerpt.id_for_label }}" 
+                              class="form-control" 
+                              rows="3"
+                              placeholder="Write a short summary of your post (shown in listings)"
+                              required>{{ form.excerpt.value|default:'' }}</textarea>
+                    <div class="text-muted mt-2" style="font-size: 0.85rem;">
+                        <i class="bi bi-info-circle"></i> This will appear in post listings and search results
+                    </div>
+                    {% if form.excerpt.errors %}
+                    <div class="text-danger mt-2" style="font-size: 0.85rem;">
+                        {{ form.excerpt.errors }}
+                    </div>
+                    {% endif %}
                 </div>
             </div>
-        </div>
+
+            <!-- Content & Media Section -->
+            <div class="form-section">
+                <h3 class="form-section-title">
+                    <i class="bi bi-card-text"></i>
+                    Content & Media
+                </h3>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="{{ form.category.id_for_label }}" class="form-label">Category</label>
+                            <select name="{{ form.category.name }}" 
+                                    id="{{ form.category.id_for_label }}" 
+                                    class="form-select">
+                                <option value="">Select a category</option>
+                                {% if all_categories %}
+                                    {% for category in all_categories %}
+                                    <option value="{{ category.id }}" {% if form.category.value == category.id %}selected{% endif %}>
+                                        {{ category.name }}
+                                    </option>
+                                    {% endfor %}
+                                {% else %}
+                                    {% for category in categories %}
+                                    <option value="{{ category.id }}" {% if form.category.value == category.id %}selected{% endif %}>
+                                        {{ category.name }}
+                                    </option>
+                                    {% endfor %}
+                                {% endif %}
+                            </select>
+                            {% if form.category.errors %}
+                            <div class="text-danger mt-2" style="font-size: 0.85rem;">
+                                {{ form.category.errors }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="{{ form.image.id_for_label }}" class="form-label">Featured Image</label>
+                            <div class="image-upload-container" onclick="document.getElementById('image-upload').click()">
+                                <div class="image-upload-icon">
+                                    <i class="bi bi-cloud-arrow-up"></i>
+                                </div>
+                                <div class="image-upload-text">
+                                    Click to upload featured image
+                                </div>
+                                <div class="image-upload-hint">
+                                    Recommended: 1200x630px, Max 5MB
+                                </div>
+                                <input type="file" 
+                                       name="{{ form.image.name }}" 
+                                       id="image-upload" 
+                                       accept="image/*" 
+                                       style="display: none;"
+                                       onchange="previewImage(event)">
+                                {% if form.instance.image %}
+                                <img id="image-preview" src="{{ form.instance.get_image_url }}" alt="Preview" class="image-preview" style="display: block;">
+                                {% else %}
+                                <img id="image-preview" alt="Preview" class="image-preview">
+                                {% endif %}
+                            </div>
+                            {% if form.image.errors %}
+                            <div class="text-danger mt-2" style="font-size: 0.85rem;">
+                                {{ form.image.errors }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="{{ form.content.id_for_label }}" class="form-label">Content *</label>
+                    <div class="rich-text-editor">
+                        <div class="editor-toolbar">
+                            <button type="button" class="editor-button" onclick="formatText('bold')">
+                                <i class="bi bi-type-bold"></i>
+                            </button>
+                            <button type="button" class="editor-button" onclick="formatText('italic')">
+                                <i class="bi bi-type-italic"></i>
+                            </button>
+                            <button type="button" class="editor-button" onclick="formatText('underline')">
+                                <i class="bi bi-type-underline"></i>
+                            </button>
+                            <div style="width: 1px; background: var(--border-color); margin: 0 6px;"></div>
+                            <button type="button" class="editor-button" onclick="formatText('h2')">
+                                H2
+                            </button>
+                            <button type="button" class="editor-button" onclick="formatText('h3')">
+                                H3
+                            </button>
+                            <button type="button" class="editor-button" onclick="formatText('paragraph')">
+                                P
+                            </button>
+                            <div style="width: 1px; background: var(--border-color); margin: 0 6px;"></div>
+                            <button type="button" class="editor-button" onclick="formatText('list-ul')">
+                                <i class="bi bi-list-ul"></i>
+                            </button>
+                            <button type="button" class="editor-button" onclick="formatText('list-ol')">
+                                <i class="bi bi-list-ol"></i>
+                            </button>
+                            <button type="button" class="editor-button" onclick="formatText('quote')">
+                                <i class="bi bi-quote"></i>
+                            </button>
+                        </div>
+                        <textarea name="{{ form.content.name }}" 
+                                  id="{{ form.content.id_for_label }}" 
+                                  class="editor-content form-control"
+                                  rows="15"
+                                  placeholder="Write your post content here..."
+                                  style="border: none; resize: vertical; color: var(--text-primary) !important;"
+                                  required>{{ form.content.value|default:'' }}</textarea>
+                    </div>
+                    <div class="text-muted mt-2" style="font-size: 0.85rem;">
+                        <i class="bi bi-info-circle"></i> Use the toolbar above for formatting or write in Markdown
+                    </div>
+                    {% if form.content.errors %}
+                    <div class="text-danger mt-2" style="font-size: 0.85rem;">
+                        {{ form.content.errors }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Settings Section -->
+            <div class="form-section">
+                <h3 class="form-section-title">
+                    <i class="bi bi-gear"></i>
+                    Settings
+                </h3>
+                
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-check">
+                            {{ form.featured }}
+                            <label class="form-check-label" for="{{ form.featured.id_for_label }}">
+                                Featured Post
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="{{ form.status.id_for_label }}" class="form-label">Status</label>
+                            <select name="{{ form.status.name }}" 
+                                    id="{{ form.status.id_for_label }}" 
+                                    class="form-select">
+                                <option value="draft" {% if form.status.value == 'draft' %}selected{% endif %}>Draft</option>
+                                <option value="published" {% if form.status.value == 'published' %}selected{% endif %}>Published</option>
+                                {% if user.is_staff %}
+                                <option value="archived" {% if form.status.value == 'archived' %}selected{% endif %}>Archived</option>
+                                {% endif %}
+                            </select>
+                            {% if form.status.errors %}
+                            <div class="text-danger mt-2" style="font-size: 0.85rem;">
+                                {{ form.status.errors }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-check">
+                            {{ form.allow_comments }}
+                            <label class="form-check-label" for="{{ form.allow_comments.id_for_label }}">
+                                Allow Comments
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="form-actions">
+                <div class="d-flex justify-content-between align-items-center actions-row">
+                    <div class="left-action">
+                        <a href="{% if form.instance.pk %}{{ form.instance.get_absolute_url }}{% else %}{% url 'blog:post-list' %}{% endif %}" 
+                           class="btn-custom btn-secondary">
+                            <i class="bi bi-arrow-left me-2"></i>Cancel
+                        </a>
+                    </div>
+                    <div class="action-scroller d-flex gap-2">
+                        {% if form.instance.pk %}
+                        <a href="{% url 'blog:post-delete' form.instance.slug %}" class="btn-custom btn-danger">
+                            <i class="bi bi-trash me-2"></i>Delete
+                        </a>
+                        {% endif %}
+                        <button type="submit" class="btn-custom btn-primary">
+                            <i class="bi bi-{% if form.instance.pk %}check-lg{% else %}plus-lg{% endif %} me-2"></i>
+                            {% if form.instance.pk %}Update Post{% else %}Create Post{% endif %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Tips Card -->
+    <div class="form-tips-card">
+        <h5 class="tips-title">
+            <i class="bi bi-lightbulb"></i>
+            Writing Tips
+        </h5>
+        <ul class="tips-list">
+            <li><i class="bi bi-check-circle"></i> Write a clear and descriptive title</li>
+            <li><i class="bi bi-check-circle"></i> Add a compelling excerpt to hook readers</li>
+            <li><i class="bi bi-check-circle"></i> Use high-quality images that relate to your content</li>
+            <li><i class="bi bi-check-circle"></i> Break content into sections with headings (H2, H3)</li>
+            <li><i class="bi bi-check-circle"></i> Use bullet points and lists for readability</li>
+            <li><i class="bi bi-check-circle"></i> Proofread before publishing</li>
+            <li><i class="bi bi-check-circle"></i> Add relevant tags and categories</li>
+        </ul>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    // Auto-generate slug from title
     document.addEventListener('DOMContentLoaded', function() {
-        const titleField = document.getElementById('id_title');
-        const slugField = document.getElementById('id_slug');
+        // Auto-generate slug from title
+        const titleField = document.getElementById('{{ form.title.id_for_label }}');
+        const slugField = document.getElementById('{{ form.slug.id_for_label }}');
         
         if (titleField && slugField) {
             titleField.addEventListener('blur', function() {
@@ -185,16 +685,95 @@
             });
         }
         
-        // Preview image filename
-        const imageField = document.getElementById('id_image');
-        if (imageField) {
-            imageField.addEventListener('change', function() {
-                const fileName = this.files[0]?.name || 'No file chosen';
-                const label = this.nextElementSibling;
-                if (label && label.classList.contains('custom-file-label')) {
-                    label.textContent = fileName;
+        // Rich text editor formatting
+        window.formatText = function(command) {
+            const textarea = document.getElementById('{{ form.content.id_for_label }}');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const selectedText = textarea.value.substring(start, end);
+            let formattedText = '';
+            
+            switch(command) {
+                case 'bold':
+                    formattedText = `**${selectedText}**`;
+                    break;
+                case 'italic':
+                    formattedText = `*${selectedText}*`;
+                    break;
+                case 'underline':
+                    formattedText = `<u>${selectedText}</u>`;
+                    break;
+                case 'h2':
+                    formattedText = `## ${selectedText}`;
+                    break;
+                case 'h3':
+                    formattedText = `### ${selectedText}`;
+                    break;
+                case 'paragraph':
+                    formattedText = selectedText;
+                    break;
+                case 'list-ul':
+                    formattedText = selectedText.split('\n').map(line => `- ${line}`).join('\n');
+                    break;
+                case 'list-ol':
+                    formattedText = selectedText.split('\n').map((line, index) => `${index + 1}. ${line}`).join('\n');
+                    break;
+                case 'quote':
+                    formattedText = `> ${selectedText}`;
+                    break;
+                default:
+                    formattedText = selectedText;
+            }
+            
+            textarea.value = textarea.value.substring(0, start) + formattedText + textarea.value.substring(end);
+            textarea.focus();
+            textarea.setSelectionRange(start + formattedText.length, start + formattedText.length);
+        };
+        
+        // Image preview
+        window.previewImage = function(event) {
+            const input = event.target;
+            const preview = document.getElementById('image-preview');
+            const container = input.closest('.image-upload-container');
+            
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                    
+                    // Update upload text
+                    const uploadText = container.querySelector('.image-upload-text');
+                    const uploadIcon = container.querySelector('.image-upload-icon i');
+                    
+                    uploadText.textContent = input.files[0].name;
+                    uploadIcon.className = 'bi bi-image';
+                };
+                
+                reader.readAsDataURL(input.files[0]);
+                
+                // Validate file size (5MB)
+                if (input.files[0].size > 5 * 1024 * 1024) {
+                    if (window.showToast) {
+                        window.showToast('Image size must be less than 5MB', 'error');
+                    }
+                    input.value = '';
+                    preview.style.display = 'none';
+                    
+                    const uploadText = container.querySelector('.image-upload-text');
+                    const uploadIcon = container.querySelector('.image-upload-icon i');
+                    
+                    uploadText.textContent = 'Click to upload featured image';
+                    uploadIcon.className = 'bi bi-cloud-arrow-up';
                 }
-            });
+            }
+        };
+        
+        // Initialize image preview if image exists
+        const preview = document.getElementById('image-preview');
+        if (preview && preview.src) {
+            preview.style.display = 'block';
         }
     });
 </script>

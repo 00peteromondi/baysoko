@@ -1,5 +1,5 @@
 """
-WSGI config for homabaysoqou project.
+WSGI config for baysoko project.
 
 It exposes the WSGI callable as a module-level variable named ``application``.
 

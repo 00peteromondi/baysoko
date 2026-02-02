@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from .models import BlogPost, BlogCategory, BlogComment, BlogPostLike
 from .forms import BlogPostForm, BlogCategoryForm, BlogCommentForm, BlogSearchForm
+from django.utils.text import Truncator
 
 class BlogPostListView(ListView):
     model = BlogPost
@@ -92,9 +93,18 @@ class BlogPostDetailView(DetailView):
             queryset = BlogPost.objects.select_related('author', 'category').prefetch_related(
                 'likes', 'comments__user', 'comments__replies__user'
             )
-            
-            # Staff can see all posts, others only published
-            if not self.request.user.is_staff:
+            # Staff can see all posts.
+            # Authors should be able to view their own posts even when not published.
+            if self.request.user.is_staff:
+                return queryset
+
+            if self.request.user.is_authenticated:
+                # Allow published posts or posts authored by the requesting user
+                queryset = queryset.filter(
+                    Q(status='published') | Q(author=self.request.user)
+                )
+            else:
+                # Anonymous users only see published posts
                 queryset = queryset.filter(status='published')
             
             return queryset
@@ -155,7 +165,12 @@ class BlogPostCreateView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
     
     def get_success_url(self):
-        return reverse_lazy('blog:post-detail', kwargs={'slug': self.object.slug})
+        # If the post is published, send visitors to the public detail page.
+        # If it's still a draft, send the author to their posts list.
+        if hasattr(self, 'object') and self.object and self.object.status == 'published':
+            return reverse_lazy('blog:post-detail', kwargs={'slug': self.object.slug})
+
+        return reverse_lazy('blog:user-posts')
 
 class BlogPostUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = BlogPost
@@ -191,7 +206,8 @@ class UserPostListView(LoginRequiredMixin, ListView):
     template_name = 'blog/user_posts.html'
     context_object_name = 'posts'
     paginate_by = 10
-    
+
+
     def get_queryset(self):
         try:
             return BlogPost.objects.filter(
@@ -207,11 +223,13 @@ class UserPostListView(LoginRequiredMixin, ListView):
             context['total_posts'] = self.get_queryset().count()
             context['published_posts'] = self.get_queryset().filter(status='published').count()
             context['draft_posts'] = self.get_queryset().filter(status='draft').count()
+            context['total_views'] = self.get_queryset().aggregate(total_views=Count('view_count'))['total_views'] or 0
         except Exception as e:
             print(f"Error in UserPostListView get_context_data: {e}")
             context['total_posts'] = 0
             context['published_posts'] = 0
             context['draft_posts'] = 0
+            context['total_views'] = 0
 
         return context
 
@@ -285,6 +303,50 @@ def delete_comment(request, comment_id):
         print(f"Error in delete_comment: {e}")
         messages.error(request, 'An error occurred while deleting your comment.')
         return redirect('blog:post-list')
+
+
+def post_search_json(request):
+    """Return a small JSON payload of matching published posts for live search.
+
+    Query params:
+    - q: search query
+    - category: optional category id
+    """
+    try:
+        q = request.GET.get('q', '').strip()
+        category = request.GET.get('category')
+
+        queryset = BlogPost.objects.filter(status='published')
+
+        if q:
+            queryset = queryset.filter(
+                Q(title__icontains=q) | Q(content__icontains=q) | Q(excerpt__icontains=q)
+            )
+
+        if category:
+            try:
+                queryset = queryset.filter(category_id=int(category))
+            except ValueError:
+                pass
+
+        queryset = queryset.select_related('category')[:10]
+
+        results = []
+        for post in queryset:
+            results.append({
+                'id': post.id,
+                'title': post.title,
+                'slug': post.slug,
+                'excerpt': Truncator(post.excerpt or post.content).chars(120),
+                'published_at': post.published_at.isoformat() if post.published_at else None,
+                'image_url': post.get_image_url(),
+                'category': post.category.name if post.category else None,
+            })
+
+        return JsonResponse({'results': results})
+    except Exception as e:
+        print(f"Error in post_search_json: {e}")
+        return JsonResponse({'results': []})
 
 # Category views remain similar but updated for new functionality
 class BlogCategoryListView(ListView):

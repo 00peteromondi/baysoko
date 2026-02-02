@@ -16,7 +16,7 @@
     </script>
     {% endif %}
     <title>Baysoko - {% block title %}Local Marketplace{% endblock %}</title>
-    
+    <link rel="icon" href="{% static 'images/favicon.ico' %}" type="image/x-icon">   
     <!-- Modern Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1136,11 +1136,28 @@
                 display: flex;
                 align-items: center;
                 gap: 6px;
+                /* Ensure actions remain on a single row and can scroll when overflowing */
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                padding: 2px 0;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: thin;
             }
 
             .mobile-actions .btn-custom {
                 padding: 8px;
-                min-width: auto;
+                min-width: 44px;
+                flex: 0 0 auto;
+            }
+
+            /* Provide a subtle thumb for webkit browsers */
+            .mobile-actions::-webkit-scrollbar {
+                height: 6px;
+            }
+
+            .mobile-actions::-webkit-scrollbar-thumb {
+                background: rgba(0,0,0,0.08);
+                border-radius: 999px;
             }
 
             .mobile-actions .btn-custom i {
@@ -1543,15 +1560,15 @@
                             </li>
                             
                             <!-- Subscription Management -->
-                            {% with user_stores=user.stores.all %}
+                            {% with user_stores=user_stores %}
                                 {% if user_stores %}
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item" href="{% url 'storefront:seller_dashboard' %}"><i class="bi bi-speedometer2 me-2"></i>Seller Dashboard</a></li>
                                     {% for store in user_stores|slice:":2" %}
                                         <li><a class="dropdown-item" href="{% url 'storefront:subscription_manage' slug=store.slug %}">
                                             <i class="bi bi-award me-2"></i>{{ store.name|truncatechars:15 }}
-                                            <span class="badge {% if store.is_premium %}bg-warning{% else %}bg-secondary{% endif %} ms-2">
-                                                {% if store.is_premium %}Premium{% else %}Free{% endif %}
+                                            <span class="badge {{ store.plan_badge_class }} ms-2">
+                                                {{ store.plan_label }}{% if store.is_trialing_plan %} (Trial){% endif %}
                                             </span>
                                         </a></li>
                                     {% endfor %}
@@ -1662,7 +1679,7 @@
             </a></li>
 
             <!-- Subscription Management -->
-            {% with user_stores=user.stores.all %}
+            {% with user_stores=user_stores %}
                 {% if user_stores %}
                     <li class="side-nav-section">
                         <small class="text-muted px-3 py-2 d-block">My Stores</small>
@@ -1672,8 +1689,8 @@
                             <a href="{% url 'storefront:subscription_manage' slug=store.slug %}" class="side-nav-link">
                                 <i class="bi bi-shop"></i>
                                 <span class="link-text">{{ store.name|truncatechars:15 }}</span>
-                                <span class="badge {% if store.is_premium %}bg-warning{% else %}bg-secondary{% endif %}">
-                                    {% if store.is_premium %}P{% else %}F{% endif %}
+                                <span class="badge {{ store.plan_badge_class }}">
+                                    {{ store.plan_label|slice:":1" }}
                                 </span>
                             </a>
                         </li>

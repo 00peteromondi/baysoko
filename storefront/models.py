@@ -509,60 +509,65 @@ class Subscription(models.Model):
     
     def cancel(self):
         """Cancel subscription"""
-        self.status = 'canceled'
-        self.canceled_at = timezone.now()
-        self.save()
-        
-        # Update store premium status
-        if self.store.is_premium:
-            # Check if store has any other active subscriptions (treat 'trialing' as active only if trial hasn't ended)
-            from django.db.models import Q
-            now = timezone.now()
-            active_subs = Subscription.objects.filter(store=self.store).filter(
-                Q(status='active') | Q(status='trialing', trial_ends_at__gt=now)
-            ).exclude(id=self.id)
-            
-            if not active_subs.exists():
-                self.store.is_premium = False
-                self.store.save()
+        self.set_status('canceled')
     
     def renew(self, payment=None):
         """Renew subscription after payment"""
-        self.status = 'active'
-        self.current_period_end = timezone.now() + timezone.timedelta(days=30)
-        
+        # Use centralized status setter to ensure store sync
         if payment:
-            # Normalize phone before saving to avoid DB truncation errors
             try:
                 from .utils.phone import normalize_phone
                 self.mpesa_phone = normalize_phone(payment.phone_number)
             except Exception:
-                # Fallback to raw value if normalization fails
                 self.mpesa_phone = payment.phone_number
-        
-        self.save()
-        
-        # Ensure store is marked as premium
-        if not self.store.is_premium:
-            self.store.is_premium = True
-            self.store.save()
+
+        self.current_period_end = timezone.now() + timezone.timedelta(days=30)
+        self.set_status('active')
     def check_trial_expiry(self):
         """Check and handle trial expiration"""
         
         if self.status == 'trialing' and self.trial_ends_at:
             if timezone.now() > self.trial_ends_at:
-                # Trial expired
-                self.status = 'canceled'
-                self.save()
-                
-                # Remove premium features from store
-                if self.store.is_premium:
-                    self.store.is_premium = False
+                # Trial expired -> cancel via centralized setter
+                self.set_status('canceled')
+                # Ensure featured cleared
+                if self.store.is_featured:
                     self.store.is_featured = False
-                    self.store.save()
-                
+                    self.store.save(update_fields=['is_featured'])
                 return True
         return False
+
+    def set_status(self, new_status):
+        """Centralized status transition that keeps store flags consistent."""
+        old_status = self.status
+        self.status = new_status
+
+        now = timezone.now()
+        if new_status == 'canceled':
+            self.canceled_at = now
+            # clear any scheduled period end
+            try:
+                self.cancel_at_period_end = False
+            except Exception:
+                pass
+        elif new_status == 'active':
+            self.canceled_at = None
+
+        # Save changes before syncing store so FK relations are stable
+        super(Subscription, self).save()
+
+        # Sync store premium flag: premium if any active or valid trial exists
+        from django.db.models import Q
+        now = timezone.now()
+        has_active = Subscription.objects.filter(
+            store=self.store
+        ).filter(
+            Q(status='active') | Q(status='trialing', trial_ends_at__gt=now)
+        ).exists()
+
+        if self.store.is_premium != has_active:
+            self.store.is_premium = has_active
+            self.store.save(update_fields=['is_premium'])
     
     @classmethod
     def get_store_subscription(cls, store):

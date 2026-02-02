@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load humanize %}
-{% load custom_filters %}
+{% load storefront_filters %}
 
 {% block title %}Seller Dashboard - Baysoko{% endblock %}
 
@@ -709,7 +709,7 @@
         <p class="dashboard-subtitle">Manage your stores and track performance</p>
         
         <div class="d-flex gap-2 mt-3">
-            {% if plan_limits.max_stores > stores.count %}
+            {% if plan_limits.unlimited_stores or plan_limits.max_stores > stores.count or plan_status.is_active or plan_status.is_trialing %}
             <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-primary">
                 <i class="bi bi-plus-circle me-2"></i>
                 Create New Store
@@ -720,7 +720,7 @@
                 Create New Store <i class="bi bi-lock-fill ms-1"></i>
             </a>
             {% endif %}
-            {% if plan_limits.max_products > total_listings %}
+            {% if plan_limits.unlimited_products or plan_limits.max_products > total_listings or plan_status.is_active or plan_status.is_trialing %}
             <a href="{% url 'listing-create' %}" class="btn-custom btn-secondary">
                 <i class="bi bi-plus-lg me-2"></i>
                 Sell Item
@@ -741,7 +741,7 @@
                 <i class="bi bi-grid-3x3 me-1"></i>
                 Overview
             </a>
-            {% if plan_limits.features.analytics %}
+            {% if plan_limits.features.analytics or plan_status.is_active or plan_status.is_trialing or stores.exists and stores.first.is_premium %}
             <a href="{% url 'storefront:seller_analytics' %}" class="dashboard-nav-link">
                 <i class="bi bi-graph-up me-1"></i>
                 Analytics
@@ -768,7 +768,7 @@
                 Orders
             </a>
             {% if stores.exists %}
-            {% if plan_limits.features.inventory %}
+            {% if plan_limits.features.inventory or plan_status.is_active or plan_status.is_trialing or stores.exists and stores.first.is_premium %}
             <a href="{% url 'storefront:inventory_dashboard' stores.0.slug %}" class="dashboard-nav-link">
                 <i class="bi bi-clipboard me-1"></i>
                 Inventory
@@ -780,7 +780,7 @@
             </a>
             {% endif %}
 
-            {% if plan_limits.features.bulk_operations %}
+            {% if plan_limits.features.bulk_operations or plan_status.is_active or plan_status.is_trialing or stores.exists and stores.first.is_premium %}
             <a href="{% url 'storefront:bulk_dashboard' stores.0.slug %}" class="dashboard-nav-link">
                 <i class="bi bi-upload me-1"></i>
                 Bulk Operations
@@ -834,7 +834,7 @@
     </div>
 
     <!-- In the upgrade banner section -->
-    {% if not stores.exists or not stores.first.is_premium %}
+    {% if not stores.exists or not plan_status.is_active and not plan_status.is_trialing and not stores.first.is_premium %}
     <div class="upgrade-banner">
         <div class="upgrade-content">
             <div class="upgrade-text">
@@ -884,7 +884,7 @@
                 <h2 class="section-title">Your Stores</h2>
                 <p class="section-subtitle">{{ stores.count }} stores</p>
             </div>
-            {% if plan_limits.max_stores > stores.count %}
+            {% if plan_limits.unlimited_stores or plan_limits.max_stores > stores.count or plan_status.is_active or plan_status.is_trialing %}
             <a href="{% url 'storefront:store_create' %}" class="btn-custom btn-primary">
                 <i class="bi bi-plus-circle me-2"></i>
                 Add Store
@@ -916,9 +916,9 @@
                              class="store-logo">
                     </div>
                     
-                    {% if store.is_premium %}
-                    <span class="store-premium-badge">
-                        <i class="bi bi-star-fill"></i>Premium
+                    {% if store.current_plan and store.current_plan != 'free' %}
+                    <span class="store-premium-badge {{ store.plan_badge_class }}">
+                        <i class="bi bi-star-fill"></i>{{ store.plan_label }}{% if store.is_trialing_plan %} (Trial){% endif %}
                     </span>
                     {% endif %}
                 </div>
@@ -984,7 +984,7 @@
                 <h2 class="section-title">Your Listings</h2>
                 <p class="section-subtitle">{{ user_listings.count }} active listings</p>
             </div>
-            {% if plan_limits.max_products > total_listings %}
+            {% if plan_limits.unlimited_products or plan_limits.max_products > total_listings or plan_status.is_active or plan_status.is_trialing %}
             <a href="{% url 'listing-create' %}" class="btn-custom btn-secondary">
                 <i class="bi bi-plus-lg me-2"></i>
                 Add Listing
@@ -1070,7 +1070,7 @@
     <section class="quick-actions">
         <h3 class="section-title mb-3">Quick Actions</h3>
         <div class="actions-grid">
-            {% if plan_limits.max_stores > stores.count %}
+            {% if plan_limits.unlimited_stores or plan_limits.max_stores > stores.count or plan_status.is_active or plan_status.is_trialing %}
             <a href="{% url 'storefront:store_create' %}" class="action-card">
                 <div class="action-icon">
                     <i class="bi bi-shop"></i>
@@ -1086,7 +1086,7 @@
                 <h4 class="action-title">Create Store</h4>
             </a>
             {% endif %}
-            {% if plan_limits.max_products > total_listings %}
+            {% if plan_limits.unlimited_products or plan_limits.max_products > total_listings or plan_status.is_active or plan_status.is_trialing %}
             <a href="{% url 'listing-create' %}" class="action-card">
                 <div class="action-icon">
                     <i class="bi bi-plus-lg"></i>
@@ -1106,7 +1106,7 @@
                 <h4 class="action-title">Sell Item</h4>
             </a>
             {% endif %}
-            {% if plan_limits.features.analytics %}
+            {% if plan_limits.features.analytics or plan_status.is_active or plan_status.is_trialing or stores.exists and stores.first.is_premium %}
             <a href="{% url 'storefront:seller_analytics' %}" class="action-card">
                 <div class="action-icon">
                     <i class="bi bi-graph-up"></i>
@@ -1133,7 +1133,7 @@
                 <h4 class="action-title">Orders</h4>
             </a>
             {% if stores.exists %}
-            {% if plan_limits.features.inventory %}
+            {% if plan_limits.features.inventory or plan_status.is_active or plan_status.is_trialing or stores.first.is_premium %}
             <a href="{% url 'storefront:inventory_dashboard' stores.first.slug %}" class="action-card">
                 <div class="action-icon">
                     <i class="bi bi-clipboard"></i>
@@ -1149,7 +1149,7 @@
                 <h4 class="action-title">Inventory</h4>
             </a>
             {% endif %}
-            {% if plan_limits.features.bulk_operations %}
+            {% if plan_limits.features.bulk_operations or plan_status.is_active or plan_status.is_trialing or stores.first.is_premium %}
             <a href="{% url 'storefront:bulk_import_data' stores.first.slug %}" class="action-card">
                 <div class="action-icon">
                     <i class="bi bi-upload"></i>

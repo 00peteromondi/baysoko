@@ -573,9 +573,9 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
         from django.conf import settings
         from django.shortcuts import render, redirect
 
-        # Enforce per-user free listing limit (global across all listing creation entrypoints)
-        FREE_LISTING_LIMIT = getattr(settings, 'STORE_FREE_LISTING_LIMIT', 5)
-        user_listing_count = Listing.objects.filter(seller=self.request.user).count()
+        # Use centralized plan permissions to decide if user can create a listing
+        from storefront.utils.plan_permissions import PlanPermissions
+        user_listing_count = Listing.objects.filter(seller=self.request.user, is_active=True).count()
 
         # Get or create the user's single storefront
         user_store = Store.objects.filter(owner=self.request.user).first()
@@ -594,10 +594,10 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
                 return render(self.request, 'listings/listing_form.html', {'form': form, 'categories': Category.objects.filter(is_active=True), 'stores': Store.objects.filter(owner=self.request.user)})
             user_store = selected_store
 
-        # If user reached limit and is not premium, show upgrade prompt
-        is_premium = user_store.is_premium if user_store else False
-        if not is_premium and user_listing_count >= FREE_LISTING_LIMIT:
-            messages.warning(self.request, f"You've reached the free listing limit ({FREE_LISTING_LIMIT}). Upgrade to premium to add more listings.")
+        # If plan does not allow more listings, show upgrade prompt
+        if not PlanPermissions.can_create_listing(self.request.user, user_store):
+            limits = PlanPermissions.get_plan_limits(self.request.user, user_store)
+            messages.warning(self.request, f"You've reached the listing limit ({limits.get('max_products')}) for your plan. Upgrade to add more listings.")
             return redirect('storefront:seller_dashboard')
 
         # If there's still no user_store (and no explicit selection), require the user to create or select a storefront.

@@ -5,6 +5,7 @@ from django.urls import reverse
 from django.utils import timezone
 from datetime import timedelta
 import re
+from .utils.subscription_utils import enforce_expired_trials_for_user
 
 class SubscriptionMiddleware:
     def __init__(self, get_response):
@@ -39,6 +40,13 @@ class SubscriptionMiddleware:
         # Skip for staff/admin
         if request.user.is_staff:
             return None
+
+        # Enforce any expired trials immediately for this user (locks stores/listings)
+        try:
+            enforce_expired_trials_for_user(request.user)
+        except Exception:
+            # Don't block the request if enforcement fails; log later if needed
+            pass
         
         # Get current path
         path = request.path
