@@ -34,9 +34,9 @@ class PlanPermissions:
         'premium': {
             'analytics': True,
             'inventory': True,
-            'bulk_operations': True,
+            'bulk_operations': False,
             'multiple_stores': True,
-            'advanced_analytics': True,
+            'advanced_analytics': False,
             'api_access': False,
             'custom_domain': False,
             'white_label': False,
@@ -223,7 +223,7 @@ class PlanPermissions:
         elif plan == 'basic':
             return 'basic'
         elif plan == 'premium':
-            return 'advanced'
+            return 'basic'
         elif plan == 'enterprise':
             return 'enterprise'
         else:

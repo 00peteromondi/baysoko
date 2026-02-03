@@ -522,6 +522,7 @@ class ListingDetailView(DetailView):
         return context
 
     
+@method_decorator(listing_limit_check, name='dispatch')
 class ListingCreateView(LoginRequiredMixin, CreateView):
     model = Listing
     form_class = AIListingForm
@@ -568,7 +569,6 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
         kwargs['user'] = self.request.user
         return kwargs
 
-    @method_decorator(listing_limit_check)
     def form_valid(self, form):
         from django.conf import settings
         from django.shortcuts import render, redirect
