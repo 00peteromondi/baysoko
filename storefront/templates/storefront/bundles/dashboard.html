@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Bundles Dashboard - {{ store.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Reuse analytics styles for consistency */
+    .analytics-header { background: var(--card-bg); border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-sm); border: 1px solid var(--border-color); margin-bottom: 20px; }
+    .analytics-title { font-size: 22px; font-weight: 800; }
+    .performance-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:12px; margin-bottom:16px; }
+    .performance-card { background:var(--card-bg); border-radius:var(--radius-lg); padding:16px; box-shadow:var(--shadow-sm); border:1px solid var(--border-color); text-align:center; }
+    .performance-value { font-size:20px; font-weight:800; }
+    .list-card { background:var(--card-bg); border-radius:var(--radius-lg); padding:16px; box-shadow:var(--shadow-sm); border:1px solid var(--border-color); }
+    .small-muted { font-size:0.85rem; color:var(--text-secondary); }
+    .bundle-row:hover { background: var(--bg-secondary); }
+     .breadcrumb {
+        background: var(--bg-secondary);
+        padding: 10px 12px;
+        border-radius: var(--radius-md);
+        margin-bottom: 16px;
+        border: 1px solid var(--border-color);
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        font-size: 12px;
+    }
+    
+    .breadcrumb-item a {
+        text-decoration: none;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+    }
+    
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-custom py-3">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}"><i class="bi bi-house"></i> Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'storefront:seller_dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'storefront:store_detail' slug=store.slug %}">{{ store.name }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Bundles</li>
+        </ol>
+    </nav>
+    <div class="analytics-header d-flex justify-content-between align-items-center">
+        <div>
+            <h1 class="analytics-title">Bundles</h1>
+            <p class="small-muted mb-0">Manage product bundles, templates and rules for <strong>{{ store.name }}</strong></p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'storefront:bundle_create' slug=store.slug %}" class="btn-custom btn-primary">New Bundle</a>
+            <a href="{% url 'storefront:product_templates' slug=store.slug %}" class="btn-custom btn-outline">Templates</a>
+            <a href="{% url 'storefront:bundle_rules' slug=store.slug %}" class="btn-custom btn-outline">Rules</a>
+        </div>
+    </div>
+
+    <div class="performance-grid">
+        <div class="performance-card">
+            <div class="performance-value">{{ total_bundles }}</div>
+            <div class="small-muted">Total Bundles</div>
+        </div>
+        <div class="performance-card">
+            <div class="performance-value">{{ active_bundles }}</div>
+            <div class="small-muted">Active Bundles</div>
+        </div>
+        <div class="performance-card">
+            <div class="performance-value">{{ featured_bundles }}</div>
+            <div class="small-muted">Featured</div>
+        </div>
+        <div class="performance-card">
+            <div class="performance-value">{{ templates }}</div>
+            <div class="small-muted">Templates</div>
+        </div>
+    </div>
+
+    <div class="list-card">
+        <h3 class="mb-3">Recent Bundles</h3>
+        {% if recent_bundles %}
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Category</th>
+                        <th>Price</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in recent_bundles %}
+                    <tr class="bundle-row">
+                        <td>{{ b.name }}</td>
+                        <td>{% if b.category %}{{ b.category.name }}{% else %}&mdash;{% endif %}</td>
+                        <td>KSh {{ b.bundle_price|floatformat:2 }}</td>
+                        <td>{% if b.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-secondary">Inactive</span>{% endif %}</td>
+                        <td>{{ b.created_at|date:"M d, Y" }}</td>
+                        <td class="text-end">
+                            <a href="{% url 'storefront:bundle_detail' slug=store.slug bundle_id=b.id %}" class="btn btn-sm btn-outline-primary">Open</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4">
+            <p class="small-muted mb-2">No bundles found. Create your first bundle to offer curated product combinations.</p>
+            <a href="{% url 'storefront:bundle_create' slug=store.slug %}" class="btn-custom btn-primary">Create Bundle</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

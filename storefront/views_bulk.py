@@ -2,7 +2,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import JsonResponse, HttpResponse, StreamingHttpResponse
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST, require_GET
 from django.db.models import Q, Count, Sum, F, Value, CharField
 from django.db import transaction
@@ -21,6 +21,7 @@ import os
 from .models import Store
 from .models_bulk import BatchJob, ExportJob, ImportTemplate, BulkOperationLog
 from django.db import DatabaseError, OperationalError
+import logging
 from .forms_bulk import (
     BulkProductUpdateForm, BulkImportForm, 
     ExportSettingsForm, TemplateForm
@@ -34,6 +35,8 @@ from .tasks_bulk import (
     process_import_task,
     generate_export_task
 )
+
+logger = logging.getLogger(__name__)
 
 @login_required
 @store_owner_required
@@ -134,16 +137,41 @@ def bulk_import_data(request, slug):
                 'skip_errors': form.cleaned_data['skip_errors'],
                 'template_id': form.cleaned_data['template'].id if form.cleaned_data['template'] else None,
             }
+
+            # If the client submitted an explicit field mapping (JSON), include it
+            fm = request.POST.get('field_mapping')
+            if fm:
+                try:
+                    batch_job.parameters['field_mapping'] = json.loads(fm)
+                except Exception:
+                    batch_job.parameters['field_mapping'] = fm
             batch_job.save()
             
-            # Start async task
-            process_import_task.delay(batch_job.id)
-            
-            messages.success(
-                request,
-                f'Import job #{batch_job.id} has been queued. '
-                f'Processing {batch_job.file.name}.'
-            )
+            # Start async task; if broker (Redis) is unavailable, keep job pending and warn user
+            try:
+                process_import_task.delay(batch_job.id)
+                messages.success(
+                    request,
+                    f'Import job #{batch_job.id} has been queued. '
+                    f'Processing {batch_job.file.name}.'
+                )
+            except Exception as exc:
+                # If broker unavailable, fall back to synchronous execution so import still works
+                logger.exception('Failed to enqueue import job %s: %s — falling back to synchronous run', batch_job.id, exc)
+                try:
+                    # Run the task synchronously in-process (may block request for duration)
+                    process_import_task.apply(args=(batch_job.id,))
+                    messages.success(
+                        request,
+                        f'Import job #{batch_job.id} was processed synchronously.'
+                    )
+                except Exception as exc2:
+                    logger.exception('Synchronous import job %s failed: %s', batch_job.id, exc2)
+                    messages.warning(
+                        request,
+                        f'Import job #{batch_job.id} was created but could not be processed: {exc2}. '
+                        'Start your Celery worker and Redis broker to process it.'
+                    )
             return redirect('storefront:bulk_job_detail', slug=slug, job_id=batch_job.id)
     else:
         form = BulkImportForm(store)
@@ -440,6 +468,9 @@ def get_job_progress(request, slug, job_id):
         'started_at': job.started_at.isoformat() if job.started_at else None,
         'completed_at': job.completed_at.isoformat() if job.completed_at else None,
     })
+
+
+
 
 @require_GET
 @login_required

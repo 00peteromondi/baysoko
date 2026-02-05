@@ -18,6 +18,18 @@ class SubscriptionService:
     TRIAL_LIMIT_PER_USER = 1  # Only 1 trial per user
     
     PLAN_DETAILS = {
+        'free': {
+            'name': 'Free',
+            'price': 0,
+            'period': 'month',
+            'features': [
+                'Seller dashboard only',
+                'Up to 5 listings',
+                'Single storefront',
+            ],
+            'max_products': 5,
+            'max_stores': 1,
+        },
         'basic': {
             'name': 'Basic',
             'price': 999,
@@ -27,12 +39,12 @@ class SubscriptionService:
                 'Basic analytics',
                 'Store customization',
                 'Verified badge',
-                'Up to 50 products',
-                '1 storefront',
+                    'Up to 50 products',
+                    'Up to 3 storefronts',
                 'Email support',
             ],
             'max_products': 50,
-            'max_stores': 1,
+                'max_stores': 3,
         },
         'premium': {
             'name': 'Premium',
@@ -45,11 +57,11 @@ class SubscriptionService:
                 'Inventory management',
                 'Product bundles',
                 'Up to 200 products',
-                '3 storefronts',
+                'Up to 10 storefronts',
                 'Priority support',
             ],
             'max_products': 200,
-            'max_stores': 3,
+            'max_stores': 10,
         },
         'enterprise': {
             'name': 'Enterprise',

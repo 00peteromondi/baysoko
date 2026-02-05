@@ -5,6 +5,7 @@
 {% block title %}Import Products - {{ store.name }}{% endblock %}
 
 {% block extra_css %}
+    {% include 'storefront/partials/breadcrumb_css.html' %}
 <style>
     .import-wizard {
         background: var(--card-bg);
@@ -310,6 +311,15 @@
 
 {% block content %}
 <div class="container-custom py-3">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}"><i class="bi bi-house"></i> Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'storefront:seller_dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'storefront:bulk_dashboard' slug=store.slug %}">Bulk Operations</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Import Data</li>
+        </ol>
+    </nav>
     <!-- Header -->
     <div class="bulk-header">
         <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
@@ -498,6 +508,16 @@
                             <div class="error-message">{{ form.skip_errors.errors }}</div>
                             {% endif %}
                         </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Auto-fetch Images</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="auto_fetch_images" id="id_auto_fetch_images">
+                                <label class="form-check-label" for="id_auto_fetch_images">
+                                    Automatically search Wikimedia Commons for product images when none are provided
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -560,6 +580,7 @@
                 <i class="bi bi-play-circle me-2"></i>Start Import
             </button>
         </div>
+        <input type="hidden" name="field_mapping" id="id_field_mapping" />
     </form>
 </div>
 
@@ -568,6 +589,7 @@
         let currentStep = 1;
         let fileData = null;
         let csvColumns = [];
+        let sampleRows = [];
         
         const steps = document.querySelectorAll('.wizard-step');
         const stepContents = document.querySelectorAll('.step-content');
@@ -605,8 +627,17 @@
             submitBtn.style.display = newStep === 4 ? 'inline-block' : 'none';
             
             // Update step-specific content
-            if (newStep === 2 && fileData) {
-                generateFieldMapping();
+            if (newStep === 2) {
+                // generate mapping if we already parsed CSV columns
+                if (csvColumns && csvColumns.length) {
+                    generateFieldMapping();
+                } else if (document.getElementById('id_file') && document.getElementById('id_file').files.length) {
+                    // try parsing the selected file to populate preview/mapping
+                    const f = document.getElementById('id_file').files[0];
+                    if (f) {
+                        handleFile(f);
+                    }
+                }
             } else if (newStep === 4) {
                 generateReview();
             }
@@ -667,6 +698,8 @@
             document.getElementById('fileName').textContent = file.name;
             document.getElementById('fileSize').textContent = formatFileSize(file.size);
             filePreview.style.display = 'block';
+            // mark that we have file data available
+            fileData = file;
             
             // Clear template selection if any
             if (templateSelect) {
@@ -692,6 +725,7 @@
         function parseCSV(content) {
             const lines = content.split('\n').slice(0, 6); // Preview first 5 rows
             csvColumns = lines[0].split(',').map(col => col.trim().replace(/"/g, ''));
+            sampleRows = lines.slice(1, 5).map(line => line.split(',').map(cell => cell.trim().replace(/"/g, '')));
             
             // Show preview
             const previewTable = document.getElementById('dataPreview');
@@ -747,23 +781,60 @@
                 const select = document.createElement('select');
                 select.className = 'mapping-select';
                 select.name = `mapping_${index}`;
-                select.innerHTML = `
-                    <option value="">Don't import</option>
-                    <option value="title">Product Title</option>
-                    <option value="sku">SKU</option>
-                    <option value="description">Description</option>
-                    <option value="price">Price</option>
-                    <option value="stock">Stock</option>
-                    <option value="category">Category</option>
-                    <option value="condition">Condition</option>
-                    <option value="tags">Tags</option>
-                `;
+                // Options for mapping
+                const options = [
+                    ['', "Don't import"],
+                    ['title', 'Product Title'],
+                    ['sku', 'SKU'],
+                    ['description', 'Description'],
+                    ['price', 'Price'],
+                    ['stock', 'Stock'],
+                    ['category', 'Category'],
+                    ['condition', 'Condition'],
+                    ['tags', 'Tags'],
+                ];
+                options.forEach(opt => {
+                    const o = document.createElement('option');
+                    o.value = opt[0];
+                    o.textContent = opt[1];
+                    select.appendChild(o);
+                });
+
+                // Auto-select best match based on column name
+                const name = (column || '').toLowerCase();
+                const guesses = {
+                    title: ['title', 'name', 'product name'],
+                    sku: ['sku', 'item code', 'product code'],
+                    description: ['description', 'desc', 'details'],
+                    price: ['price', 'cost', 'amount'],
+                    stock: ['stock', 'quantity', 'qty'],
+                    category: ['category', 'cat'],
+                    condition: ['condition'],
+                    tags: ['tags', 'tag'],
+                };
+
+                for (const field in guesses) {
+                    if (!select.value) {
+                        for (const token of guesses[field]) {
+                            if (name.includes(token)) {
+                                select.value = field;
+                                break;
+                            }
+                        }
+                    }
+                }
                 selectDiv.appendChild(select);
                 
                 // Sample data
                 const sampleDiv = document.createElement('div');
                 sampleDiv.className = 'mapping-sample';
-                sampleDiv.textContent = 'Sample data...';
+                // show first non-empty sample if available
+                let sampleText = 'Sample data...';
+                if (sampleRows && sampleRows.length) {
+                    const cell = (sampleRows[0][index] !== undefined) ? sampleRows[0][index] : '';
+                    if (cell && cell.trim()) sampleText = cell;
+                }
+                sampleDiv.textContent = sampleText;
                 
                 row.appendChild(colDiv);
                 row.appendChild(selectDiv);
@@ -794,6 +865,7 @@
                 { label: 'Update Existing', value: document.getElementById('id_update_existing').checked ? 'Yes' : 'No' },
                 { label: 'Create New', value: document.getElementById('id_create_new').checked ? 'Yes' : 'No' },
                 { label: 'Skip Errors', value: document.getElementById('id_skip_errors').checked ? 'Yes' : 'No' }
+                ,{ label: 'Auto-fetch Images', value: (document.getElementById('id_auto_fetch_images') && document.getElementById('id_auto_fetch_images').checked) ? 'Yes' : 'No' }
             ];
             
             configs.forEach(config => {
@@ -870,6 +942,25 @@
             if (!element.classList.contains('form-control') && !element.classList.contains('form-select')) {
                 element.classList.add('form-control');
             }
+        });
+
+        // Before submit, serialize the mapping selections into hidden input
+        const importForm = document.getElementById('importForm');
+        importForm.addEventListener('submit', function(e) {
+            // Build mapping from csvColumns and mapping selects
+            const mapping = {};
+            const selects = document.querySelectorAll('.mapping-select');
+            selects.forEach((select, idx) => {
+                const val = select.value;
+                const colName = csvColumns[idx] || `Column ${idx + 1}`;
+                if (val) {
+                    mapping[colName] = val;
+                }
+            });
+
+            // Attach JSON string to hidden input
+            document.getElementById('id_field_mapping').value = JSON.stringify(mapping);
+            // Let the form submit normally
         });
     });
 </script>

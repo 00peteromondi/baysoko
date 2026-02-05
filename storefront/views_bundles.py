@@ -14,6 +14,7 @@ from datetime import timedelta, datetime
 import json
 
 from .models import Store
+from django.db import OperationalError
 from .models_bundles import (
     ProductBundle, BundleItem, BundleRule, 
     UpsellProduct, ProductTemplate
@@ -23,30 +24,36 @@ from .forms_bundles import (
     UpsellProductForm, ProductTemplateForm, QuickProductForm
 )
 from listings.models import Listing, Category
-from .decorators import staff_required
+from .decorators import staff_required, store_owner_required
 
 @login_required
-@staff_required('edit')
+@store_owner_required('edit')
 def bundle_dashboard(request, slug):
     """Bundle management dashboard"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
-    
-    # Get bundle statistics
-    total_bundles = store.bundles.count()
-    active_bundles = store.bundles.filter(is_active=True).count()
-    featured_bundles = store.bundles.filter(featured=True, is_active=True).count()
-    
-    # Get recent bundles
-    recent_bundles = store.bundles.select_related('category').order_by('-created_at')[:10]
-    
-    # Get top performing bundles (by sales)
-    # Note: You'll need to implement sales tracking for bundles
-    
-    # Get bundle rules
-    active_rules = store.bundle_rules.filter(is_active=True).count()
-    
-    # Get templates
-    templates = store.product_templates.filter(is_active=True).count()
+    store = get_object_or_404(Store, slug=slug)
+    # Get bundle statistics. Guard DB access in case migrations haven't been applied yet
+    try:
+        total_bundles = store.bundles.count()
+        active_bundles = store.bundles.filter(is_active=True).count()
+        featured_bundles = store.bundles.filter(featured=True, is_active=True).count()
+
+        # Get recent bundles
+        recent_bundles = store.bundles.select_related('category').order_by('-created_at')[:10]
+
+        # Get bundle rules
+        active_rules = store.bundle_rules.filter(is_active=True).count()
+
+        # Get templates
+        templates = store.product_templates.filter(is_active=True).count()
+    except OperationalError:
+        # Database tables (e.g. storefront_productbundle) may not exist in some dev/test environments.
+        # Provide safe defaults so the dashboard can render and guide the developer to run migrations.
+        total_bundles = 0
+        active_bundles = 0
+        featured_bundles = 0
+        recent_bundles = []
+        active_rules = 0
+        templates = 0
     
     context = {
         'store': store,
@@ -61,10 +68,10 @@ def bundle_dashboard(request, slug):
     return render(request, 'storefront/bundles/dashboard.html', context)
 
 @login_required
-@staff_required('edit')
+@store_owner_required('edit')
 def bundle_list(request, slug):
     """List all bundles"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     
     bundles = store.bundles.select_related('category').prefetch_related('items')
     
@@ -121,10 +128,10 @@ def bundle_list(request, slug):
     return render(request, 'storefront/bundles/list.html', context)
 
 @login_required
-@staff_required('edit')
+@store_owner_required('edit')
 def bundle_create(request, slug):
     """Create a new bundle"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     
     if request.method == 'POST':
         form = ProductBundleForm(store, request.POST, request.FILES)
@@ -146,10 +153,10 @@ def bundle_create(request, slug):
     return render(request, 'storefront/bundles/create.html', context)
 
 @login_required
-@staff_required('edit')
+@store_owner_required('edit')
 def bundle_edit(request, slug, bundle_id):
     """Edit a bundle"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     bundle = get_object_or_404(ProductBundle, id=bundle_id, store=store)
     
     if request.method == 'POST':
@@ -171,10 +178,10 @@ def bundle_edit(request, slug, bundle_id):
     return render(request, 'storefront/bundles/edit.html', context)
 
 @login_required
-@staff_required('edit')
+@store_owner_required('edit')
 def bundle_detail(request, slug, bundle_id):
     """View bundle details"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     bundle = get_object_or_404(ProductBundle, id=bundle_id, store=store)
     
     items = bundle.items.select_related('product').order_by('display_order')
@@ -188,10 +195,10 @@ def bundle_detail(request, slug, bundle_id):
     return render(request, 'storefront/bundles/detail.html', context)
 
 @login_required
-@staff_required('edit')
+@store_owner_required('edit')
 def bundle_items(request, slug, bundle_id):
     """Manage bundle items"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     bundle = get_object_or_404(ProductBundle, id=bundle_id, store=store)
     
     items = bundle.items.select_related('product').order_by('display_order')
@@ -241,10 +248,10 @@ def bundle_items(request, slug, bundle_id):
 
 @require_POST
 @login_required
-@staff_required('edit')
+@store_owner_required('edit')
 def bundle_item_delete(request, slug, bundle_id, item_id):
     """Delete item from bundle"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     bundle = get_object_or_404(ProductBundle, id=bundle_id, store=store)
     item = get_object_or_404(BundleItem, id=item_id, bundle=bundle)
     
@@ -258,10 +265,10 @@ def bundle_item_delete(request, slug, bundle_id, item_id):
 
 @require_POST
 @login_required
-@staff_required('edit')
+@store_owner_required('edit')
 def bundle_toggle_active(request, slug, bundle_id):
     """Toggle bundle active status"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     bundle = get_object_or_404(ProductBundle, id=bundle_id, store=store)
     
     bundle.is_active = not bundle.is_active
@@ -274,10 +281,10 @@ def bundle_toggle_active(request, slug, bundle_id):
 
 @require_POST
 @login_required
-@staff_required('edit')
+@store_owner_required('edit')
 def bundle_delete(request, slug, bundle_id):
     """Delete a bundle"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     bundle = get_object_or_404(ProductBundle, id=bundle_id, store=store)
     
     bundle.delete()
@@ -287,10 +294,10 @@ def bundle_delete(request, slug, bundle_id):
 
 # Bundle Rules Views
 @login_required
-@staff_required('edit')
+@store_owner_required('edit')
 def bundle_rules(request, slug):
     """Manage bundle rules"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     
     rules = store.bundle_rules.all()
     
@@ -316,10 +323,10 @@ def bundle_rules(request, slug):
 
 @require_POST
 @login_required
-@staff_required('edit')
+@store_owner_required('edit')
 def bundle_rule_delete(request, slug, rule_id):
     """Delete bundle rule"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     rule = get_object_or_404(BundleRule, id=rule_id, store=store)
     
     rule.delete()
@@ -329,10 +336,10 @@ def bundle_rule_delete(request, slug, rule_id):
 
 # Upsell Products Views
 @login_required
-@staff_required('edit')
+@store_owner_required('edit')
 def upsell_products(request, slug):
     """Manage upsell products"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     
     upsells = UpsellProduct.objects.filter(
         base_product__store=store
@@ -357,10 +364,10 @@ def upsell_products(request, slug):
 
 @require_POST
 @login_required
-@staff_required('edit')
+@store_owner_required('edit')
 def upsell_delete(request, slug, upsell_id):
     """Delete upsell product"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     upsell = get_object_or_404(UpsellProduct, id=upsell_id, base_product__store=store)
     
     upsell.delete()
@@ -370,10 +377,10 @@ def upsell_delete(request, slug, upsell_id):
 
 # Product Templates Views
 @login_required
-@staff_required('edit')
+@store_owner_required('edit')
 def product_templates(request, slug):
     """Manage product templates"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     
     templates = store.product_templates.all()
     
@@ -410,10 +417,10 @@ def product_templates(request, slug):
     return render(request, 'storefront/bundles/templates.html', context)
 
 @login_required
-@staff_required('edit')
+@store_owner_required('edit')
 def quick_product_create(request, slug):
     """Quick product creation from template"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     
     if request.method == 'POST':
         form = QuickProductForm(store, request.POST)
@@ -451,9 +458,10 @@ def quick_product_create(request, slug):
 
 @require_GET
 @login_required
+@store_owner_required('edit')
 def get_template_variables(request, slug, template_id):
     """Get template variables for a template (AJAX)"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     template = get_object_or_404(ProductTemplate, id=template_id, store=store)
     
     # Extract variables from title template
@@ -472,10 +480,10 @@ def get_template_variables(request, slug, template_id):
 
 @require_POST
 @login_required
-@staff_required('edit')
+@store_owner_required('edit')
 def template_delete(request, slug, template_id):
     """Delete product template"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     template = get_object_or_404(ProductTemplate, id=template_id, store=store)
     
     template.delete()
@@ -485,10 +493,10 @@ def template_delete(request, slug, template_id):
 
 # Bulk Image Upload
 @login_required
-@staff_required('edit')
+@store_owner_required
 def bulk_image_upload(request, slug):
     """Bulk upload images for products"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     
     if request.method == 'POST' and request.FILES.getlist('images'):
         images = request.FILES.getlist('images')
@@ -528,6 +536,16 @@ def bulk_image_upload(request, slug):
                     'error': str(e)
                 })
         
+        # If this is an AJAX request, return JSON so the frontend can handle progress and results
+        is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+
+        if is_ajax:
+            return JsonResponse({
+                'success': True if uploaded_count > 0 else False,
+                'uploaded': uploaded_count,
+                'failed': failed_images
+            })
+
         if uploaded_count > 0:
             messages.success(request, f'{uploaded_count} images uploaded successfully.')
         
@@ -548,10 +566,10 @@ def bulk_image_upload(request, slug):
 
 # Product Recommendations
 @login_required
-@staff_required('edit')
+@store_owner_required('edit')
 def product_recommendations(request, slug):
     """Manage product recommendations"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     
     # Get products that are frequently bought together
     from django.db.models import Count
@@ -571,9 +589,10 @@ def product_recommendations(request, slug):
 # AJAX endpoints for drag and drop
 @require_POST
 @login_required
+@store_owner_required('edit')
 def update_bundle_item_order(request, slug, bundle_id):
     """Update bundle item display order (AJAX)"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     bundle = get_object_or_404(ProductBundle, id=bundle_id, store=store)
     
     try:
@@ -596,9 +615,10 @@ def update_bundle_item_order(request, slug, bundle_id):
 
 @require_POST
 @login_required
+@store_owner_required('edit')
 def update_bundle_order(request, slug):
     """Update bundle display order (AJAX)"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     
     try:
         data = json.loads(request.body)

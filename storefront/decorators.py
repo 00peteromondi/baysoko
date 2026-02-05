@@ -143,7 +143,11 @@ def plan_required(feature, redirect_url='storefront:subscription_manage'):
 
                 if target:
                     return redirect(target)
-                return redirect(redirect_url, slug=store_slug) if store_slug else redirect(redirect_url)
+                # If we have a store context, redirect to the store-specific subscription manage URL.
+                if store_slug:
+                    return redirect('storefront:subscription_manage', slug=store_slug)
+                # Otherwise send user to seller dashboard as a safe fallback.
+                return redirect('storefront:seller_dashboard')
             return view_func(request, *args, **kwargs)
         return _wrapped_view
     return decorator
@@ -218,7 +222,20 @@ def analytics_access_required(level='basic'):
                     request,
                     f"Advanced analytics requires a Premium or Enterprise plan. You have {user_level.title()} access."
                 )
-                return redirect('storefront:subscription_manage')
+                # Try to redirect to the store-specific subscription management page if a store slug
+                # is available in the view kwargs or resolver; otherwise fall back to seller dashboard.
+                store_slug = kwargs.get('slug')
+                if not store_slug:
+                    try:
+                        resolver = getattr(request, 'resolver_match', None)
+                        if resolver:
+                            store_slug = resolver.kwargs.get('slug') or resolver.kwargs.get('store_slug')
+                    except Exception:
+                        store_slug = None
+
+                if store_slug:
+                    return redirect('storefront:subscription_manage', slug=store_slug)
+                return redirect('storefront:seller_dashboard')
             return view_func(request, *args, **kwargs)
         return _wrapped_view
     return decorator

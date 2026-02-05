@@ -15,9 +15,39 @@ from django.db.models import Q
 
 logger = logging.getLogger('storefront.bulk')
 
+import math
+
+
+def _clean_json(obj):
+    """Recursively sanitize object for JSON storage: replace NaN/Inf with None and
+    convert non-serializable objects to strings."""
+    if isinstance(obj, dict):
+        return {k: _clean_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_clean_json(v) for v in obj]
+    if isinstance(obj, float):
+        if math.isnan(obj) or not math.isfinite(obj):
+            return None
+        return obj
+    if isinstance(obj, (str, bool, int)) or obj is None:
+        return obj
+    try:
+        # Attempt to cast decimals or other numbers
+        if hasattr(obj, 'to_python'):
+            return _clean_json(str(obj))
+        return str(obj)
+    except Exception:
+        return None
+
 from .models import Store
 from listings.models import Listing, Category
 from .models_bulk import BatchJob, ExportJob, ImportTemplate, BulkOperationLog
+from django.core.exceptions import FieldDoesNotExist
+# image fetcher is optional; import safely
+try:
+    from .image_fetcher import fetch_and_attach
+except Exception:
+    fetch_and_attach = None
 
 @shared_task(bind=True)
 def process_bulk_update_task(self, job_id):
@@ -134,7 +164,7 @@ def process_bulk_update_task(self, job_id):
                         item_identifier=f"Product: {product.title} (ID: {product.id})",
                         action=action,
                         status='success',
-                        details={'product_id': product.id, 'changes': params}
+                        details=_clean_json({'product_id': product.id, 'changes': params})
                     )
                     
                     success_count += 1
@@ -154,7 +184,7 @@ def process_bulk_update_task(self, job_id):
                         action=action,
                         status='error',
                         error_message=error_msg,
-                        details={'product_id': product.id if product else None}
+                        details=_clean_json({'product_id': product.id if product else None})
                     )
                 
                 # Update progress
@@ -222,66 +252,168 @@ def process_import_task(self, job_id):
         except Exception:
             pd = None
 
+        # Optional charset detector
+        try:
+            import chardet
+        except Exception:
+            chardet = None
+
+        # Get field mapping from job parameters (form submits this as JSON) or template
+        field_mapping = {}
+        try:
+            fm = params.get('field_mapping')
+            if fm:
+                if isinstance(fm, str):
+                    import json as _json
+                    field_mapping = _json.loads(fm)
+                elif isinstance(fm, dict):
+                    field_mapping = fm
+        except Exception:
+            field_mapping = {}
+        if not field_mapping:
+            field_mapping = template.field_mapping if template else {}
+
+        # Load rows depending on file type; prefer pandas but fall back for CSV
+        rows = []
         if file_ext == 'csv':
-            if pd is None:
-                raise ImportError('pandas is required to process CSV imports')
-            df = pd.read_csv(BytesIO(file_content))
+            if pd is not None:
+                # Try reading with pandas; handle encoding issues gracefully
+                df = None
+                # First try direct read (utf-8)
+                try:
+                    df = pd.read_csv(BytesIO(file_content))
+                except Exception as e:
+                    # Try to detect encoding with chardet
+                    enc = None
+                    if chardet is not None:
+                        try:
+                            det = chardet.detect(file_content)
+                            enc = det.get('encoding')
+                        except Exception:
+                            enc = None
+
+                    # Try common encodings if detection failed
+                    tried = []
+                    for attempt_enc in filter(None, [enc, 'utf-8', 'latin-1', 'cp1252']):
+                        if attempt_enc in tried:
+                            continue
+                        tried.append(attempt_enc)
+                        try:
+                            text = file_content.decode(attempt_enc)
+                            df = pd.read_csv(StringIO(text))
+                            break
+                        except Exception:
+                            df = None
+
+                if df is None:
+                    # Last resort: decode with replacement and parse via csv module
+                    try:
+                        text = file_content.decode('utf-8', errors='replace')
+                        reader = csv.DictReader(StringIO(text))
+                        rows = [r for r in reader]
+                    except Exception:
+                        rows = []
+                else:
+                    rows = [r.to_dict() for _, r in df.iterrows()]
+            else:
+                try:
+                    text = file_content.decode('utf-8')
+                except Exception:
+                    # try chardet or latin-1
+                    if chardet is not None:
+                        try:
+                            enc = chardet.detect(file_content).get('encoding')
+                            text = file_content.decode(enc or 'latin-1', errors='replace')
+                        except Exception:
+                            text = file_content.decode('latin-1', errors='replace')
+                    else:
+                        text = file_content.decode('latin-1', errors='replace')
+                reader = csv.DictReader(StringIO(text))
+                rows = [r for r in reader]
         elif file_ext in ['xlsx', 'xls']:
             if pd is None:
                 raise ImportError('pandas is required to process Excel imports')
             df = pd.read_excel(BytesIO(file_content))
+            rows = [r.to_dict() for _, r in df.iterrows()]
         else:
             raise ValueError(f"Unsupported file format: {file_ext}")
-        
-        # Get field mapping from template or use defaults
-        field_mapping = template.field_mapping if template else {}
-        
+
+        # If still no mapping provided, attempt to auto-detect mapping from CSV headers
+        if not field_mapping and rows:
+            # rows may be list of dicts; use the first row's keys as detected headers
+            first = rows[0]
+            detected_headers = list(first.keys()) if isinstance(first, dict) else []
+            guesses = {
+                'title': ['title', 'product name', 'name'],
+                'sku': ['sku', 'item code', 'product code'],
+                'description': ['description', 'desc', 'details'],
+                'price': ['price', 'cost', 'amount'],
+                'stock': ['stock', 'quantity', 'qty'],
+                'category': ['category', 'cat'],
+                'condition': ['condition'],
+                'tags': ['tags', 'tag']
+            }
+            auto_map = {}
+            for h in detected_headers:
+                hn = str(h).strip().lower()
+                for field, tokens in guesses.items():
+                    if any(tok in hn for tok in tokens):
+                        auto_map[h] = field
+                        break
+            if auto_map:
+                field_mapping = auto_map
+
         # Process rows
-        total_rows = len(df)
+        total_rows = len(rows)
         job.total_items = total_rows
         job.save()
-        
+
         success_count = 0
         error_count = 0
         errors = []
-        
-        for index, row in df.iterrows():
+
+        for index, row in enumerate(rows):
             try:
-                # Convert row to dict
-                row_data = row.to_dict()
-                
+                row_data = row if isinstance(row, dict) else row.to_dict()
+
                 # Apply field mapping
                 mapped_data = {}
                 for csv_col, model_field in field_mapping.items():
                     if csv_col in row_data:
                         mapped_data[model_field] = row_data[csv_col]
-                
+                    else:
+                        # try case-insensitive match
+                        for k in row_data.keys():
+                            if k and k.strip().lower() == str(csv_col).strip().lower():
+                                mapped_data[model_field] = row_data[k]
+                                break
+
                 # Process based on template type
                 template_type = params.get('template_type', 'products')
-                
+
                 if template_type == 'products':
                     process_product_import_row(job.store, mapped_data, params)
-                
+
                 # Log success
                 BulkOperationLog.objects.create(
                     batch_job=job,
                     item_identifier=f"Row {index + 2}",  # +2 for header row and 1-index
                     action='import',
                     status='success',
-                    details=mapped_data
+                    details=_clean_json(mapped_data)
                 )
-                
+
                 success_count += 1
-                
+
             except Exception as e:
                 error_count += 1
                 error_msg = str(e)
                 errors.append({
                     'row': index + 2,
                     'error': error_msg,
-                    'data': row_data
+                    'data': _clean_json(row_data) if 'row_data' in locals() else None
                 })
-                
+
                 # Log error
                 BulkOperationLog.objects.create(
                     batch_job=job,
@@ -289,9 +421,9 @@ def process_import_task(self, job_id):
                     action='import',
                     status='error',
                     error_message=error_msg,
-                    details=row_data
+                    details=_clean_json(row_data) if 'row_data' in locals() else None
                 )
-            
+
             # Update progress
             job.processed_items = index + 1
             job.success_count = success_count
@@ -338,7 +470,17 @@ def process_product_import_row(store, data, params):
     # Look for existing product
     product = None
     if sku:
-        product = Listing.objects.filter(store=store, sku=sku).first()
+        # Some deployments may not have a `sku` field on Listing.
+        # Safely attempt to use `sku` field; if it doesn't exist, fall back to `slug` lookup.
+        try:
+            Listing._meta.get_field('sku')
+            product = Listing.objects.filter(store=store, sku=sku).first()
+        except FieldDoesNotExist:
+            # fallback: try matching slug
+            try:
+                product = Listing.objects.filter(store=store, slug=sku).first()
+            except Exception:
+                product = None
     if not product and title:
         product = Listing.objects.filter(store=store, title__iexact=title).first()
     
@@ -362,9 +504,15 @@ def process_product_import_row(store, data, params):
                 # Handle special field types
                 if field == 'price' or field == 'stock':
                     try:
-                        setattr(product, field, float(value))
+                        # convert to float and guard against NaN/Inf
+                        v = float(value)
+                        if math.isfinite(v):
+                            setattr(product, field, v)
+                        else:
+                            # skip invalid numeric values
+                            continue
                     except (ValueError, TypeError):
-                        pass
+                        continue
                 elif field == 'is_active':
                     setattr(product, field, str(value).lower() in ['true', 'yes', '1', 'active'])
                 elif field == 'category' and value:
@@ -386,6 +534,19 @@ def process_product_import_row(store, data, params):
             product.seller = store.owner
         
         product.save()
+
+        # Auto-fetch images when requested and none exist for this listing
+        try:
+            auto_fetch = params.get('auto_fetch_images') or params.get('auto_fetch', False)
+            if auto_fetch and fetch_and_attach is not None:
+                # ensure there is an images related manager
+                images_rel = getattr(product, 'images', None)
+                has_images = images_rel.count() if images_rel is not None else 0
+                if has_images == 0:
+                    q = title or data.get('title') or f"{product.title} {store.name}"
+                    fetch_and_attach(product, q)
+        except Exception as e:
+            logger.exception('Auto-fetch images failed for product %s: %s', getattr(product, 'id', None), e)
 
 @shared_task(bind=True)
 def generate_export_task(self, job_id):

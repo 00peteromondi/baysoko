@@ -1,0 +1,671 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Product Performance - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== PRODUCT PERFORMANCE SPECIFIC STYLES ===== */
+    .performance-header {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .performance-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #ff6b35, #ffd166);
+    }
+
+    .performance-title {
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .performance-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
+    /* ===== INVENTORY METRICS ===== */
+    .inventory-metrics {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .inventory-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+
+    .inventory-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .inventory-icon {
+        font-size: 20px;
+        margin-bottom: 12px;
+        background: rgba(255, 107, 53, 0.1);
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 12px;
+        color: var(--primary);
+    }
+
+    .inventory-value {
+        font-size: 22px;
+        font-weight: 800;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+    }
+
+    .inventory-label {
+        font-size: 11px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* ===== STOCK HEALTH INDICATORS ===== */
+    .stock-indicator {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+    .stock-healthy {
+        background: rgba(40, 167, 69, 0.1);
+        color: var(--success);
+        border: 1px solid rgba(40, 167, 69, 0.3);
+    }
+
+    .stock-low {
+        background: rgba(255, 193, 7, 0.1);
+        color: var(--warning);
+        border: 1px solid rgba(255, 193, 7, 0.3);
+    }
+
+    .stock-out {
+        background: rgba(220, 53, 69, 0.1);
+        color: var(--danger);
+        border: 1px solid rgba(220, 53, 69, 0.3);
+    }
+
+    /* ===== ENHANCED PRODUCT TABLE ===== */
+    .product-table-container {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+        transition: all 0.3s ease;
+    }
+
+    .product-table-container:hover {
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+    }
+
+    .table-header {
+        margin-bottom: 20px;
+        border-bottom: 2px solid var(--border-color);
+        padding-bottom: 12px;
+    }
+
+    .table-title {
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+
+    .table-subtitle {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    /* ===== PRODUCT ROWS WITH IMAGES ===== */
+    .product-row {
+        transition: all 0.3s ease;
+        border-radius: var(--radius);
+    }
+
+    .product-row:hover {
+        background: var(--bg-secondary);
+        transform: translateX(4px);
+    }
+
+    .product-cell {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .product-img {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        object-fit: cover;
+        background: var(--bg-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-secondary);
+        font-size: 12px;
+        overflow: hidden;
+    }
+
+    .product-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .product-title {
+        font-weight: 600;
+        margin-bottom: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .product-sku {
+        font-size: 10px;
+        color: var(--text-tertiary);
+        font-family: monospace;
+    }
+
+    /* ===== LOADING STATES ===== */
+    .loading-skeleton {
+        animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .inventory-metrics {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .product-table-container {
+            padding: 16px;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .inventory-metrics {
+            grid-template-columns: 1fr;
+        }
+        
+        .product-cell {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+        }
+        
+        .product-img {
+            width: 32px;
+            height: 32px;
+        }
+    }
+     .breadcrumb {
+        background: var(--bg-secondary);
+        padding: 10px 12px;
+        border-radius: var(--radius-md);
+        margin-bottom: 16px;
+        border: 1px solid var(--border-color);
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        font-size: 12px;
+    }
+    
+    .breadcrumb-item a {
+        text-decoration: none;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+    }
+    
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-custom py-3">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}"><i class="bi bi-house"></i> Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'storefront:seller_dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Product Performance</li>
+        </ol>
+    </nav>
+
+    <!-- Header -->
+    <div class="performance-header">
+        <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
+            <div>
+                <h1 class="performance-title" id="store-name">Product Performance</h1>
+                <p class="performance-subtitle">Top products and inventory health</p>
+            </div>
+                <div>
+                    {% include 'storefront/partials/period_selector.html' %}
+                </div>
+            <div class="d-flex gap-2">
+                <button class="btn-custom btn-outline" id="export-performance">
+                    <i class="bi bi-download me-2"></i>Export
+                </button>
+                <a href="{% url 'storefront:seller_dashboard' %}" class="btn-custom btn-primary">
+                    <i class="bi bi-arrow-left me-2"></i>Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="pp-loading" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted mt-3">Loading product performance...</p>
+    </div>
+
+    <!-- Content (Initially Hidden) -->
+    <div id="pp-content" style="display:none">
+        <!-- Inventory Metrics -->
+        <div class="inventory-metrics">
+            <div class="inventory-card">
+                <div class="inventory-icon" style="background: rgba(23, 162, 184, 0.1); color: var(--info);">
+                    <i class="bi bi-grid"></i>
+                </div>
+                <div class="inventory-value" id="pp-total-products">—</div>
+                <div class="inventory-label">Total Products</div>
+            </div>
+            
+            <div class="inventory-card">
+                <div class="inventory-icon" style="background: rgba(40, 167, 69, 0.1); color: var(--success);">
+                    <i class="bi bi-check-circle"></i>
+                </div>
+                <div class="inventory-value" id="pp-in-stock">—</div>
+                <div class="inventory-label">In Stock</div>
+            </div>
+            
+            <div class="inventory-card">
+                <div class="inventory-icon" style="background: rgba(220, 53, 69, 0.1); color: var(--danger);">
+                    <i class="bi bi-x-circle"></i>
+                </div>
+                <div class="inventory-value" id="pp-out-stock">—</div>
+                <div class="inventory-label">Out of Stock</div>
+            </div>
+            
+            <div class="inventory-card">
+                <div class="inventory-icon" style="background: rgba(255, 193, 7, 0.1); color: var(--warning);">
+                    <i class="bi bi-exclamation-triangle"></i>
+                </div>
+                <div class="inventory-value" id="pp-low-stock">—</div>
+                <div class="inventory-label">Low Stock</div>
+            </div>
+        </div>
+
+        <!-- Top Products Table -->
+        <div class="product-table-container">
+            <div class="table-header">
+                <h3 class="table-title">Top Performing Products</h3>
+                <p class="table-subtitle">Ranked by revenue and sales volume</p>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table enhanced-table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Price</th>
+                            <th>Revenue</th>
+                            <th>Orders</th>
+                            <th>Quantity</th>
+                            <th>Stock</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pp-products">
+                        <!-- Data will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="mt-3 d-flex justify-content-between align-items-center">
+                <small class="text-muted" id="pp-table-summary">Showing top 20 products</small>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn-custom btn-outline" id="sort-revenue">
+                        <i class="bi bi-sort-down"></i> Revenue
+                    </button>
+                    <button class="btn-custom btn-outline" id="sort-sales">
+                        <i class="bi bi-sort-down"></i> Sales
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stock Health Summary -->
+        <div class="product-table-container">
+            <div class="table-header">
+                <h3 class="table-title">Stock Health Analysis</h3>
+                <p class="table-subtitle">Monitor inventory levels and restock needs</p>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table enhanced-table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Current Stock</th>
+                            <th>Monthly Sales</th>
+                            <th>Days of Stock</th>
+                            <th>Health</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pp-stock-health">
+                        <!-- Data will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="mt-3 text-center">
+                <div class="progress" style="height: 8px;">
+                    <div class="progress-bar bg-success" id="pp-stock-health-bar" style="width: 75%"></div>
+                </div>
+                <small class="text-muted" id="pp-health-status">Overall stock health: Good</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadProductPerformance() {
+    const loading = document.getElementById('pp-loading');
+    const content = document.getElementById('pp-content');
+
+    // Extract store slug from URL
+    let slug = null;
+    const pathParts = window.location.pathname.split('/').filter(Boolean);
+    const slugIndex = pathParts.indexOf('store');
+    
+    if (slugIndex !== -1 && pathParts.length > slugIndex + 1) {
+        slug = pathParts[slugIndex + 1];
+    }
+
+    if (!slug) {
+        loading.innerHTML = `
+            <div class="text-danger">
+                <i class="bi bi-exclamation-triangle display-4"></i>
+                <p class="mt-2">Store not found</p>
+                <a href="{% url 'storefront:seller_dashboard' %}" class="btn-custom btn-primary mt-2">
+                    <i class="bi bi-arrow-left me-2"></i>Return to Dashboard
+                </a>
+            </div>
+        `;
+        return;
+    }
+
+    try {
+        loading.style.display = 'block';
+        content.style.display = 'none';
+
+        const res = await fetch(`/storefront/api/analytics/store/${slug}/product-performance/`, {
+            credentials: 'same-origin'
+        });
+        
+        if (!res.ok) throw new Error('Failed to load product performance');
+        
+        const data = await res.json();
+
+        // Update store name in header if available
+        const storeNameElement = document.getElementById('store-name');
+        if (data.store_name) {
+            storeNameElement.textContent = `Product Performance - ${data.store_name}`;
+        }
+
+        // Update inventory metrics
+        document.getElementById('pp-total-products').textContent = 
+            data.data.inventory_metrics?.total_products || 0;
+        
+        const inStock = (data.data.inventory_metrics?.total_products || 0) - 
+                       (data.data.inventory_metrics?.out_of_stock || 0);
+        document.getElementById('pp-in-stock').textContent = inStock;
+        
+        document.getElementById('pp-out-stock').textContent = 
+            data.data.inventory_metrics?.out_of_stock || 0;
+        
+        document.getElementById('pp-low-stock').textContent = 
+            data.data.inventory_metrics?.low_stock || 0;
+
+        // Populate products table
+        const productsTbody = document.getElementById('pp-products');
+        productsTbody.innerHTML = '';
+        
+        (data.data.products || []).forEach((product, index) => {
+            const stockHealth = getStockHealth(product.stock, product.quantity_sold);
+            const tr = document.createElement('tr');
+            tr.className = 'product-row';
+            tr.innerHTML = `
+                <td>
+                    <div class="product-cell">
+                        <div class="product-img">
+                            <i class="bi bi-box-seam"></i>
+                        </div>
+                        <div class="product-info">
+                            <div class="product-title">${product.title || 'Unnamed Product'}</div>
+                            <div class="product-sku">SKU: ${product.id || 'N/A'}</div>
+                        </div>
+                    </div>
+                </td>
+                <td><strong>KSh ${Number(product.price || 0).toLocaleString()}</strong></td>
+                <td><strong class="text-success">KSh ${Number(product.revenue || 0).toLocaleString()}</strong></td>
+                <td>${product.orders || 0}</td>
+                <td>${product.quantity_sold || 0}</td>
+                <td>
+                    <div class="d-flex align-items-center gap-2">
+                        <span>${product.stock || 0}</span>
+                        ${stockHealth.indicator}
+                    </div>
+                </td>
+                <td>
+                    <span class="stock-indicator ${stockHealth.class}">
+                        ${stockHealth.text}
+                    </span>
+                </td>
+            `;
+            productsTbody.appendChild(tr);
+        });
+
+        // Update table summary
+        document.getElementById('pp-table-summary').textContent = 
+            `Showing ${(data.data.products || []).length} products • Total Revenue: KSh ${data.data.performance_metrics?.total_revenue?.toLocaleString() || 0}`;
+
+        // Update stock health analysis
+        updateStockHealthAnalysis(data.data.products || []);
+
+        // Show content with animation
+        loading.style.display = 'none';
+        content.style.opacity = '0';
+        content.style.transform = 'translateY(20px)';
+        content.style.display = 'block';
+        
+        setTimeout(() => {
+            content.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+            content.style.opacity = '1';
+            content.style.transform = 'translateY(0)';
+        }, 100);
+
+    } catch (err) {
+        loading.innerHTML = `
+            <div class="text-danger">
+                <i class="bi bi-exclamation-triangle display-4"></i>
+                <p class="mt-2">Error loading product performance</p>
+                <button class="btn-custom btn-outline btn-sm mt-2" onclick="loadProductPerformance()">
+                    <i class="bi bi-arrow-clockwise"></i> Retry
+                </button>
+            </div>
+        `;
+        console.error('Product performance error:', err);
+    }
+}
+
+// Helper function to determine stock health
+function getStockHealth(stock, monthlySales) {
+    if (stock === 0) {
+        return {
+            class: 'stock-out',
+            text: 'Out of Stock',
+            indicator: '<i class="bi bi-x-circle text-danger"></i>'
+        };
+    }
+    
+    const daysOfStock = monthlySales > 0 ? Math.floor((stock / (monthlySales / 30))) : 999;
+    
+    if (daysOfStock < 7) {
+        return {
+            class: 'stock-low',
+            text: 'Low Stock',
+            indicator: '<i class="bi bi-exclamation-triangle text-warning"></i>'
+        };
+    } else if (daysOfStock < 14) {
+        return {
+            class: 'stock-low',
+            text: 'Monitor',
+            indicator: '<i class="bi bi-eye text-warning"></i>'
+        };
+    } else {
+        return {
+            class: 'stock-healthy',
+            text: 'Healthy',
+            indicator: '<i class="bi bi-check-circle text-success"></i>'
+        };
+    }
+}
+
+// Update stock health analysis
+function updateStockHealthAnalysis(products) {
+    const healthTbody = document.getElementById('pp-stock-health');
+    healthTbody.innerHTML = '';
+    
+    let healthyCount = 0;
+    let totalProducts = products.length;
+    
+    products.forEach(product => {
+        const monthlySales = product.quantity_sold || 0;
+        const daysOfStock = monthlySales > 0 ? 
+            Math.floor((product.stock || 0) / (monthlySales / 30)) : 999;
+        
+        const health = getStockHealth(product.stock, monthlySales);
+        if (health.class === 'stock-healthy') healthyCount++;
+        
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>
+                <div class="product-cell">
+                    <div class="product-img">
+                        <i class="bi bi-box-seam"></i>
+                    </div>
+                    <div class="product-info">
+                        <div class="product-title">${product.title?.substring(0, 30) || 'Product'}</div>
+                    </div>
+                </div>
+            </td>
+            <td><strong>${product.stock || 0}</strong></td>
+            <td>${monthlySales}</td>
+            <td>${daysOfStock > 100 ? '100+' : daysOfStock}</td>
+            <td>
+                <span class="stock-indicator ${health.class}">
+                    ${health.text}
+                </span>
+            </td>
+            <td>
+                ${product.stock === 0 ? 
+                    '<button class="btn-custom btn-outline btn-sm">Restock</button>' : 
+                    '<button class="btn-custom btn-outline btn-sm">View</button>'}
+            </td>
+        `;
+        healthTbody.appendChild(tr);
+    });
+    
+    // Update health bar
+    const healthPercentage = totalProducts > 0 ? Math.round((healthyCount / totalProducts) * 100) : 100;
+    const healthBar = document.getElementById('pp-stock-health-bar');
+    const healthStatus = document.getElementById('pp-health-status');
+    
+    healthBar.style.width = `${healthPercentage}%`;
+    
+    if (healthPercentage >= 80) {
+        healthBar.className = 'progress-bar bg-success';
+        healthStatus.textContent = `Overall stock health: Excellent (${healthPercentage}% healthy)`;
+    } else if (healthPercentage >= 60) {
+        healthBar.className = 'progress-bar bg-warning';
+        healthStatus.textContent = `Overall stock health: Good (${healthPercentage}% healthy)`;
+    } else {
+        healthBar.className = 'progress-bar bg-danger';
+        healthStatus.textContent = `Overall stock health: Needs Attention (${healthPercentage}% healthy)`;
+    }
+}
+
+// Export functionality
+document.getElementById('export-performance')?.addEventListener('click', function() {
+    alert('Export feature coming soon!');
+});
+
+// Sorting functionality
+document.getElementById('sort-revenue')?.addEventListener('click', function() {
+    alert('Sort by revenue - coming soon!');
+});
+
+document.getElementById('sort-sales')?.addEventListener('click', function() {
+    alert('Sort by sales - coming soon!');
+});
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', loadProductPerformance);
+
+// Refresh data periodically (every 5 minutes)
+setInterval(() => {
+    if (!document.hidden) {
+        loadProductPerformance();
+    }
+}, 300000);
+</script>
+{% endblock %}

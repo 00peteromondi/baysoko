@@ -1,45 +1,38 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
-from .decorators import store_owner_required, analytics_access_required, store_limit_check
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
 from django.conf import settings
-from .models import Store, Subscription, MpesaPayment
 from django.urls import reverse
-from django.core.exceptions import ValidationError
-from listings.models import Listing, Category, Favorite
-from listings.forms import ListingForm
-from .forms import StoreForm
-from listings.models import ListingImage
-from django.db.models import F, Sum, Count, Avg
-
+from django.core.exceptions import ValidationError, PermissionDenied
+from django.http import JsonResponse, HttpResponseForbidden, HttpResponseRedirect, HttpResponse
+from django.db.models import F, Sum, Count, Avg, Q
 from django.utils import timezone
-from datetime import timedelta
-from .mpesa import MpesaGateway
-from .forms import UpgradeForm
-from django.db.models import Q, Sum, Count, Avg
-from django.contrib.admin.views.decorators import staff_member_required
-from .monitoring import PaymentMonitor
-from reviews.models import Review
-from listings.models import OrderItem
-from .utils import dumps_with_decimals
-from django.http import JsonResponse, HttpResponseForbidden, HttpResponseRedirect
-
-
-
-
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db import transaction
+from datetime import timedelta, datetime
+from django.views.decorators.http import require_GET, require_POST
+import json
 import logging
-
+from decimal import Decimal
+from collections import defaultdict
+from .decorators import store_owner_required, analytics_access_required, store_limit_check
+from .models import Store, Subscription, MpesaPayment, StockMovement, StoreReview
+from .forms import StoreForm, UpgradeForm, SubscriptionPlanForm, StoreReviewForm
+from .mpesa import MpesaGateway
+from .monitoring import PaymentMonitor
+from listings.models import Listing, Category, Favorite, ListingImage, Order, OrderItem, Payment
+from listings.forms import ListingForm
+from reviews.models import Review
 
 logger = logging.getLogger(__name__)
-
 
 def store_list(request):
     stores = Store.objects.filter()
     premium_count = Store.objects.filter(is_premium=True).count()
-    total_products = sum(store.listings.count() for store in stores)
+    from listings.models import Listing as _Listing
+    total_products = sum(_Listing.objects.filter(store=store).count() for store in stores)
     
     context = {
         'stores': stores,
@@ -55,12 +48,9 @@ def store_list(request):
     
     return render(request, 'storefront/store_list.html', context)
 
-from django.db.models import F
-
 
 def store_detail(request, slug):
-    store = get_object_or_404(Store, slug=slug)
-    
+    store = get_object_or_404(Store, slug=slug) 
     # Increment the view count (using F() to avoid race conditions)
     Store.objects.filter(pk=store.pk).update(total_views=F('total_views') + 1)
     
@@ -72,8 +62,8 @@ def store_detail(request, slug):
     user_favorites = []
     if request.user.is_authenticated:
         user_favorites = Favorite.objects.filter(
-            user=request.user, 
-            listing__in=store.listings.all()
+            user=request.user,
+            listing__in=Listing.objects.filter(store=store)
         ).values_list('listing_id', flat=True)
     
     context = {'store': store, 'products': products, 'user_favorites': user_favorites}
@@ -87,15 +77,13 @@ def store_detail(request, slug):
     return render(request, 'storefront/store_detail.html', context)
 
 def product_detail(request, store_slug, slug):
-
-    store = get_object_or_404(Store, slug=store_slug)
+    store = get_object_or_404(Store, slug=store_slug) 
     # Only show products associated with this specific store
-    product = get_object_or_404(Listing, store=store, slug=slug, is_active=True)
-    user_favorites = []
+    product = get_object_or_404(Listing, store=store, slug=slug, is_active=True) 
     if request.user.is_authenticated:
         user_favorites = Favorite.objects.filter(
-            user=request.user, 
-            listing__in=store.listings.all()
+            user=request.user,
+            listing__in=Listing.objects.filter(store=store)
         ).values_list('listing_id', flat=True)
 
     return render(request, 'storefront/product_detail.html', {'store': store, 'product': product, 'user_favorites': user_favorites})
@@ -148,7 +136,6 @@ def seller_dashboard(request):
     })
 
 @login_required
-@login_required
 @store_limit_check
 def store_create(request):
     """
@@ -167,8 +154,12 @@ def store_create(request):
     # Enforce store limit for free users / expired trials
     if existing_stores.exists() and not can_create:
         first_store = existing_stores.first()
-        messages.warning(request, 'You must upgrade to create additional storefronts.')
-        return redirect('storefront:store_edit', slug=first_store.slug)
+        if first_store:
+            messages.warning(request, 'You must upgrade to create additional storefronts.')
+            return redirect('storefront:store_edit', slug=first_store.slug)
+        else:
+            messages.warning(request, 'You must upgrade to create additional storefronts.')
+            return redirect('storefront:seller_dashboard')
 
     # Show store creation confirmation for users coming from listing creation
     if request.GET.get('from') == 'listing':
@@ -200,7 +191,8 @@ def store_create(request):
                 
             except ValidationError as e:
                 # Handle all validation errors
-                messages.error(request, str(e))
+                error_message = str(e)
+                messages.error(request, error_message)
                 # Also add to form errors so they display in the template
                 for field, errors in e.message_dict.items():
                     if field == '__all__':  # Non-field errors
@@ -211,9 +203,11 @@ def store_create(request):
         # If form is invalid, add all errors to messages
         for field, errors in form.errors.items():
             if field == '__all__':
-                messages.error(request, errors[0])
+                if errors:
+                    messages.error(request, errors[0])
             else:
-                messages.error(request, f"{field.title()}: {errors[0]}")
+                if errors:
+                    messages.error(request, f"{field.title()}: {errors[0]}")
 
     else:
         form = StoreForm(user=request.user)
@@ -237,7 +231,7 @@ def store_edit(request, slug):
     """
     Edit an existing store with proper form handling and validation.
     """
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     
     # Check if store can be featured (has active subscription or valid trial)
     can_be_featured = False
@@ -266,7 +260,7 @@ def store_edit(request, slug):
                 ).exists()
         except Exception as e:
             # If there's any error with subscription check, default to not featured
-            print(f"Error checking subscription: {e}")
+            logger.error(f"Error checking subscription: {e}")
             can_be_featured = False
             is_enterprise = False
     
@@ -334,7 +328,7 @@ def product_create(request, store_slug):
     user_listing_count = Listing.objects.filter(seller=request.user).count()
 
     # Get or create the user's single storefront
-    user_store = Store.objects.filter(owner=request.user).first()
+    user_store = Store.objects.filter(owner=request.user).first()  
 
     # If user reached limit and is not premium, prompt upgrade
     is_premium = user_store.is_premium if user_store else False
@@ -368,9 +362,7 @@ def product_create(request, store_slug):
             listing.store = store
             
             # Set is_featured automatically based on store's subscription
-            from storefront.models import Subscription
             from django.utils import timezone
-            from django.db.models import Q
             active_premium_subscription = Subscription.objects.filter(
                 store=store,
                 plan__in=['premium', 'enterprise']
@@ -417,19 +409,18 @@ def product_create(request, store_slug):
 @login_required
 @store_owner_required
 def product_edit(request, pk):
-    product = get_object_or_404(Listing, pk=pk)
+    product = get_object_or_404(Listing, pk=pk) 
     # Allow the listing seller, the store owner, or staff to edit
     user = request.user
-    store_owner_id = product.store.owner_id if product.store else None
+    store_owner_id = product.store.owner_id if product.store and hasattr(product.store, 'owner_id') else None
     if not (product.seller == user or store_owner_id == getattr(user, 'id', None) or getattr(user, 'is_staff', False)):
-        from django.core.exceptions import PermissionDenied
         raise PermissionDenied("You don't have permission to edit this listing.")
     if request.method == 'POST':
         # Handle removal of the main listing image via a small separate POST
         if request.POST.get('remove_main_image'):
             # Ensure owner
             if product.seller == request.user:
-                if product.image:
+                if product.image and hasattr(product.image, 'delete'):
                     try:
                         product.image.delete(save=False)
                     except Exception:
@@ -464,9 +455,7 @@ def product_edit(request, pk):
                     messages.info(request, "A new store was created for your listings.")
             
             # Set is_featured automatically based on store's subscription
-            from storefront.models import Subscription
             from django.utils import timezone
-            from django.db.models import Q
             if listing.store:
                 active_premium_subscription = Subscription.objects.filter(
                     store=listing.store,
@@ -506,11 +495,13 @@ def product_edit(request, pk):
             return redirect('storefront:seller_dashboard')
         else:
             # Add form-level error if there are any
-            if form.non_field_errors():
-                messages.error(request, form.non_field_errors()[0])
+            non_field_errors = form.non_field_errors()
+            if non_field_errors:
+                messages.error(request, non_field_errors[0] if len(non_field_errors) > 0 else "Form validation failed")
             # Add field-specific errors
             for field, errors in form.errors.items():
-                messages.error(request, f"{field}: {errors[0]}")
+                if errors:
+                    messages.error(request, f"{field}: {errors[0]}")
     else:
         form = ListingForm(instance=product)
     
@@ -527,12 +518,11 @@ def product_edit(request, pk):
 @login_required
 @store_owner_required
 def product_delete(request, pk):
-    product = get_object_or_404(Listing, pk=pk)
+    product = get_object_or_404(Listing, pk=pk)  
     # Allow seller, store owner, or staff to delete
     user = request.user
-    store_slug = request.POST.get('store_slug') or (product.store.slug if product.store else (product.seller.stores.first().slug if product.seller.stores.exists() else ''))
+    store_slug = request.POST.get('store_slug') or (product.store.slug if product.store else (product.seller.stores.first().slug if hasattr(product.seller, 'stores') and product.seller.stores.exists() else ''))
     if not (product.seller == user or (product.store and product.store.owner == user) or getattr(user, 'is_staff', False)):
-        from django.core.exceptions import PermissionDenied
         raise PermissionDenied("You don't have permission to delete this listing.")
     if request.method == 'POST':
         product.delete()
@@ -546,12 +536,11 @@ def product_delete(request, pk):
 @store_owner_required
 def image_delete(request, pk):
     # Delete a ListingImage
-    img = get_object_or_404(ListingImage, pk=pk)
+    img = get_object_or_404(ListingImage, pk=pk) 
     # Ensure the requesting user owns the listing or is store owner/staff
     user = request.user
     listing = img.listing
     if not (listing.seller == user or (listing.store and listing.store.owner == user) or getattr(user, 'is_staff', False)):
-        from django.core.exceptions import PermissionDenied
         raise PermissionDenied("You don't have permission to delete this image.")
     if request.method == 'POST':
         # Allow a "next" parameter to return to a specific URL (e.g., edit page)
@@ -562,7 +551,7 @@ def image_delete(request, pk):
             if next_url.startswith('/'):
                 return redirect(next_url)
         # Fallback to store detail if available
-        store_slug = img.listing.store.slug if img.listing.store else (img.listing.seller.stores.first().slug if img.listing.seller.stores.exists() else '')
+        store_slug = img.listing.store.slug if img.listing.store else (img.listing.seller.stores.first().slug if hasattr(img.listing.seller, 'stores') and img.listing.seller.stores.exists() else '')
         if store_slug:
             return redirect('storefront:store_detail', slug=store_slug)
         return redirect('storefront:seller_dashboard')
@@ -572,10 +561,10 @@ def image_delete(request, pk):
 @store_owner_required
 def delete_logo(request, slug):
     """Delete a store's logo."""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     if request.method == 'POST':
         # Delete the actual file
-        if store.logo:
+        if store.logo and hasattr(store.logo, 'delete'):
             store.logo.delete(save=False)
         store.logo = None
         store.save()
@@ -587,17 +576,16 @@ def delete_logo(request, slug):
 @store_owner_required
 def delete_cover(request, slug):
     """Delete a store's cover image."""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     if request.method == 'POST':
         # Delete the actual file
-        if store.cover_image:
+        if store.cover_image and hasattr(store.cover_image, 'delete'):
             store.cover_image.delete(save=False)
         store.cover_image = None
         store.save()
         messages.success(request, 'Store cover image removed successfully.')
         return redirect('storefront:store_edit', slug=store.slug)
     return redirect('storefront:store_edit', slug=store.slug)
-
 
 
 
@@ -608,8 +596,8 @@ def cancel_subscription(request, slug):
     if request.method != 'POST':
         return redirect('storefront:subscription_manage', slug=slug)
         
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
-    subscription = store.subscriptions.order_by('-started_at').first()
+    store = get_object_or_404(Store, slug=slug)
+    subscription = store.subscriptions.order_by('-started_at').first()  # type: "Subscription"
     
     if not subscription or not subscription.is_active():
         messages.error(request, 'No active subscription found.')
@@ -652,8 +640,7 @@ def payment_monitor(request):
     subscription_payments = subscription_payments.order_by('-created_at')[:50]
 
     # ===== ORDER PAYMENTS (Customer purchases) =====
-    from listings.models import Payment as OrderPayment
-    order_payments = OrderPayment.objects.filter(
+    order_payments = Payment.objects.filter(
         order__order_items__listing__store__in=user_stores
     ).select_related(
         'order',
@@ -666,7 +653,7 @@ def payment_monitor(request):
     order_payments = order_payments.order_by('-created_at')[:50]
 
     # ===== ESCROW RELEASES =====
-    escrow_releases = OrderPayment.objects.filter(
+    escrow_releases = Payment.objects.filter(
         order__order_items__listing__store__in=user_stores,
         status='completed',
         seller_payout_reference__isnull=False
@@ -682,13 +669,13 @@ def payment_monitor(request):
 
     # ===== PAYMENT STATISTICS =====
     # Total earnings from completed orders
-    total_earnings = OrderPayment.objects.filter(
+    total_earnings = Payment.objects.filter(
         order__order_items__listing__store__in=user_stores,
         status='completed'
     ).aggregate(total=Sum('amount'))['total'] or 0
 
     # Pending escrow funds
-    pending_escrow = OrderPayment.objects.filter(
+    pending_escrow = Payment.objects.filter(
         order__order_items__listing__store__in=user_stores,
         status='completed',
         is_held_in_escrow=True,
@@ -696,7 +683,7 @@ def payment_monitor(request):
     ).aggregate(total=Sum('amount'))['total'] or 0
 
     # Released escrow funds
-    released_escrow = OrderPayment.objects.filter(
+    released_escrow = Payment.objects.filter(
         order__order_items__listing__store__in=user_stores,
         status='completed',
         is_held_in_escrow=True,
@@ -715,7 +702,7 @@ def payment_monitor(request):
         subscription__store__in=user_stores,
         status='failed'
     ).order_by('-created_at')[:10]
-    failed_orders = OrderPayment.objects.filter(
+    failed_orders = Payment.objects.filter(
         order__order_items__listing__store__in=user_stores,
         status='failed'
     ).order_by('-created_at')[:10]
@@ -750,18 +737,6 @@ def payment_monitor(request):
 
     return render(request, 'storefront/payment_monitor_enhanced.html', context)
 
-# views.py - Fixed and enhanced analytics views
-from django.shortcuts import render, get_object_or_404
-from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
-from django.utils import timezone
-from django.db.models import Sum, Count, Avg, F, Q
-from datetime import timedelta, datetime
-import json
-from decimal import Decimal
-from listings.models import OrderItem, Listing, Category, Order, Review
-from django.views.decorators.http import require_GET, require_POST
-
 # Helper function to serialize Decimal objects
 def dumps_with_decimals(data):
     """JSON serializer that handles Decimal objects"""
@@ -777,6 +752,8 @@ def seller_analytics(request):
     """Seller analytics dashboard showing aggregated metrics across all stores."""
     # Get all stores owned by the user
     stores = Store.objects.filter(owner=request.user)
+    from .utils.plan_permissions import PlanPermissions
+    analytics_level = PlanPermissions.get_analytics_level(request.user)
     
     # Get time period from query params
     period = request.GET.get('period', '24h')
@@ -1001,8 +978,9 @@ def seller_analytics(request):
         # `order.items.first()` returns a `Listing` instance (not a wrapper),
         # so access `.store` directly. Guard against missing relationships.
         store_name = "Unknown Store"
-        if order.items.exists():
-            first_listing = order.items.first()
+        items_qs = getattr(order, 'order_items', None) or getattr(order, 'items', None)
+        if items_qs and items_qs.exists():
+            first_listing = items_qs.first()
             if first_listing and getattr(first_listing, 'store', None):
                 store_name = first_listing.store.name
 
@@ -1010,21 +988,27 @@ def seller_analytics(request):
             'timestamp': order.created_at,
             'store': store_name,
             'type': 'Order',
-            'description': f'New order #{order.id} from {order.user.username}'
+            'description': f'New order #{order.id if hasattr(order, "id") else "N/A"} from {order.user.username if order.user else "Unknown"}'
         })
     
     # Recent reviews
     recent_reviews = Review.objects.filter(
         seller=request.user
-    ).order_by('-created_at')[:5]
+    ).order_by('-date_created')[:5]
     
     for review in recent_reviews:
-        store_name = review.seller.stores.first().name if review.seller.stores.exists() else "Unknown Store"
+        store_name = "Unknown Store"
+        if review.seller and hasattr(review.seller, 'stores'):
+            if review.seller.stores.exists():
+                first_store = review.seller.stores.first()
+                if first_store:
+                    store_name = first_store.name
+        
         recent_activity.append({
             'timestamp': review.created_at,
             'store': store_name,
             'type': 'Review',
-            'description': f'{review.rating}★ review by {review.user.username}'
+            'description': f'{review.rating}★ review by {review.user.username if review.user else "Unknown"}'
         })
     
     # Recent listings
@@ -1035,7 +1019,7 @@ def seller_analytics(request):
     for listing in recent_listings:
         recent_activity.append({
             'timestamp': listing.date_created,
-            'store': listing.store.name,
+            'store': listing.store.name if listing.store else "Unknown Store",
             'type': 'Listing',
             'description': f'New listing: {listing.title}'
         })
@@ -1077,11 +1061,17 @@ def seller_analytics(request):
         'recent_activity': recent_activity,
         'customer_map_data': dumps_with_decimals(customer_map_data)
     }
+    # Add analytics access level and store list for advanced analytics actions
+    context.update({
+        'analytics_level': analytics_level,
+        'stores': stores,
+    })
     
     return render(request, 'storefront/seller_analytics.html', context)
 
 
 @login_required
+@analytics_access_required(level='basic')
 @store_owner_required
 def store_analytics(request, slug):
     """Store analytics view with comprehensive metrics and visualizations."""
@@ -1216,19 +1206,19 @@ def store_analytics(request, slug):
         recent_activity.append({
             'timestamp': order.created_at,
             'type': 'Order',
-            'description': f'Order #{order.id} - KSh {order.total_price} from {order.user.username}'
+            'description': f'Order #{order.id if hasattr(order, "id") else "N/A"} - KSh {order.total_price if hasattr(order, "total_price") else 0} from {order.user.username if order.user else "Unknown"}'
         })
     
     # Add recent reviews
     recent_reviews = Review.objects.filter(
         seller=store.owner
-    ).order_by('-created_at')[:5]
+    ).order_by('-date_created')[:5]
     
     for review in recent_reviews:
         recent_activity.append({
-            'timestamp': review.created_at,
+            'timestamp': review.date_created,
             'type': 'Review',
-            'description': f'{review.rating}★ review by {review.user.username}'
+            'description': f'{review.rating}★ review by {review.user.username if review.user else "Unknown"}'
         })
     
     # Add recent listings
@@ -1259,9 +1249,11 @@ def store_analytics(request, slug):
     
     return render(request, 'storefront/store_analytics.html', context)
 
+
 # ============== ANALYTICS API ENDPOINTS ==============
 
 @login_required
+@analytics_access_required(level='basic')
 @require_GET
 def seller_analytics_summary(request):
     """API endpoint for seller analytics summary (JSON)"""
@@ -1317,7 +1309,7 @@ def seller_analytics_summary(request):
     top_categories = Category.objects.filter(
         listing__store__in=stores
     ).annotate(
-        revenue=Sum('listing__order_items__price')
+        revenue=Sum('listing__orderitem__price')
     ).order_by('-revenue')[:3]
     
     return JsonResponse({
@@ -1332,7 +1324,7 @@ def seller_analytics_summary(request):
             'top_categories': [
                 {
                     'name': cat.name,
-                    'revenue': float(cat.revenue or 0)
+                    'revenue': float(getattr(cat, 'revenue', 0) or 0)
                 }
                 for cat in top_categories
             ],
@@ -1342,6 +1334,7 @@ def seller_analytics_summary(request):
     })
 
 @login_required
+@analytics_access_required(level='basic')
 @store_owner_required
 @require_GET
 def store_analytics_summary(request, slug):
@@ -1379,7 +1372,7 @@ def store_analytics_summary(request, slug):
     # Views data (if available)
     views = store.total_views or 0
     
-    # Conversion rate (orders/views)
+    # Conversion rate (orders/views) - SAFE CHECK FOR views > 0
     conversion_rate = (order_count / views * 100) if views > 0 else 0
     
     # Top products
@@ -1400,7 +1393,7 @@ def store_analytics_summary(request, slug):
             'active_listings': active_listings,
             'avg_order_value': float(avg_order_value),
             'views': views,
-            'conversion_rate': round(conversion_rate, 2),
+            'conversion_rate': round(conversion_rate, 2) if conversion_rate is not None else 0,
             'rating': store.get_rating() if hasattr(store, 'get_rating') else 0,
             'review_count': store.reviews.count() if hasattr(store, 'reviews') else 0,
             'top_products': list(top_products),
@@ -1410,6 +1403,7 @@ def store_analytics_summary(request, slug):
     })
 
 @login_required
+@analytics_access_required(level='basic')
 @require_GET
 def revenue_trend_data(request):
     """API endpoint for revenue trend data (JSON)"""
@@ -1491,6 +1485,7 @@ def revenue_trend_data(request):
     })
 
 @login_required
+@analytics_access_required(level='basic')
 @require_GET
 def store_performance_comparison(request):
     """API endpoint for comparing performance across stores"""
@@ -1523,7 +1518,7 @@ def store_performance_comparison(request):
             'avg_order_value': float(avg_order_value),
             'rating': round(avg_rating, 1),
             'review_count': reviews.count(),
-            'listings': store.listings.filter(is_active=True).count(),
+            'listings': Listing.objects.filter(store=store, is_active=True).count(),
             'is_premium': store.is_premium
         })
     
@@ -1540,22 +1535,6 @@ def store_performance_comparison(request):
             'last_updated': timezone.now().isoformat()
         }
     })
-
-# storefront/views.py - Add these views
-
-from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required
-from django.contrib import messages
-from django.utils import timezone
-from datetime import timedelta
-from django.db.models import Q, Count, Avg
-from django.http import JsonResponse
-from .decorators import store_owner_required
-from .models import Store, StoreReview, Subscription, MpesaPayment, ReviewHelpful
-from .forms import StoreReviewForm, UpgradeForm, CancelSubscriptionForm, SubscriptionPlanForm
-from .mpesa import MpesaGateway
-from listings.models import Listing
-from listings.models import Review  
 
 
 # Store Review Views
@@ -1575,7 +1554,6 @@ def store_review_create(request, slug):
     # Check if user already reviewed
     existing_review = StoreReview.objects.filter(store=store, reviewer=request.user).first()
 
-    from listings.models import Review
     has_product_review = Review.objects.filter(
         listing__store=store,
         user=request.user
@@ -1635,7 +1613,6 @@ def store_reviews(request, slug):
     reviews_page = store.get_all_reviews_paginated(page=page, per_page=10)
     
     # Calculate rating distribution for all reviews
-    from collections import defaultdict
     rating_distribution = defaultdict(int)
     all_reviews = store.get_all_reviews()
     
@@ -1653,7 +1630,7 @@ def store_reviews(request, slug):
         user_has_reviewed = store.has_user_reviewed(request.user)
         if user_has_reviewed:
             # Try to get user's direct store review
-            user_review = store.reviews.filter(reviewer=request.user).first()
+            user_review = StoreReview.objects.filter(store=store, reviewer=request.user).first()
     
     context = {
         'store': store,
@@ -1738,7 +1715,7 @@ def subscription_plan_select(request, slug):
     """
     Select subscription plan before payment - FIXED VERSION
     """
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     
     # Check if already has active subscription (treat 'trialing' as active only if trial hasn't ended)
     active_subscription = Subscription.objects.filter(store=store).filter(
@@ -1819,13 +1796,11 @@ def subscription_plan_select(request, slug):
 
 
 @login_required
+@staff_member_required
 def admin_subscription_list(request):
     """
     Admin view to list all subscriptions
     """
-    if not request.user.is_staff:
-        return redirect('storefront:seller_dashboard')
-    
     subscriptions = Subscription.objects.all().order_by('-created_at')
     
     # Filter by status
@@ -1852,15 +1827,13 @@ def admin_subscription_list(request):
 
 
 @login_required
+@staff_member_required
 def admin_subscription_detail(request, subscription_id):
     """
     Admin view for subscription details
     """
-    if not request.user.is_staff:
-        return redirect('storefront:seller_dashboard')
-    
     subscription = get_object_or_404(Subscription, id=subscription_id)
-    payments = subscription.payments.all().order_by('-created_at')
+    payments = MpesaPayment.objects.filter(subscription=subscription).order_by('-created_at')
     
     context = {
         'subscription': subscription,
@@ -1870,15 +1843,12 @@ def admin_subscription_detail(request, subscription_id):
     return render(request, 'storefront/admin_subscription_detail.html', context)
 
 
-from django.http import JsonResponse
-from django.views.decorators.http import require_GET
-
 @login_required
 @store_owner_required
 @require_GET
 def store_views_analytics(request, slug):
     """Get store views analytics data"""
-    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    store = get_object_or_404(Store, slug=slug)
     
     # You can implement more detailed analytics here
     # For example, views over time, comparison with other stores, etc.
@@ -1908,10 +1878,6 @@ def popular_stores(request):
     
     return render(request, 'storefront/popular_stores.html', context)
 
-# views.py - Add these API endpoints
-from django.http import JsonResponse
-from django.views.decorators.http import require_POST
-from .models import StockMovement
 
 @require_POST
 @login_required
@@ -1956,14 +1922,26 @@ def get_movement_details(request, slug, movement_id):
             product__store__slug=slug,
             product__store__owner=request.user
         )
+        # type: StockMovementModel
+        
+        # Get movement type display safely
+        movement_type_display = ''
+        if hasattr(movement, 'get_movement_type_display'):
+            movement_type_display = movement.get_movement_type_display()
+        
+        # Get image URL safely
+        product_image = ''
+        if movement.product and hasattr(movement.product, 'image'):
+            if movement.product.image:
+                product_image = movement.product.image.url if hasattr(movement.product.image, 'url') else ''
         
         data = {
             'id': movement.id,
             'product_title': movement.product.title,
             'product_sku': movement.product.sku,
-            'product_image': movement.product.get_image_url(),
+            'product_image': product_image,
             'movement_type': movement.movement_type,
-            'movement_type_display': movement.get_movement_type_display(),
+            'movement_type_display': movement_type_display,
             'quantity': movement.quantity,
             'previous_stock': movement.previous_stock,
             'new_stock': movement.new_stock,
@@ -1979,6 +1957,7 @@ def get_movement_details(request, slug, movement_id):
 
 # Additional analytics API endpoints
 @login_required
+@analytics_access_required(level='basic')
 @require_GET
 def category_performance(request):
     """API endpoint for category performance analysis"""
@@ -1987,21 +1966,22 @@ def category_performance(request):
     categories = Category.objects.filter(
         listing__store__in=stores
     ).distinct().annotate(
-        revenue=Sum('listing__order_items__price'),
-        orders=Count('listing__order_items'),
+        revenue=Sum('listing__orderitem__price'),
+        orders=Count('listing__orderitem'),
         listings=Count('listing', filter=Q(listing__is_active=True))
     ).order_by('-revenue')
     
     category_data = []
     for category in categories:
-        if category.revenue:
+        revenue = getattr(category, 'revenue', 0) or 0
+        if revenue:
             category_data.append({
                 'name': category.name,
-                'revenue': float(category.revenue or 0),
-                'orders': category.orders or 0,
-                'listings': category.listings or 0,
-                'avg_order_value': float(category.revenue / category.orders) if category.orders else 0,
-                'conversion_rate': (category.orders / category.listings * 100) if category.listings else 0
+                'revenue': float(revenue),
+                'orders': getattr(category, 'orders', 0) or 0,
+                'listings': getattr(category, 'listings', 0) or 0,
+                'avg_order_value': float(revenue / getattr(category, 'orders', 1)) if getattr(category, 'orders', 0) else 0,
+                'conversion_rate': (getattr(category, 'orders', 0) / getattr(category, 'listings', 1) * 100) if getattr(category, 'listings', 0) else 0
             })
     
     return JsonResponse({
@@ -2014,49 +1994,76 @@ def category_performance(request):
     })
 
 @login_required
+@analytics_access_required(level='enterprise')
 @require_GET
 def customer_insights(request):
     """API endpoint for customer insights"""
     stores = Store.objects.filter(owner=request.user)
+    stores_ids = list(stores.values_list('id', flat=True))
     
     # Customer demographics
     customers = Order.objects.filter(
-        items__listing__store__in=stores,
+        order_items__listing__store_id__in=stores_ids,
         status__in=['paid', 'delivered']
     ).values('user__id', 'user__username').distinct()
     
     # Repeat customers
     repeat_customers = Order.objects.filter(
-        items__listing__store__in=stores,
+        order_items__listing__store_id__in=stores_ids,
         status__in=['paid', 'delivered']
     ).values('user__id').annotate(
         order_count=Count('id'),
-        total_spent=Sum('total_amount')
+        total_spent=Sum('total_price')
     ).filter(order_count__gt=1)
     
     # Customer locations
     customer_locations = Order.objects.filter(
-        items__listing__store__in=stores,
+        order_items__listing__store_id__in=stores_ids,
         status__in=['paid', 'delivered']
     ).exclude(city__isnull=True).values('city').annotate(
         customer_count=Count('user__id', distinct=True),
         order_count=Count('id'),
-        total_revenue=Sum('total_amount')
+        total_revenue=Sum('total_price')
     ).order_by('-total_revenue')[:10]
     
+    # Prepare serializable data
+    total_customers = customers.count()
+    repeat_count = repeat_customers.count()
+    customer_locations_list = list(customer_locations)
+    top_spenders = list(repeat_customers.order_by('-total_spent')[:5])
+    avg_customer_value = (sum([c['total_spent'] for c in repeat_customers]) / repeat_count) if repeat_count else 0
+
+    # Prefer JSON by default for API endpoints. Only render HTML when
+    # explicitly requested via `format=html` or Accept header contains text/html.
+    accept = request.headers.get('accept', '')
+    want_html = request.GET.get('format') == 'html' or 'text/html' in accept
+
+    if want_html:
+        context = {
+            'total_customers': total_customers,
+            'repeat_customers': repeat_count,
+            'repeat_customer_rate': round((repeat_count / total_customers * 100), 2) if total_customers else 0,
+            'customer_locations': customer_locations_list,
+            'avg_customer_value': avg_customer_value,
+            'top_spenders': top_spenders,
+            'period': request.GET.get('period', '30d')
+        }
+        return render(request, 'storefront/analytics/customer_insights.html', context)
+
     return JsonResponse({
         'success': True,
         'data': {
-            'total_customers': customers.count(),
-            'repeat_customers': repeat_customers.count(),
-            'repeat_customer_rate': (repeat_customers.count() / customers.count() * 100) if customers.count() else 0,
-            'customer_locations': list(customer_locations),
-            'avg_customer_value': sum([c['total_spent'] for c in repeat_customers]) / repeat_customers.count() if repeat_customers.count() else 0,
-            'top_spenders': list(repeat_customers.order_by('-total_spent')[:5])
+            'total_customers': total_customers,
+            'repeat_customers': repeat_count,
+            'repeat_customer_rate': (repeat_count / total_customers * 100) if total_customers else 0,
+            'customer_locations': customer_locations_list,
+            'avg_customer_value': avg_customer_value,
+            'top_spenders': top_spenders
         }
     })
 
 @login_required
+@analytics_access_required(level='enterprise')
 @store_owner_required
 @require_GET
 def product_performance(request, slug):
@@ -2068,47 +2075,72 @@ def product_performance(request, slug):
         store=store,
         is_active=True
     ).annotate(
-        revenue=Sum('order_items__price'),
-        orders=Count('order_items'),
-        quantity_sold=Sum('order_items__quantity')
+        revenue=Sum('orderitem__price'),
+        orders=Count('orderitem'),
+        quantity_sold=Sum('orderitem__quantity')
     ).order_by('-revenue')[:20]
     
     product_data = []
     for product in products:
-        if product.revenue:
+        revenue = getattr(product, 'revenue', 0) or 0
+        if revenue:
+            category_name = 'Uncategorized'
+            if hasattr(product, 'category') and product.category:
+                category_name = getattr(product.category, 'name', 'Uncategorized')
+            
             product_data.append({
                 'id': product.id,
                 'title': product.title,
                 'price': float(product.price),
                 'stock': product.stock,
-                'revenue': float(product.revenue or 0),
-                'orders': product.orders or 0,
-                'quantity_sold': product.quantity_sold or 0,
-                'avg_order_quantity': (product.quantity_sold / product.orders) if product.orders else 0,
-                'stock_health': (product.stock / product.quantity_sold * 100) if product.quantity_sold else 100,
-                'category': product.category.name if product.category else 'Uncategorized'
+                'revenue': float(revenue),
+                'orders': getattr(product, 'orders', 0) or 0,
+                'quantity_sold': getattr(product, 'quantity_sold', 0) or 0,
+                'avg_order_quantity': (getattr(product, 'quantity_sold', 0) / getattr(product, 'orders', 1)) if getattr(product, 'orders', 0) else 0,
+                'stock_health': (product.stock / getattr(product, 'quantity_sold', 1) * 100) if getattr(product, 'quantity_sold', 0) else 100,
+                'category': category_name
             })
     
     # Calculate inventory metrics
-    total_products = store.listings.count()
-    out_of_stock = store.listings.filter(stock=0).count()
-    low_stock = store.listings.filter(stock__lt=10, stock__gt=0).count()
+    total_products = Listing.objects.filter(store=store).count()
+    out_of_stock = Listing.objects.filter(store=store, stock=0).count()
+    low_stock = Listing.objects.filter(store=store, stock__lt=10, stock__gt=0).count()
     
+    # Prepare serializable data
+    performance_metrics = {
+        'total_revenue': sum(p['revenue'] for p in product_data),
+        'total_orders': sum(p['orders'] for p in product_data),
+        'total_quantity_sold': sum(p['quantity_sold'] for p in product_data),
+        'avg_product_revenue': sum(p['revenue'] for p in product_data) / len(product_data) if product_data else 0
+    }
+
+    inventory_metrics = {
+        'total_products': total_products,
+        'out_of_stock': out_of_stock,
+        'low_stock': low_stock,
+        'in_stock_rate': ((total_products - out_of_stock) / total_products * 100) if total_products else 0
+    }
+
+    # Prefer JSON by default for API endpoints. Only render HTML when
+    # explicitly requested via `format=html` or Accept header contains text/html.
+    accept = request.headers.get('accept', '')
+    want_html = request.GET.get('format') == 'html' or 'text/html' in accept
+
+    if want_html:
+        context = {
+            'store': store,
+            'products': product_data,
+            'inventory_metrics': inventory_metrics,
+            'performance_metrics': performance_metrics,
+            'period': request.GET.get('period', '30d')
+        }
+        return render(request, 'storefront/analytics/product_performance.html', context)
+
     return JsonResponse({
         'success': True,
         'data': {
             'products': product_data,
-            'inventory_metrics': {
-                'total_products': total_products,
-                'out_of_stock': out_of_stock,
-                'low_stock': low_stock,
-                'in_stock_rate': ((total_products - out_of_stock) / total_products * 100) if total_products else 0
-            },
-            'performance_metrics': {
-                'total_revenue': sum(p['revenue'] for p in product_data),
-                'total_orders': sum(p['orders'] for p in product_data),
-                'total_quantity_sold': sum(p['quantity_sold'] for p in product_data),
-                'avg_product_revenue': sum(p['revenue'] for p in product_data) / len(product_data) if product_data else 0
-            }
+            'inventory_metrics': inventory_metrics,
+            'performance_metrics': performance_metrics
         }
     })

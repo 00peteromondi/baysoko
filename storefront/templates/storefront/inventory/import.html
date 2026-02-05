@@ -4,6 +4,7 @@
 {% block title %}Import Inventory - {{ store.name }}{% endblock %}
 
 {% block extra_css %}
+    {% include 'storefront/partials/breadcrumb_css.html' %}
 <style>
     /* ===== IMPORT STYLES ===== */
     .import-header {
@@ -363,6 +364,15 @@
 
 {% block content %}
 <div class="container-custom py-3">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}"><i class="bi bi-house"></i> Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'storefront:seller_dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'storefront:inventory_dashboard' slug=store.slug %}">Inventory</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Import Inventory</li>
+        </ol>
+    </nav>
     <!-- Header -->
     <div class="import-header">
         <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
@@ -550,6 +560,7 @@
                 <form method="post" action="{% url 'storefront:import_inventory' slug=store.slug %}" 
                       enctype="multipart/form-data" id="importForm" class="p-4">
                     {% csrf_token %}
+                                        <input type="hidden" name="field_mapping" id="id_field_mapping" />
                     
                     <!-- Step 1: Upload File -->
                     <div id="step1" class="import-step">
@@ -633,6 +644,13 @@
                                             Notify when complete
                                         </label>
                                     </div>
+                                        <div class="form-check mb-3">
+                                            <input class="form-check-input" type="checkbox" name="auto_fetch_images" 
+                                                   id="auto_fetch_images">
+                                            <label class="form-check-label" for="auto_fetch_images">
+                                                Auto-fetch images for imported products (Wikimedia Commons)
+                                            </label>
+                                        </div>
                                 </div>
                             </div>
                         </div>
@@ -707,6 +725,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentStep = 1;
     let fileData = null;
     let headers = [];
+    let sampleRows = [];
     
     // File upload drag and drop
     fileDropArea.addEventListener('click', () => fileInput.click());
@@ -782,6 +801,8 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
         document.getElementById('filePreviewSection').classList.add('d-none');
     }
+    // Expose for inline handlers that expect a global function
+    window.resetFileUpload = resetFileUpload;
     
     // Step navigation
     function showStep(step) {
@@ -853,7 +874,8 @@ document.addEventListener('DOMContentLoaded', function() {
         reader.onload = function(e) {
             const text = e.target.result;
             const rows = text.split('\n').slice(0, 6);
-            headers = rows[0].split(',');
+            headers = rows[0].split(',').map(h => h.trim());
+            sampleRows = rows.slice(1, 5).map(line => line.split(',').map(cell => cell.trim()));
             const previewHeaders = document.getElementById('previewHeaders');
             const previewData = document.getElementById('previewData');
             
@@ -896,34 +918,73 @@ document.addEventListener('DOMContentLoaded', function() {
     function generateMapping() {
         const mappingBody = document.getElementById('mappingBody');
         mappingBody.innerHTML = '';
-        
-        // Sample field mappings
-        const fieldMappings = [
-            { csv: 'title', field: 'Product Name', required: true, sample: 'Sample Product' },
-            { csv: 'sku', field: 'SKU', required: false, sample: 'PROD-001' },
-            { csv: 'price', field: 'Price', required: true, sample: '99.99' },
-            { csv: 'stock', field: 'Stock', required: true, sample: '50' },
-            { csv: 'category', field: 'Category', required: false, sample: 'Electronics' }
-        ];
-        
-        fieldMappings.forEach(mapping => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${mapping.csv}</td>
-                <td>
-                    <select class="form-control-custom form-control-sm">
-                        <option value="">Select Field</option>
-                        <option value="${mapping.field.toLowerCase()}" selected>${mapping.field}</option>
-                    </select>
-                </td>
-                <td>
-                    <span class="badge ${mapping.required ? 'bg-danger' : 'bg-secondary'}">
-                        ${mapping.required ? 'Required' : 'Optional'}
-                    </span>
-                </td>
-                <td>${mapping.sample}</td>
-            `;
-            mappingBody.appendChild(row);
+
+        // Build mapping rows from detected headers
+        headers.forEach((hdr, idx) => {
+            const fieldName = hdr || `Column ${idx + 1}`;
+            const tr = document.createElement('tr');
+
+            // CSV column
+            const tdCol = document.createElement('td');
+            tdCol.textContent = fieldName;
+
+            // select
+            const tdSelect = document.createElement('td');
+            const sel = document.createElement('select');
+            sel.className = 'form-control-custom form-control-sm';
+            const opts = [
+                ['', 'Select Field'],
+                ['title', 'Product Name'],
+                ['sku', 'SKU'],
+                ['price', 'Price'],
+                ['stock', 'Stock'],
+                ['category', 'Category'],
+                ['description', 'Description'],
+                ['tags', 'Tags']
+            ];
+            opts.forEach(o => {
+                const option = document.createElement('option');
+                option.value = o[0];
+                option.textContent = o[1];
+                sel.appendChild(option);
+            });
+
+            // auto-select based on header name
+            const name = (hdr || '').toLowerCase();
+            if (name.includes('title') || name.includes('name')) sel.value = 'title';
+            else if (name.includes('sku')) sel.value = 'sku';
+            else if (name.includes('price') || name.includes('cost')) sel.value = 'price';
+            else if (name.includes('stock') || name.includes('qty') || name.includes('quantity')) sel.value = 'stock';
+            else if (name.includes('category') || name.includes('cat')) sel.value = 'category';
+
+            tdSelect.appendChild(sel);
+
+            // required
+            const tdReq = document.createElement('td');
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-secondary';
+            // mark title/price/stock required
+            if (sel.value === 'title' || sel.value === 'price' || sel.value === 'stock') {
+                badge.className = 'badge bg-danger';
+                badge.textContent = 'Required';
+            } else {
+                badge.textContent = 'Optional';
+            }
+            tdReq.appendChild(badge);
+
+            // sample
+            const tdSample = document.createElement('td');
+            let sampleText = '';
+            if (sampleRows && sampleRows.length) {
+                sampleText = sampleRows[0][idx] || '';
+            }
+            tdSample.textContent = sampleText;
+
+            tr.appendChild(tdCol);
+            tr.appendChild(tdSelect);
+            tr.appendChild(tdReq);
+            tr.appendChild(tdSample);
+            mappingBody.appendChild(tr);
         });
     }
     
@@ -931,6 +992,48 @@ document.addEventListener('DOMContentLoaded', function() {
     saveAsTemplate.addEventListener('change', function() {
         templateNameField.classList.toggle('d-none', !this.checked);
     });
+
+    // Before form submit, serialize mapping selections into hidden input
+    const importForm = document.getElementById('importForm');
+    importForm.addEventListener('submit', function(e) {
+        const mapping = {};
+        const rows = document.querySelectorAll('#mappingBody tr');
+        rows.forEach((row, idx) => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 2) {
+                const csvCol = cells[0].textContent.trim();
+                const sel = cells[1].querySelector('select');
+                const val = sel ? sel.value : '';
+                if (val) mapping[csvCol] = val;
+            }
+        });
+        document.getElementById('id_field_mapping').value = JSON.stringify(mapping);
+        // allow form to submit
+    });
+
+    // Ensure clicking the import button always serializes mapping and submits (defensive)
+    const importBtnEl = document.getElementById('importBtn');
+    if (importBtnEl) {
+        importBtnEl.addEventListener('click', function(ev) {
+            try {
+                const mapping = {};
+                const rows = document.querySelectorAll('#mappingBody tr');
+                rows.forEach((row, idx) => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length >= 2) {
+                        const csvCol = cells[0].textContent.trim();
+                        const sel = cells[1].querySelector('select');
+                        const val = sel ? sel.value : '';
+                        if (val) mapping[csvCol] = val;
+                    }
+                });
+                document.getElementById('id_field_mapping').value = JSON.stringify(mapping);
+                // let normal submit flow proceed
+            } catch (e) {
+                console.error('Error preparing mapping for import:', e);
+            }
+        });
+    }
     
     // Table row hover effects
     document.querySelectorAll('.import-jobs-table tbody tr').forEach(row => {

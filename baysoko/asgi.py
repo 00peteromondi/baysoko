@@ -21,12 +21,13 @@ django_asgi_app = get_asgi_application()
 
 # Import delivery websocket routing lazily
 import delivery.routing
+import storefront.routing
 
 application = ProtocolTypeRouter({
 	'http': django_asgi_app,
 	'websocket': AuthMiddlewareStack(
 		URLRouter(
-			delivery.routing.websocket_urlpatterns
+			delivery.routing.websocket_urlpatterns + storefront.routing.websocket_urlpatterns
 		)
 	),
 })

@@ -1091,18 +1091,18 @@
                             <h4 class="status-title">Billing Period</h4>
                         </div>
                         <div class="status-value">
-                            {% if subscription.trial_ends_at %}
+                            {% if subscription.status == 'trialing' and subscription.trial_ends_at %}
                                 {{ subscription.trial_ends_at|date:"M d" }}
-                            {% elif subscription.current_period_end %}
+                            {% elif subscription.status == 'active' and subscription.current_period_end %}
                                 {{ subscription.current_period_end|date:"M d" }}
                             {% else %}
                                 N/A
                             {% endif %}
                         </div>
                         <p class="status-subtext">
-                            {% if subscription.trial_ends_at %}
+                            {% if subscription.status == 'trialing' and subscription.trial_ends_at %}
                                 Trial ends
-                            {% elif subscription.current_period_end %}
+                            {% elif subscription.status == 'active' and subscription.current_period_end %}
                                 Next billing
                             {% else %}
                                 No active billing
@@ -1118,20 +1118,18 @@
                             <h4 class="status-title">Store Status</h4>
                         </div>
                         <div class="status-value">
-                            {% if subscription and subscription.plan in 'premium enterprise' %}
-                                {{ subscription.plan|title }}
-                            {% else %}
-                                Basic
+                            {% if subscription and subscription.plan in 'free basic premium enterprise' %}
+                                {{ subscription.plan|title }} Store
                             {% endif %}
                             
                         </div>
                         <p class="status-subtext">
-                            {% if features_active and store.is_premium %}
+                            {% if subscription.status == 'active' or subscription.status == 'trialing' and subscription.plan in 'free basic premium enterprise' %}
                                 <i class="bi bi-check-circle-fill text-success me-1"></i>
-                                All features active
-                            {% elif features_active and not store.is_premium %}
-                                <i class="bi bi-check-circle-fill text-success me-1"></i>
-                                All features active
+                                {{ subscription.plan|title }} features active
+                                {% if subscription.plan == 'free' %}
+                                    - Upgrade to unlock more features
+                                {% endif %}
                             {% else %}
                                 <i class="bi bi-x-circle-fill text-danger me-1"></i>
                                 Features deactivated

@@ -15,6 +15,8 @@ import csv
 import logging
 
 from .models import Store, InventoryAlert, ProductVariant, StockMovement, InventoryAudit
+from .models_bulk import BatchJob, ImportTemplate
+from .tasks_bulk import process_import_task
 from listings.models import Order, OrderItem
 from .forms_inventory import (
     InventoryAlertForm, ProductVariantForm, 
@@ -519,87 +521,61 @@ def import_inventory(request, slug):
     """Import inventory from CSV"""
     store = get_object_or_404(Store, slug=slug, owner=request.user)
     
-    if request.method == 'POST' and request.FILES.get('csv_file'):
-        csv_file = request.FILES['csv_file']
-        
+    if request.method == 'POST' and (request.FILES.get('csv_file') or request.FILES.get('file')):
+        # Support both inventory template (csv_file) and bulk form (file)
+        upload = request.FILES.get('csv_file') or request.FILES.get('file')
+
+        # Build job parameters from form fields
+        params = {
+            'template_type': request.POST.get('template_type', 'inventory'),
+            'update_existing': request.POST.get('update_existing') in ['on', 'true', '1'],
+            'create_new': request.POST.get('create_new') in ['on', 'true', '1'],
+            'skip_errors': request.POST.get('skip_errors') in ['on', 'true', '1'],
+            'template_id': request.POST.get('template') or None,
+        }
+
+        # Include mapping if provided
+        fm = request.POST.get('field_mapping')
+        if fm:
+            try:
+                params['field_mapping'] = json.loads(fm)
+            except Exception:
+                params['field_mapping'] = fm
+
+        # Create a BatchJob to process import in background (keeps behavior consistent with bulk import)
         try:
-            # Import pandas lazily to avoid hard dependency at module import time
-            import pandas as pd
-            # Read CSV file
-            df = pd.read_csv(csv_file)
-            required_columns = ['Product Name', 'Price', 'Stock']
-            
-            if not all(col in df.columns for col in required_columns):
-                messages.error(request, 'CSV file must contain required columns.')
-                return redirect('storefront:import_inventory', slug=slug)
-            
-            created_count = 0
-            updated_count = 0
-            errors = []
-            
-            for index, row in df.iterrows():
+            batch_job = BatchJob.objects.create(
+                store=store,
+                job_type='import',
+                status='pending',
+                created_by=request.user,
+                parameters=params,
+                file=upload
+            )
+            # Enqueue processing task; handle broker unavailability gracefully
+            try:
+                process_import_task.delay(batch_job.id)
+                messages.success(request, f'Import job #{batch_job.id} has been queued. Processing {batch_job.file.name}.')
+            except Exception as exc:
+                logger.exception('Failed to enqueue import job %s: %s — falling back to synchronous run', batch_job.id, exc)
                 try:
-                    sku = row.get('SKU', '')
-                    title = row['Product Name']
-                    price = float(row['Price'])
-                    stock = int(row['Stock'])
-                    category_name = row.get('Category', '')
-                    
-                    # Get or create category
-                    category = None
-                    if category_name:
-                        category, _ = Category.objects.get_or_create(
-                            name=category_name,
-                            defaults={'is_active': True}
-                        )
-                    
-                    # Check if product exists
-                    if sku:
-                        product = Listing.objects.filter(sku=sku, store=store).first()
-                    else:
-                        product = Listing.objects.filter(
-                            title__iexact=title,
-                            store=store
-                        ).first()
-                    
-                    if product:
-                        # Update existing product
-                        product.price = price
-                        product.stock = stock
-                        if category:
-                            product.category = category
-                        product.save()
-                        updated_count += 1
-                    else:
-                        # Create new product
-                        Listing.objects.create(
-                            store=store,
-                            title=title,
-                            price=price,
-                            stock=stock,
-                            category=category,
-                            sku=sku or None,
-                            seller=request.user,
-                            is_active=True
-                        )
-                        created_count += 1
-                        
-                except Exception as e:
-                    errors.append(f"Row {index + 2}: {str(e)}")
-            
-            # Show results
-            if errors:
-                messages.warning(request, f'Import completed with {len(errors)} errors.')
-                request.session['import_errors'] = errors[:10]  # Store first 10 errors
-            else:
-                messages.success(request, f'Import successful: {created_count} created, {updated_count} updated.')
-            
-            return redirect('storefront:inventory_list', slug=slug)
-            
+                    process_import_task.apply(args=(batch_job.id,))
+                    messages.success(request, f'Import job #{batch_job.id} was processed synchronously.')
+                except Exception as exc2:
+                    logger.exception('Synchronous import job %s failed: %s', batch_job.id, exc2)
+                    messages.warning(request, (
+                        f'Import job #{batch_job.id} was created but could not be processed: {exc2}. '
+                        'Start your Celery worker and Redis broker to process it.'
+                    ))
+
+            return redirect('storefront:bulk_job_detail', slug=slug, job_id=batch_job.id)
         except Exception as e:
-            messages.error(request, f'Error processing CSV file: {str(e)}')
-    
-    return render(request, 'storefront/inventory/import.html', {'store': store})
+            messages.error(request, f'Error creating import job: {str(e)}')
+
+    # Provide templates for select in template dropdown
+    templates = ImportTemplate.objects.filter(store=store, is_active=True)
+
+    return render(request, 'storefront/inventory/import.html', {'store': store, 'templates': templates})
 
 @login_required
 @store_owner_required('inventory')

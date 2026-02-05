@@ -25,7 +25,7 @@ class PlanPermissions:
             'analytics': True,  # Basic analytics only
             'inventory': False,
             'bulk_operations': False,
-            'multiple_stores': False,
+            'multiple_stores': True,
             'advanced_analytics': False,
             'api_access': False,
             'custom_domain': False,
@@ -34,7 +34,7 @@ class PlanPermissions:
         'premium': {
             'analytics': True,
             'inventory': True,
-            'bulk_operations': False,
+            'bulk_operations': True,
             'multiple_stores': True,
             'advanced_analytics': False,
             'api_access': False,
@@ -102,8 +102,14 @@ class PlanPermissions:
     @classmethod
     def has_feature_access(cls, user, feature, store=None):
         """Check if user has access to a specific feature"""
+        # If user is currently in an active trial for the store (or any store when store is None),
+        # grant access to all features until the trial ends.
         plan_status = cls.get_user_plan_status(user, store)
+        if plan_status.get('is_trialing'):
+            return True
+
         plan = plan_status['plan']
+        # Fall back to configured feature permissions per plan (free disallows analytics)
         return cls.FEATURE_PERMISSIONS.get(plan, {}).get(feature, False)
 
     @classmethod
@@ -111,24 +117,15 @@ class PlanPermissions:
         """Get plan limits for the user"""
         plan_status = cls.get_user_plan_status(user, store)
         plan = plan_status['plan']
-
-        if plan == 'free':
-            return {
-                'max_stores': 1,
-                'max_products': 5,  # Only first 5 listings
-                'features': cls.FEATURE_PERMISSIONS['free']
-            }
-
+        # Use centralized plan details from SubscriptionService to determine limits
         plan_details = SubscriptionService.PLAN_DETAILS.get(plan, {})
-        # Normalize sentinel values used for 'enterprise' plans.
-        # Historically enterprise used large numeric sentinels (e.g. 100 for stores,
-        # 500 for products) to mean "unlimited". Convert those to None so
-        # downstream callers can treat None as unlimited consistently.
+
         raw_max_stores = plan_details.get('max_stores', 1)
         raw_max_products = plan_details.get('max_products', 5)
 
-        max_stores = None if (raw_max_stores is None or int(raw_max_stores) >= 100) else int(raw_max_stores)
-        max_products = None if (raw_max_products is None or int(raw_max_products) >= 500) else int(raw_max_products)
+        # Convert large sentinels or None to actual None (meaning unlimited)
+        max_stores = None if (raw_max_stores is None or (isinstance(raw_max_stores, int) and raw_max_stores >= 100)) else int(raw_max_stores)
+        max_products = None if (raw_max_products is None or (isinstance(raw_max_products, int) and raw_max_products >= 500)) else int(raw_max_products)
 
         return {
             'max_stores': max_stores,
@@ -217,6 +214,9 @@ class PlanPermissions:
         """Get the analytics level user has access to"""
         plan_status = cls.get_user_plan_status(user, store)
         plan = plan_status['plan']
+        # During an active trial, grant full analytics access
+        if plan_status.get('is_trialing'):
+            return 'enterprise'
 
         if plan == 'free':
             return 'none'
