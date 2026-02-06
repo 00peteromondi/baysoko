@@ -858,6 +858,10 @@ class SubscriptionService:
                 # CRITICAL FIX: For upgrades requiring payment, DO NOT apply changes immediately
                 # Wait for payment confirmation via webhook
                 if payment_required and payment_amount > 0:
+                    # Snapshot current metadata/state so we can fully rollback on failure
+                    original_metadata = dict(subscription.metadata or {})
+                    original_store_is_premium = getattr(subscription.store, 'is_premium', False)
+
                     # Store the intended plan change in metadata but DON'T apply it yet
                     subscription.metadata = subscription.metadata or {}
                     subscription.metadata.update({
@@ -870,25 +874,27 @@ class SubscriptionService:
                         'change_requires_payment': True,
                     })
                     subscription.save()
-                    
+
                     # Initiate payment - subscription will only change after successful payment
                     payment_success, payment_result = cls.process_payment(
                         subscription=subscription,
                         phone_number=phone_number or subscription.mpesa_phone.replace('+254', '')
                     )
-                    
+
                     if not payment_success:
-                        # Payment initiation failed, clear pending changes
-                        subscription.metadata.pop('pending_plan_change', None)
-                        subscription.metadata.pop('pending_plan_change_at', None)
-                        subscription.metadata.pop('pending_payment_amount', None)
-                        subscription.metadata.pop('pending_old_plan', None)
-                        subscription.metadata.pop('pending_old_amount', None)
-                        subscription.metadata.pop('pending_change_type', None)
-                        subscription.metadata.pop('change_requires_payment', None)
+                        # Restore original metadata and store premium flag to preserve trial/active state
+                        subscription.metadata = original_metadata
                         subscription.save()
+
+                        try:
+                            subscription.store.is_premium = original_store_is_premium
+                            subscription.store.save()
+                        except Exception:
+                            # Best-effort save; do not fail the rollback for store save issues
+                            logger.exception("Failed to restore store.is_premium during plan-change rollback")
+
                         return False, f"Payment failed: {payment_result}. Plan change cancelled."
-                    
+
                     return True, f"Plan change initiated. Please complete payment of KSh {payment_amount} to activate {new_plan.capitalize()} plan."
                 
                 else:
@@ -924,11 +930,12 @@ class SubscriptionService:
                 subscription.save()
                 
                 # Initiate payment
+                original_metadata = dict(subscription.metadata or {})
                 payment_success, payment_result = cls.process_payment(
                     subscription=subscription,
                     phone_number=phone_number or subscription.mpesa_phone.replace('+254', '')
                 )
-                
+
                 if payment_success:
                     # Payment successful, activate the subscription with new plan
                     subscription.status = 'active'
@@ -948,6 +955,9 @@ class SubscriptionService:
                     
                     return True, f"Subscription reactivated with {new_plan.capitalize()} plan successfully!"
                 else:
+                    # Payment initiation failed - clear any pending keys and restore original metadata
+                    subscription.metadata = original_metadata
+                    subscription.save()
                     return False, f"Payment failed: {payment_result}. Plan change cancelled."
 
     @classmethod

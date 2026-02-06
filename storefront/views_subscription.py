@@ -13,6 +13,7 @@ from .utils.subscription_states import SubscriptionStateManager
 from .decorators import store_owner_required
 from django.db.models import Q
 import logging
+from types import SimpleNamespace
 
 logger = logging.getLogger(__name__)
 
@@ -246,13 +247,8 @@ def subscription_manage(request, slug):
         store=store
     ).order_by('-created_at')
     
-    # Prefer owner-level active subscription (an active plan covers all stores)
-    owner_active = Subscription.objects.filter(store__owner=request.user, status='active').order_by('-created_at').first()
-    if owner_active:
-        current_subscription = owner_active
-    else:
-        # Fall back to the store-specific latest subscription
-        current_subscription = subscription_history.first()
+    # Use centralized helper to fetch effective subscription (may create a seeded free row)
+    current_subscription = store.get_effective_subscription(owner=request.user)
     
     # Get recent payments
     recent_payments = []

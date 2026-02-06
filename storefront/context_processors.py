@@ -48,10 +48,11 @@ def store_context(request):
         ).order_by('-created_at').first()
         
         for store in user_stores:
-            # Prefer owner-level active subscription, fall back to store-specific
-            subscription = owner_active_subscription or Subscription.objects.filter(
-                store=store
-            ).order_by('-created_at').first()
+            # Use centralized helper which prefers owner-level active subscription
+            try:
+                subscription = store.get_effective_subscription(owner=request.user, create_if_missing=False)
+            except Exception:
+                subscription = owner_active_subscription or Subscription.objects.filter(store=store).order_by('-created_at').first()
             
             # Determine effective status and plan - mirrors subscription_manage view logic
             if subscription:
@@ -117,17 +118,18 @@ def subscription_context(request):
         # Get active subscription for each store
         active_subscriptions = []
         for store in user_stores:
-            subscription = Subscription.objects.filter(
-                store=store
-            ).order_by('-created_at').first()
-            
-            if subscription and subscription.is_active():
+            try:
+                subscription = store.get_effective_subscription(owner=request.user, create_if_missing=False)
+            except Exception:
+                subscription = Subscription.objects.filter(store=store).order_by('-created_at').first()
+
+            if subscription and getattr(subscription, 'is_active', lambda: False)():
                 active_subscriptions.append({
                     'store': store,
                     'subscription': subscription,
-                    'is_trial': subscription.status == 'trialing',
+                    'is_trial': getattr(subscription, 'status', None) == 'trialing',
                     'days_remaining': (subscription.trial_ends_at - timezone.now()).days 
-                        if subscription.status == 'trialing' and subscription.trial_ends_at 
+                        if getattr(subscription, 'status', None) == 'trialing' and getattr(subscription, 'trial_ends_at', None) 
                         else None,
                 })
         

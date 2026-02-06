@@ -1616,10 +1616,20 @@ def store_review_create(request, slug):
     # Check if user already reviewed
     existing_review = StoreReview.objects.filter(store=store, reviewer=request.user).first()
 
-    has_product_review = Review.objects.filter(
-        listing__store=store,
-        user=request.user
-    ).exists()
+    # The site has two Review models: reviews.Review (seller-level) and listings.Review (listing-level).
+    # Ensure we check product/listing reviews using the listings app Review model.
+    try:
+        from listings.models import Review as ListingReview
+        has_product_review = ListingReview.objects.filter(
+            listing__store=store,
+            user=request.user
+        ).exists()
+    except Exception:
+        # Fallback: if listings.Review is unavailable, fall back to seller-level reviews
+        has_product_review = Review.objects.filter(
+            seller=store.owner,
+            reviewer=request.user
+        ).exists()
     
     if has_product_review and not existing_review:
         messages.info(request, "You've already reviewed products from this store. You can still leave a direct store review.")

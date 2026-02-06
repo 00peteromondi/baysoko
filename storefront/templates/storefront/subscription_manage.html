@@ -1043,7 +1043,7 @@
                         <div class="status-value">
                             {% if effective_status == 'trial_expired' %}
                                 Trial Ended
-                            {% elif subscription %}
+                            {% elif effective_status == 'active' and subscription and subscription.plan in 'premium enterprise free basic' %}
                                 {{ subscription.get_status_display }}
                             {% else %}
                                 No Subscription
@@ -1051,8 +1051,8 @@
                         </div>
                         <p class="status-subtext">
                             {% if effective_status == 'active' %}
-                                <i class="bi bi-calendar-check text-success me-1"></i>
-                                Active since {{ subscription.started_at|date:"M d, Y" }}
+                                    <i class="bi bi-calendar-check text-success me-1"></i>
+                                    Active since {{ subscription.started_at|date:"M d, Y" }}
                             {% elif effective_status == 'trialing' %}
                                 <i class="bi bi-gem text-info me-1"></i>
                                 Trial started {{ subscription.created_at|date:"M d, Y" }}
@@ -1099,18 +1099,18 @@
                             <h4 class="status-title">Billing Period</h4>
                         </div>
                         <div class="status-value">
-                            {% if subscription.status == 'trialing' and subscription.trial_ends_at %}
+                            {% if effective_status == 'trialing' and subscription and subscription.trial_ends_at %}
                                 {{ subscription.trial_ends_at|date:"M d" }}
-                            {% elif subscription.status == 'active' and subscription.current_period_end %}
+                            {% elif effective_status == 'active' and subscription and subscription.current_period_end %}
                                 {{ subscription.current_period_end|date:"M d" }}
                             {% else %}
                                 N/A
                             {% endif %}
                         </div>
                         <p class="status-subtext">
-                            {% if subscription.status == 'trialing' and subscription.trial_ends_at %}
+                            {% if effective_status == 'trialing' and subscription and subscription.trial_ends_at %}
                                 Trial ends
-                            {% elif subscription.status == 'active' and subscription.current_period_end %}
+                            {% elif effective_status == 'active' and subscription and subscription.current_period_end %}
                                 Next billing
                             {% else %}
                                 No active billing
@@ -1126,7 +1126,7 @@
                             <h4 class="status-title">Store Status</h4>
                         </div>
                         <div class="status-value">
-                            {% if subscription and subscription.plan in 'free basic premium enterprise' %}
+                            {% if subscription and subscription.plan == 'free' or subscription.plan == 'basic' or subscription.plan == 'premium' or subscription.plan == 'enterprise' %}
                                 {{ subscription.plan|title }} Store
                             {% else %}
                                 Inactive Store
@@ -1134,7 +1134,7 @@
                             
                         </div>
                         <p class="status-subtext">
-                            {% if subscription.status == 'active' or subscription.status == 'trialing' and subscription.plan in 'free basic premium enterprise' %}
+                            {% if effective_status == 'active' or effective_status == 'trialing' and subscription and subscription.plan == 'free' or subscription.plan == 'basic' or subscription.plan == 'premium' or subscription.plan == 'enterprise' %}
                                 <i class="bi bi-check-circle-fill text-success me-1"></i>
                                 {{ subscription.plan|title }} features active
                                 {% if subscription.plan == 'free' %}
@@ -1157,7 +1157,7 @@
                     <i class="bi bi-card-checklist"></i>
                     Current Subscription Details
                 </h2>
-                <span class="badge bg-{% if subscription.status == 'active' %}success{% elif subscription.status == 'trialing' %}info{% elif subscription.status == 'past_due' %}warning{% else %}secondary{% endif %} bg-opacity-10 text-{% if subscription.status == 'active' %}success{% elif subscription.status == 'trialing' %}info{% elif subscription.status == 'past_due' %}warning{% else %}secondary{% endif %} border border-{% if subscription.status == 'active' %}success{% elif subscription.status == 'trialing' %}info{% elif subscription.status == 'past_due' %}warning{% else %}secondary{% endif %} border-opacity-25 px-3 py-2">
+                <span class="badge bg-{% if effective_status == 'active' %}success{% elif effective_status == 'trialing' %}info{% elif effective_status == 'past_due' %}warning{% else %}secondary{% endif %} bg-opacity-10 text-{% if effective_status == 'active' %}success{% elif effective_status == 'trialing' %}info{% elif effective_status == 'past_due' %}warning{% else %}secondary{% endif %} border border-{% if effective_status == 'active' %}success{% elif effective_status == 'trialing' %}info{% elif effective_status == 'past_due' %}warning{% else %}secondary{% endif %} border-opacity-25 px-3 py-2">
                     {{ subscription.plan|title }} Plan
                 </span>
             </div>
@@ -1410,7 +1410,7 @@
             </div>
 
             <div class="action-buttons-grid">
-                {% if subscription.status == 'active' %}
+                {% if effective_status == 'active' %}
                 <a href="{% url 'storefront:subscription_change_plan' store.slug %}" class="action-button action-button-primary no-ajax">
                     <div class="action-button-icon">
                         <i class="bi bi-arrow-left-right"></i>
@@ -1435,7 +1435,7 @@
                     <p class="action-button-description">Update your M-Pesa payment method information</p>
                 </a>
                 
-                {% elif subscription.status == 'trialing' %}
+                {% elif effective_status == 'trialing' %}
                 <a href="{% url 'storefront:subscription_payment_options' store.slug %}" class="action-button action-button-primary">
                     <div class="action-button-icon">
                         <i class="bi bi-credit-card"></i>
@@ -1452,7 +1452,7 @@
                     <p class="action-button-description">Select a different plan before subscribing</p>
                 </a>
                 
-                {% elif subscription.status == 'past_due' or subscription.status == 'canceled' %}
+                {% elif effective_status == 'past_due' or effective_status == 'canceled' %}
                 <a href="{% url 'storefront:subscription_renew' store.slug %}" class="action-button action-button-warning">
                     <div class="action-button-icon">
                         <i class="bi bi-arrow-clockwise"></i>

@@ -45,7 +45,7 @@
             try { btn.disabled = true; } catch (e) {}
         }
 
-        btn.innerHTML = createSpinnerHtml('sm') + (text || 'Loading...');
+        btn.innerHTML = createSpinnerHtml('sm') + (text || '');
     }
 
     function resetButton(btn){
@@ -385,7 +385,8 @@
         
         e.preventDefault();
         // Option A: Show loading spinner for a few seconds, then reload the page
-        setButtonLoading(a, a.dataset.loadingText || 'Loading...');
+        const linkLabel = (a.innerText || a.textContent || a.dataset.loadingText || '').trim();
+        setButtonLoading(a, linkLabel);
         
         // After 3 seconds (or when ready), perform full-page reload
         // This ensures proper CSS/style loading and auth state parity
@@ -406,7 +407,8 @@
         e.preventDefault();
 
         const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
-        setFormLoading(form, submitBtn && submitBtn.dataset.loadingText || 'Submitting...');
+        const submitLabel = submitBtn && ((submitBtn.dataset && submitBtn.dataset.loadingText) || (submitBtn.innerText || submitBtn.value)) || 'Submitting...';
+        setFormLoading(form, (submitLabel || 'Submitting...').trim());
 
         const action = form.getAttribute('action') || window.location.href;
         const method = (form.getAttribute('method') || 'GET').toUpperCase();

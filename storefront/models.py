@@ -87,6 +87,66 @@ class Store(models.Model):
         ).exists()
         
         return has_active or has_valid_trial
+
+    def get_effective_subscription(self, owner=None, create_if_missing=True):
+        """Return the most relevant Subscription for this store.
+
+        Preference order:
+        1. An active owner-level subscription (applies to all stores)
+        2. The most recent subscription for this store
+        3. Any existing free subscription row for the store
+        4. If none and create_if_missing=True, create and return a zero-amount free Subscription
+        """
+        from django.utils import timezone as _tz
+        try:
+            # Lazy import to avoid circular issues when module is imported
+            Subscription = globals().get('Subscription')
+            if Subscription is None:
+                from .models import Subscription
+                Subscription = Subscription
+
+            owner_obj = owner or getattr(self, 'owner', None)
+            if owner_obj:
+                owner_active = Subscription.objects.filter(store__owner=owner_obj, status='active').order_by('-created_at').first()
+                if owner_active:
+                    return owner_active
+
+            # Most recent subscription for this store
+            recent = Subscription.objects.filter(store=self).order_by('-created_at').first()
+            if recent:
+                # Ensure trial expiry is enforced
+                try:
+                    recent.check_trial_expiry()
+                except Exception:
+                    pass
+                return recent
+
+            # Any explicit free subscription
+            free_sub = Subscription.objects.filter(store=self, plan='free').order_by('-created_at').first()
+            if free_sub:
+                return free_sub
+
+            # Optionally create a seeded free subscription so templates can rely on DB rows
+            if create_if_missing:
+                now = _tz.now()
+                try:
+                    created = Subscription.objects.create(
+                        store=self,
+                        plan='free',
+                        status='active',
+                        amount=0,
+                        currency='KES',
+                        started_at=now,
+                        metadata={'seeded_free_subscription': True}
+                    )
+                    return created
+                except Exception:
+                    # Best-effort: return None if creation fails
+                    return None
+
+            return None
+        except Exception:
+            return None
     
     def get_rating(self):
         """
@@ -388,13 +448,14 @@ class Subscription(models.Model):
     )
     
     PLAN_CHOICES = (
+        ('free', 'Free - KSh 0/month'),
         ('basic', 'Basic - KSh 999/month'),
         ('premium', 'Premium - KSh 1,999/month'),
         ('enterprise', 'Enterprise - KSh 4,999/month'),
     )
     
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='subscriptions')
-    plan = models.CharField(max_length=20, choices=PLAN_CHOICES, default='basic')
+    plan = models.CharField(max_length=20, choices=PLAN_CHOICES, default='free')
     status = models.CharField(max_length=20, choices=SUBSCRIPTION_STATUS, default='trialing')
     
     # Billing details
