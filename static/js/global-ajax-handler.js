@@ -19,14 +19,32 @@
     }
 
     function createSpinnerHtml(size='sm'){
-        return `<span class="spinner-border spinner-border-${size} me-2" role="status" aria-hidden="true"></span>`;
+        // Use a compact spinner and inline sizing so it fits inside buttons/links
+        const dim = size === 'sm' ? '1rem' : '1.25rem';
+        return `<span class="spinner-border spinner-border-${size} me-2" role="status" aria-hidden="true" style="width:${dim};height:${dim};vertical-align:middle"></span>`;
+    }
+
+    // Resolve a possibly-relative URL to an absolute href for robust comparisons
+    function resolveUrl(u){
+        try{ return new URL(u, window.location.origin).href; }catch(e){ return String(u || ''); }
     }
 
     function setButtonLoading(btn, text){
         if(!btn) return;
         if(btn.dataset.originalHtml) return; // already loading
         btn.dataset.originalHtml = btn.innerHTML;
-        btn.disabled = true;
+
+        const tag = btn.tagName && btn.tagName.toLowerCase();
+        if(tag === 'a' || btn.classList.contains('btn-custom')){
+            // anchor-like elements: add disabled state and prevent clicks
+            btn.dataset.savedPointerEvents = btn.style.pointerEvents || '';
+            btn.classList.add('disabled');
+            btn.setAttribute('aria-disabled', 'true');
+            btn.style.pointerEvents = 'none';
+        } else {
+            try { btn.disabled = true; } catch (e) {}
+        }
+
         btn.innerHTML = createSpinnerHtml('sm') + (text || 'Loading...');
     }
 
@@ -36,7 +54,74 @@
             btn.innerHTML = btn.dataset.originalHtml;
             delete btn.dataset.originalHtml;
         }
-        btn.disabled = false;
+
+        const tag = btn.tagName && btn.tagName.toLowerCase();
+        if(tag === 'a' || btn.classList.contains('btn-custom')){
+            btn.classList.remove('disabled');
+            btn.removeAttribute('aria-disabled');
+            if(btn.dataset.savedPointerEvents !== undefined){
+                btn.style.pointerEvents = btn.dataset.savedPointerEvents;
+                delete btn.dataset.savedPointerEvents;
+            } else {
+                btn.style.pointerEvents = '';
+            }
+        } else {
+            try { btn.disabled = false; } catch (e) {}
+        }
+    }
+
+    function setFormLoading(form, text){
+        if(!form) return;
+        const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
+        if(submitBtn){
+            setButtonLoading(submitBtn, text);
+            form.__submitBtn = submitBtn;
+            return;
+        }
+
+        // If no submit button, create an overlay to indicate loading
+        if(form.dataset.loadingOverlay) return;
+        // ensure form has positioning context
+        const prevPos = window.getComputedStyle(form).position;
+        if(prevPos === 'static' || !prevPos){
+            form.dataset.prevPosition = 'static';
+            form.style.position = 'relative';
+        }
+
+        const overlay = document.createElement('div');
+        overlay.className = 'form-loading-overlay';
+        overlay.style.position = 'absolute';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.right = '0';
+        overlay.style.bottom = '0';
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.style.background = 'rgba(255,255,255,0.6)';
+        overlay.style.zIndex = '9999';
+        overlay.innerHTML = createSpinnerHtml('sm') + (text || 'Submitting...');
+        form.appendChild(overlay);
+        form.dataset.loadingOverlay = '1';
+        form.__overlay = overlay;
+    }
+
+    function resetFormLoading(form){
+        if(!form) return;
+        if(form.__submitBtn){
+            try{ resetButton(form.__submitBtn); }catch(e){}
+            delete form.__submitBtn;
+            return;
+        }
+        if(form.dataset.loadingOverlay && form.__overlay){
+            try{ form.__overlay.remove(); }catch(e){}
+            delete form.__overlay;
+            delete form.dataset.loadingOverlay;
+            if(form.dataset.prevPosition){
+                form.style.position = '';
+                delete form.dataset.prevPosition;
+            }
+        }
     }
 
     async function fetchHtmlAndReplace(url, opts){
@@ -53,13 +138,109 @@
                 // Don't replace the entire body which includes navigation
                 if(doc.title) document.title = doc.title;
                 
+                // IMPORTANT: Ensure head-level stylesheets and inline styles are preserved
+                // Copy stylesheet links from parsed document head into current head if missing
+                const headLinks = Array.from(doc.head.querySelectorAll('link[rel="stylesheet"]'));
+                headLinks.forEach(link => {
+                    const href = link.getAttribute('href') || link.href;
+                    if (!href) return;
+                    const hrefAbs = resolveUrl(href);
+                    const exists = Array.from(document.head.querySelectorAll('link[rel="stylesheet"]')).some(existing => resolveUrl(existing.getAttribute('href') || existing.href) === hrefAbs);
+                    if (!exists) {
+                        const newLink = document.createElement('link');
+                        newLink.rel = 'stylesheet';
+                        newLink.href = hrefAbs;
+                        document.head.appendChild(newLink);
+                    }
+                });
+
+                // Copy inline <style> blocks from parsed document head, avoid exact duplicates
+                const headStyles = Array.from(doc.head.querySelectorAll('style'));
+                headStyles.forEach(s => {
+                    const text = (s.textContent || '').trim();
+                    if (!text) return;
+                    const exists = Array.from(document.head.querySelectorAll('style')).some(existing => (existing.textContent || '').trim() === text);
+                    if (!exists) {
+                        const ns = document.createElement('style');
+                        ns.textContent = text;
+                        document.head.appendChild(ns);
+                    }
+                });
+
+                // Copy any <style> blocks that live in the fetched document's <body>
+                const bodyStyles = Array.from(doc.body.querySelectorAll('style'));
+                bodyStyles.forEach(s => {
+                    const text = (s.textContent || '').trim();
+                    if (!text) return;
+                    const exists = Array.from(document.head.querySelectorAll('style')).some(existing => (existing.textContent || '').trim() === text);
+                    if (!exists) {
+                        const ns = document.createElement('style');
+                        ns.textContent = text;
+                        document.head.appendChild(ns);
+                    }
+                });
+
                 // Find the main content container in both current and new documents
                 const currentMainContent = document.querySelector('.main-content .container-custom');
                 const newMainContent = doc.querySelector('.main-content .container-custom');
                 
                 if(newMainContent && currentMainContent) {
                     // Replace only the content inside the main container
+                    // Preserve head-level assets by only swapping the main content
                     currentMainContent.innerHTML = newMainContent.innerHTML;
+
+                    // Ensure any <link rel="stylesheet"> in the injected content is added to head
+                    const newLinks = Array.from(newMainContent.querySelectorAll('link[rel="stylesheet"]'));
+                    newLinks.forEach(link => {
+                        const href = link.getAttribute('href') || link.href;
+                        if (!href) return;
+                        const hrefAbs = resolveUrl(href);
+                        const exists = Array.from(document.head.querySelectorAll('link[rel="stylesheet"]')).some(existing => resolveUrl(existing.getAttribute('href') || existing.href) === hrefAbs);
+                        if (!exists) {
+                            const newLink = document.createElement('link');
+                            newLink.rel = 'stylesheet';
+                            newLink.href = hrefAbs;
+                            document.head.appendChild(newLink);
+                        }
+                    });
+
+                    // Copy inline <style> blocks from the injected content into head (avoid duplicates)
+                    const injectedStyles = Array.from(newMainContent.querySelectorAll('style'));
+                    injectedStyles.forEach(s => {
+                        const text = (s.textContent || '').trim();
+                        if (!text) return;
+                        const exists = Array.from(document.head.querySelectorAll('style')).some(existing => (existing.textContent || '').trim() === text);
+                        if (!exists) {
+                            const ns = document.createElement('style');
+                            ns.textContent = text;
+                            document.head.appendChild(ns);
+                        }
+                    });
+
+                    // Execute any scripts included in the new content (inline and external)
+                    const scripts = Array.from(newMainContent.querySelectorAll('script'));
+                    scripts.forEach(s => {
+                        try {
+                            if (s.src) {
+                                // External script - load it and avoid duplicates
+                                const srcAbs = resolveUrl(s.getAttribute('src') || s.src);
+                                const existsScript = Array.from(document.querySelectorAll('script[src]')).some(existing => resolveUrl(existing.getAttribute('src') || existing.src) === srcAbs);
+                                if (!existsScript) {
+                                    const ext = document.createElement('script');
+                                    ext.src = srcAbs;
+                                    ext.async = false;
+                                    document.body.appendChild(ext);
+                                }
+                            } else if (s.textContent && s.textContent.trim()) {
+                                // Inline script - evaluate in global scope
+                                const inline = document.createElement('script');
+                                inline.text = s.textContent;
+                                document.body.appendChild(inline);
+                            }
+                        } catch (err) {
+                            console.warn('Failed to evaluate injected script', err);
+                        }
+                    });
                     
                     // Update history
                     history.pushState({}, doc.title || '', url);
@@ -69,24 +250,63 @@
                         detail: { url: url }
                     }));
                     
-                    // IMPORTANT: Re-initialize scripts for the new content
+                    // Replace navigation fragments when provided in fetched HTML so auth/UI updates are reflected
+                    try {
+                        const newMainNav = doc.querySelector('.main-nav');
+                        const currentMainNav = document.querySelector('.main-nav');
+                        if (newMainNav && currentMainNav) {
+                            currentMainNav.replaceWith(newMainNav.cloneNode(true));
+                        }
+
+                        const newSideNav = doc.querySelector('.side-nav');
+                        const currentSideNav = document.querySelector('.side-nav');
+                        if (newSideNav && currentSideNav) {
+                            currentSideNav.replaceWith(newSideNav.cloneNode(true));
+                        }
+                    } catch (err) { console.warn('Failed to replace nav fragments', err); }
+
+                    // Copy body attributes (classes, data-*) so page-level styling and attributes persist
+                    try {
+                        const attrs = Array.from(doc.body.attributes || []);
+                        attrs.forEach(attr => {
+                            if (!attr) return;
+                            document.body.setAttribute(attr.name, attr.value);
+                        });
+                    } catch (err) { console.warn('Failed to copy body attributes', err); }
+
+                    // Copy any inline styles from the fetched body (not inside main content)
+                    try {
+                        const injectedBodyStyles = Array.from(doc.body.querySelectorAll('style'));
+                        injectedBodyStyles.forEach(s => {
+                            const text = (s.textContent || '').trim();
+                            if (!text) return;
+                            const exists = Array.from(document.head.querySelectorAll('style')).some(existing => (existing.textContent || '').trim() === text);
+                            if (!exists) {
+                                const ns = document.createElement('style');
+                                ns.textContent = text;
+                                document.head.appendChild(ns);
+                            }
+                        });
+                    } catch (err) { console.warn('Failed to inject body styles', err); }
+
+                    // IMPORTANT: Re-initialize scripts and components for the new content
                     setTimeout(() => {
-                        // Trigger DOMContentLoaded for scripts that depend on it
+                        // Trigger DOMContentLoaded-like hook for page scripts
                         if (typeof initializePage === 'function') {
-                            initializePage();
+                            try { initializePage(); } catch (e) { console.warn(e); }
                         }
-                        
-                        // Re-run badge manager initialization
+
+                        // Re-run badge manager initialization if available
                         if (window.BadgeManager && typeof window.BadgeManager.initialize === 'function') {
-                            window.BadgeManager.initialize();
+                            try { window.BadgeManager.initialize(); } catch (e) { console.warn(e); }
                         }
-                        
-                        // Re-initialize any scroll animations
+
+                        // Re-initialize scroll animations if handler exists
                         const scrollElements = document.querySelectorAll('.scroll-animate');
                         if (scrollElements.length > 0 && typeof handleScrollAnimation === 'function') {
-                            handleScrollAnimation();
+                            try { handleScrollAnimation(); } catch (e) { console.warn(e); }
                         }
-                        
+
                         // Update navigation active states
                         updateNavigationActiveStates();
                     }, 100);
@@ -164,26 +384,14 @@
         if(!isButtonLike && !isInternalLink) return;
         
         e.preventDefault();
+        // Option A: Show loading spinner for a few seconds, then reload the page
         setButtonLoading(a, a.dataset.loadingText || 'Loading...');
-
-        fetchHtmlAndReplace(href, { 
-            credentials: 'same-origin', 
-            headers: { 'X-Requested-With': 'XMLHttpRequest' } 
-        })
-        .then(res => {
-            if(!res.ok){
-                // fallback to normal navigation
-                resetButton(a);
-                window.location.href = href;
-            } else {
-                resetButton(a);
-            }
-        })
-        .catch(err => {
-            console.error('AJAX link navigation failed', err);
-            resetButton(a);
-            window.location.href = href;
-        });
+        
+        // After 3 seconds (or when ready), perform full-page reload
+        // This ensures proper CSS/style loading and auth state parity
+        setTimeout(() => { 
+            window.location.href = href; 
+        }, 3000);
     });
 
     document.addEventListener('submit', function(e){
@@ -198,7 +406,7 @@
         e.preventDefault();
 
         const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
-        setButtonLoading(submitBtn, submitBtn && submitBtn.dataset.loadingText || 'Submitting...');
+        setFormLoading(form, submitBtn && submitBtn.dataset.loadingText || 'Submitting...');
 
         const action = form.getAttribute('action') || window.location.href;
         const method = (form.getAttribute('method') || 'GET').toUpperCase();
@@ -219,68 +427,40 @@
             body: method === 'GET' ? null : formData
         }).then(async response => {
             const ct = response.headers.get('content-type') || '';
-            
+
+            // If the response was an HTTP redirect, perform a full navigation
+            if(response.redirected){
+                window.location.href = response.url;
+                return;
+            }
+
             if(ct.indexOf('application/json') !== -1){
                 const json = await response.json();
+                // If server asks us to redirect, force a full page reload to that URL
                 if(json.redirect){
-                    // try to fetch redirect HTML and replace to avoid full page load
-                    try{
-                        await fetchHtmlAndReplace(json.redirect, { 
-                            credentials: 'same-origin', 
-                            headers: { 'X-Requested-With': 'XMLHttpRequest' } 
-                        });
-                    }catch(err){
-                        window.location.href = json.redirect;
-                    }
-                } else if(json.success){
-                    // emit event; pages can listen
+                    window.location.href = json.redirect;
+                    return;
+                }
+
+                if(json.success){
                     window.dispatchEvent(new CustomEvent('ajaxFormSuccess', { detail: json }));
-                    
-                    // Show toast notification if available
-                    if(window.showToast && json.message){
-                        window.showToast(json.message, 'success');
-                    }
+                    if(window.showToast && json.message){ window.showToast(json.message, 'success'); }
+                    return;
                 } else {
                     window.dispatchEvent(new CustomEvent('ajaxFormError', { detail: json }));
-                    
-                    // Show error toast if available
-                    if(window.showToast && json.error){
-                        window.showToast(json.error, 'error');
-                    }
+                    if(window.showToast && json.error){ window.showToast(json.error, 'error'); }
+                    return;
                 }
-            } else if(ct.indexOf('text/html') !== -1){
-                // Handle HTML responses (like search forms, etc.)
-                const text = await response.text();
-                try{
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(text, 'text/html');
-                    
-                    if(doc.title) document.title = doc.title;
-                    
-                    // Find and replace main content only
-                    const currentMainContent = document.querySelector('.main-content .container-custom');
-                    const newMainContent = doc.querySelector('.main-content .container-custom');
-                    
-                    if(newMainContent && currentMainContent) {
-                        currentMainContent.innerHTML = newMainContent.innerHTML;
-                        history.pushState({}, doc.title || '', response.url || action);
-                        window.dispatchEvent(new Event('ajaxPageLoaded'));
-                    } else {
-                        // Fallback
-                        window.location.href = response.url || action;
-                    }
-                }catch(err){
-                    // fallback
-                    window.location.href = response.url || action;
-                }
-            } else {
-                // unknown response type -> fallback to normal submit
-                window.location.href = response.url || action;
             }
+
+            // For HTML or unknown content types, do a full page navigation to ensure
+            // CSS and scripts load properly (avoids partial DOM replacement which
+            // can lose styles and initialization).
+            window.location.href = response.url || action;
         }).catch(err => {
             console.error('AJAX form submit failed', err);
             // On failure, fallback to normal submit once (submit without interception)
-            resetButton(submitBtn);
+            resetFormLoading(form);
             try{ 
                 // Create a temporary form for fallback submission
                 const tempForm = document.createElement('form');
@@ -308,7 +488,7 @@
                 window.location.href = action; 
             }
         }).finally(() => {
-            resetButton(submitBtn);
+            resetFormLoading(form);
         });
     });
 

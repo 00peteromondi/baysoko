@@ -177,13 +177,15 @@ class PlanPermissions:
         stores = Store.objects.filter(owner=user, is_active=True).order_by('-created_at')
 
         max_stores = limits.get('max_stores')
-        if max_stores is None:
-            return stores
-        try:
-            if stores.count() > int(max_stores):
-                return stores[:int(max_stores)]
-        except Exception:
-            pass
+        if max_stores is not None:
+            try:
+                max_stores_int = int(max_stores)
+                # Use [:n] to limit but return as list-like queryset by requerying
+                # Actually, just apply limit via queryset - don't slice, use count check for UI
+                # The filtering will happen on the full queryset before any slicing for aggregation
+                stores = stores[:max_stores_int]  # This returns a list, not a queryset
+            except Exception:
+                pass
 
         return stores
 

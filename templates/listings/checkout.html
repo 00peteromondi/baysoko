@@ -777,14 +777,7 @@
                     Shipping Details
                 </h3>
                 
-                <!-- Alternate Shipping Toggle -->
-                <div class="form-switch">
-                    <div class="switch-control">
-                        <input type="checkbox" class="switch-input" id="useAlternateShipping" name="use_alternate_shipping">
-                        <span class="switch-slider"></span>
-                    </div>
-                    <label for="useAlternateShipping" class="switch-label">Ship to a different address</label>
-                </div>
+                
                 
                 <!-- Account Info -->
                 <div id="accountInfo">
@@ -886,6 +879,17 @@
                     </div>
                 </div>
                 
+                <!-- Validation Errors -->
+                <div id="checkoutValidationErrors" class="alert alert-danger" style="display: none;">
+                    <div class="d-flex align-items-start gap-2">
+                        <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+                        <div>
+                            <strong>Please fix the following errors:</strong>
+                            <ul class="mb-0 mt-2" id="errorList"></ul>
+                        </div>
+                    </div>
+                </div>
+                
                 <button type="submit" class="btn-checkout" id="placeOrderBtn">
                     <i class="bi bi-lock-fill"></i>
                     Proceed to Payment - KSh {{ cart.get_total_price }}
@@ -918,9 +922,9 @@
                 <div class="form-switch">
                     <div class="switch-control">
                         <input type="checkbox" class="switch-input" id="useAlternateShipping" name="use_alternate_shipping" {% if checkout_form.use_alternate_shipping.value %}checked{% endif %}>
-                        <span class="switch-slider"></span>
+                        <span class="switch-slider" role="switch" aria-checked="{% if checkout_form.use_alternate_shipping.value %}true{% else %}false{% endif %}" aria-labelledby="useAlternateShippingLabel"></span>
                     </div>
-                    <label for="useAlternateShipping" class="switch-label">Ship to a different address</label>
+                    <span id="useAlternateShippingLabel" class="switch-label">Ship to a different address</span>
                 </div>
                 
                 <!-- Account Info (Hidden when alternate shipping is checked) -->
@@ -1134,7 +1138,7 @@
 
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
+    function initializeCheckoutPage() {
         console.log('Checkout page initialized');
         
         // ===== ELEMENT REFERENCES =====
@@ -1196,17 +1200,34 @@
             }
         }
         
-        // ===== ALTERNATE SHIPPING TOGGLE =====
-        // Centralized handler for alternate shipping UI/state
+        // ===== ALTERNATE SHIPPING TOGGLE WITH AJAX LOADING =====
+        // Centralized handler for alternate shipping UI/state with smooth AJAX transitions
         function setAlternateShippingState(checked) {
             if (!accountInfo || !alternateShippingForm) return;
 
             const alternateFields = alternateShippingForm.querySelectorAll('input, select, textarea');
+            const toggleSwitch = alternateShippingForm.parentElement?.querySelector('.switch-slider');
 
             if (checked) {
-                accountInfo.style.display = 'none';
-                alternateShippingForm.style.display = 'block';
+                // Show loading state
+                if (toggleSwitch) toggleSwitch.style.opacity = '0.6';
+                
+                // Animate transition: fade out account info
+                accountInfo.style.transition = 'opacity 0.3s ease, visibility 0.3s ease';
+                accountInfo.style.opacity = '0';
+                accountInfo.style.visibility = 'hidden';
 
+                // Animate transition: fade in alternate form
+                alternateShippingForm.style.transition = 'opacity 0.3s ease, visibility 0.3s ease';
+                alternateShippingForm.style.display = 'block';
+                
+                // Force reflow to ensure display change takes effect
+                void alternateShippingForm.offsetHeight;
+                
+                alternateShippingForm.style.opacity = '1';
+                alternateShippingForm.style.visibility = 'visible';
+
+                // Enable all form fields for input
                 alternateFields.forEach(field => {
                     // Never disable CSRF or other hidden connector fields
                     if (field.name && field.name.toLowerCase().includes('csrf')) return;
@@ -1217,11 +1238,34 @@
                     }
                 });
 
-                showToast('Enter different shipping address', 'info');
+                // Restore toggle opacity
+                if (toggleSwitch) toggleSwitch.style.opacity = '1';
+                showToast('Shipping form loaded - enter your delivery address', 'info');
+                
+                // Focus first input field for better UX
+                const firstInput = alternateShippingForm.querySelector('input:not([type="hidden"])');
+                if (firstInput) setTimeout(() => firstInput.focus(), 100);
+                
             } else {
-                accountInfo.style.display = 'block';
-                alternateShippingForm.style.display = 'none';
+                // Show loading state
+                if (toggleSwitch) toggleSwitch.style.opacity = '0.6';
+                
+                // Animate transition: fade out alternate form
+                alternateShippingForm.style.transition = 'opacity 0.3s ease, visibility 0.3s ease';
+                alternateShippingForm.style.opacity = '0';
+                alternateShippingForm.style.visibility = 'hidden';
 
+                // Animate transition: fade in account info
+                accountInfo.style.transition = 'opacity 0.3s ease, visibility 0.3s ease';
+                accountInfo.style.display = 'block';
+                
+                // Force reflow
+                void accountInfo.offsetHeight;
+                
+                accountInfo.style.opacity = '1';
+                accountInfo.style.visibility = 'visible';
+
+                // Disable alternate shipping fields to prevent form submission
                 alternateFields.forEach(field => {
                     if (field.name && field.name.toLowerCase().includes('csrf')) return;
                     field.disabled = true;
@@ -1231,6 +1275,8 @@
                 // Fill visible form fields with account info where applicable
                 fillWithAccountInfo();
 
+                // Restore toggle opacity
+                if (toggleSwitch) toggleSwitch.style.opacity = '1';
                 showToast('Using your account details', 'info');
             }
         }
@@ -1249,8 +1295,36 @@
                 }
             });
 
-            // Initialize based on current checkbox state
+            // Make the visible slider element toggle the checkbox (label is non-clickable now)
+            const sliderEl = document.querySelector('.switch-slider');
+            if (sliderEl) {
+                sliderEl.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    try {
+                        useAlternateShipping.checked = !useAlternateShipping.checked;
+                        // update ARIA
+                        this.setAttribute('aria-checked', useAlternateShipping.checked ? 'true' : 'false');
+                        useAlternateShipping.dispatchEvent(new Event('change'));
+                    } catch (err) { console.warn('Error toggling via slider', err); }
+                });
+            }
+
+            // Initialize based on current checkbox state with smooth load
             try {
+                // Set initial opacity and visibility for smooth transitions
+                if (useAlternateShipping.checked) {
+                    alternateShippingForm.style.opacity = '1';
+                    alternateShippingForm.style.visibility = 'visible';
+                    accountInfo.style.opacity = '0';
+                    accountInfo.style.visibility = 'hidden';
+                    accountInfo.style.display = 'none';
+                } else {
+                    alternateShippingForm.style.opacity = '0';
+                    alternateShippingForm.style.visibility = 'hidden';
+                    accountInfo.style.opacity = '1';
+                    accountInfo.style.visibility = 'visible';
+                }
+                
                 setAlternateShippingState(useAlternateShipping.checked);
             } catch (err) {
                 console.warn('Error initializing alternate shipping state', err);
@@ -1265,6 +1339,73 @@
                     field.required = false;
                 });
             }
+        }
+        
+        // ===== FORM VALIDATION =====
+        function validateCheckoutForm() {
+            const errors = [];
+            const useAlternate = document.getElementById('useAlternateShipping') && document.getElementById('useAlternateShipping').checked;
+            
+            // Check alternate shipping fields if toggled
+            if (useAlternate) {
+                const firstName = checkoutForm?.querySelector('[name="first_name"]') || document.querySelector('[name="first_name"]');
+                const lastName = checkoutForm?.querySelector('[name="last_name"]') || document.querySelector('[name="last_name"]');
+                const email = checkoutForm?.querySelector('[name="email"]') || document.querySelector('[name="email"]');
+                const phone = checkoutForm?.querySelector('[name="phone_number"]') || document.querySelector('[name="phone_number"]');
+                
+                if (!firstName?.value?.trim()) errors.push('First Name is required');
+                if (!lastName?.value?.trim()) errors.push('Last Name is required');
+                if (!email?.value?.trim()) errors.push('Email is required');
+                if (!phone?.value?.trim()) errors.push('Phone Number is required');
+            }
+            
+            // Check shipping address and city/postal code (always required)
+            const shippingAddress = checkoutForm?.querySelector('[name="shipping_address"]') || document.querySelector('[name="shipping_address"]');
+            const city = checkoutForm?.querySelector('[name="city"]') || document.querySelector('[name="city"]');
+            const postalCode = checkoutForm?.querySelector('[name="postal_code"]') || document.querySelector('[name="postal_code"]');
+            
+            if (!shippingAddress?.value?.trim()) errors.push('Shipping Address is required');
+            if (!city?.value?.trim()) errors.push('City is required');
+            if (!postalCode?.value?.trim()) errors.push('Postal Code is required');
+            
+            // Check M-Pesa phone
+            const mpesaPhone = checkoutForm?.querySelector('[name="mpesa_phone"]') || document.querySelector('[name="mpesa_phone"]');
+            if (!mpesaPhone?.value?.trim()) errors.push('M-Pesa Phone Number is required');
+            
+            // Check terms
+            const termsCheckbox = document.getElementById('terms') || checkoutForm?.querySelector('[name="terms"]');
+            if (!termsCheckbox?.checked) errors.push('You must agree to Terms of Service');
+            
+            return errors;
+        }
+        
+        // Display and handle validation errors
+        if (checkoutForm) {
+            if (checkoutForm.dataset.initialized === '1') {
+                // already initialized for this DOM instance
+                return;
+            }
+            checkoutForm.addEventListener('submit', function(e) {
+                const errors = validateCheckoutForm();
+                if (errors.length > 0) {
+                    e.preventDefault();
+                    
+                    // Display error alert
+                    const errorContainer = document.getElementById('checkoutValidationErrors');
+                    const errorList = document.getElementById('errorList');
+                    if (errorContainer && errorList) {
+                        errorList.innerHTML = errors.map(err => `<li class="small">${err}</li>`).join('');
+                        errorContainer.style.display = 'block';
+                        errorContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                    
+                    return false;
+                }
+                
+                // Clear errors if validation passes
+                const errorContainer = document.getElementById('checkoutValidationErrors');
+                if (errorContainer) errorContainer.style.display = 'none';
+            });
         }
         
         function fillWithAccountInfo() {
@@ -1285,6 +1426,9 @@
             if (phoneField && !phoneField.value && '{{ request.user.phone_number|escapejs }}') {
                 phoneField.value = '{{ request.user.phone_number|escapejs }}';
             }
+
+            // mark initialized to avoid duplicate listeners on same DOM instance
+            checkoutForm.dataset.initialized = '1';
         }
         
         // ===== PAYMENT METHOD TOGGLE =====
@@ -1477,6 +1621,64 @@
             });
         }
         
+        // ===== CHECKOUT FORM VALIDATION =====
+        function validateCheckoutForm() {
+            const errors = [];
+            const useAlternateShipping = checkoutForm.querySelector('#useAlternateShipping');
+            const isAlternate = useAlternateShipping && useAlternateShipping.checked;
+
+            // Validate alternate shipping fields if toggled
+            if (isAlternate) {
+                const firstName = checkoutForm.querySelector('input[name="first_name"]');
+                const lastName = checkoutForm.querySelector('input[name="last_name"]');
+                const email = checkoutForm.querySelector('input[name="email"]');
+                const altPhone = checkoutForm.querySelector('input[name="phone_number"]');
+
+                if (!firstName || !firstName.value.trim()) errors.push('First name is required');
+                if (!lastName || !lastName.value.trim()) errors.push('Last name is required');
+                if (!email || !email.value.trim()) errors.push('Email is required');
+                else if (!email.value.includes('@')) errors.push('Email must be valid');
+                if (!altPhone || !altPhone.value.trim()) errors.push('Phone number is required for shipping');
+            }
+
+            // Validate common fields
+            const shippingAddress = checkoutForm.querySelector('textarea[name="shipping_address"]');
+            const city = checkoutForm.querySelector('input[name="city"]');
+            const postalCode = checkoutForm.querySelector('input[name="postal_code"]');
+
+            if (!shippingAddress || !shippingAddress.value.trim()) errors.push('Shipping address is required');
+            if (!city || !city.value.trim()) errors.push('City is required');
+            if (!postalCode || !postalCode.value.trim()) errors.push('Postal code is required');
+
+            // Validate payment method phone
+            const mpesaPhone = checkoutForm.querySelector('input[name="mpesa_phone"]');
+            if (mpesaPhone && !mpesaPhone.value.trim()) {
+                errors.push('M-Pesa phone number is required');
+            } else if (mpesaPhone && mpesaPhone.value.trim().length < 9) {
+                errors.push('M-Pesa phone number must be at least 9 digits');
+            }
+
+            // Validate terms agreement
+            const terms = checkoutForm.querySelector('#terms');
+            if (terms && !terms.checked) errors.push('You must agree to the Terms of Service');
+
+            return errors;
+        }
+
+        function displayValidationErrors(errors) {
+            const errorContainer = checkoutForm.querySelector('#checkoutValidationErrors');
+            const errorList = checkoutForm.querySelector('#errorList');
+            if (!errorContainer || !errorList) return;
+
+            if (errors.length > 0) {
+                errorList.innerHTML = errors.map(err => `<li>${err}</li>`).join('');
+                errorContainer.style.display = 'block';
+                errorContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+                errorContainer.style.display = 'none';
+            }
+        }
+
         // ===== REAL-TIME VALIDATION =====
         if (checkoutForm) {
             const formInputs = checkoutForm.querySelectorAll('input, select, textarea');
@@ -1494,6 +1696,16 @@
                         this.classList.remove('is-invalid');
                     }
                 });
+            });
+
+            // Validate on form submit
+            checkoutForm.addEventListener('submit', function(e) {
+                const errors = validateCheckoutForm();
+                displayValidationErrors(errors);
+                if (errors.length > 0) {
+                    e.preventDefault();
+                    return false;
+                }
             });
         }
         
@@ -1536,6 +1748,13 @@
         
         // Start initialization
         initialize();
+    }
+
+    // Run on first load and after AJAX page replacements
+    document.addEventListener('DOMContentLoaded', initializeCheckoutPage);
+    window.addEventListener('ajaxPageLoaded', function(e){
+        try { initializeCheckoutPage(); } catch(err) { console.warn('initializeCheckoutPage failed', err); }
+    });
         
         // ===== WINDOW RESIZE HANDLER =====
         let resizeTimeout;

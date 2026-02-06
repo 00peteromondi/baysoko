@@ -840,13 +840,13 @@
             <div id="paymentFormContainer">
                 <!-- M-Pesa Payment Form -->
                 <div class="payment-method-form" id="mpesaForm">
-                    <div class="mpesa-simulation">
+                    <div class="mb-3">
                         <div class="text-center mb-3">
-                            <i class="bi bi-phone display-4 mb-2"></i>
+                            <i class="bi bi-phone display-4 mb-2 text-primary"></i>
                             <h4>M-Pesa Payment</h4>
-                            <p>You will receive a prompt on your phone to complete payment</p>
+                            <p class="mb-0">We will initiate a secure M-Pesa payment request to your phone. Do not rely on simulated flows; follow the prompt on your device to complete payment.</p>
                         </div>
-                        
+
                         <div class="mb-3">
                             <label for="mpesaNumber" class="form-label">M-Pesa Phone Number</label>
                             <div class="input-group">
@@ -855,7 +855,7 @@
                                        placeholder="7XX XXX XXX" 
                                        value="{% if order.phone_number %}{{ order.phone_number|slice:'4:' }}{% endif %}">
                             </div>
-                            <small class="text-white-50">Enter your M-Pesa registered phone number</small>
+                            <small class="text-muted">Enter your M-Pesa registered phone number. You will receive the real payment prompt on this device.</small>
                         </div>
                     </div>
                 </div>
@@ -1169,30 +1169,59 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             body: `phone_number=${encodeURIComponent(phoneNumber)}`
         })
-        .then(response => response.json())
+        .then(async response => {
+            let data = null;
+            try {
+                data = await response.json();
+            } catch (e) {
+                // not json
+            }
+
+            if (!response.ok) {
+                // Try to show detailed server / MPesa error if available
+                const msg = (data && (data.error || data.message || data.detail)) ? (data.error || data.message || data.detail) : `Server error: ${response.status} ${response.statusText}`;
+                showToast(msg, 'error');
+
+                // Re-enable button
+                processPaymentBtn.innerHTML = '<i class="bi bi-lock-fill me-2"></i> Complete Payment - KSh {{ order.total_price }}';
+                processPaymentBtn.disabled = false;
+                return Promise.reject(new Error(msg));
+            }
+
+            return data;
+        })
         .then(data => {
+            if (!data) return; // already handled
+
             if (data.success) {
-                showToast(data.message, 'success');
-                
+                showToast(data.message || 'Payment initiated', 'success');
+
                 // Switch to processing view
                 document.getElementById('paymentFormContainer').style.display = 'none';
                 document.getElementById('paymentProcessingSection').style.display = 'block';
                 processPaymentBtn.style.display = 'none';
-                
+
                 // Start checking payment status
                 startStatusChecking();
             } else {
-                showToast(data.error, 'error');
-                
+                // Provide MPesa-specific messages if present
+                const detail = data.mpesa_result_desc || data.error || data.message || 'Failed to initiate payment';
+                showToast(detail, 'error');
+
                 // Re-enable button
                 processPaymentBtn.innerHTML = '<i class="bi bi-lock-fill me-2"></i> Complete Payment - KSh {{ order.total_price }}';
                 processPaymentBtn.disabled = false;
             }
         })
         .catch(error => {
-            console.error('Error:', error);
-            showToast('An error occurred while initiating payment. Please try again.', 'error');
-            
+            console.error('Error initiating payment:', error);
+            // Show a friendly message if not already shown
+            if (error && error.message) {
+                showToast(error.message, 'error');
+            } else {
+                showToast('An error occurred while initiating payment. Please try again.', 'error');
+            }
+
             // Re-enable button
             processPaymentBtn.innerHTML = '<i class="bi bi-lock-fill me-2"></i> Complete Payment - KSh {{ order.total_price }}';
             processPaymentBtn.disabled = false;
@@ -1291,18 +1320,44 @@ document.addEventListener('DOMContentLoaded', function() {
     const retryPaymentBtn = document.getElementById('retryPaymentBtn');
     if (retryPaymentBtn) {
         retryPaymentBtn.addEventListener('click', function() {
-            // Hide failed section and re-initiate
+            // Hide failed section, show form and process button for retry
             document.getElementById('paymentFailedSection').style.display = 'none';
-            // Use current mpesaNumber value or order phone
+            document.getElementById('paymentFormContainer').style.display = 'block';
+            if (processPaymentBtn) {
+                processPaymentBtn.style.display = 'block';
+                processPaymentBtn.disabled = false;
+                processPaymentBtn.innerHTML = '<i class="bi bi-lock-fill me-2"></i> Complete Payment - KSh {{ order.total_price }}';
+            }
+            
+            // Use current mpesaNumber value or order phone (strip spaces and any leading country code)
             const mpesaNumberRaw = document.getElementById('mpesaNumber') ? document.getElementById('mpesaNumber').value.replace(/\s/g, '') : '';
-            const phone = (mpesaNumberRaw && mpesaNumberRaw.length === 9) ? mpesaNumberRaw : '{{ order.phone_number|slice:"3:" }}';
-            if (!phone) {
-                showToast('No phone number available to retry payment', 'error');
-                return;
+            let phone = '';
+            if (mpesaNumberRaw && mpesaNumberRaw.length === 9) {
+                phone = mpesaNumberRaw;
+            } else {
+                // Fallback: strip leading +254 or 254 from stored order phone
+                phone = '{{ order.phone_number|slice:"4:" }}';
+                if (phone && phone.startsWith('254')) phone = phone.slice(3);
+                phone = phone.replace(/\D/g, '');
             }
 
-            // Initiate payment using the same AJAX function
-            initiateMpesaPayment(phone);
+            if (phone && phone.length === 9) {
+                // Pre-fill the phone number for convenience
+                const phoneInput = document.getElementById('mpesaNumber');
+                if (phoneInput) {
+                    // Format as 7XX XXX XXX
+                    const formatted = phone.substring(0, 3) + ' ' + phone.substring(3, 6) + ' ' + phone.substring(6);
+                    phoneInput.value = formatted;
+                }
+            }
+            
+            // Scroll to payment form
+            const formContainer = document.getElementById('paymentFormContainer');
+            if (formContainer) {
+                setTimeout(() => {
+                    formContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            }
         });
     }
     

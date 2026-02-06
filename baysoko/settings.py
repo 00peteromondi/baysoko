@@ -667,15 +667,24 @@ MAX_IMAGE_UPLOAD_SIZE = MAX_IMAGE_UPLOAD_SIZE_MB * 1024 * 1024
 
 
 
-# Add to settings.py
-MPESA_CONSUMER_KEY = os.environ.get('MPESA_CONSUMER_KEY', '')
-MPESA_CONSUMER_SECRET = os.environ.get('MPESA_CONSUMER_SECRET', '')
-MPESA_BUSINESS_SHORTCODE = os.environ.get('MPESA_BUSINESS_SHORTCODE', '')
-MPESA_PASSKEY = os.environ.get('MPESA_PASSKEY', '')
-# Use localhost for development, production URL for production
-MPESA_CALLBACK_URL = os.environ.get('MPESA_CALLBACK_URL', '')
-MPESA_ENVIRONMENT = os.environ.get('MPESA_ENVIRONMENT', 'sandbox')  # or 'production'
-MPESA_SIMULATE_PAYMENTS = False 
+# M-Pesa settings - use python-decouple `config` so `.env` values are picked up
+MPESA_CONSUMER_KEY = config('MPESA_CONSUMER_KEY', default='')
+MPESA_CONSUMER_SECRET = config('MPESA_CONSUMER_SECRET', default='')
+MPESA_BUSINESS_SHORTCODE = config('MPESA_BUSINESS_SHORTCODE', default='')
+MPESA_PASSKEY = config('MPESA_PASSKEY', default='')
+# Callback URL: prefer explicit env var, fallback to sandbox callback if not provided
+MPESA_CALLBACK_URL = config('MPESA_CALLBACK_URL', default='')
+# Read raw environment value then sanitize: strip inline comments and quotes
+_mpesa_env_raw = config('MPESA_ENVIRONMENT', default='sandbox')
+_mpesa_env = str(_mpesa_env_raw).split('#', 1)[0].strip().strip("'\"").lower()
+if _mpesa_env not in ('sandbox', 'production'):
+    import logging
+    logging.warning(f"Invalid MPESA_ENVIRONMENT '{_mpesa_env_raw}', defaulting to 'sandbox'")
+    MPESA_ENVIRONMENT = 'sandbox'
+else:
+    MPESA_ENVIRONMENT = _mpesa_env
+# Allow toggling simulation via env (useful in CI or local dev)
+MPESA_SIMULATE_PAYMENTS = config('MPESA_SIMULATE_PAYMENTS', default=False, cast=bool)
 
 # How many remaining sellers (with unshipped items) should trigger reminder notifications
 SELLER_SHIPMENT_REMINDER_THRESHOLD = int(os.environ.get('SELLER_SHIPMENT_REMINDER_THRESHOLD', '2'))

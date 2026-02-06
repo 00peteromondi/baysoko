@@ -56,11 +56,24 @@ def check_trial_expirations():
 def send_trial_expired_notification(subscription_id):
     """Send notification when trial expires"""
     from .models import Subscription
+    from notifications.utils import create_notification
     
     try:
         subscription = Subscription.objects.get(id=subscription_id)
         store = subscription.store
         user = store.owner
+        
+        # Send internal notification
+        create_notification(
+            recipient=user,
+            notification_type='system',
+            title='Trial Period Ended',
+            message=f'Your {subscription.get_plan_display()} trial for {store.name} has ended. Upgrade to a paid plan to keep premium features active.',
+            related_object_id=subscription.id,
+            related_content_type='subscription',
+            action_url=f'/dashboard/store/{store.slug}/subscription/plans/',
+            action_text='Choose Plan'
+        )
         
         subject = f"Your {subscription.get_plan_display()} Trial Has Ended - {store.name}"
         
@@ -90,6 +103,7 @@ def send_trial_expired_notification(subscription_id):
 def send_trial_expiration_reminder(subscription_id):
     """Send reminder 2 days before trial expires"""
     from .models import Subscription
+    from notifications.utils import create_notification
     
     try:
         subscription = Subscription.objects.get(id=subscription_id)
@@ -97,6 +111,18 @@ def send_trial_expiration_reminder(subscription_id):
         user = store.owner
         
         remaining_days = (subscription.trial_ends_at - timezone.now()).days
+        
+        # Send internal notification
+        create_notification(
+            recipient=user,
+            notification_type='system',
+            title='Trial Ending Soon',
+            message=f'Your {subscription.get_plan_display()} trial for {store.name} ends in {remaining_days} days. Upgrade to keep premium features.',
+            related_object_id=subscription.id,
+            related_content_type='subscription',
+            action_url=f'/dashboard/store/{store.slug}/subscription/plans/',
+            action_text='Upgrade Plan'
+        )
         
         subject = f"Your Trial Ends in {remaining_days} Days - {store.name}"
         

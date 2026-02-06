@@ -76,6 +76,52 @@ def mpesa_callback(request):
                     }, status=400)
                 
                 SubscriptionService.log_activation_attempt(subscription, 'webhook_payment_success', True)
+                
+                # Send subscription activated notification (email + internal)
+                try:
+                    from notifications.utils import create_notification
+                    from django.core.mail import send_mail
+                    from django.template.loader import render_to_string
+                    from django.conf import settings
+                    import logging as notify_logger
+                    
+                    user = subscription.store.owner
+                    store = subscription.store
+                    
+                    # Send internal notification
+                    create_notification(
+                        recipient=user,
+                        notification_type='system',
+                        title=f'{subscription.get_plan_display().capitalize()} Subscription Activated',
+                        message=f'Your {subscription.get_plan_display()} subscription for {store.name} is now active.',
+                        related_object_id=subscription.id,
+                        related_content_type='subscription',
+                        action_url=f'/dashboard/store/{store.slug}/subscription/manage/',
+                        action_text='View Subscription'
+                    )
+                    
+                    # Send email notification
+                    try:
+                        context = {
+                            'store': store,
+                            'subscription': subscription,
+                            'plan_name': subscription.get_plan_display(),
+                            'user': user,
+                        }
+                        html_message = render_to_string('storefront/emails/subscription_activated.html', context)
+                        send_mail(
+                            subject=f'{subscription.get_plan_display().capitalize()} Subscription Activated - {store.name}',
+                            message='Your subscription has been activated.',
+                            from_email=settings.DEFAULT_FROM_EMAIL,
+                            recipient_list=[user.email],
+                            html_message=html_message,
+                            fail_silently=True,
+                        )
+                    except Exception as email_err:
+                        notify_logger.getLogger(__name__).error(f'Error sending subscription activation email: {str(email_err)}')
+                except Exception as e:
+                    logger.error(f'Error sending subscription activation notification: {str(e)}')
+                
                 return JsonResponse({
                     'status': 'success',
                     'message': 'Subscription activated successfully after payment validation'

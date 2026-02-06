@@ -461,11 +461,28 @@ def process_import_task(self, job_id):
 
 def process_product_import_row(store, data, params):
     """Process a single product import row"""
+    import math
+    
     sku = data.get('sku')
     title = data.get('title')
     
+    # Ensure title is a non-empty string (not NaN or other float values)
+    if isinstance(title, float) and (math.isnan(title) or not math.isfinite(title)):
+        title = None
+    if isinstance(title, str):
+        title = title.strip() if title else None
+    
     if not title:
         raise ValueError("Product title is required")
+    
+    # Ensure SKU is a string if present
+    if sku is not None:
+        if isinstance(sku, float) and (math.isnan(sku) or not math.isfinite(sku)):
+            sku = None
+        elif isinstance(sku, str):
+            sku = sku.strip() if sku else None
+        else:
+            sku = str(sku) if sku else None
     
     # Look for existing product
     product = None
@@ -523,7 +540,19 @@ def process_product_import_row(store, data, params):
                     if category:
                         product.category = category
                 else:
-                    setattr(product, field, value)
+                    # For string fields, ensure we don't set NaN or other invalid values
+                    if isinstance(value, float) and (math.isnan(value) or not math.isfinite(value)):
+                        # Skip invalid float values for string fields
+                        continue
+                    # Convert to string and strip whitespace for string fields
+                    if isinstance(value, str):
+                        value = value.strip()
+                    elif value is not None:
+                        value = str(value).strip()
+                    
+                    # Only set if not empty
+                    if value:
+                        setattr(product, field, value)
         
         # Set defaults for required fields
         if not product.price:

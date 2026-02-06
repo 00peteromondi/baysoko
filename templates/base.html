@@ -1526,7 +1526,7 @@
                                 {{ cart_item_count|default:0 }}
                             </span>
                             {% if cart_item_count and cart_item_count > 0 %}
-                            <span class="cart-total">KSh {{ cart_total|floatformat:2 }}</span>
+                            <span class="cart-total">KSh {{ cart_total|floatformat:2|intcomma }}</span>
                             {% else %}
                             <span class="cart-empty-text">KSh 0</span>
                             {% endif %}
@@ -1587,8 +1587,11 @@
                                     {% for store in user_stores|slice:":2" %}
                                         <li><a class="dropdown-item" href="{% url 'storefront:subscription_manage' slug=store.slug %}">
                                             <i class="bi bi-award me-2"></i>{{ store.name|truncatechars:15 }}
-                                            <span class="badge {{ store.plan_badge_class }} ms-2">
-                                                {{ store.plan_label }}{% if store.is_trialing_plan %} (Trial){% endif %}
+                                            {% if store.plan_price %}
+                                                <small class="text-muted ms-2">{{ store.plan_price }}</small>
+                                            {% endif %}
+                                            <span class="badge {{ store.plan_badge_class }} ms-2" title="{{ store.plan|title }}{% if store.is_trialing_plan %} (Trial){% endif %}">
+                                                {% if store.plan == 'free' %}F{% elif store.plan == 'basic' %}B{% elif store.plan == 'premium' %}P{% elif store.plan == 'enterprise' %}E{% else %}{{ store.plan|slice:":1"|upper }}{% endif %}{% if store.is_trialing_plan %}*{% endif %}
                                             </span>
                                         </a></li>
                                     {% endfor %}
@@ -1600,7 +1603,7 @@
                             
                             <li><hr class="dropdown-divider"></li>
                             <li>
-                                <form method="post" action="{% url 'logout' %}">
+                                <form method="post" action="{% url 'logout' %}" class="no-ajax">
                                     {% csrf_token %}
                                     <button class="dropdown-item text-danger" type="submit"><i class="bi bi-box-arrow-right me-2"></i>Logout</button>
                                 </form>
@@ -1609,7 +1612,7 @@
                     </div>
                     {% else %}
                     <!-- Auth Buttons -->
-                    <a href="{% url 'login' %}" class="btn-custom btn-ghost">Sign In</a>
+                    <a href="{% url 'login' %}" class="btn-custom btn-ghost no-ajax">Sign In</a>
                     <a href="{% url 'register' %}" class="btn-custom btn-primary">Get Started</a>
                     {% endif %}
                 </div>
@@ -1709,8 +1712,8 @@
                             <a href="{% url 'storefront:subscription_manage' slug=store.slug %}" class="side-nav-link">
                                 <i class="bi bi-shop"></i>
                                 <span class="link-text">{{ store.name|truncatechars:15 }}</span>
-                                <span class="badge {{ store.plan_badge_class }}">
-                                    {{ store.plan_label|slice:":1" }}
+                                <span class="badge {{ store.plan_badge_class }}" title="{{ store.plan|title }}{% if store.is_trialing_plan %} (Trial){% endif %}">
+                                    {% if store.plan == 'free' %}F{% elif store.plan == 'basic' %}B{% elif store.plan == 'premium' %}P{% elif store.plan == 'enterprise' %}E{% else %}{{ store.plan|slice:":1"|upper }}{% endif %}{% if store.is_trialing_plan %}*{% endif %}
                                 </span>
                             </a>
                         </li>
@@ -1723,11 +1726,11 @@
                 <span class="link-text">Favorites</span>
             </a></li>
             <li>
-                <a href="#" class="side-nav-link text-danger" id="logoutLink">
+                <a href="#" class="side-nav-link text-danger no-ajax" id="logoutLink">
                     <i class="bi bi-box-arrow-right"></i>
                     <span class="link-text">Logout</span>
                 </a>
-                <form method="post" action="{% url 'logout' %}" id="logoutForm" class="d-none">
+                <form method="post" action="{% url 'logout' %}" id="logoutForm" class="d-none no-ajax">
                     {% csrf_token %}
                 </form>
             </li>
@@ -2514,7 +2517,7 @@
                 const cartTotalElements = document.querySelectorAll('.cart-total');
                 cartTotalElements.forEach(element => {
                     if (itemCount > 0) {
-                        element.textContent = `KSh ${parseFloat(total).toFixed(2)}`;
+                        element.textContent = `KSh ${parseFloat(total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                         element.style.display = 'inline';
                     } else {
                         element.style.display = 'none';
@@ -3012,6 +3015,8 @@
     </script>
 
     {% endblock %}
-    
+
+    <!-- Include global AJAX handler -->
+    <script src="{% static 'js/global-ajax-handler.js' %}"></script>
 </body>
 </html>

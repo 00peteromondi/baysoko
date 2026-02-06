@@ -568,6 +568,28 @@ class Subscription(models.Model):
         if self.store.is_premium != has_active:
             self.store.is_premium = has_active
             self.store.save(update_fields=['is_premium'])
+
+        # Owner-level sync: if the user has no other active subscriptions across their stores,
+        # downgrade all their stores to free (no premium features). This enforces that a
+        # single active subscription (any plan) covers all stores and active takes precedence
+        # over unpaid/past_due instances.
+        try:
+            owner = self.store.owner
+            owner_has_active = Subscription.objects.filter(
+                store__owner=owner
+            ).filter(
+                Q(status='active') | Q(status='trialing', trial_ends_at__gt=now)
+            ).exists()
+
+            if not owner_has_active:
+                # No active subscriptions for owner -> ensure all stores are downgraded
+                from django.db.models import F
+                owner_stores = self.store.__class__.objects.filter(owner=owner)
+                owner_stores.update(is_premium=False)
+        except Exception:
+            # Be defensive - do not break status transitions on error
+            logger = logging.getLogger(__name__)
+            logger.exception('Failed to sync owner-level subscription flags')
     
     @classmethod
     def get_store_subscription(cls, store):

@@ -35,24 +35,65 @@ def store_context(request):
             'enterprise': 'bg-success',
             'free': 'bg-secondary'
         }
+        
+        # Import SubscriptionService for plan details
+        from .subscription_service import SubscriptionService
 
         annotated_stores = []
+        
+        # Get owner-level active subscription (applies to all stores)
+        owner_active_subscription = Subscription.objects.filter(
+            store__owner=request.user, 
+            status='active'
+        ).order_by('-created_at').first()
+        
         for store in user_stores:
-            subscription = Subscription.objects.filter(store=store).order_by('-created_at').first()
-            if subscription and subscription.is_active():
-                plan_key = subscription.plan or 'free'
-                plan_label = subscription.get_plan_display()
-                is_trial = subscription.status == 'trialing'
+            # Prefer owner-level active subscription, fall back to store-specific
+            subscription = owner_active_subscription or Subscription.objects.filter(
+                store=store
+            ).order_by('-created_at').first()
+            
+            # Determine effective status and plan - mirrors subscription_manage view logic
+            if subscription:
+                # Check if subscription is still valid
+                if subscription.status == 'trialing':
+                    if subscription.trial_ends_at and now > subscription.trial_ends_at:
+                        # Trial has ended
+                        plan_key = 'free'
+                        plan_label = 'Free'
+                        is_trial = False
+                    else:
+                        # Trial is still active
+                        plan_key = subscription.plan or 'free'
+                        plan_label = subscription.get_plan_display()
+                        is_trial = True
+                elif subscription.status == 'active':
+                    plan_key = subscription.plan or 'free'
+                    plan_label = subscription.get_plan_display()
+                    is_trial = False
+                else:
+                    # Canceled, past_due, or other non-active status
+                    plan_key = 'free'
+                    plan_label = 'Free'
+                    is_trial = False
             else:
                 plan_key = 'free'
                 plan_label = 'Free'
                 is_trial = False
 
+            # Get plan price from subscription service
+            plan_details = SubscriptionService.PLAN_DETAILS.get(plan_key, {})
+            plan_price = plan_details.get('price', 0)
+            plan_price_display = f"KSh {plan_price:,}" if plan_price > 0 else "Free"
+
             # Attach transient attributes for template use
+            setattr(store, 'plan', plan_key)
             setattr(store, 'current_plan', plan_key)
             setattr(store, 'plan_label', plan_label)
+            setattr(store, 'plan_price', plan_price_display)
             setattr(store, 'plan_badge_class', plan_color_map.get(plan_key, 'bg-secondary'))
             setattr(store, 'is_trialing_plan', is_trial)
+            setattr(store, 'subscription', subscription)
             annotated_stores.append(store)
 
         context.update({

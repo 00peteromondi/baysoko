@@ -100,8 +100,25 @@ def seller_dashboard(request):
     
     # Compute metrics only for visible stores/listings
     total_listings = user_listings.count()
-    premium_stores = stores.filter(is_premium=True).count()
-    store_views_sum = stores.aggregate(total=Sum('total_views'))['total'] or 0
+    stores_list = None
+
+    # If `stores` is a plain list, compute metrics directly. If it's a QuerySet,
+    # attempt to use DB aggregation, but fall back to converting to a list if the
+    # QuerySet has been sliced (filtering a sliced queryset raises TypeError).
+    if isinstance(stores, list):
+        stores_list = stores
+        premium_stores = sum(1 for store in stores_list if store.is_premium)
+        store_views_sum = sum(getattr(store, 'total_views', 0) for store in stores_list)
+    else:
+        try:
+            premium_stores = stores.filter(is_premium=True).count()
+            store_views_sum = stores.aggregate(total=Sum('total_views'))['total'] or 0
+        except TypeError:
+            # Likely a sliced QuerySet — convert to list and compute in Python
+            stores_list = list(stores)
+            premium_stores = sum(1 for store in stores_list if getattr(store, 'is_premium', False))
+            store_views_sum = sum(getattr(store, 'total_views', 0) for store in stores_list)
+    
     listing_views_sum = user_listings.aggregate(total=Sum('views'))['total'] or 0
     total_views = store_views_sum + listing_views_sum
 
@@ -119,7 +136,12 @@ def seller_dashboard(request):
     remaining = max(free_limit - total_listings, 0)
     percentage_used = (total_listings / free_limit * 100) if free_limit > 0 else 0
 
-    store_with_slug = stores.filter(slug__isnull=False).exclude(slug='').first()
+    # `get_visible_stores` may return a QuerySet, a sliced QuerySet, or a list.
+    # Prefer using the already-converted `stores_list` when available.
+    if stores_list is not None:
+        store_with_slug = next((s for s in stores_list if getattr(s, 'slug', None)), None)
+    else:
+        store_with_slug = stores.filter(slug__isnull=False).exclude(slug='').first()
 
     return render(request, 'storefront/dashboard.html', {
         'stores': stores,
@@ -186,7 +208,46 @@ def store_create(request):
                     store.cover_image = request.FILES['cover_image']
                 store.save()
 
-                messages.success(request, 'Store created successfully!')
+                # Automatically assign Free plan semantics (no DB Subscription required)
+                # Inform user via Django messages, create an in-app notification, and send email.
+                try:
+                    from notifications.utils import create_notification, NotificationService
+                    # In-app notification
+                    try:
+                        create_notification(
+                            recipient=request.user,
+                            notification_type='store_created',
+                            title='Store Created',
+                            message=f'Your store "{store.name}" was created and is on the Free plan.',
+                            sender=None,
+                            related_object_id=store.id,
+                            related_content_type='store',
+                            action_url=store.get_absolute_url(),
+                            action_text='View Store'
+                        )
+                    except Exception:
+                        pass
+
+                    # Email notification via NotificationService for nicer HTML email
+                    try:
+                        email_context = {
+                            'user': request.user,
+                            'store': store,
+                            'store_url': request.build_absolute_uri(store.get_absolute_url()),
+                        }
+                        NotificationService.send_email(
+                            to_email=request.user.email,
+                            subject=f'Your store "{store.name}" has been created',
+                            template_name='emails/store_created.html',
+                            context=email_context
+                        )
+                    except Exception:
+                        pass
+                except Exception:
+                    # If notifications app missing or other errors occur, continue gracefully
+                    pass
+
+                messages.success(request, 'Store created successfully! Your store is now on the Free plan.')
                 return redirect('storefront:seller_dashboard')
                 
             except ValidationError as e:
@@ -338,8 +399,9 @@ def product_create(request, store_slug):
         return render(request, 'storefront/subscription_manage.html', {
             'store': store_for_template,
             'limit_reached': True,
-            'current_count': user_listing_count,
-            'free_limit': FREE_LISTING_LIMIT,
+            'trial_count': user_listing_count,
+            'trial_limit': FREE_LISTING_LIMIT,
+            'trial_available': user_listing_count < FREE_LISTING_LIMIT,
         })
 
     # If the user does not have a store, require they create one first instead of auto-creating it.

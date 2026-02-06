@@ -126,8 +126,10 @@ class SubscriptionService:
         # User can ONLY start trial if they have NEVER had ANY trial
         can_start_trial = not ever_had_trial
         
-        # User can subscribe if they don't have an active subscription
-        can_subscribe = not active_subscription or active_subscription.status != 'active'
+        # User can subscribe if they don't have an active subscription across their stores
+        # An active subscription on any store covers all stores (enterprise/basic/premium semantics)
+        user_active = Subscription.objects.filter(store__owner=user, status='active').order_by('-created_at').first()
+        can_subscribe = not user_active
         
         # Get trial usage count (1 if any trial exists, 0 otherwise)
         trial_count = 1 if ever_had_trial else 0
@@ -143,6 +145,11 @@ class SubscriptionService:
             'trial_count': trial_count,
             'trial_limit': 1,  # Only 1 trial per user
         }
+
+    @classmethod
+    def get_user_active_subscription(cls, user):
+        """Return the most recent active subscription across all stores owned by the user."""
+        return Subscription.objects.filter(store__owner=user, status='active').order_by('-created_at').first()
     
     @classmethod
     def subscribe_immediately(cls, store, plan, phone_number):
@@ -157,14 +164,14 @@ class SubscriptionService:
             return False, f"Phone number is too long. Maximum {max_length} characters allowed."
         
         with transaction.atomic():
-            # Check if store already has active subscription
-            existing_active = Subscription.objects.filter(
-                store=store,
+            # Check if user already has an active subscription (owner-level precedence)
+            owner_active = Subscription.objects.filter(
+                store__owner=store.owner,
                 status='active'
             ).exists()
-            
-            if existing_active:
-                return False, "Store already has an active subscription."
+
+            if owner_active:
+                return False, "You already have an active subscription covering your stores. Wait until it expires before subscribing again."
             
             # Create active subscription
             subscription = Subscription.objects.create(
@@ -323,7 +330,12 @@ class SubscriptionService:
     @classmethod
     def can_user_access_premium(cls, user, store):
         """Check if user can access premium features with strict validation"""
-        # Get latest subscription and rely on Subscription.is_active() which includes valid trials
+        # Prefer owner-level active subscription (covers all stores)
+        owner_active = cls.get_user_active_subscription(user)
+        if owner_active and owner_active.is_active():
+            return True
+
+        # Fallback to store-level subscription
         subscription = Subscription.objects.filter(store=store).order_by('-created_at').first()
         if subscription and subscription.is_active():
             return True

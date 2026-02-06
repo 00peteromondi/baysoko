@@ -174,6 +174,7 @@ def notify_delivery_status(recipient, order, message):
         order: Order instance related to the message
         message: Short text message to deliver
     """
+    from django.urls import reverse
     notification_service = NotificationService()
 
     # Prefer order-level phone number, fall back to recipient attribute
@@ -186,14 +187,15 @@ def notify_delivery_status(recipient, order, message):
 
     # Create in-app notification
     try:
+        order_id = getattr(order, 'id', None)
         return create_notification(
             recipient=recipient,
             notification_type='delivery_status',
             title='Delivery Update',
             message=str(message),
-            related_object_id=getattr(order, 'id', None),
+            related_object_id=order_id,
             related_content_type='order',
-            action_url=f'/orders/{getattr(order, "id", "")}/',
+            action_url=reverse('order_detail', kwargs={'order_id': order_id}) if order_id else '',
             action_text='View Order'
         )
     except Exception:
@@ -338,6 +340,7 @@ def create_notification(recipient, notification_type, title, message,
 
 def notify_order_created(buyer, order):
     """Notify buyer about order creation"""
+    from django.urls import reverse
     return create_notification(
         recipient=buyer,
         notification_type='order_created',
@@ -345,12 +348,13 @@ def notify_order_created(buyer, order):
         message=f'Your order #{order.id} has been placed. Please complete payment.',
         related_object_id=order.id,
         related_content_type='order',
-        action_url=f'/orders/{order.id}/',
+        action_url=reverse('order_detail', kwargs={'order_id': order.id}),
         action_text='View Order'
     )
 
 def notify_order_paid(buyer, order):
     """Notify buyer about payment confirmation"""
+    from django.urls import reverse
     return create_notification(
         recipient=buyer,
         notification_type='payment_success',
@@ -358,12 +362,13 @@ def notify_order_paid(buyer, order):
         message=f'Payment for order #{order.id} has been confirmed. Your order is now being processed.',
         related_object_id=order.id,
         related_content_type='order',
-        action_url=f'/orders/{order.id}/',
+        action_url=reverse('order_detail', kwargs={'order_id': order.id}),
         action_text='Track Order'
     )
 
 def notify_order_status_update(buyer, order, status):
     """Notify buyer about order status update"""
+    from django.urls import reverse
     status_messages = {
         'processing': 'Your order is being prepared by the seller.',
         'shipped': 'Your order has been shipped and is on its way.',
@@ -381,6 +386,6 @@ def notify_order_status_update(buyer, order, status):
         message=message,
         related_object_id=order.id,
         related_content_type='order',
-        action_url=f'/orders/{order.id}/',
+        action_url=reverse('order_detail', kwargs={'order_id': order.id}),
         action_text='View Details'
     )

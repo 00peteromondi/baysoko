@@ -41,6 +41,11 @@ def subscription_plan_select(request, slug):
     if request.method == 'POST':
         plan_form = SubscriptionPlanForm(request.POST)
         upgrade_form = UpgradeForm(request.POST)
+        # Disallow subscribing to another plan while user already has an active subscription
+        owner_active = SubscriptionService.get_user_active_subscription(request.user)
+        if owner_active:
+            messages.error(request, "You already have an active subscription. You cannot subscribe to another plan until your active subscription ends.")
+            return redirect('storefront:subscription_manage', slug=slug)
         
         if plan_form.is_valid() and upgrade_form.is_valid():
             plan = plan_form.cleaned_data['plan']
@@ -241,8 +246,13 @@ def subscription_manage(request, slug):
         store=store
     ).order_by('-created_at')
     
-    # Get active subscription
-    current_subscription = subscription_history.first()
+    # Prefer owner-level active subscription (an active plan covers all stores)
+    owner_active = Subscription.objects.filter(store__owner=request.user, status='active').order_by('-created_at').first()
+    if owner_active:
+        current_subscription = owner_active
+    else:
+        # Fall back to the store-specific latest subscription
+        current_subscription = subscription_history.first()
     
     # Get recent payments
     recent_payments = []

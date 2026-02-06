@@ -70,6 +70,7 @@ def mark_notification_read(request, notification_id):
     """Mark a single notification as read"""
     notification = get_object_or_404(Notification, id=notification_id, recipient=request.user)
     notification.mark_as_read()
+    notification.is_read = True
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return JsonResponse({'success': True})
