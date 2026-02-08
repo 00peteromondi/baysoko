@@ -890,6 +890,33 @@
                 {% endif %}
                 
 
+                <!-- Payout Settings -->
+                {% if not creating_store %}
+                <div class="form-section-modern">
+                    <h3 class="section-title-modern">
+                        <i class="bi bi-wallet2"></i>
+                        Payout Settings
+                    </h3>
+                    <div class="form-grid-modern">
+                        <div class="form-group">
+                            <label class="form-label fw-bold">M-Pesa Payout Phone</label>
+                            {% if store.payout_verified %}
+                                <input type="text" class="form-control" value="{{ store.payout_phone }}" disabled>
+                                <div class="form-text text-success">Verified on {{ store.payout_verified_at|date:'SHORT_DATE_FORMAT' }} — payout phone locked.</div>
+                            {% else %}
+                                <input type="text" class="form-control" id="payoutPhone" name="payout_phone" value="{{ store.payout_phone|default:'' }}">
+                                <div class="form-text">Enter the M-Pesa phone to receive payouts. Verify to lock this number.</div>
+                                <form method="post" action="{% url 'storefront:start_payout_verification' store.slug %}" class="mt-2">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="phone" id="verifyPhoneInput" value="{{ store.payout_phone|default:'' }}">
+                                    <button class="btn btn-outline-primary btn-sm" type="submit" onclick="document.getElementById('verifyPhoneInput').value = document.getElementById('payoutPhone').value;">Verify Phone</button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- Form Actions -->
                 <div class="form-actions-modern">
                     <a href="{% url 'storefront:seller_dashboard' %}" class="btn-custom btn-ghost">
@@ -1040,6 +1067,7 @@
     </div>
 </div>
 {% endif %}
+
 {% endblock %}
 
 {% block extra_js %}

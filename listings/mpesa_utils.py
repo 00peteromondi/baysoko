@@ -30,6 +30,11 @@ class MpesaGateway:
             logger.warning(f"Invalid MPESA_ENVIRONMENT '{self.environment}', defaulting to 'sandbox'")
             self.environment = 'sandbox'
         
+        # Validate callback URL format
+        if self.callback_url:
+            if not self.callback_url.startswith('https://'):
+                logger.warning(f"MPESA_CALLBACK_URL must be HTTPS, got: {self.callback_url}. M-Pesa may reject this URL.")
+        
         # Check if we have valid credentials
         self.has_valid_credentials = all([
             self.consumer_key,

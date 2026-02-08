@@ -280,11 +280,22 @@ def my_listings(request):
                 'price': listing.price,
                 'image': image_url
             })
+        # Detect whether the caller expects JSON (AJAX) or HTML
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax') in ('1', 'true')
+
+        if is_ajax:
+            return JsonResponse({'listings': listings_data})
+
+        # Render an HTML partial for callers that expect HTML
+        return render(request, 'chats/_my_listings.html', {
+            'listings': listings_data
+        })
         
-        return JsonResponse({'listings': listings_data})
-        
-    except Exception as e:
-        return JsonResponse({'listings': []})
+    except Exception:
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax') in ('1', 'true')
+        if is_ajax:
+            return JsonResponse({'listings': []})
+        return render(request, 'chats/_my_listings.html', {'listings': []})
 
 
 

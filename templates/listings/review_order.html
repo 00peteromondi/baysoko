@@ -3,272 +3,879 @@
 
 {% block title %}Review Order #{{ order.id }} - Baysoko{% endblock %}
 
-{% block content %}
-<div class="container py-5">
-    <nav aria-label="breadcrumb" class="mb-4">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'order_list' %}">Orders</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'order_detail' order.id %}">Order #{{ order.id }}</a></li>
-            <li class="breadcrumb-item active" aria-current="page">Leave Review</li>
-        </ol>
-    </nav>
+{% block extra_css %}
+<style>
+    /* ===== GLOBAL STYLES ===== */
+    .order-review-container {
+        min-height: 80vh;
+        padding: var(--spacing-xl) 0;
+        background: linear-gradient(135deg, 
+            rgba(25, 135, 84, 0.05) 0%, 
+            rgba(255, 193, 7, 0.05) 50%, 
+            rgba(13, 110, 253, 0.05) 100%);
+    }
 
-    <div class="row">
-        <div class="col-lg-8">
-            <div class="card shadow mb-4">
-                <div class="card-header bg-success text-white py-3">
-                    <h2 class="h4 mb-0"><i class="bi bi-stars me-2"></i> Review Your Order #{{ order.id }}</h2>
-                </div>
-                <div class="card-body p-4">
-                    <div class="mb-4">
-                        <h5 class="mb-3">Order Summary</h5>
-                        <div class="row">
-                            {% for item in items|slice:":3" %}
-                            <div class="col-md-4 mb-3">
-                                <div class="border rounded p-2">
-                                    <img src="{{ item.listing.get_image_url }}" 
-                                         alt="{{ item.listing.title }}"
-                                         class="img-fluid rounded mb-2"
-                                         style="height: 80px; object-fit: cover; width: 100%;">
-                                    <h6 class="mb-1">{{ item.listing.title|truncatechars:30 }}</h6>
-                                    <small class="text-muted">Qty: {{ item.quantity }}</small>
+    .container-custom {
+        padding-left: 12px;
+        padding-right: 12px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    /* ===== BREADCRUMB ===== */
+    .breadcrumb {
+        background: var(--bg-secondary);
+        padding: 10px 15px;
+        border-radius: var(--radius-md);
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        font-size: 13px;
+    }
+
+    .breadcrumb-item a {
+        text-decoration: none;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    /* ===== MAIN CONTENT ===== */
+    .row-custom {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 25px;
+    }
+
+    @media (min-width: 992px) {
+        .row-custom {
+            grid-template-columns: 2fr 1fr;
+        }
+    }
+
+    /* ===== ORDER REVIEW CARD ===== */
+    .order-review-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border-color);
+        position: relative;
+    }
+
+    .order-review-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: linear-gradient(90deg, var(--success), var(--accent));
+    }
+
+    .card-header-review {
+        padding: 25px;
+        background: linear-gradient(135deg, var(--success) 0%, #198754 100%);
+        color: white;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .card-header-review::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 100px;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.1);
+        transform: skewX(-15deg);
+    }
+
+    .card-header-review h2 {
+        font-size: 22px;
+        font-weight: 900;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .card-body-review {
+        padding: 30px;
+    }
+
+    /* ===== ORDER SUMMARY ===== */
+    .order-summary {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        margin-bottom: 30px;
+        border: 1px solid var(--border-color);
+    }
+
+    .order-summary h5 {
+        font-size: 18px;
+        font-weight: 900;
+        margin-bottom: 15px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .order-items-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 15px;
+        margin-top: 15px;
+    }
+
+    .order-item-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-md);
+        padding: 15px;
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+
+    .order-item-card:hover {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .order-item-image {
+        width: 100%;
+        height: 80px;
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+        margin-bottom: 10px;
+    }
+
+    .order-item-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .order-item-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 5px;
+        line-height: 1.3;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .order-item-meta {
+        font-size: 12px;
+        color: var(--text-secondary);
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+    }
+
+    /* ===== RATING STYLES ===== */
+    .rating-section {
+        margin-bottom: 30px;
+    }
+
+    .rating-label {
+        font-size: 16px;
+        font-weight: 900;
+        color: var(--text-primary);
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .rating-input-container {
+        display: flex;
+        flex-direction: row-reverse;
+        justify-content: flex-start;
+        gap: 5px;
+    }
+
+    .rating-star {
+        display: none;
+    }
+
+    .rating-star-label {
+        cursor: pointer;
+        color: #ddd;
+        font-size: 28px;
+        transition: all 0.2s ease;
+        padding: 5px;
+    }
+
+    .rating-star-label:hover,
+    .rating-star-label:hover ~ .rating-star-label,
+    .rating-star:checked ~ .rating-star-label {
+        color: #ffc107;
+        transform: scale(1.1);
+    }
+
+    .rating-star:checked + .rating-star-label {
+        color: #ffc107;
+        animation: starPop 0.3s ease;
+    }
+
+    .detailed-ratings {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        margin: 25px 0;
+        border: 1px solid var(--border-color);
+    }
+
+    .detailed-rating-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 20px;
+        margin-top: 15px;
+    }
+
+    .detailed-rating-item {
+        text-align: center;
+    }
+
+    .detailed-rating-label {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 10px;
+        display: block;
+    }
+
+    .detailed-rating-subtext {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-top: 5px;
+        display: block;
+    }
+
+    .detailed-rating-icons {
+        display: flex;
+        flex-direction: row-reverse;
+        justify-content: center;
+        gap: 5px;
+    }
+
+    .detailed-rating-icon {
+        cursor: pointer;
+        color: #ddd;
+        font-size: 20px;
+        transition: all 0.2s ease;
+        padding: 3px;
+    }
+
+    .detailed-rating-icon:hover,
+    .detailed-rating-icon:hover ~ .detailed-rating-icon,
+    .detailed-rating-item input:checked ~ .detailed-rating-icon {
+        color: #ffc107;
+        transform: scale(1.1);
+    }
+
+    .detailed-rating-item input:checked + .detailed-rating-icon {
+        color: #ffc107;
+    }
+
+    /* ===== FORM STYLES ===== */
+    .form-group-custom {
+        margin-bottom: 25px;
+    }
+
+    .form-label-custom {
+        font-size: 16px;
+        font-weight: 900;
+        color: var(--text-primary);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .form-control-custom {
+        width: 100%;
+        padding: 15px;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 15px;
+        transition: all 0.3s ease;
+        outline: none;
+        resize: vertical;
+        min-height: 120px;
+    }
+
+    .form-control-custom:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+    }
+
+    .file-input-custom {
+        width: 100%;
+        padding: 15px;
+        border: 2px dashed var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-size: 14px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+
+    .file-input-custom:hover {
+        border-color: var(--primary);
+        background: var(--bg-primary);
+    }
+
+    .file-input-custom:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+    }
+
+    /* ===== ACTION BUTTONS ===== */
+    .action-buttons {
+        display: flex;
+        gap: 15px;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .btn-cancel {
+        padding: 12px 25px;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        font-size: 15px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .btn-cancel:hover {
+        background: var(--bg-primary);
+        border-color: var(--primary);
+        color: var(--primary);
+        transform: translateY(-2px);
+        text-decoration: none;
+    }
+
+    .btn-submit {
+        padding: 12px 25px;
+        background: linear-gradient(135deg, var(--success) 0%, #198754 100%);
+        color: white;
+        border: none;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        font-size: 15px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        flex: 1;
+    }
+
+    .btn-submit:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(25, 135, 84, 0.2);
+    }
+
+    /* ===== SIDEBAR CARDS ===== */
+    .sidebar-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 25px;
+        border: 1px solid var(--border-color);
+        margin-bottom: 20px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .sidebar-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: linear-gradient(to bottom, var(--info), var(--accent));
+    }
+
+    .sidebar-card-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid var(--border-color);
+    }
+
+    .sidebar-card-header h5 {
+        font-size: 18px;
+        font-weight: 900;
+        margin: 0;
+        color: var(--text-primary);
+    }
+
+    .sidebar-card-body {
+        color: var(--text-primary);
+    }
+
+    .sidebar-card-body p {
+        margin-bottom: 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .sidebar-card-body p strong {
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .sidebar-card-body p span {
+        color: var(--text-secondary);
+        font-weight: 600;
+    }
+
+    .sellers-list {
+        list-style: none;
+        padding: 0;
+        margin: 15px 0 0 0;
+    }
+
+    .sellers-list li {
+        padding: 8px 0;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .sellers-list li:last-child {
+        border-bottom: none;
+    }
+
+    .tips-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .tips-list li {
+        padding: 10px 0;
+        color: var(--text-primary);
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 14px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .tips-list li:last-child {
+        border-bottom: none;
+    }
+
+    .tips-list li i {
+        color: var(--success);
+        font-size: 16px;
+        margin-top: 2px;
+        flex-shrink: 0;
+    }
+
+    /* ===== ANIMATIONS ===== */
+    @keyframes starPop {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.2); }
+        100% { transform: scale(1); }
+    }
+
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .animate-fade-in-up {
+        animation: fadeInUp 0.6s ease-out forwards;
+    }
+
+    /* ===== RESPONSIVE DESIGN ===== */
+    @media (max-width: 768px) {
+        .container-custom {
+            padding-left: 8px;
+            padding-right: 8px;
+        }
+        
+        .order-items-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .detailed-rating-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .action-buttons {
+            flex-direction: column;
+        }
+        
+        .card-body-review {
+            padding: 20px;
+        }
+        
+        .card-header-review h2 {
+            font-size: 18px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .order-items-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .rating-star-label {
+            font-size: 24px;
+        }
+        
+        .detailed-rating-icon {
+            font-size: 18px;
+        }
+        
+        .sidebar-card {
+            padding: 15px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="order-review-container">
+    <div class="container-custom py-3">
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb" class="mb-3">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'home' %}"><i class="bi bi-house"></i> Home</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'order_list' %}">Orders</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'order_detail' order.id %}">Order #{{ order.id }}</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Leave Review</li>
+            </ol>
+        </nav>
+
+        <div class="row-custom">
+            <!-- Main Content -->
+            <div>
+                <!-- Order Review Card -->
+                <div class="order-review-card animate-fade-in-up">
+                    <div class="card-header-review">
+                        <h2><i class="bi bi-stars"></i> Review Your Order #{{ order.id }}</h2>
+                    </div>
+                    
+                    <div class="card-body-review">
+                        <!-- Order Summary -->
+                        <div class="order-summary animate-fade-in-up" style="animation-delay: 0.1s;">
+                            <h5><i class="bi bi-receipt"></i> Order Summary</h5>
+                            <div class="order-items-grid">
+                                {% for item in items|slice:":3" %}
+                                <div class="order-item-card">
+                                    <div class="order-item-image">
+                                        <img src="{{ item.listing.get_image_url }}" alt="{{ item.listing.title }}">
+                                    </div>
+                                    <div class="order-item-title">{{ item.listing.title|truncatechars:30 }}</div>
+                                    <div class="order-item-meta">
+                                        <span>Qty: {{ item.quantity }}</span>
+                                    </div>
                                 </div>
+                                {% endfor %}
                             </div>
-                            {% endfor %}
                             {% if items.count > 3 %}
-                            <div class="col-12">
+                            <div class="text-center mt-3">
                                 <small class="text-muted">+ {{ items.count|add:"-3" }} more item{{ items.count|add:"-3"|pluralize }}</small>
                             </div>
                             {% endif %}
                         </div>
-                    </div>
-                    
-                    <form method="post" enctype="multipart/form-data">
-                        {% csrf_token %}
                         
-                        <!-- Overall Rating -->
-                        <div class="mb-4">
-                            <label class="form-label fw-bold">Overall Experience</label>
-                            <div class="rating-input">
-                                {% for i in "54321" %}
-                                <input type="radio" id="star{{ i }}" name="rating" value="{{ i }}" 
-                                       {% if form.rating.value == i or not form.rating.value and forloop.first %}checked{% endif %}>
-                                <label for="star{{ i }}" title="{{ i }} stars">
-                                    <i class="bi bi-star{% if form.rating.value >= i|add:"0" %}-fill{% endif %}"></i>
+                        <!-- Review Form -->
+                        <form method="post" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            
+                            <!-- Overall Rating -->
+                            <div class="rating-section animate-fade-in-up" style="animation-delay: 0.2s;">
+                                <label class="rating-label">
+                                    <i class="bi bi-star"></i>
+                                    Overall Experience
                                 </label>
+                                <div class="rating-input-container">
+                                    {% for i in "54321" %}
+                                    <input type="radio" id="star{{ i }}" name="rating" value="{{ i }}" 
+                                           class="rating-star"
+                                           {% if form.rating.value == i or not form.rating.value and forloop.first %}checked{% endif %}>
+                                    <label for="star{{ i }}" class="rating-star-label" title="{{ i }} stars">
+                                        <i class="bi bi-star{% if form.rating.value >= i|add:"0" %}-fill{% endif %}"></i>
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                                {% if form.rating.errors %}
+                                <div class="error-message mt-2">
+                                    <i class="bi bi-exclamation-circle text-danger me-1"></i>
+                                    {{ form.rating.errors.0 }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Detailed Ratings -->
+                            <div class="detailed-ratings animate-fade-in-up" style="animation-delay: 0.3s;">
+                                <h6 class="rating-label mb-3"><i class="bi bi-list-check"></i> Detailed Ratings</h6>
+                                <div class="detailed-rating-grid">
+                                    <div class="detailed-rating-item">
+                                        <label class="detailed-rating-label">Communication</label>
+                                        <div class="detailed-rating-icons">
+                                            {% for i in "54321" %}
+                                            <input type="radio" id="comm{{ i }}" name="communication_rating" value="{{ i }}"
+                                                   class="d-none"
+                                                   {% if form.communication_rating.value == i or not form.communication_rating.value and forloop.first %}checked{% endif %}>
+                                            <label for="comm{{ i }}" class="detailed-rating-icon" title="{{ i }} stars">
+                                                <i class="bi bi-chat{% if form.communication_rating.value >= i|add:"0" %}-fill{% endif %}"></i>
+                                            </label>
+                                            {% endfor %}
+                                        </div>
+                                        <span class="detailed-rating-subtext">Seller communication</span>
+                                    </div>
+                                    
+                                    <div class="detailed-rating-item">
+                                        <label class="detailed-rating-label">Delivery</label>
+                                        <div class="detailed-rating-icons">
+                                            {% for i in "54321" %}
+                                            <input type="radio" id="delivery{{ i }}" name="delivery_rating" value="{{ i }}"
+                                                   class="d-none"
+                                                   {% if form.delivery_rating.value == i or not form.delivery_rating.value and forloop.first %}checked{% endif %}>
+                                            <label for="delivery{{ i }}" class="detailed-rating-icon" title="{{ i }} stars">
+                                                <i class="bi bi-truck{% if form.delivery_rating.value >= i|add:"0" %}-fill{% endif %}"></i>
+                                            </label>
+                                            {% endfor %}
+                                        </div>
+                                        <span class="detailed-rating-subtext">Speed & packaging</span>
+                                    </div>
+                                    
+                                    <div class="detailed-rating-item">
+                                        <label class="detailed-rating-label">Accuracy</label>
+                                        <div class="detailed-rating-icons">
+                                            {% for i in "54321" %}
+                                            <input type="radio" id="accuracy{{ i }}" name="accuracy_rating" value="{{ i }}"
+                                                   class="d-none"
+                                                   {% if form.accuracy_rating.value == i or not form.accuracy_rating.value and forloop.first %}checked{% endif %}>
+                                            <label for="accuracy{{ i }}" class="detailed-rating-icon" title="{{ i }} stars">
+                                                <i class="bi bi-check-circle{% if form.accuracy_rating.value >= i|add:"0" %}-fill{% endif %}"></i>
+                                            </label>
+                                            {% endfor %}
+                                        </div>
+                                        <span class="detailed-rating-subtext">Item as described</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Comment -->
+                            <div class="form-group-custom animate-fade-in-up" style="animation-delay: 0.4s;">
+                                <label class="form-label-custom">
+                                    <i class="bi bi-chat-text"></i>
+                                    Your Review
+                                </label>
+                                <textarea name="comment" 
+                                          class="form-control-custom" 
+                                          rows="6"
+                                          placeholder="Share your experience with this order...">{{ form.comment.value|default:'' }}</textarea>
+                                {% if form.comment.errors %}
+                                <div class="error-message mt-2">
+                                    <i class="bi bi-exclamation-circle text-danger me-1"></i>
+                                    {{ form.comment.errors.0 }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Photos -->
+                            <div class="form-group-custom animate-fade-in-up" style="animation-delay: 0.5s;">
+                                <label class="form-label-custom">
+                                    <i class="bi bi-images"></i>
+                                    Add Photos (Optional)
+                                </label>
+                                <input type="file" 
+                                       name="photos" 
+                                       class="file-input-custom"
+                                       multiple
+                                       accept="image/*">
+                                <small class="text-muted mt-2 d-block">Upload up to 5 photos of your items</small>
+                                
+                                {% for photo in review.review_images.all %}
+                                <div class="review-photo-preview mt-2">
+                                    <img src="{{ photo.image.url }}" alt="{{ photo.caption }}" class="rounded" width="80" height="80" style="object-fit: cover;">
+                                </div>
                                 {% endfor %}
                             </div>
-                            {% if form.rating.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.rating.errors }}
+                            
+                            <!-- Action Buttons -->
+                            <div class="action-buttons animate-fade-in-up" style="animation-delay: 0.6s;">
+                                <a href="{% url 'order_detail' order.id %}" class="btn-cancel">
+                                    <i class="bi bi-arrow-left"></i> Cancel
+                                </a>
+                                <button type="submit" class="btn-submit">
+                                    <i class="bi bi-check-circle"></i>
+                                    Submit Order Review
+                                </button>
                             </div>
-                            {% endif %}
-                        </div>
-                        
-                        <!-- Detailed Ratings -->
-                        <div class="mb-4">
-                            <h6 class="mb-3">Detailed Ratings</h6>
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">Communication</label>
-                                    <div class="detailed-rating-input">
-                                        {% for i in "54321" %}
-                                        <input type="radio" id="comm{{ i }}" name="communication_rating" value="{{ i }}"
-                                               {% if form.communication_rating.value == i or not form.communication_rating.value and forloop.first %}checked{% endif %}>
-                                        <label for="comm{{ i }}" title="{{ i }} stars">
-                                            <i class="bi bi-chat{% if form.communication_rating.value >= i|add:"0" %}-fill{% endif %}"></i>
-                                        </label>
-                                        {% endfor %}
-                                    </div>
-                                    <small class="text-muted">Seller communication</small>
-                                </div>
-                                
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">Delivery</label>
-                                    <div class="detailed-rating-input">
-                                        {% for i in "54321" %}
-                                        <input type="radio" id="delivery{{ i }}" name="delivery_rating" value="{{ i }}"
-                                               {% if form.delivery_rating.value == i or not form.delivery_rating.value and forloop.first %}checked{% endif %}>
-                                        <label for="delivery{{ i }}" title="{{ i }} stars">
-                                            <i class="bi bi-truck{% if form.delivery_rating.value >= i|add:"0" %}-fill{% endif %}"></i>
-                                        </label>
-                                        {% endfor %}
-                                    </div>
-                                    <small class="text-muted">Speed & packaging</small>
-                                </div>
-                                
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">Accuracy</label>
-                                    <div class="detailed-rating-input">
-                                        {% for i in "54321" %}
-                                        <input type="radio" id="accuracy{{ i }}" name="accuracy_rating" value="{{ i }}"
-                                               {% if form.accuracy_rating.value == i or not form.accuracy_rating.value and forloop.first %}checked{% endif %}>
-                                        <label for="accuracy{{ i }}" title="{{ i }} stars">
-                                            <i class="bi bi-check-circle{% if form.accuracy_rating.value >= i|add:"0" %}-fill{% endif %}"></i>
-                                        </label>
-                                        {% endfor %}
-                                    </div>
-                                    <small class="text-muted">Item as described</small>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Comment -->
-                        <div class="mb-4">
-                            {{ form.comment|as_crispy_field }}
-                        </div>
-                        
-                        <!-- Photos -->
-                        <div class="mb-4">
-                            <label class="form-label">Add Photos (Optional)</label>
-                            {{ photo_form.photos }}
-                            <small class="text-muted">Upload up to 5 photos of your items</small>
-                        </div>
-                        {% for photo in review.review_images.all %}
-                            <img src="{{ photo.image.url }}" alt="{{ photo.caption }}" class="review-photo">
-                        {% endfor %}
-                        
-                        <div class="d-flex justify-content-between">
-                            <a href="{% url 'order_detail' order.id %}" class="btn btn-outline-secondary">Cancel</a>
-                            <button type="submit" class="btn btn-success">Submit Order Review</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Sidebar -->
-        <div class="col-lg-4">
-            <!-- Order Details -->
-            <div class="card shadow mb-4">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0"><i class="bi bi-receipt me-2"></i> Order Details</h5>
-                </div>
-                <div class="card-body">
-                    <p><strong>Order Date:</strong> {{ order.created_at|date:"M d, Y" }}</p>
-                    <p><strong>Total Amount:</strong> KSh {{ order.total_price }}</p>
-                    <p><strong>Status:</strong> {{ order.get_status_display }}</p>
-                    
-                    <hr>
-                    
-                    <h6>Sellers in this Order:</h6>
-                    <ul class="list-unstyled">
-                        {% for seller in sellers %}
-                        <li class="mb-2">
-                            <i class="bi bi-person-check me-2"></i>
-                            {{ seller.username }}
-                        </li>
-                        {% endfor %}
-                    </ul>
+                        </form>
+                    </div>
                 </div>
             </div>
             
-            <!-- Review Tips -->
-            <div class="card shadow">
-                <div class="card-header bg-info text-white">
-                    <h5 class="mb-0"><i class="bi bi-lightbulb me-2"></i> Review Tips</h5>
+            <!-- Sidebar -->
+            <div>
+                <!-- Order Details Card -->
+                <div class="sidebar-card animate-fade-in-up" style="animation-delay: 0.3s;">
+                    <div class="sidebar-card-header">
+                        <i class="bi bi-receipt fs-4 text-primary"></i>
+                        <h5>Order Details</h5>
+                    </div>
+                    <div class="sidebar-card-body">
+                        <p><strong>Order Date:</strong> <span>{{ order.created_at|date:"M d, Y" }}</span></p>
+                        <p><strong>Total Amount:</strong> <span>KSh {{ order.total_price|intcomma }}</span></p>
+                        <p><strong>Status:</strong> <span>{{ order.get_status_display }}</span></p>
+                        
+                        <hr class="my-3">
+                        
+                        <h6 class="fw-bold mb-3">Sellers in this Order:</h6>
+                        <ul class="sellers-list">
+                            {% for seller in sellers %}
+                            <li>
+                                <i class="bi bi-person-check text-success"></i>
+                                {{ seller.username }}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <ul class="list-unstyled mb-0">
-                        <li class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> Be specific about what you liked</li>
-                        <li class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> Mention packaging quality</li>
-                        <li class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> Note communication with seller</li>
-                        <li class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> Describe item condition</li>
-                        <li><i class="bi bi-check-circle text-success me-1"></i> Photos help other buyers</li>
-                    </ul>
+                
+                <!-- Review Tips Card -->
+                <div class="sidebar-card animate-fade-in-up" style="animation-delay: 0.4s;">
+                    <div class="sidebar-card-header">
+                        <i class="bi bi-lightbulb fs-4 text-warning"></i>
+                        <h5>Review Tips</h5>
+                    </div>
+                    <div class="sidebar-card-body">
+                        <ul class="tips-list">
+                            <li><i class="bi bi-check-circle"></i> Be specific about what you liked</li>
+                            <li><i class="bi bi-check-circle"></i> Mention packaging quality</li>
+                            <li><i class="bi bi-check-circle"></i> Note communication with seller</li>
+                            <li><i class="bi bi-check-circle"></i> Describe item condition</li>
+                            <li><i class="bi bi-check-circle"></i> Photos help other buyers</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<style>
-.rating-input, .detailed-rating-input {
-    display: flex;
-    flex-direction: row-reverse;
-    justify-content: flex-end;
-    gap: 5px;
-}
-
-.rating-input label, .detailed-rating-input label {
-    cursor: pointer;
-    color: #ddd;
-    font-size: 1.5rem;
-    transition: color 0.2s;
-}
-
-.detailed-rating-input label {
-    font-size: 1.25rem;
-}
-
-.rating-input input:checked ~ label,
-.rating-input label:hover,
-.rating-input label:hover ~ label,
-.detailed-rating-input input:checked ~ label,
-.detailed-rating-input label:hover,
-.detailed-rating-input label:hover ~ label {
-    color: #ffc107;
-}
-
-.rating-input input:checked + label,
-.detailed-rating-input input:checked + label {
-    color: #ffc107;
-}
-
-input[type="radio"] {
-    display: none;
-}
-
-.card {
-    border: none;
-    border-radius: 15px;
-    overflow: hidden;
-}
-
-.card-header {
-    border-radius: 15px 15px 0 0 !important;
-}
-</style>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Handle star rating clicks
-    const ratingInputs = document.querySelectorAll('.rating-input input, .detailed-rating-input input');
-    
-    ratingInputs.forEach(input => {
-        input.addEventListener('change', function() {
-            const labels = this.parentElement.querySelectorAll('label');
-            const value = parseInt(this.value);
-            
-            labels.forEach((label, index) => {
-                const starValue = 5 - index;
-                const icon = label.querySelector('i');
-                
-                if (starValue <= value) {
-                    if (icon.classList.contains('bi-star')) {
-                        icon.classList.replace('bi-star', 'bi-star-fill');
-                    } else if (icon.classList.contains('bi-chat')) {
-                        icon.classList.replace('bi-chat', 'bi-chat-fill');
-                    } else if (icon.classList.contains('bi-truck')) {
-                        icon.classList.replace('bi-truck', 'bi-truck-fill');
-                    } else if (icon.classList.contains('bi-check-circle')) {
-                        icon.classList.replace('bi-check-circle', 'bi-check-circle-fill');
-                    }
-                } else {
-                    if (icon.classList.contains('bi-star-fill')) {
-                        icon.classList.replace('bi-star-fill', 'bi-star');
-                    } else if (icon.classList.contains('bi-chat-fill')) {
-                        icon.classList.replace('bi-chat-fill', 'bi-chat');
-                    } else if (icon.classList.contains('bi-truck-fill')) {
-                        icon.classList.replace('bi-truck-fill', 'bi-truck');
-                    } else if (icon.classList.contains('bi-check-circle-fill')) {
-                        icon.classList.replace('bi-check-circle-fill', 'bi-check-circle');
-                    }
+    // Update star icons based on initial values
+    function updateStarIcons(rating, container) {
+        const icons = container.querySelectorAll('.rating-star-label i, .detailed-rating-icon i');
+        icons.forEach((icon, index) => {
+            const starValue = 5 - index;
+            if (starValue <= rating) {
+                if (icon.classList.contains('bi-star')) {
+                    icon.classList.replace('bi-star', 'bi-star-fill');
+                } else if (icon.classList.contains('bi-chat')) {
+                    icon.classList.replace('bi-chat', 'bi-chat-fill');
+                } else if (icon.classList.contains('bi-truck')) {
+                    icon.classList.replace('bi-truck', 'bi-truck-fill');
+                } else if (icon.classList.contains('bi-check-circle')) {
+                    icon.classList.replace('bi-check-circle', 'bi-check-circle-fill');
                 }
-            });
+            }
+        });
+    }
+    
+    // Initialize star icons
+    const overallRating = parseInt(document.querySelector('input[name="rating"]:checked')?.value || 0);
+    const overallContainer = document.querySelector('.rating-input-container');
+    if (overallRating > 0 && overallContainer) {
+        updateStarIcons(overallRating, overallContainer);
+    }
+    
+    const commRating = parseInt(document.querySelector('input[name="communication_rating"]:checked')?.value || 0);
+    const commContainer = document.querySelector('.detailed-rating-item:has([name="communication_rating"])');
+    if (commRating > 0 && commContainer) {
+        updateStarIcons(commRating, commContainer);
+    }
+    
+    const deliveryRating = parseInt(document.querySelector('input[name="delivery_rating"]:checked')?.value || 0);
+    const deliveryContainer = document.querySelector('.detailed-rating-item:has([name="delivery_rating"])');
+    if (deliveryRating > 0 && deliveryContainer) {
+        updateStarIcons(deliveryRating, deliveryContainer);
+    }
+    
+    const accuracyRating = parseInt(document.querySelector('input[name="accuracy_rating"]:checked')?.value || 0);
+    const accuracyContainer = document.querySelector('.detailed-rating-item:has([name="accuracy_rating"])');
+    if (accuracyRating > 0 && accuracyContainer) {
+        updateStarIcons(accuracyRating, accuracyContainer);
+    }
+    
+    // Add star click animations
+    const starInputs = document.querySelectorAll('.rating-star, .detailed-rating-item input');
+    starInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            const label = this.nextElementSibling;
+            if (label) {
+                label.style.animation = 'starPop 0.3s ease';
+                setTimeout(() => {
+                    label.style.animation = '';
+                }, 300);
+            }
         });
     });
+    
+    // File input styling
+    const fileInput = document.querySelector('.file-input-custom');
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                this.style.borderStyle = 'solid';
+                this.style.borderColor = 'var(--success)';
+                this.style.background = 'rgba(6, 214, 160, 0.05)';
+            } else {
+                this.style.borderStyle = 'dashed';
+                this.style.borderColor = 'var(--border-color)';
+                this.style.background = 'var(--bg-secondary)';
+            }
+        });
+    }
 });
 </script>
 {% endblock %}

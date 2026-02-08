@@ -17,6 +17,7 @@ urlpatterns = [
     path('calculate-fee/', views.calculate_delivery_fee_api, name='calculate-fee'),
     path('track/<str:tracking_number>/', views.track_delivery_api, name='track-delivery'),
     
+    
     # Analytics endpoints
     path('analytics/', views.delivery_analytics_api, name='analytics'),
     path('analytics/status-distribution/', views.status_distribution_api, name='status-distribution'),

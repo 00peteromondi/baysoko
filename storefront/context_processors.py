@@ -1,10 +1,19 @@
 # storefront/context_processors.py
 from .models import Store, Subscription
+from types import SimpleNamespace
 from listings.models import Listing
 from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
 from .models import Store, InventoryAlert
+
+# Mapping of plan keys to badge CSS classes used in templates
+plan_color_map = {
+    'free': 'plan-badge-free',
+    'basic': 'plan-badge-basic',
+    'premium': 'plan-badge-premium',
+    'enterprise': 'plan-badge-enterprise',
+}
 from django.db import DatabaseError, OperationalError
 
 
@@ -16,96 +25,50 @@ def store_context(request):
         # Get user's stores
         user_stores = Store.objects.filter(owner=request.user)
         
-        # Get active subscriptions (treat 'trialing' as active only if trial hasn't ended)
-        from django.db.models import Q
-        now = timezone.now()
-        active_subscriptions = Subscription.objects.filter(
-            store__owner=request.user
-        ).filter(
-            Q(status='active') | Q(status='trialing', trial_ends_at__gt=now)
-        )
-        
-        # Check if user has premium store
-        has_premium_store = user_stores.filter(is_premium=True).exists()
-        
-        # Annotate each store with current subscription plan and badge class for templates
-        plan_color_map = {
-            'basic': 'bg-primary',
-            'premium': 'bg-warning',
-            'enterprise': 'bg-success',
-            'free': 'bg-secondary'
-        }
-        
-        # Import SubscriptionService for plan details
-        from .subscription_service import SubscriptionService
-
+        # Annotate each store with current subscription plan
         annotated_stores = []
         
-        # Get owner-level active subscription (applies to all stores)
-        owner_active_subscription = Subscription.objects.filter(
-            store__owner=request.user, 
-            status='active'
-        ).order_by('-created_at').first()
-        
         for store in user_stores:
-            # Use centralized helper which prefers owner-level active subscription
-            try:
-                subscription = store.get_effective_subscription(owner=request.user, create_if_missing=False)
-            except Exception:
-                subscription = owner_active_subscription or Subscription.objects.filter(store=store).order_by('-created_at').first()
+            # Get effective subscription (may return None for free plan)
+            subscription = store.get_effective_subscription(owner=request.user, create_if_missing=False)
             
-            # Determine effective status and plan - mirrors subscription_manage view logic
+            # Determine plan
             if subscription:
-                # Check if subscription is still valid
-                if subscription.status == 'trialing':
-                    if subscription.trial_ends_at and now > subscription.trial_ends_at:
-                        # Trial has ended
-                        plan_key = 'free'
-                        plan_label = 'Free'
-                        is_trial = False
-                    else:
-                        # Trial is still active
-                        plan_key = subscription.plan or 'free'
-                        plan_label = subscription.get_plan_display()
-                        is_trial = True
-                elif subscription.status == 'active':
-                    plan_key = subscription.plan or 'free'
-                    plan_label = subscription.get_plan_display()
-                    is_trial = False
-                else:
-                    # Canceled, past_due, or other non-active status
-                    plan_key = 'free'
-                    plan_label = 'Free'
-                    is_trial = False
+                plan_key = subscription.plan
+                plan_label = subscription.get_plan_display()
+                is_trial = subscription.status == 'trialing'
             else:
+                # Free plan
                 plan_key = 'free'
                 plan_label = 'Free'
                 is_trial = False
-
-            # Get plan price from subscription service
-            plan_details = SubscriptionService.PLAN_DETAILS.get(plan_key, {})
-            plan_price = plan_details.get('price', 0)
-            plan_price_display = f"KSh {plan_price:,}" if plan_price > 0 else "Free"
-
-            # Attach transient attributes for template use
-            setattr(store, 'plan', plan_key)
-            setattr(store, 'current_plan', plan_key)
-            setattr(store, 'plan_label', plan_label)
-            setattr(store, 'plan_price', plan_price_display)
-            setattr(store, 'plan_badge_class', plan_color_map.get(plan_key, 'bg-secondary'))
-            setattr(store, 'is_trialing_plan', is_trial)
-            setattr(store, 'subscription', subscription)
+                # Create a dummy subscription object for template
+                subscription = SimpleNamespace(
+                    plan='free',
+                    status='none',
+                    amount=0,
+                    get_plan_display=lambda: 'Free',
+                    get_status_display=lambda: 'Free Plan',
+                    trial_ends_at=None,
+                    current_period_end=None
+                )
+            
+            # Attach transient attributes
+            store.plan = plan_key
+            store.current_plan = plan_key
+            store.plan_label = plan_label
+            store.plan_badge_class = plan_color_map.get(plan_key, 'bg-secondary')
+            store.is_trialing_plan = is_trial
+            store.subscription = subscription
+            
             annotated_stores.append(store)
-
+        
         context.update({
             'user_stores': annotated_stores,
-            'active_subscriptions': active_subscriptions,
-            'has_premium_store': has_premium_store,
             'total_user_stores': user_stores.count(),
         })
     
     return context
-
 
 def subscription_context(request):
     """Add subscription information to all templates"""

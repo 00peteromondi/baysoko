@@ -59,7 +59,7 @@ class ListingImage(models.Model):
         return f"Image for {self.listing.title}"
 
     def get_image_url(self):
-        """Safe method to get image URL"""
+       
         if self.image:
             try:
                 return self.image.url
@@ -170,7 +170,7 @@ class Listing(models.Model):
     
     @property
     def rating_average(self):
-        """Get average rating for this specific listing"""
+        
         reviews = self.reviews.filter(review_type='listing')
         if reviews.exists():
             avg = reviews.aggregate(Avg('rating'))['rating__avg']
@@ -179,23 +179,23 @@ class Listing(models.Model):
 
     @property 
     def rating_count(self):
-        """Get number of reviews for this listing"""
+        
         return self.reviews.filter(review_type='listing').count()
 
     @property
     def get_views(self):
-        """Get number of views for this listing"""
+        
         return self.views
     
     def get_rating_display(self):
-        """Get rating for display (with star icons)"""
+        
         avg = self.rating_average
         if avg == 0:
             return "No ratings yet"
         return f"{avg} ⭐ ({self.rating_count} review{'s' if self.rating_count != 1 else ''})"
     
     def get_image_url(self):
-        """Safe method to get image URL that works with both Cloudinary and local storage"""
+        
         if self.image:
             try:
                 return self.image.url
@@ -207,12 +207,19 @@ class Listing(models.Model):
     
     @property
     def price_trend(self):
-        """Simple price trend indicator"""
+        
         if self.original_price and self.original_price > self.price:
             return 'down'
         elif self.original_price and self.original_price < self.price:
             return 'up'
         return 'stable'
+
+    def get_discount_percentage(self):
+        if self.original_price and self.original_price > self.price:
+            discount = self.original_price - self.price
+            percentage = (discount / self.original_price) * 100
+            return round(percentage)
+        return 0
     
     # In the save method of Listing model, add store validation
     def save(self, *args, **kwargs):
@@ -489,15 +496,15 @@ class Order(models.Model):
 
         
     def can_be_shipped(self):
-        """Check if order can be shipped"""
+        
         return self.status == 'paid'
     
     def can_confirm_delivery(self):
-        """Check if delivery can be confirmed"""
+        
         return self.status == 'shipped'
 
     def send_to_delivery_system(self):
-        """Send order to delivery system via webhook"""
+        
         from .webhooks import send_order_webhook
         
         event_type = 'order_created' if not self.webhook_sent else 'order_updated'
@@ -530,7 +537,7 @@ class Order(models.Model):
             return False
     
     def get_delivery_tracking_url(self):
-        """Get delivery tracking URL"""
+        
         if self.delivery_tracking_number:
             return f"{settings.DELIVERY_SYSTEM_URL}track/{self.delivery_tracking_number}/"
         return None
@@ -563,11 +570,7 @@ class Order(models.Model):
         super().save(*args, **kwargs)
 
     def set_delivery_status(self, new_status):
-        """Set statuses that must only be changed by the delivery system.
-
-        This method temporarily allows delivery-controlled status changes and
-        records timestamps (shipped_at, delivered_at) as appropriate.
-        """
+        
         if new_status not in ('shipped', 'delivered', 'in_transit', 'out_for_delivery', 'picked_up', 'failed', 'cancelled'):
             # allow other statuses via normal flow
             self.status = new_status
@@ -592,7 +595,7 @@ class Order(models.Model):
         return True
 
 class WebhookLog(models.Model):
-    """Log webhook events"""
+    
     order = models.ForeignKey('Order', on_delete=models.CASCADE, related_name='webhook_logs')
     event_type = models.CharField(max_length=50)
     payload = models.JSONField()
@@ -683,7 +686,18 @@ class Payment(models.Model):
         # 1. Releasing from escrow account to seller's balance
         # 2. Creating a payout transaction
         # 3. Updating accounting records
-        pass
+        # Mark payment-level fields to indicate funds moved
+        try:
+            from django.utils import timezone
+            self.is_held_in_escrow = False
+            self.actual_release_date = timezone.now()
+            # Generate a simple payout reference if none exists
+            if not self.seller_payout_reference:
+                self.seller_payout_reference = f"PAYOUT-{self.order.id}-{int(timezone.now().timestamp())}"
+            self.save()
+        except Exception:
+            # Best-effort: do not raise to avoid blocking higher-level flows
+            pass
 
     def __str__(self):
         return f"Payment for Order #{self.order.id}"
@@ -707,6 +721,10 @@ class Payment(models.Model):
 
         # Mark order as paid
         self.order.mark_as_paid()
+
+        # If there is an escrow record attached to the order and it's held,
+        # ensure the escrow object references are consistent. Do NOT release here;
+        # release should only happen after buyer confirmation.
 
     
     def initiate_mpesa_payment(self, phone_number):

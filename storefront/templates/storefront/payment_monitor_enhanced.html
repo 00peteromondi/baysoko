@@ -486,6 +486,11 @@
                     </a>
                 </li>
                 <li>
+                    <a href="#customer-purchases" class="payment-tab" data-tab="customer-purchases">
+                        <i class="bi bi-bag me-2"></i>My Purchases
+                    </a>
+                </li>
+                <li>
                     <a href="#escrow" class="payment-tab" data-tab="escrow">
                         <i class="bi bi-safe me-2"></i>Escrow Releases
                     </a>
@@ -493,6 +498,11 @@
                 <li>
                     <a href="#subscriptions" class="payment-tab" data-tab="subscriptions">
                         <i class="bi bi-credit-card me-2"></i>Subscriptions
+                    </a>
+                </li>
+                <li>
+                    <a href="#withdrawals" class="payment-tab" data-tab="withdrawals">
+                        <i class="bi bi-cash me-2"></i>Withdrawals
                     </a>
                 </li>
                 <li>
@@ -574,6 +584,87 @@
                                             </div>
                                             <h5>No order payments found</h5>
                                             <p class="text-muted">Your order payments will appear here</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Customer Purchases Tab -->
+            <div id="customer-purchases" class="tab-pane">
+                <div class="payment-table-container">
+                    <div class="table-responsive">
+                        <table class="payment-table">
+                            <thead>
+                                <tr>
+                                    <th>Order #</th>
+                                    <th>Seller</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Items</th>
+                                    <th>Date</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in customer_purchases %}
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold">#{{ payment.order.id }}</div>
+                                        <small class="text-muted">{{ payment.transaction_id|truncatechars:8 }}</small>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi bi-shop text-muted me-2"></i>
+                                            {% if payment.order.order_items.first %}
+                                                {{ payment.order.order_items.first.listing.seller.get_full_name|default:payment.order.order_items.first.listing.seller.username }}
+                                            {% else %}
+                                                Unknown Seller
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold">KSh {{ payment.amount|intcomma }}</span>
+                                    </td>
+                                    <td>
+                                        {% if payment.status == 'completed' %}
+                                            <span class="badge-payment badge-completed">Completed</span>
+                                        {% elif payment.status == 'pending' %}
+                                            <span class="badge-payment badge-pending">Pending</span>
+                                        {% elif payment.status == 'failed' %}
+                                            <span class="badge-payment badge-failed">Failed</span>
+                                        {% else %}
+                                            <span class="badge-payment">{{ payment.status|title }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {% for item in payment.order.order_items.all|slice:":2" %}
+                                                {{ item.listing.title }}{% if not forloop.last %}, {% endif %}
+                                            {% endfor %}
+                                            {% if payment.order.order_items.count > 2 %}...{% endif %}
+                                        </small>
+                                    </td>
+                                    <td>{{ payment.created_at|naturaltime }}</td>
+                                    <td>
+                                        <a href="{% url 'order_detail' payment.order.id %}" class="btn-custom btn-primary btn-sm">
+                                            <i class="bi bi-eye"></i> View
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="7" class="text-center py-5">
+                                        <div class="empty-payments">
+                                            <div class="empty-payments-icon">
+                                                <i class="bi bi-bag"></i>
+                                            </div>
+                                            <h5>No purchases found</h5>
+                                            <p class="text-muted">Your purchases will appear here</p>
                                         </div>
                                     </td>
                                 </tr>
@@ -729,6 +820,72 @@
                 </div>
             </div>
 
+            <!-- Withdrawals Tab -->
+            <div id="withdrawals" class="tab-pane">
+                <div class="payment-table-container">
+                    <div class="table-responsive">
+                        <table class="payment-table">
+                            <thead>
+                                <tr>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Request Date</th>
+                                    <th>Payment Date</th>
+                                    <th>Reference</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for withdrawal in withdrawals %}
+                                <tr>
+                                    <td>
+                                        <span class="fw-bold text-success">KSh {{ withdrawal.amount|intcomma }}</span>
+                                    </td>
+                                    <td>
+                                        {% if withdrawal.status == 'pending' %}
+                                            <span class="badge-payment badge-pending">Pending</span>
+                                        {% elif withdrawal.status == 'completed' %}
+                                            <span class="badge-payment badge-completed">Completed</span>
+                                        {% elif withdrawal.status == 'failed' %}
+                                            <span class="badge-payment badge-failed">Failed</span>
+                                        {% else %}
+                                            <span class="badge-payment">{{ withdrawal.status|title }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ withdrawal.requested_at|naturaltime }}</td>
+                                    <td>
+                                        {% if withdrawal.paid_at %}
+                                            {{ withdrawal.paid_at|naturaltime }}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <code class="text-muted small">{{ withdrawal.mpesa_reference|default:"N/A" }}</code>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ withdrawal.notes|default:"—" }}</small>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-5">
+                                        <div class="empty-payments">
+                                            <div class="empty-payments-icon">
+                                                <i class="bi bi-cash"></i>
+                                            </div>
+                                            <h5>No withdrawal requests yet</h5>
+                                            <p class="text-muted">When you request a withdrawal, it will appear here</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <!-- Failed Payments Tab -->
             <div id="failed" class="tab-pane">
                 <div class="payment-table-container">
@@ -809,7 +966,7 @@
     </div>
 
     <!-- Withdrawal Section -->
-    {% if available_balance > 0 %}
+    {% if available_balance >= 0 and store %}
     <div class="withdrawal-banner">
         <div class="withdrawal-content">
             <div class="withdrawal-text">
@@ -821,11 +978,47 @@
                 <small class="opacity-75">Funds are held in escrow for 7 days after delivery confirmation for buyer protection.</small>
             </div>
             <div>
-                <button class="btn-custom btn-light" disabled>
+                {% if store.payout_verified and available_balance >= 10000 %}
+                <form method="post" action="{% url 'storefront:request_withdrawal' store.slug %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="amount" value="{{ available_balance }}">
+                    <button type="submit" class="btn btn-light btn-lg" style="font-weight: 600;">
+                        <i class="bi bi-wallet2 me-2"></i>
+                        Withdraw Funds
+                    </button>
+                </form>
+                <small class="d-block mt-2 opacity-75">Scheduled withdrawals are processed on Thursdays.</small>
+                {% else %}
+                <button class="btn btn-light btn-lg" disabled style="font-weight: 600;">
                     <i class="bi bi-wallet2 me-2"></i>
                     Withdraw Funds
                 </button>
-                <small class="d-block mt-2 opacity-75">Coming Soon</small>
+                <small class="d-block mt-2 opacity-75">
+                    {% if not store.payout_verified %}
+                        Please add and verify your M-Pesa payout phone in store settings first.
+                    {% else %}
+                        Minimum withdrawal is KSh 10,000. You need KSh {{ 10000|add:available_balance|stringformat:"-.0f" }} more.
+                    {% endif %}
+                </small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% elif store and available_balance > 0 and not store %}
+    <div class="withdrawal-banner" style="background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%);">
+        <div class="withdrawal-content">
+            <div class="withdrawal-text">
+                <h4>
+                    <i class="bi bi-info-circle me-2"></i>
+                    Setup Withdrawal Details
+                </h4>
+                <p>You have <strong>KSh {{ available_balance|intcomma }}</strong> available for withdrawal.</p>
+            </div>
+            <div>
+                <a href="{% url 'storefront:store_edit' user_stores.0.slug %}" class="btn btn-light btn-lg" style="font-weight: 600;">
+                    <i class="bi bi-gear me-2"></i>
+                    Add Payout Phone
+                </a>
             </div>
         </div>
     </div>

@@ -1,40 +1,211 @@
 {% extends 'delivery/base.html' %}
 {% load crispy_forms_tags %}
+{% load static %}
 
 {% block title %}Create New Delivery - Delivery Management{% endblock %}
 
+{% block extra_css %}
+<style>
+    .order-selector-container {
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(5, 184, 138, 0.02) 100%);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .order-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        cursor: pointer;
+        transition: var(--transition);
+    }
+    
+    .order-card:hover {
+        border-color: var(--primary);
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(5, 184, 138, 0.02) 100%);
+    }
+    
+    .order-card.selected {
+        border-color: var(--primary);
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.1) 0%, 
+            rgba(5, 184, 138, 0.05) 100%);
+    }
+    
+    .order-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .order-details {
+        flex-grow: 1;
+    }
+    
+    .order-meta {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+    }
+    
+    .order-status {
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .status-pending { background: rgba(255, 158, 31, 0.1); color: #ff9e1f; }
+    .status-paid { background: rgba(6, 214, 160, 0.1); color: #06d6a0; }
+    .status-processing { background: rgba(17, 138, 178, 0.1); color: #118ab2; }
+    
+    .form-section {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .form-section h5 {
+        color: var(--primary);
+        border-bottom: 2px solid var(--primary-light);
+        padding-bottom: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .price-preview-card {
+        background: linear-gradient(135deg, 
+            rgba(255, 209, 102, 0.1) 0%, 
+            rgba(255, 158, 31, 0.05) 100%);
+        border: 1px solid rgba(255, 209, 102, 0.2);
+        border-radius: var(--radius-lg);
+    }
+    
+    .autofill-badge {
+        background: rgba(6, 214, 160, 0.1);
+        color: var(--success);
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.75rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-lg);
+        z-index: 1000;
+    }
+    
+    .spinner {
+        width: 3rem;
+        height: 3rem;
+    }
+    
+    .search-box {
+        position: relative;
+        margin-bottom: 1rem;
+    }
+    
+    .search-icon {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-secondary);
+    }
+    
+    .search-input {
+        padding-left: 3rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row">
-    <div class="col-lg-8 mx-auto">
+    <div class="col-lg-10 mx-auto">
         <div class="card">
             <div class="card-header">
-                <h3 class="mb-0"><i class="fas fa-plus-circle me-2"></i>Create New Delivery</h3>
-                <p class="text-muted mb-0">Fill in the delivery details below</p>
+                <h3 class="mb-0"><i class="fas fa-plus-circle me-2 text-primary"></i>Create New Delivery</h3>
+                <p class="text-muted mb-0">Select an order below or fill the form manually</p>
             </div>
             <div class="card-body">
-                <form method="post" id="deliveryForm">
-                    {% csrf_token %}
-                    
-                    <!-- Order Information -->
-                    <div class="mb-4">
-                        <h5 class="border-bottom pb-2 mb-3">
-                            <i class="fas fa-shopping-cart me-2"></i>Order Information
-                        </h5>
-                        <div class="row">
-                            <div class="col-md-6">
-                                {{ form.order_id|as_crispy_field }}
+                <!-- Order Selection Section -->
+                <div class="form-section">
+                    <h5><i class="fas fa-shopping-cart me-2"></i>Step 1: Select Order</h5>
+                    <div class="order-selector-container">
+                        <div class="search-box">
+                            <i class="fas fa-search search-icon"></i>
+                            <input type="text" id="orderSearch" class="form-control search-input" 
+                                   placeholder="Search orders by customer name, email, or order number...">
+                        </div>
+                        
+                        <div id="ordersLoading" class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading orders...</span>
                             </div>
-                            <div class="col-md-6">
-                                {{ form.priority|as_crispy_field }}
-                            </div>
+                            <p class="text-muted mt-2">Loading available orders...</p>
+                        </div>
+                        
+                        <div id="ordersList" class="d-none">
+                            <!-- Orders will be loaded here -->
+                        </div>
+                        
+                        <div id="noOrders" class="text-center py-4 d-none">
+                            <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No pending orders found</h5>
+                            <p class="text-muted">All your orders already have deliveries assigned.</p>
+                            <p class="text-muted">You can still create a delivery manually below.</p>
+                        </div>
+                        
+                        <div class="mt-3 text-center">
+                            <button type="button" class="btn btn-outline-primary" onclick="refreshOrders()">
+                                <i class="fas fa-sync-alt me-1"></i> Refresh Orders
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary ms-2" onclick="clearOrderSelection()">
+                                <i class="fas fa-times me-1"></i> Clear Selection
+                            </button>
                         </div>
                     </div>
                     
+                    <div class="mt-3">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Selected Order:</strong>
+                            <span id="selectedOrderInfo" class="ms-2">No order selected</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Delivery Form -->
+                <form method="post" id="deliveryForm">
+                    {% csrf_token %}
+                    
+                    <!-- Hidden order_id field -->
+                    <input type="hidden" name="order_id" id="id_order_id" value="">
+                    
                     <!-- Pickup Information -->
-                    <div class="mb-4">
-                        <h5 class="border-bottom pb-2 mb-3">
-                            <i class="fas fa-warehouse me-2"></i>Pickup Information
-                        </h5>
+                    <div class="form-section">
+                        <h5><i class="fas fa-warehouse me-2"></i>Pickup Information</h5>
                         <div class="row">
                             <div class="col-md-6">
                                 {{ form.pickup_name|as_crispy_field }}
@@ -48,18 +219,35 @@
                                 {{ form.pickup_email|as_crispy_field }}
                             </div>
                             <div class="col-md-6">
-                                {{ form.pickup_latitude|as_crispy_field }}
+                                <label class="form-label">Store</label>
+                                <select class="form-select" id="storeSelect" name="store_id">
+                                    <option value="">Select store...</option>
+                                    {% for store in request.stores %}
+                                    <option value="{{ store.id }}" 
+                                            data-name="{{ store.name }}"
+                                            data-address="{{ store.address|default:'' }}"
+                                            data-phone="{{ store.phone|default:'' }}">
+                                        {{ store.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
                             </div>
                         </div>
                         {{ form.pickup_address|as_crispy_field }}
+                        <div class="row">
+                            <div class="col-md-6">
+                                {{ form.pickup_latitude|as_crispy_field }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ form.pickup_longitude|as_crispy_field }}
+                            </div>
+                        </div>
                         {{ form.pickup_notes|as_crispy_field }}
                     </div>
                     
                     <!-- Delivery Information -->
-                    <div class="mb-4">
-                        <h5 class="border-bottom pb-2 mb-3">
-                            <i class="fas fa-home me-2"></i>Delivery Information
-                        </h5>
+                    <div class="form-section">
+                        <h5><i class="fas fa-home me-2"></i>Delivery Information</h5>
                         <div class="row">
                             <div class="col-md-6">
                                 {{ form.recipient_name|as_crispy_field }}
@@ -72,18 +260,21 @@
                             <div class="col-md-6">
                                 {{ form.recipient_email|as_crispy_field }}
                             </div>
+                        </div>
+                        {{ form.recipient_address|as_crispy_field }}
+                        <div class="row">
                             <div class="col-md-6">
                                 {{ form.recipient_latitude|as_crispy_field }}
                             </div>
+                            <div class="col-md-6">
+                                {{ form.recipient_longitude|as_crispy_field }}
+                            </div>
                         </div>
-                        {{ form.recipient_address|as_crispy_field }}
                     </div>
                     
                     <!-- Package Information -->
-                    <div class="mb-4">
-                        <h5 class="border-bottom pb-2 mb-3">
-                            <i class="fas fa-box me-2"></i>Package Information
-                        </h5>
+                    <div class="form-section">
+                        <h5><i class="fas fa-box me-2"></i>Package Information</h5>
                         <div class="row">
                             <div class="col-md-6">
                                 {{ form.package_weight|as_crispy_field }}
@@ -93,29 +284,33 @@
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 {{ form.package_length|as_crispy_field }}
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 {{ form.package_width|as_crispy_field }}
                             </div>
+                            <div class="col-md-4">
+                                {{ form.package_height|as_crispy_field }}
+                            </div>
                         </div>
-                        {{ form.package_height|as_crispy_field }}
                         {{ form.package_description|as_crispy_field }}
                         
                         <div class="row mt-3">
                             <div class="col-md-6">
-                                <div class="form-check">
+                                <div class="form-check form-switch">
                                     {{ form.is_fragile }}
                                     <label class="form-check-label" for="{{ form.is_fragile.id_for_label }}">
+                                        <i class="fas fa-wine-glass-alt me-1"></i>
                                         {{ form.is_fragile.label }}
                                     </label>
                                 </div>
                             </div>
                             <div class="col-md-6">
-                                <div class="form-check">
+                                <div class="form-check form-switch">
                                     {{ form.requires_signature }}
                                     <label class="form-check-label" for="{{ form.requires_signature.id_for_label }}">
+                                        <i class="fas fa-signature me-1"></i>
                                         {{ form.requires_signature.label }}
                                     </label>
                                 </div>
@@ -124,10 +319,8 @@
                     </div>
                     
                     <!-- Service Information -->
-                    <div class="mb-4">
-                        <h5 class="border-bottom pb-2 mb-3">
-                            <i class="fas fa-truck me-2"></i>Service Information
-                        </h5>
+                    <div class="form-section">
+                        <h5><i class="fas fa-truck me-2"></i>Service Information</h5>
                         <div class="row">
                             <div class="col-md-6">
                                 {{ form.delivery_service|as_crispy_field }}
@@ -138,64 +331,86 @@
                         </div>
                         <div class="row">
                             <div class="col-md-6">
+                                {{ form.priority|as_crispy_field }}
+                            </div>
+                            <div class="col-md-6">
                                 {{ form.estimated_delivery_time|as_crispy_field }}
                             </div>
                         </div>
                     </div>
                     
                     <!-- Additional Information -->
-                    <div class="mb-4">
-                        <h5 class="border-bottom pb-2 mb-3">
-                            <i class="fas fa-info-circle me-2"></i>Additional Information
-                        </h5>
+                    <div class="form-section">
+                        <h5><i class="fas fa-info-circle me-2"></i>Additional Information</h5>
                         {{ form.notes|as_crispy_field }}
                     </div>
                     
                     <!-- Pricing Preview -->
-                    <div class="card bg-light mb-4">
+                    <div class="card price-preview-card mb-4">
                         <div class="card-body">
-                            <h6 class="card-title">Pricing Preview</h6>
+                            <h6 class="card-title">
+                                <i class="fas fa-calculator me-2"></i>Pricing Preview
+                            </h6>
                             <div id="pricePreview">
-                                <p class="text-muted">Fill in package weight and service to see pricing</p>
+                                <div class="text-center text-muted py-3">
+                                    <i class="fas fa-calculator fa-2x mb-2"></i>
+                                    <p>Fill in package weight and service to see pricing</p>
+                                </div>
                             </div>
                         </div>
                     </div>
                     
                     <!-- Form Actions -->
-                    <div class="d-flex justify-content-between">
-                        <a href="{% url 'delivery:dashboard' %}" class="btn btn-secondary">
-                            <i class="fas fa-arrow-left"></i> Cancel
-                        </a>
-                        <button type="submit" class="btn btn-delivery">
-                            <i class="fas fa-check"></i> Create Delivery
-                        </button>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <a href="{% url 'delivery:dashboard' %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-1"></i> Back to Dashboard
+                            </a>
+                            <button type="button" class="btn btn-outline-primary ms-2" onclick="fillSampleData()">
+                                <i class="fas fa-vial me-1"></i> Sample Data
+                            </button>
+                        </div>
+                        <div>
+                            <button type="reset" class="btn btn-outline-danger me-2">
+                                <i class="fas fa-redo me-1"></i> Reset Form
+                            </button>
+                            <button type="submit" class="btn btn-delivery btn-lg">
+                                <i class="fas fa-check me-1"></i> Create Delivery
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>
         </div>
         
-        <!-- Quick Help -->
+        <!-- Help Section -->
         <div class="card mt-4">
             <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-question-circle me-2"></i>Quick Help</h5>
+                <h5 class="mb-0"><i class="fas fa-question-circle me-2 text-primary"></i>Quick Guide</h5>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
-                        <h6>Required Fields</h6>
-                        <ul class="list-unstyled">
-                            <li><i class="fas fa-asterisk text-danger me-1"></i> Order ID</li>
-                            <li><i class="fas fa-asterisk text-danger me-1"></i> Recipient Name & Phone</li>
-                            <li><i class="fas fa-asterisk text-danger me-1"></i> Package Weight</li>
-                            <li><i class="fas fa-asterisk text-danger me-1"></i> Pickup Information</li>
-                        </ul>
+                        <h6>How it works:</h6>
+                        <ol>
+                            <li>Select an order from the list above</li>
+                            <li>Form fields will auto-fill with order details</li>
+                            <li>Review and adjust information as needed</li>
+                            <li>Select delivery service and see pricing</li>
+                            <li>Submit to create the delivery</li>
+                        </ol>
                     </div>
                     <div class="col-md-6">
-                        <h6>Tips</h6>
-                        <ul class="list-unstyled">
-                            <li><i class="fas fa-lightbulb text-warning me-1"></i> Add coordinates for accurate distance calculation</li>
-                            <li><i class="fas fa-lightbulb text-warning me-1"></i> Mark fragile items to ensure careful handling</li>
-                            <li><i class="fas fa-lightbulb text-warning me-1"></i> Set realistic delivery estimates</li>
+                        <h6>Tips:</h6>
+                        <ul>
+                            <li><i class="fas fa-lightbulb text-warning me-1"></i> 
+                                <strong>Store Selection:</strong> Pickup info updates when you select a store</li>
+                            <li><i class="fas fa-lightbulb text-warning me-1"></i> 
+                                <strong>Coordinates:</strong> Add for accurate distance calculation (optional)</li>
+                            <li><i class="fas fa-lightbulb text-warning me-1"></i> 
+                                <strong>Package Weight:</strong> Auto-calculated from order items</li>
+                            <li><i class="fas fa-lightbulb text-warning me-1"></i> 
+                                <strong>Delivery Time:</strong> Set realistic estimates for customer satisfaction</li>
                         </ul>
                     </div>
                 </div>
@@ -204,64 +419,573 @@
     </div>
 </div>
 
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="loading-overlay d-none">
+    <div class="text-center">
+        <div class="spinner-border text-primary spinner" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2">Loading order details...</p>
+    </div>
+</div>
+{% endblock %}
+
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-    // Calculate delivery fee on form change
-    function calculateFee() {
+    // Global variables
+    let selectedOrderId = null;
+    let selectedOrderData = null;
+    let allOrders = [];
+    
+    // Initialize pending orders from server context
+    const pendingOrdersData = {% if pending_orders %}
+        [
+        {% for order in pending_orders %}
+            {
+                'id': {{ order.id }},
+                'order_number': '#{{ order.id }}',
+                'customer_name': '{{ order.first_name }} {{ order.last_name }}' || '{{ order.user.get_full_name }}',
+                'customer_email': '{{ order.email }}' || '{{ order.user.email }}',
+                'created_at': '{{ order.created_at|date:"M d, Y · g:i A" }}',
+                'total_amount': {{ order.total_price|floatformat:2 }},
+                'item_count': {{ order.order_items.count }},
+                'status': '{{ order.status }}',
+                'shipping_address': '{{ order.shipping_address }}'
+            }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+        ]
+    {% else %}
+        []
+    {% endif %};
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Initializing delivery creation form...');
+        
+        // Use pending orders from server context if available
+        if (pendingOrdersData.length > 0) {
+            console.log(`Loaded ${pendingOrdersData.length} pending orders from server`);
+            allOrders = pendingOrdersData;
+            displayOrders(allOrders);
+            
+            if (allOrders.length > 0) {
+                // Auto-select first order
+                selectOrder(allOrders[0].id);
+            }
+        } else {
+            // Fallback: Load orders from API if no pending orders in context
+            console.log('No pending orders in context, loading from API...');
+            loadOrders();
+        }
+        
+        // Set up store selector
+        setupStoreSelector();
+        
+        // Set up event listeners for price calculation
+        setupPriceCalculation();
+        
+        // Set default estimated delivery time (tomorrow)
+        setDefaultDeliveryTime();
+    });
+    
+    // Load orders from API
+    async function loadOrders() {
+        const ordersList = document.getElementById('ordersList');
+        const ordersLoading = document.getElementById('ordersLoading');
+        const noOrders = document.getElementById('noOrders');
+        
+        try {
+            console.log('Loading orders...');
+            ordersLoading.classList.remove('d-none');
+            ordersList.classList.add('d-none');
+            noOrders.classList.add('d-none');
+            
+            const url = '{% url "delivery:get_user_orders" %}';
+            const response = await fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            allOrders = data.orders || [];
+            
+            console.log(`Loaded ${allOrders.length} orders`);
+            displayOrders(allOrders);
+            
+            if (allOrders.length > 0) {
+                // Auto-select first order
+                selectOrder(allOrders[0].id);
+            }
+        } catch (error) {
+            console.error('Error loading orders:', error);
+            ordersLoading.classList.add('d-none');
+            noOrders.classList.remove('d-none');
+            ordersList.classList.add('d-none');
+            showError('Failed to load orders. Please try again.');
+        }
+    }
+    
+    // Display orders in the list
+    function displayOrders(orders) {
+        const ordersList = document.getElementById('ordersList');
+        const ordersLoading = document.getElementById('ordersLoading');
+        const noOrders = document.getElementById('noOrders');
+        
+        if (orders.length === 0) {
+            ordersLoading.classList.add('d-none');
+            ordersList.classList.add('d-none');
+            noOrders.classList.remove('d-none');
+            return;
+        }
+        
+        ordersLoading.classList.add('d-none');
+        noOrders.classList.add('d-none');
+        ordersList.classList.remove('d-none');
+        
+        let html = '';
+        
+        orders.forEach(order => {
+            const statusClass = `status-${order.status || 'pending'}`;
+            const isSelected = selectedOrderId === order.id ? 'selected' : '';
+            
+            html += `
+            <div class="order-card ${isSelected}" onclick="selectOrder(${order.id})" data-order-id="${order.id}">
+                <div class="order-info">
+                    <div class="order-details">
+                        <h6 class="mb-1">
+                            <strong>Order ${order.order_number}</strong>
+                            <span class="order-status ${statusClass} ms-2">
+                                ${order.status || 'pending'}
+                            </span>
+                        </h6>
+                        <p class="mb-1">
+                            <i class="fas fa-user me-1"></i>
+                            ${order.customer_name}
+                            <span class="ms-3">
+                                <i class="fas fa-envelope me-1"></i>
+                                ${order.customer_email || 'No email'}
+                            </span>
+                        </p>
+                        <div class="order-meta">
+                            <span>
+                                <i class="fas fa-calendar me-1"></i>
+                                ${order.created_at}
+                            </span>
+                            <span>
+                                <i class="fas fa-boxes me-1"></i>
+                                ${order.item_count} items
+                            </span>
+                            <span>
+                                <i class="fas fa-money-bill-wave me-1"></i>
+                                KSh ${order.total_amount.toLocaleString()}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        <i class="fas fa-chevron-right text-primary"></i>
+                    </div>
+                </div>
+            </div>
+            `;
+        });
+        
+        ordersList.innerHTML = html;
+    }
+    
+    // Select an order
+    async function selectOrder(orderId) {
+        // Update UI
+        document.querySelectorAll('.order-card').forEach(card => {
+            card.classList.remove('selected');
+            if (parseInt(card.dataset.orderId) === orderId) {
+                card.classList.add('selected');
+            }
+        });
+        
+        selectedOrderId = orderId;
+        document.getElementById('id_order_id').value = orderId;
+        
+        // Show loading
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        loadingOverlay.classList.remove('d-none');
+        
+        try {
+            console.log(`Loading details for order ${orderId}...`);
+            
+            // Fetch order details using the proper URL
+            const url = `{% url "delivery:order_details" order_id=0 %}`.replace('/0/', `/${orderId}/`);
+            const response = await fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            selectedOrderData = data;
+            console.log('Order details loaded:', data);
+            populateForm(data);
+            
+            // Update selected order info
+            const order = allOrders.find(o => o.id === orderId);
+            if (order) {
+                document.getElementById('selectedOrderInfo').innerHTML = `
+                    <strong>Order ${order.order_number}</strong> - 
+                    ${order.customer_name} - 
+                    KSh ${order.total_amount.toLocaleString()} - 
+                    <span class="autofill-badge">
+                        <i class="fas fa-check"></i> Details loaded
+                    </span>
+                `;
+            }
+            
+            // Calculate initial price
+            calculateFee();
+        } catch (error) {
+            console.error('Error loading order details:', error);
+            showError('Failed to load order details. Please try again.');
+        } finally {
+            loadingOverlay.classList.add('d-none');
+        }
+    }
+    
+    // Populate form with order data
+    function populateForm(data) {
+        if (!data || !data.success) return;
+        
+        // Customer/Recipient Information
+        document.getElementById('id_recipient_name').value = data.customer.name || '';
+        document.getElementById('id_recipient_email').value = data.customer.email || '';
+        document.getElementById('id_recipient_phone').value = data.customer.phone || '';
+        document.getElementById('id_recipient_address').value = data.customer.shipping_address || '';
+        
+        // Package Information
+        document.getElementById('id_package_weight').value = data.package.weight || '';
+        document.getElementById('id_declared_value').value = data.package.total_value || '';
+        
+        // Package Description
+        let description = `Order ${data.order.order_number} - ${data.package.item_count} items:\n`;
+        data.package.items.forEach(item => {
+            description += `• ${item.quantity}x ${item.name} (${item.weight}kg)\n`;
+        });
+        document.getElementById('id_package_description').value = description;
+        
+        // Show autofill indicators
+        addAutofillBadges();
+    }
+    
+    // Add autofill badges to auto-filled fields
+    function addAutofillBadges() {
+        const fields = [
+            'id_recipient_name',
+            'id_recipient_email', 
+            'id_recipient_phone',
+            'id_recipient_address',
+            'id_package_weight',
+            'id_declared_value',
+            'id_package_description'
+        ];
+        
+        fields.forEach(fieldId => {
+            const field = document.getElementById(fieldId);
+            if (field && field.value.trim()) {
+                const container = field.closest('.mb-3');
+                if (container) {
+                    let badge = container.querySelector('.autofill-badge');
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = 'autofill-badge';
+                        badge.innerHTML = '<i class="fas fa-robot"></i> Auto-filled';
+                        container.appendChild(badge);
+                    }
+                }
+            }
+        });
+    }
+    
+    // Set up store selector
+    function setupStoreSelector() {
+        const storeSelect = document.getElementById('storeSelect');
+        if (storeSelect) {
+            storeSelect.addEventListener('change', function() {
+                const selectedOption = this.options[this.selectedIndex];
+                if (selectedOption.value) {
+                    // Update pickup info from store
+                    document.getElementById('id_pickup_name').value = selectedOption.dataset.name || '';
+                    document.getElementById('id_pickup_address').value = selectedOption.dataset.address || '';
+                    document.getElementById('id_pickup_phone').value = selectedOption.dataset.phone || '';
+                    
+                    // Add autofill badge
+                    addAutofillBadges();
+                }
+            });
+        }
+    }
+    
+    // Set up price calculation
+    function setupPriceCalculation() {
+        // Add event listeners for fee calculation
+        const weightField = document.getElementById('id_package_weight');
+        const serviceField = document.getElementById('id_delivery_service');
+        const zoneField = document.getElementById('id_delivery_zone');
+        
+        if (weightField) weightField.addEventListener('input', calculateFee);
+        if (serviceField) serviceField.addEventListener('change', calculateFee);
+        if (zoneField) zoneField.addEventListener('change', calculateFee);
+    }
+    
+    // Calculate delivery fee
+    async function calculateFee() {
         const weight = parseFloat(document.getElementById('id_package_weight').value) || 0;
         const service = document.getElementById('id_delivery_service').value;
         const zone = document.getElementById('id_delivery_zone').value;
         
         if (weight > 0 && service) {
-            fetch('/delivery/api/calculate-fee/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                },
-                body: JSON.stringify({
-                    weight: weight,
-                    service_id: service,
-                    zone_id: zone
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
+            try {
+                console.log('Calculating delivery fee...');
+                
+                const url = '{% url "delivery:calculate_fee_api" %}';
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken'),
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        weight: weight,
+                        service_id: service,
+                        zone_id: zone
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Fee calculation result:', data);
+                
                 if (data.delivery_fee) {
-                    document.getElementById('pricePreview').innerHTML = `
-                        <table class="table table-sm">
-                            <tr>
-                                <td>Base Fee:</td>
-                                <td class="text-end">KES ${data.delivery_fee}</td>
-                            </tr>
-                            <tr class="table-active">
-                                <th>Total Estimated:</th>
-                                <th class="text-end">KES ${data.delivery_fee}</th>
-                            </tr>
-                        </table>
+                    const fee = parseFloat(data.delivery_fee);
+                    const pricePreview = document.getElementById('pricePreview');
+                    if (pricePreview) {
+                        pricePreview.innerHTML = `
+                            <div class="row">
+                                <div class="col-6">
+                                    <small class="text-muted">Base Fee</small>
+                                    <h5>KES ${fee.toLocaleString()}</h5>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">Weight</small>
+                                    <h5>${weight} kg</h5>
+                                </div>
+                            </div>
+                            <hr>
+                            <div class="text-center">
+                                <h4 class="text-success">Total: KES ${fee.toLocaleString()}</h4>
+                                <small class="text-muted">Price may change based on actual distance</small>
+                            </div>
+                        `;
+                    }
+                }
+            } catch (error) {
+                console.error('Error calculating fee:', error);
+                const pricePreview = document.getElementById('pricePreview');
+                if (pricePreview) {
+                    pricePreview.innerHTML = `
+                        <div class="alert alert-warning mb-0">
+                            <small>Unable to calculate fee. Please try again.</small>
+                        </div>
                     `;
                 }
-            })
-            .catch(error => {
-                console.error('Error calculating fee:', error);
-            });
+            }
         }
     }
     
-    // Add event listeners for fee calculation
-    document.getElementById('id_package_weight').addEventListener('change', calculateFee);
-    document.getElementById('id_delivery_service').addEventListener('change', calculateFee);
-    document.getElementById('id_delivery_zone').addEventListener('change', calculateFee);
+    // Set default delivery time (tomorrow)
+    function setDefaultDeliveryTime() {
+        const now = new Date();
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(17, 0, 0); // 5 PM tomorrow
+        
+        const dateString = tomorrow.toISOString().slice(0, 16);
+        const timeField = document.getElementById('id_estimated_delivery_time');
+        if (timeField && !timeField.value) {
+            timeField.value = dateString;
+        }
+    }
+    
+    // Refresh orders list
+    function refreshOrders() {
+        document.getElementById('ordersLoading').classList.remove('d-none');
+        document.getElementById('ordersList').classList.add('d-none');
+        document.getElementById('noOrders').classList.add('d-none');
+        
+        loadOrders();
+    }
+    
+    // Clear order selection
+    function clearOrderSelection() {
+        selectedOrderId = null;
+        selectedOrderData = null;
+        document.getElementById('id_order_id').value = '';
+        document.getElementById('selectedOrderInfo').textContent = 'No order selected';
+        
+        document.querySelectorAll('.order-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+        
+        // Clear autofill badges
+        document.querySelectorAll('.autofill-badge').forEach(badge => badge.remove());
+    }
+    
+    // Fill sample data for testing
+    function fillSampleData() {
+        Swal.fire({
+            title: 'Fill Sample Data?',
+            text: 'This will populate the form with sample data for testing.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, fill it',
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Sample recipient
+                document.getElementById('id_recipient_name').value = 'John Doe';
+                document.getElementById('id_recipient_email').value = 'john@example.com';
+                document.getElementById('id_recipient_phone').value = '+254712345678';
+                document.getElementById('id_recipient_address').value = '123 Main Street, Nairobi, Kenya';
+                
+                // Sample package
+                document.getElementById('id_package_weight').value = '2.5';
+                document.getElementById('id_declared_value').value = '5000';
+                document.getElementById('id_package_description').value = 'Electronics package - 1x Laptop, 2x Phones';
+                
+                // Sample pickup
+                document.getElementById('id_pickup_name').value = 'Baysoko Main Store';
+                document.getElementById('id_pickup_phone').value = '+254700000000';
+                document.getElementById('id_pickup_email').value = 'store@baysoko.com';
+                document.getElementById('id_pickup_address').value = 'Shop 45, City Mall, Homa Bay';
+                
+                // Calculate fee
+                setTimeout(calculateFee, 500);
+                
+                Swal.fire('Success!', 'Sample data filled successfully.', 'success');
+            }
+        });
+    }
+    
+    // Search orders
+    document.getElementById('orderSearch').addEventListener('input', function(e) {
+        const searchTerm = e.target.value.toLowerCase();
+        
+        if (!searchTerm) {
+            displayOrders(allOrders);
+            return;
+        }
+        
+        const filteredOrders = allOrders.filter(order => 
+            order.customer_name.toLowerCase().includes(searchTerm) ||
+            order.customer_email.toLowerCase().includes(searchTerm) ||
+            order.order_number.toLowerCase().includes(searchTerm) ||
+            order.shipping_address.toLowerCase().includes(searchTerm)
+        );
+        
+        displayOrders(filteredOrders);
+    });
     
     // Form validation
     document.getElementById('deliveryForm').addEventListener('submit', function(e) {
         const weight = parseFloat(document.getElementById('id_package_weight').value);
-        if (weight <= 0 || weight > 100) {
+        
+        if (!weight || weight <= 0) {
             e.preventDefault();
-            alert('Package weight must be between 0.1 and 100 kg');
+            Swal.fire({
+                title: 'Invalid Package Weight',
+                text: 'Please enter a valid package weight greater than 0.',
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
             return false;
         }
+        
+        if (weight > 100) {
+            e.preventDefault();
+            Swal.fire({
+                title: 'Package Too Heavy',
+                text: 'Package weight cannot exceed 100kg.',
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
+            return false;
+        }
+        
+        // Check if service is selected
+        const service = document.getElementById('id_delivery_service').value;
+        if (!service) {
+            e.preventDefault();
+            Swal.fire({
+                title: 'Service Required',
+                text: 'Please select a delivery service.',
+                icon: 'warning',
+                confirmButtonText: 'OK'
+            });
+            return false;
+        }
+        
+        // Show loading during submission
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalHtml = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Creating...';
+        submitBtn.disabled = true;
+        
+        // Allow form submission to proceed
+        return true;
     });
+    
+    // Utility functions
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    function showError(message) {
+        Swal.fire({
+            title: 'Error!',
+            text: message,
+            icon: 'error',
+            confirmButtonText: 'OK'
+        });
+    }
+    
+    function showSuccess(message) {
+        Swal.fire({
+            title: 'Success!',
+            text: message,
+            icon: 'success',
+            confirmButtonText: 'OK'
+        });
+    }
 </script>
-{% endblock %}
 {% endblock %}

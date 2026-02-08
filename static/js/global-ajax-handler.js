@@ -24,6 +24,34 @@
         return `<span class="spinner-border spinner-border-${size} me-2" role="status" aria-hidden="true" style="width:${dim};height:${dim};vertical-align:middle"></span>`;
     }
 
+    // Wrap text nodes inside an element with a span so we can hide only textual content
+    function hideTextNodes(el){
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+        const texts = [];
+        while(walker.nextNode()){
+            const n = walker.currentNode;
+            if(n && n.nodeValue && n.nodeValue.trim()) texts.push(n);
+        }
+        texts.forEach(t => {
+            try{
+                const span = document.createElement('span');
+                span.className = 'btn-text-hidden';
+                span.textContent = t.nodeValue;
+                t.parentNode.replaceChild(span, t);
+            }catch(e){}
+        });
+    }
+
+    function ensureSpinnerCssOnce(){
+        if(document.getElementById('global-ajax-spinner-css')) return;
+        const css = `
+            .btn-text-hidden{ visibility:hidden; display:inline-block; }
+            .btn-spinner-inline{ display:inline-flex; align-items:center; justify-content:center; vertical-align:middle; }
+            .loading-no-underline{ text-decoration:none !important; }
+        `;
+        const st = document.createElement('style'); st.id = 'global-ajax-spinner-css'; st.textContent = css; document.head.appendChild(st);
+    }
+
     // Resolve a possibly-relative URL to an absolute href for robust comparisons
     function resolveUrl(u){
         try{ return new URL(u, window.location.origin).href; }catch(e){ return String(u || ''); }
@@ -34,18 +62,44 @@
         if(btn.dataset.originalHtml) return; // already loading
         btn.dataset.originalHtml = btn.innerHTML;
 
+        ensureSpinnerCssOnce();
+
+        // Anchor/button disabled styling
         const tag = btn.tagName && btn.tagName.toLowerCase();
         if(tag === 'a' || btn.classList.contains('btn-custom')){
-            // anchor-like elements: add disabled state and prevent clicks
             btn.dataset.savedPointerEvents = btn.style.pointerEvents || '';
             btn.classList.add('disabled');
             btn.setAttribute('aria-disabled', 'true');
             btn.style.pointerEvents = 'none';
+            try{ btn.classList.add('loading-no-underline'); }catch(e){}
         } else {
             try { btn.disabled = true; } catch (e) {}
         }
 
-        btn.innerHTML = createSpinnerHtml('sm') + (text || '');
+        // Insert inline spinner element (no overlay) so visuals/layout preserved
+        const spinnerWrap = document.createElement('span');
+        spinnerWrap.className = 'btn-spinner-inline';
+        spinnerWrap.setAttribute('aria-hidden', 'false');
+        spinnerWrap.innerHTML = createSpinnerHtml('sm');
+
+        // On very small screens (bottom nav), prefer swapping the icon only
+        try{
+            if(window.innerWidth <= 576){
+                const icon = btn.querySelector('i, svg');
+                if(icon){
+                    // Save original icon HTML and replace with spinner
+                    btn.dataset._origIcon = icon.outerHTML;
+                    icon.replaceWith(spinnerWrap);
+                    btn.__btnSpinner = spinnerWrap;
+                    return;
+                }
+            }
+        }catch(e){/* ignore */}
+
+        // place spinner at the start to avoid layout shifts
+        try{ btn.insertBefore(spinnerWrap, btn.firstChild); }catch(e){ btn.appendChild(spinnerWrap); }
+        btn.__btnSpinner = spinnerWrap;
+        if(text){ spinnerWrap.setAttribute('aria-label', String(text)); }
     }
 
     function resetButton(btn){
@@ -69,6 +123,52 @@
             try { btn.disabled = false; } catch (e) {}
         }
     }
+        function resetButton(btn){
+            if(!btn) return;
+            // Remove spinner element
+            if(btn.__btnSpinner){
+                try{ btn.__btnSpinner.remove(); }catch(e){}
+                delete btn.__btnSpinner;
+            }
+
+            // If we swapped out an icon on small screens, restore it
+            if(btn.dataset && btn.dataset._origIcon){
+                try{
+                    const wrapper = document.createElement('span');
+                    wrapper.innerHTML = btn.dataset._origIcon;
+                    // insert at start
+                    if(btn.firstChild) btn.insertBefore(wrapper.firstChild, btn.firstChild);
+                }catch(e){}
+                try{ delete btn.dataset._origIcon; }catch(e){}
+            }
+
+            // Restore original HTML if we saved it
+            if(btn.dataset.originalHtml){
+                try{ btn.innerHTML = btn.dataset.originalHtml; }catch(e){}
+                delete btn.dataset.originalHtml;
+            }
+
+            // Restore pointer events and classes
+            try{ btn.classList.remove('loading-no-underline'); }catch(e){}
+            const tag = btn.tagName && btn.tagName.toLowerCase();
+            if(tag === 'a' || btn.classList.contains('btn-custom')){
+                btn.classList.remove('disabled');
+                btn.removeAttribute('aria-disabled');
+                if(btn.dataset.savedPointerEvents !== undefined){
+                    btn.style.pointerEvents = btn.dataset.savedPointerEvents;
+                    delete btn.dataset.savedPointerEvents;
+                } else {
+                    btn.style.pointerEvents = '';
+                }
+            } else {
+                try { btn.disabled = false; } catch (e) {}
+            }
+
+            if(btn.dataset.prevPosition){
+                btn.style.position = '';
+                delete btn.dataset.prevPosition;
+            }
+        }
 
     function setFormLoading(form, text){
         if(!form) return;
@@ -353,46 +453,46 @@
     }
 
     document.addEventListener('click', function(e){
+        // Intercept anchors and card-like clickable elements
         const a = e.target.closest && e.target.closest('a');
-        if(!a) return;
-        
-        // skip external links, targets, downloads, anchors, and opt-out
-        const href = a.getAttribute('href');
+        const cardLike = e.target.closest && e.target.closest('[data-href], .card-clickable, .listing-card, .store-card, .scroll-item');
+        const clickable = a || cardLike;
+        if(!clickable) return;
+
+        // resolve href from anchor or data-href on cards
+        const href = (a && a.getAttribute('href')) || (cardLike && cardLike.dataset && cardLike.dataset.href) || null;
         if(!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
-        if(a.target && a.target !== '_self') return;
-        if(a.hasAttribute('download')) return;
-        if(a.dataset.noAjax !== undefined || a.classList.contains('no-ajax')) return;
-        
-        // do not interfere with add-to-cart
-        if(a.classList.contains('add-to-cart-btn') || a.classList.contains('action-cart')) return;
-        
-        // Only intercept UI buttons / nav that look like buttons or have data-ajax
-        const isButtonLike = a.classList.contains('btn-custom') || 
-                           a.dataset.ajax !== undefined || 
-                           a.classList.contains('ajax-link') ||
-                           a.classList.contains('nav-link') ||
-                           a.classList.contains('side-nav-link') ||
-                           a.classList.contains('bottom-nav-link');
-        
-        // Also intercept main navigation links (except external ones)
-        const isInternalLink = href && (
-            href.startsWith('/') || 
-            href.startsWith(window.location.origin) || 
-            !href.includes('://')
-        );
-        
+        if(a && a.target && a.target !== '_self') return;
+        if(a && a.hasAttribute('download')) return;
+        if((a && a.dataset.noAjax !== undefined) || (clickable.classList && clickable.classList.contains('no-ajax'))) return;
+
+        // do not interfere with add-to-cart or action cart elements
+        if((a && (a.classList.contains('add-to-cart-btn') || a.classList.contains('action-cart'))) || (clickable.classList && (clickable.classList.contains('add-to-cart-btn') || clickable.classList.contains('action-cart')))) return;
+
+        // detect button-like anchors or internal links
+        const el = clickable;
+        const isButtonLike = (el.classList && (el.classList.contains('btn-custom') || el.dataset.ajax !== undefined || el.classList.contains('ajax-link') || el.classList.contains('nav-link') || el.classList.contains('side-nav-link') || el.classList.contains('bottom-nav-link')));
+        const isInternalLink = href && (href.startsWith('/') || href.startsWith(window.location.origin) || !href.includes('://'));
+
         if(!isButtonLike && !isInternalLink) return;
-        
+
         e.preventDefault();
-        // Option A: Show loading spinner for a few seconds, then reload the page
-        const linkLabel = (a.innerText || a.textContent || a.dataset.loadingText || '').trim();
-        setButtonLoading(a, linkLabel);
-        
-        // After 3 seconds (or when ready), perform full-page reload
-        // This ensures proper CSS/style loading and auth state parity
-        setTimeout(() => { 
-            window.location.href = href; 
-        }, 3000);
+
+        // Choose a label when available; for cards, prefer preserving innerHTML so images remain visible
+        let label = '';
+        if(a){
+            label = (a.innerText || a.textContent || a.dataset.loadingText || '').trim();
+        } else if(cardLike){
+            const titleEl = cardLike.querySelector('h4, h3, .listing-title, .store-name') || cardLike.querySelector('[data-title]');
+            if(titleEl) label = (titleEl.innerText || titleEl.textContent || '').trim();
+            if(!label && cardLike.dataset && cardLike.dataset.loadingText) label = cardLike.dataset.loadingText;
+        }
+
+        // Show spinner; leaving label empty will preserve original innerHTML (keeps images)
+        setButtonLoading(el, label || '');
+
+        // Navigate after a short delay so spinner provides feedback
+        setTimeout(() => { window.location.href = href; }, 3000);
     });
 
     document.addEventListener('submit', function(e){

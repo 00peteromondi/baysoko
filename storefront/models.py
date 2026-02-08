@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.core.exceptions import ValidationError
 from django.db.models import Sum, Avg, F
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 class Store(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='stores')
@@ -26,6 +26,10 @@ class Store(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True)
     location = models.CharField(max_length=255, blank=True)
+    # Payout info for sellers
+    payout_phone = models.CharField(max_length=15, blank=True, null=True, help_text="Seller M-Pesa phone for payouts")
+    payout_verified = models.BooleanField(default=False)
+    payout_verified_at = models.DateTimeField(null=True, blank=True)
     policies = models.TextField(blank=True, help_text="Store policies, return policy, etc.")
     is_featured = models.BooleanField(default=False, help_text="Featured stores get premium placement")
     total_views = models.PositiveIntegerField(default=0)
@@ -88,65 +92,24 @@ class Store(models.Model):
         
         return has_active or has_valid_trial
 
-    def get_effective_subscription(self, owner=None, create_if_missing=True):
-        """Return the most relevant Subscription for this store.
-
-        Preference order:
-        1. An active owner-level subscription (applies to all stores)
-        2. The most recent subscription for this store
-        3. Any existing free subscription row for the store
-        4. If none and create_if_missing=True, create and return a zero-amount free Subscription
-        """
-        from django.utils import timezone as _tz
-        try:
-            # Lazy import to avoid circular issues when module is imported
-            Subscription = globals().get('Subscription')
-            if Subscription is None:
-                from .models import Subscription
-                Subscription = Subscription
-
-            owner_obj = owner or getattr(self, 'owner', None)
-            if owner_obj:
-                owner_active = Subscription.objects.filter(store__owner=owner_obj, status='active').order_by('-created_at').first()
-                if owner_active:
-                    return owner_active
-
-            # Most recent subscription for this store
-            recent = Subscription.objects.filter(store=self).order_by('-created_at').first()
-            if recent:
-                # Ensure trial expiry is enforced
-                try:
-                    recent.check_trial_expiry()
-                except Exception:
-                    pass
-                return recent
-
-            # Any explicit free subscription
-            free_sub = Subscription.objects.filter(store=self, plan='free').order_by('-created_at').first()
-            if free_sub:
-                return free_sub
-
-            # Optionally create a seeded free subscription so templates can rely on DB rows
-            if create_if_missing:
-                now = _tz.now()
-                try:
-                    created = Subscription.objects.create(
-                        store=self,
-                        plan='free',
-                        status='active',
-                        amount=0,
-                        currency='KES',
-                        started_at=now,
-                        metadata={'seeded_free_subscription': True}
-                    )
-                    return created
-                except Exception:
-                    # Best-effort: return None if creation fails
-                    return None
-
-            return None
-        except Exception:
-            return None
+    def get_effective_subscription(self, owner=None, create_if_missing=False):
+        """Get effective subscription for this store, with free plan fallback"""
+        # Try to get subscription for this store
+        subscription = self.subscriptions.order_by('-created_at').first()
+        
+        # If no subscription exists and create_if_missing is True, create a free subscription
+        if not subscription and create_if_missing:
+            from django.utils import timezone
+            subscription = Subscription.objects.create(
+                store=self,
+                plan='free',
+                status='active',
+                amount=0,
+                started_at=timezone.now(),
+                metadata={'auto_created': True, 'plan_type': 'free'}
+            )
+        
+        return subscription
     
     def get_rating(self):
         """
@@ -392,6 +355,15 @@ class Store(models.Model):
     
     def save(self, *args, **kwargs):
         # Run clean validation before saving
+        # Prevent changing payout phone after verification
+        try:
+            if self.pk:
+                orig = Store.objects.filter(pk=self.pk).first()
+                if orig and orig.payout_verified and orig.payout_phone and self.payout_phone and orig.payout_phone != self.payout_phone:
+                    raise ValidationError('Payout phone is locked after verification')
+        except Exception:
+            pass
+
         self.full_clean()
         super().save(*args, **kwargs)
     
@@ -754,6 +726,105 @@ class MpesaPayment(models.Model):
     def is_successful(self):
         """Check if payment was successful"""
         return self.status == 'completed'
+
+
+class PayoutVerification(models.Model):
+    """Track one-time payout phone verifications initiated via STK push."""
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='payout_verifications')
+    phone = models.CharField(max_length=15)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    checkout_request_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    verified = models.BooleanField(default=False)
+    verified_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"PayoutVerification(store={self.store.slug}, phone={self.phone}, verified={self.verified})"
+
+
+
+class WithdrawalRequest(models.Model):
+    STATUS = [
+        ('pending', 'Pending'),
+        ('scheduled', 'Scheduled for Processing'),
+        ('processed', 'Processed'),
+        ('failed', 'Failed'),
+    ]
+
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='withdrawal_requests')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, choices=STATUS, default='pending')
+    scheduled_for = models.DateTimeField(null=True, blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    reference = models.CharField(max_length=100, blank=True)
+    note = models.TextField(blank=True)
+
+    MIN_WITHDRAWAL = 10000
+
+    def schedule(self):
+        """Schedule the withdrawal for the next Thursday if valid.
+
+        Returns True if scheduled, False otherwise.
+        """
+        from django.utils import timezone
+        from datetime import timedelta
+
+        # Enforce minimum
+        if self.amount < self.MIN_WITHDRAWAL:
+            return False
+
+        # Find next Thursday
+        today = timezone.now().date()
+        # Python: Monday=0 ... Sunday=6; Thursday=3
+        days_ahead = (3 - today.weekday()) % 7
+        if days_ahead == 0:
+            # If today is Thursday, schedule for today
+            target = today
+        else:
+            target = today + timedelta(days=days_ahead)
+
+        # schedule at start of day
+        self.scheduled_for = timezone.make_aware(datetime.combine(target, datetime.min.time()))
+        self.status = 'scheduled'
+        self.save()
+        return True
+
+    def process(self):
+        """Process the withdrawal. This should be called by a scheduled task on Thursdays."""
+        from django.utils import timezone
+        try:
+            # Call payout wrapper to perform actual disbursement
+            from .payout import payout_to_phone
+
+            if not self.store.payout_phone or not self.store.payout_verified:
+                self.status = 'failed'
+                self.save()
+                return False
+
+            success, provider_ref = payout_to_phone(self.store.payout_phone, self.amount, reference=self.reference)
+            if success:
+                self.status = 'processed'
+                self.processed_at = timezone.now()
+                if not self.reference:
+                    self.reference = provider_ref or f"WITHDRAW-{self.store.id}-{int(timezone.now().timestamp())}"
+                else:
+                    # Record provider ref if available
+                    self.reference = provider_ref or self.reference
+                self.save()
+                return True
+            else:
+                self.status = 'failed'
+                self.note = str(provider_ref)
+                self.save()
+                return False
+        except Exception:
+            self.status = 'failed'
+            self.save()
+            return False
 
 
 # Add to existing models.py

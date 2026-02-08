@@ -1,212 +1,659 @@
 {% extends 'delivery/base.html' %}
 {% load humanize %}
+{% load static %}
 
 {% block title %}All Deliveries - Delivery Management{% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Enhanced table styling */
+    .table-delivery {
+        --bs-table-bg: transparent;
+        margin-bottom: 0;
+    }
+    
+    .table-delivery > thead {
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.1) 0%, 
+            rgba(5, 184, 138, 0.05) 100%);
+    }
+    
+    .table-delivery > thead th {
+        border-bottom: 2px solid var(--primary);
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.5px;
+        color: var(--text-secondary);
+        padding: 1rem 0.75rem;
+    }
+    
+    .table-delivery > tbody td {
+        padding: 1rem 0.75rem;
+        vertical-align: middle;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .table-delivery > tbody tr {
+        transition: var(--transition-fast);
+    }
+    
+    .table-delivery > tbody tr:hover {
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.03) 0%, 
+            rgba(5, 184, 138, 0.02) 100%);
+    }
+    
+    /* Status badges */
+    .status-badge {
+        padding: 0.35rem 0.85rem;
+        border-radius: 50px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: inline-block;
+        text-align: center;
+        min-width: 100px;
+    }
+    
+    .status-pending { background: rgba(255, 158, 31, 0.1); color: #ff9e1f; }
+    .status-accepted { background: rgba(17, 138, 178, 0.1); color: #118ab2; }
+    .status-assigned { background: rgba(6, 214, 160, 0.1); color: #06d6a0; }
+    .status-picked_up { background: rgba(255, 209, 102, 0.1); color: #ffd166; }
+    .status-in_transit { background: rgba(66, 133, 244, 0.1); color: #4285f4; }
+    .status-out_for_delivery { background: rgba(6, 214, 160, 0.2); color: #06d6a0; }
+    .status-delivered { background: rgba(6, 214, 160, 0.2); color: #06d6a0; }
+    .status-failed { background: rgba(239, 71, 111, 0.1); color: #ef476f; }
+    .status-cancelled { background: rgba(108, 117, 125, 0.1); color: #6c757d; }
+    
+    /* Driver status indicator */
+    .driver-status {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 8px;
+    }
+    
+    .driver-status-available { background: var(--success); }
+    .driver-status-busy { background: var(--warning); }
+    .driver-status-offline { background: var(--secondary); }
+    .driver-status-on_break { background: var(--info); }
+    
+    /* Filter card */
+    .filter-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .filter-card .card-header {
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(5, 184, 138, 0.02) 100%);
+        border-bottom: 1px solid var(--border-color);
+        padding: 1rem 1.5rem;
+    }
+    
+    /* Quick filter buttons */
+    .quick-filters {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+    
+    .quick-filter-btn {
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-size: 0.85rem;
+        transition: var(--transition-fast);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .quick-filter-btn:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+        text-decoration: none;
+    }
+    
+    .quick-filter-btn.active {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        border-color: var(--primary);
+        color: white;
+    }
+    
+    /* Pagination */
+    .pagination {
+        --bs-pagination-color: var(--text-primary);
+        --bs-pagination-bg: var(--card-bg);
+        --bs-pagination-border-color: var(--border-color);
+        --bs-pagination-hover-color: var(--primary);
+        --bs-pagination-hover-bg: rgba(6, 214, 160, 0.1);
+        --bs-pagination-hover-border-color: var(--primary);
+        --bs-pagination-focus-color: var(--primary);
+        --bs-pagination-focus-bg: rgba(6, 214, 160, 0.1);
+        --bs-pagination-active-bg: var(--primary);
+        --bs-pagination-active-border-color: var(--primary);
+    }
+    
+    /* Action buttons */
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .action-btn {
+        width: 32px;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-md);
+        transition: var(--transition-fast);
+    }
+    
+    .action-btn:hover {
+        transform: translateY(-2px);
+    }
+    
+    /* Checkbox styling */
+    .form-check-input:checked {
+        background-color: var(--primary);
+        border-color: var(--primary);
+    }
+    
+    /* Empty state */
+    .empty-state {
+        padding: 3rem 1rem;
+        text-align: center;
+    }
+    
+    .empty-state-icon {
+        font-size: 3.5rem;
+        color: var(--text-tertiary);
+        margin-bottom: 1rem;
+    }
+    
+    /* Responsive table */
+    @media (max-width: 768px) {
+        .table-responsive {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+        }
+        
+        .action-buttons {
+            flex-direction: column;
+        }
+        
+        .action-btn {
+            width: 28px;
+            height: 28px;
+        }
+        
+        .status-badge {
+            min-width: 80px;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.7rem;
+        }
+    }
+    
+    /* Store filter */
+    .store-filter-container {
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(5, 184, 138, 0.02) 100%);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0">All Deliveries</h2>
-    <div>
-        <a href="{% url 'delivery:create_delivery' %}" class="btn btn-delivery">
-            <i class="fas fa-plus-circle"></i> Create Delivery
-        </a>
-    </div>
-</div>
-
-<!-- Filters -->
-<div class="card mb-4">
-    <div class="card-body">
-        <form method="get" class="row g-3">
-            <div class="col-md-3">
-                <label for="status" class="form-label">Status</label>
-                <select name="status" id="status" class="form-select">
-                    <option value="">All Statuses</option>
-                    {% for status_code, status_name in status_choices %}
-                    <option value="{{ status_code }}" {% if filter_status == status_code %}selected{% endif %}>
-                        {{ status_name }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            
-            <div class="col-md-2">
-                <label for="date_from" class="form-label">From Date</label>
-                <input type="date" name="date_from" id="date_from" class="form-control" value="{{ date_from }}">
-            </div>
-            
-            <div class="col-md-2">
-                <label for="date_to" class="form-label">To Date</label>
-                <input type="date" name="date_to" id="date_to" class="form-control" value="{{ date_to }}">
-            </div>
-            
-            <div class="col-md-3">
-                <label for="search" class="form-label">Search</label>
-                <input type="text" name="search" id="search" class="form-control" placeholder="Search..." value="{{ search }}">
-            </div>
-            
-            <div class="col-md-2 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="fas fa-filter"></i> Filter
-                </button>
-            </div>
-            
-            {% if user.delivery_person %}
-            <div class="col-md-12">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="my_deliveries" id="my_deliveries" {% if my_deliveries %}checked{% endif %}>
-                    <label class="form-check-label" for="my_deliveries">
-                        Show only my deliveries
-                    </label>
-                </div>
-            </div>
-            {% endif %}
-        </form>
-    </div>
-</div>
-
-<!-- Deliveries Table -->
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Deliveries ({{ deliveries.paginator.count }})</h5>
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            {% if user.is_staff %}
-            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bulkUpdateModal">
-                <i class="fas fa-edit"></i> Bulk Update
-            </button>
-            {% endif %}
-            <a href="?export=csv" class="btn btn-sm btn-outline-success">
-                <i class="fas fa-download"></i> Export CSV
+            <h1 class="h2 fw-bold mb-2">
+                <i class="fas fa-truck-loading text-primary me-2"></i>
+                All Deliveries
+            </h1>
+            <p class="text-muted mb-0">
+                Manage and track all delivery requests
+                {% if is_seller and stores.count > 1 %}
+                <span class="badge bg-primary ms-2">{{ stores.count }} stores</span>
+                {% endif %}
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'delivery:create_delivery' %}" class="btn btn-delivery">
+                <i class="fas fa-plus-circle me-1"></i> Create Delivery
+            </a>
+            <a href="{% url 'delivery:dashboard' %}" class="btn btn-outline-primary">
+                <i class="fas fa-tachometer-alt me-1"></i> Dashboard
             </a>
         </div>
     </div>
     
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-delivery mb-0">
-                <thead>
-                    <tr>
-                        {% if user.is_staff %}
-                        <th width="30">
-                            <input type="checkbox" id="selectAll">
-                        </th>
-                        {% endif %}
-                        <th>Tracking #</th>
-                        <th>Order ID</th>
-                        <th>Recipient</th>
-                        <th>Pickup</th>
-                        <th>Status</th>
-                        <th>Driver</th>
-                        <th>Fee</th>
-                        <th>Created</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for delivery in deliveries %}
-                    <tr>
-                        {% if user.is_staff %}
-                        <td>
-                            <input type="checkbox" class="delivery-checkbox" value="{{ delivery.id }}">
-                        </td>
-                        {% endif %}
-                        <td>
-                            <strong>{{ delivery.tracking_number }}</strong><br>
-                            <small class="text-muted">{{ delivery.priority }}</small>
-                        </td>
-                        <td>{{ delivery.order_id|default:"-" }}</td>
-                        <td>
-                            <strong>{{ delivery.recipient_name }}</strong><br>
-                            <small class="text-muted">{{ delivery.recipient_phone }}</small>
-                        </td>
-                        <td>
-                            <small>{{ delivery.pickup_name }}</small><br>
-                            <small class="text-muted">{{ delivery.pickup_phone }}</small>
-                        </td>
-                        <td>
-                            <span class="status-badge status-{{ delivery.status }}">
-                                {{ delivery.get_status_display }}
-                            </span>
-                        </td>
-                        <td>
-                            {% if delivery.delivery_person %}
-                            <div class="d-flex align-items-center">
-                                <span class="driver-status status-{{ delivery.delivery_person.current_status }}"></span>
-                                {{ delivery.delivery_person.user.get_short_name|default:delivery.delivery_person.employee_id }}
-                            </div>
-                            {% else %}
-                            <span class="text-muted">Not assigned</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <strong>KES {{ delivery.delivery_fee|intcomma }}</strong><br>
-                            <small class="{% if delivery.payment_status == 'paid' %}text-success{% else %}text-warning{% endif %}">
-                                {{ delivery.get_payment_status_display }}
-                            </small>
-                        </td>
-                        <td>{{ delivery.created_at|date:"M d, Y" }}</td>
-                        <td>
-                            <div class="btn-group" role="group">
-                                <a href="{% url 'delivery:delivery_detail' delivery.pk %}" class="btn btn-sm btn-outline-primary" title="View">
-                                    <i class="fas fa-eye"></i>
-                                </a>
-                                <a href="{% url 'delivery:update_status' delivery.pk %}" class="btn btn-sm btn-outline-warning" title="Update Status">
-                                    <i class="fas fa-edit"></i>
-                                </a>
-                                <a href="/delivery/track/{{ delivery.tracking_number }}/" class="btn btn-sm btn-outline-info" title="Track" target="_blank">
-                                    <i class="fas fa-map-marker-alt"></i>
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="{% if user.is_staff %}10{% else %}9{% endif %}" class="text-center py-5">
-                            <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
-                            <h5 class="text-muted">No deliveries found</h5>
-                            <p class="text-muted">Try adjusting your filters</p>
-                        </td>
-                    </tr>
+    <!-- Store Filter (for sellers with multiple stores) -->
+    {% if is_seller and stores.count > 1 %}
+    <div class="store-filter-container">
+        <div class="row align-items-center">
+            <div class="col-md-3">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="fas fa-store text-primary"></i>
+                    <span class="fw-medium">Filter by Store:</span>
+                </div>
+            </div>
+            <div class="col-md-9">
+                <div class="quick-filters">
+                    <a href="?{% if filter_status %}status={{ filter_status }}{% endif %}" 
+                       class="quick-filter-btn {% if not store_filter %}active{% endif %}">
+                        <i class="fas fa-layer-group"></i> All Stores
+                    </a>
+                    {% for store in stores %}
+                    <a href="?{% if filter_status %}status={{ filter_status }}&{% endif %}store={{ store.id }}" 
+                       class="quick-filter-btn {% if store_filter == store.id|stringformat:'i' %}active{% endif %}">
+                        <i class="fas fa-store"></i> {{ store.name|truncatechars:20 }}
+                    </a>
                     {% endfor %}
-                </tbody>
-            </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Quick Filters -->
+    <div class="mb-3">
+        <div class="quick-filters">
+            <a href="?{% if store_filter %}store={{ store_filter }}{% endif %}" 
+               class="quick-filter-btn {% if not filter_status %}active{% endif %}">
+                <i class="fas fa-boxes"></i> All ({{ total_count }})
+            </a>
+            <a href="?{% if store_filter %}store={{ store_filter }}&{% endif %}status=pending" 
+               class="quick-filter-btn status-pending {% if filter_status == 'pending' %}active{% endif %}">
+                <i class="fas fa-clock"></i> Pending ({{ pending_count }})
+            </a>
+            <a href="?{% if store_filter %}store={{ store_filter }}&{% endif %}status=in_transit" 
+               class="quick-filter-btn status-in_transit {% if filter_status == 'in_transit' %}active{% endif %}">
+                <i class="fas fa-truck-moving"></i> In Transit ({{ transit_count }})
+            </a>
+            <a href="?{% if store_filter %}store={{ store_filter }}&{% endif %}status=delivered" 
+               class="quick-filter-btn status-delivered {% if filter_status == 'delivered' %}active{% endif %}">
+                <i class="fas fa-check-circle"></i> Delivered ({{ delivered_count }})
+            </a>
+            {% if is_delivery_person %}
+            <a href="?{% if store_filter %}store={{ store_filter }}&{% endif %}my_deliveries=1" 
+               class="quick-filter-btn {% if my_deliveries %}active{% endif %}">
+                <i class="fas fa-user-check"></i> My Deliveries
+            </a>
+            {% endif %}
         </div>
     </div>
     
-    {% if deliveries.paginator.num_pages > 1 %}
-    <div class="card-footer">
-        <nav aria-label="Page navigation">
-            <ul class="pagination justify-content-center mb-0">
-                {% if deliveries.has_previous %}
-                <li class="page-item">
-                    <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">First</a>
-                </li>
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ deliveries.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Previous</a>
-                </li>
+    <!-- Advanced Filters Card -->
+    <div class="filter-card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-filter me-2 text-primary"></i>
+                Advanced Filters
+                <small class="text-muted ms-2">({{ deliveries.paginator.count }} deliveries found)</small>
+            </h5>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3" id="filterForm">
+                <div class="col-md-3">
+                    <label for="status" class="form-label">Status</label>
+                    <select name="status" id="status" class="form-select">
+                        <option value="">All Statuses</option>
+                        {% for status_code, status_name in status_choices %}
+                        <option value="{{ status_code }}" {% if filter_status == status_code %}selected{% endif %}>
+                            {{ status_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-2">
+                    <label for="date_from" class="form-label">From Date</label>
+                    <input type="date" name="date_from" id="date_from" class="form-control" value="{{ date_from }}">
+                </div>
+                
+                <div class="col-md-2">
+                    <label for="date_to" class="form-label">To Date</label>
+                    <input type="date" name="date_to" id="date_to" class="form-control" value="{{ date_to }}">
+                </div>
+                
+                <div class="col-md-3">
+                    <label for="search" class="form-label">Search</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" name="search" id="search" class="form-control" 
+                               placeholder="Tracking, Customer, Phone, Address..." value="{{ search }}">
+                    </div>
+                </div>
+                
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-filter me-1"></i> Apply Filters
+                    </button>
+                </div>
+                
+                {% if user.delivery_person %}
+                <div class="col-md-12">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="my_deliveries" 
+                               id="my_deliveries" {% if my_deliveries %}checked{% endif %}>
+                        <label class="form-check-label" for="my_deliveries">
+                            <i class="fas fa-user-check me-1"></i>
+                            Show only my deliveries
+                        </label>
+                    </div>
+                </div>
                 {% endif %}
                 
-                {% for num in deliveries.paginator.page_range %}
-                    {% if deliveries.number == num %}
-                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                    {% elif num > deliveries.number|add:'-3' and num < deliveries.number|add:'3' %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
-                    </li>
+                <!-- Hidden fields for store filter -->
+                {% if store_filter %}
+                <input type="hidden" name="store" value="{{ store_filter }}">
+                {% endif %}
+            </form>
+            
+            <!-- Active Filters -->
+            {% if filter_status or date_from or date_to or search or my_deliveries %}
+            <div class="mt-3">
+                <small class="text-muted">Active filters:</small>
+                <div class="d-flex flex-wrap gap-2 mt-1">
+                    {% if filter_status %}
+                    <span class="badge bg-primary">
+                        Status: {{ filter_status }}
+                        <a href="?{% if store_filter %}store={{ store_filter }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}{% if search %}search={{ search }}&{% endif %}{% if my_deliveries %}my_deliveries=1&{% endif %}" 
+                           class="text-white ms-1" style="text-decoration: none;">×</a>
+                    </span>
                     {% endif %}
-                {% endfor %}
-                
-                {% if deliveries.has_next %}
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ deliveries.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next</a>
-                </li>
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ deliveries.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Last</a>
-                </li>
-                {% endif %}
-            </ul>
-        </nav>
+                    {% if date_from %}
+                    <span class="badge bg-info">
+                        From: {{ date_from }}
+                        <a href="?{% if store_filter %}store={{ store_filter }}&{% endif %}{% if filter_status %}status={{ filter_status }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}{% if search %}search={{ search }}&{% endif %}{% if my_deliveries %}my_deliveries=1&{% endif %}" 
+                           class="text-white ms-1" style="text-decoration: none;">×</a>
+                    </span>
+                    {% endif %}
+                    {% if date_to %}
+                    <span class="badge bg-info">
+                        To: {{ date_to }}
+                        <a href="?{% if store_filter %}store={{ store_filter }}&{% endif %}{% if filter_status %}status={{ filter_status }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if search %}search={{ search }}&{% endif %}{% if my_deliveries %}my_deliveries=1&{% endif %}" 
+                           class="text-white ms-1" style="text-decoration: none;">×</a>
+                    </span>
+                    {% endif %}
+                    {% if search %}
+                    <span class="badge bg-warning">
+                        Search: "{{ search }}"
+                        <a href="?{% if store_filter %}store={{ store_filter }}&{% endif %}{% if filter_status %}status={{ filter_status }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}{% if my_deliveries %}my_deliveries=1&{% endif %}" 
+                           class="text-white ms-1" style="text-decoration: none;">×</a>
+                    </span>
+                    {% endif %}
+                    {% if my_deliveries %}
+                    <span class="badge bg-success">
+                        My Deliveries
+                        <a href="?{% if store_filter %}store={{ store_filter }}&{% endif %}{% if filter_status %}status={{ filter_status }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}{% if search %}search={{ search }}&{% endif %}" 
+                           class="text-white ms-1" style="text-decoration: none;">×</a>
+                    </span>
+                    {% endif %}
+                    <a href="?{% if store_filter %}store={{ store_filter }}{% endif %}" class="btn btn-sm btn-outline-secondary">
+                        Clear All Filters
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
     </div>
-    {% endif %}
+    
+    <!-- Deliveries Table Card -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-list-check me-2 text-primary"></i>
+                Deliveries List
+            </h5>
+            <div class="d-flex gap-2">
+                {% if user.is_staff and deliveries.count > 0 %}
+                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bulkUpdateModal"
+                        id="bulkUpdateBtn" disabled>
+                    <i class="fas fa-edit me-1"></i> Bulk Update (<span id="selectedCount">0</span>)
+                </button>
+                {% endif %}
+                <a href="?{% if store_filter %}store={{ store_filter }}&{% endif %}{% if filter_status %}status={{ filter_status }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}{% if search %}search={{ search }}&{% endif %}{% if my_deliveries %}my_deliveries=1&{% endif %}export=csv" 
+                   class="btn btn-sm btn-outline-success">
+                    <i class="fas fa-download me-1"></i> Export CSV
+                </a>
+                <button class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+                    <i class="fas fa-print me-1"></i> Print
+                </button>
+            </div>
+        </div>
+        
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-delivery mb-0">
+                    <thead>
+                        <tr>
+                            {% if user.is_staff %}
+                            <th width="30">
+                                <input type="checkbox" id="selectAll">
+                            </th>
+                            {% endif %}
+                            <th>Tracking #</th>
+                            <th>Order</th>
+                            <th>Recipient</th>
+                            <th>Pickup</th>
+                            <th>Status</th>
+                            <th>Driver</th>
+                            <th>Fee</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for delivery in deliveries %}
+                        <tr class="delivery-row" data-status="{{ delivery.status }}">
+                            {% if user.is_staff %}
+                            <td>
+                                <input type="checkbox" class="delivery-checkbox" value="{{ delivery.id }}" 
+                                       data-tracking="{{ delivery.tracking_number }}">
+                            </td>
+                            {% endif %}
+                            <td>
+                                <div>
+                                    <strong class="text-primary">{{ delivery.tracking_number }}</strong>
+                                </div>
+                                <small class="text-muted">
+                                    {% if delivery.priority == 4 %}
+                                    <i class="fas fa-exclamation-triangle text-danger"></i> Urgent
+                                    {% elif delivery.priority == 3 %}
+                                    <i class="fas fa-arrow-up text-warning"></i> High
+                                    {% elif delivery.priority == 2 %}
+                                    <i class="fas fa-minus text-info"></i> Medium
+                                    {% else %}
+                                    <i class="fas fa-arrow-down text-success"></i> Low
+                                    {% endif %}
+                                </small>
+                            </td>
+                            <td>
+                                {% if delivery.order_id %}
+                                <span class="badge bg-light text-dark">#{{ delivery.order_id }}</span>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-start">
+                                    <div>
+                                        <strong>{{ delivery.recipient_name|truncatechars:20 }}</strong>
+                                        <div class="text-muted small">
+                                            <i class="fas fa-phone me-1"></i>{{ delivery.recipient_phone|truncatechars:15 }}
+                                        </div>
+                                        <div class="text-muted small">
+                                            <i class="fas fa-map-marker-alt me-1"></i>
+                                            {{ delivery.recipient_address|truncatechars:30 }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="text-muted small">
+                                    <div><i class="fas fa-warehouse me-1"></i>{{ delivery.pickup_name|truncatechars:20 }}</div>
+                                    <div><i class="fas fa-phone me-1"></i>{{ delivery.pickup_phone|truncatechars:15 }}</div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="status-badge status-{{ delivery.status }}">
+                                    {{ delivery.get_status_display }}
+                                </span>
+                                {% if delivery.estimated_delivery_time %}
+                                <div class="text-muted small mt-1">
+                                    <i class="far fa-clock me-1"></i>
+                                    {{ delivery.estimated_delivery_time|date:"M d, g:i a" }}
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if delivery.delivery_person %}
+                                <div class="d-flex align-items-center">
+                                    <span class="driver-status driver-status-{{ delivery.delivery_person.current_status }}"></span>
+                                    <div>
+                                        <div>{{ delivery.delivery_person.user.get_short_name|default:delivery.delivery_person.employee_id }}</div>
+                                        <small class="text-muted">{{ delivery.delivery_person.get_current_status_display }}</small>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <span class="text-muted">Not assigned</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div>
+                                    <strong class="text-success">KES {{ delivery.delivery_fee|intcomma }}</strong>
+                                </div>
+                                <div class="small">
+                                    <span class="badge {% if delivery.payment_status == 'paid' %}bg-success{% else %}bg-warning{% endif %}">
+                                        {{ delivery.get_payment_status_display }}
+                                    </span>
+                                </div>
+                            </td>
+                            <td>
+                                <div>{{ delivery.created_at|date:"M d, Y" }}</div>
+                                <div class="text-muted small">{{ delivery.created_at|date:"g:i a" }}</div>
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <a href="{% url 'delivery:delivery_detail' delivery.pk %}" 
+                                       class="action-btn btn btn-sm btn-outline-primary" title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{% url 'delivery:update_status' delivery.pk %}" 
+                                       class="action-btn btn btn-sm btn-outline-warning" title="Update Status">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <a href="{% url 'delivery:track_delivery' delivery.tracking_number %}" 
+                                       class="action-btn btn btn-sm btn-outline-info" title="Track" target="_blank">
+                                        <i class="fas fa-map-marker-alt"></i>
+                                    </a>
+                                    {% if is_delivery_person and delivery.delivery_person == user.delivery_person and delivery.status == 'assigned' %}
+                                    <button class="action-btn btn btn-sm btn-success" 
+                                            onclick="quickUpdateStatus({{ delivery.id }}, 'picked_up')"
+                                            title="Mark as Picked Up">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="{% if user.is_staff %}10{% else %}9{% endif %}" class="text-center py-5">
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">
+                                        <i class="fas fa-box-open"></i>
+                                    </div>
+                                    <h5 class="text-muted">No deliveries found</h5>
+                                    <p class="text-muted">Try adjusting your filters or create a new delivery</p>
+                                    <a href="{% url 'delivery:create_delivery' %}" class="btn btn-delivery mt-2">
+                                        <i class="fas fa-plus-circle me-1"></i> Create First Delivery
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Pagination -->
+        {% if deliveries.paginator.num_pages > 1 %}
+        <div class="card-footer">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <small class="text-muted">
+                        Showing {{ deliveries.start_index }} - {{ deliveries.end_index }} of {{ deliveries.paginator.count }} deliveries
+                    </small>
+                </div>
+                <nav aria-label="Page navigation">
+                    <ul class="pagination justify-content-center mb-0">
+                        {% if deliveries.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                <i class="fas fa-angle-double-left"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ deliveries.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                <i class="fas fa-angle-left"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                        
+                        {% for num in deliveries.paginator.page_range %}
+                            {% if num > deliveries.number|add:'-3' and num < deliveries.number|add:'3' %}
+                            <li class="page-item {% if deliveries.number == num %}active{% endif %}">
+                                <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                    {{ num }}
+                                </a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if deliveries.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ deliveries.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                <i class="fas fa-angle-right"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ deliveries.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                <i class="fas fa-angle-double-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                <div>
+                    <small class="text-muted">
+                        Page {{ deliveries.number }} of {{ deliveries.paginator.num_pages }}
+                    </small>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
 </div>
 
 <!-- Bulk Update Modal -->
@@ -215,12 +662,15 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Bulk Update Status</h5>
+                <h5 class="modal-title">
+                    <i class="fas fa-edit me-2"></i>
+                    Bulk Update Status
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label">Select Status</label>
+                    <label class="form-label">Select New Status</label>
                     <select id="bulkStatus" class="form-select">
                         <option value="">Select status...</option>
                         {% for status_code, status_name in status_choices %}
@@ -230,74 +680,604 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Notes (Optional)</label>
-                    <textarea id="bulkNotes" class="form-control" rows="3" placeholder="Add notes..."></textarea>
+                    <textarea id="bulkNotes" class="form-control" rows="3" placeholder="Add notes for this status change..."></textarea>
                 </div>
                 <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i> This will update all selected deliveries.
+                    <i class="fas fa-info-circle me-2"></i>
+                    This will update <strong id="selectedDeliveriesCount">0</strong> selected deliveries.
+                </div>
+                <div id="selectedDeliveriesList" class="mt-3">
+                    <!-- Selected deliveries will be listed here -->
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="bulkUpdate()">Update Selected</button>
+                <button type="button" class="btn btn-primary" onclick="performBulkUpdate()">
+                    <i class="fas fa-check me-1"></i> Update Selected
+                </button>
             </div>
         </div>
     </div>
 </div>
 {% endif %}
 
+<!-- Quick Status Update Modal -->
+<div class="modal fade" id="quickUpdateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Delivery Status</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="quickUpdateMessage">Are you sure you want to update this delivery?</p>
+                <div id="quickUpdateDetails"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmQuickUpdate">Confirm Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-    // Select all checkboxes
-    document.getElementById('selectAll').addEventListener('change', function() {
-        const checkboxes = document.querySelectorAll('.delivery-checkbox');
-        checkboxes.forEach(checkbox => {
-            checkbox.checked = this.checked;
+    // Global variables
+    let selectedDeliveries = new Set();
+    let quickUpdateDeliveryId = null;
+    let quickUpdateNewStatus = null;
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Initializing delivery list page...');
+        
+        // Setup bulk selection
+        setupBulkSelection();
+        
+        // Setup filter form
+        setupFilterForm();
+        
+        // Setup export functionality
+        setupExport();
+        
+        // Setup quick actions
+        setupQuickActions();
+        
+        // Auto-refresh if there are pending deliveries
+        autoRefreshIfPending();
+    });
+    
+    // Setup bulk selection functionality
+    function setupBulkSelection() {
+        const selectAllCheckbox = document.getElementById('selectAll');
+        const deliveryCheckboxes = document.querySelectorAll('.delivery-checkbox');
+        const bulkUpdateBtn = document.getElementById('bulkUpdateBtn');
+        
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', function() {
+                const isChecked = this.checked;
+                deliveryCheckboxes.forEach(checkbox => {
+                    checkbox.checked = isChecked;
+                    updateDeliverySelection(checkbox.value, checkbox.checked);
+                });
+                updateBulkActionUI();
+            });
+        }
+        
+        // Individual checkbox handling
+        deliveryCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                updateDeliverySelection(this.value, this.checked);
+                updateBulkActionUI();
+            });
+        });
+    }
+    
+    // Update delivery selection
+    function updateDeliverySelection(deliveryId, isSelected) {
+        if (isSelected) {
+            selectedDeliveries.add(deliveryId);
+        } else {
+            selectedDeliveries.delete(deliveryId);
+            document.getElementById('selectAll').checked = false;
+        }
+        
+        document.getElementById('selectedCount').textContent = selectedDeliveries.size;
+    }
+    
+    // Update bulk action UI
+    function updateBulkActionUI() {
+        const bulkUpdateBtn = document.getElementById('bulkUpdateBtn');
+        if (bulkUpdateBtn) {
+            bulkUpdateBtn.disabled = selectedDeliveries.size === 0;
+            
+            if (selectedDeliveries.size > 0) {
+                updateSelectedDeliveriesList();
+            }
+        }
+    }
+    
+    // Update selected deliveries list in modal
+    function updateSelectedDeliveriesList() {
+        const listContainer = document.getElementById('selectedDeliveriesList');
+        const countContainer = document.getElementById('selectedDeliveriesCount');
+        
+        if (countContainer) {
+            countContainer.textContent = selectedDeliveries.size;
+        }
+        
+        if (listContainer) {
+            let html = '<strong>Selected deliveries:</strong><div class="mt-2">';
+            let count = 0;
+            
+            document.querySelectorAll('.delivery-checkbox:checked').forEach(checkbox => {
+                if (count < 5) { // Show only first 5 to avoid clutter
+                    const tracking = checkbox.dataset.tracking;
+                    html += `<div class="badge bg-light text-dark me-1 mb-1">${tracking}</div>`;
+                }
+                count++;
+            });
+            
+            if (count > 5) {
+                html += `<div class="badge bg-secondary">+${count - 5} more</div>`;
+            }
+            
+            html += '</div>';
+            listContainer.innerHTML = html;
+        }
+    }
+    
+    // Setup filter form
+    function setupFilterForm() {
+        const filterForm = document.getElementById('filterForm');
+        if (filterForm) {
+            // Clear all filters
+            document.querySelectorAll('.clear-filter').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const param = this.dataset.param;
+                    const input = document.querySelector(`[name="${param}"]`);
+                    if (input) {
+                        input.value = '';
+                    }
+                    filterForm.submit();
+                });
+            });
+            
+            // Date range validation
+            const dateFrom = document.getElementById('date_from');
+            const dateTo = document.getElementById('date_to');
+            
+            if (dateFrom && dateTo) {
+                dateFrom.addEventListener('change', function() {
+                    if (dateTo.value && new Date(this.value) > new Date(dateTo.value)) {
+                        dateTo.value = '';
+                        Swal.fire({
+                            title: 'Date Range Invalid',
+                            text: 'From date cannot be after To date. To date has been cleared.',
+                            icon: 'warning',
+                            timer: 2000
+                        });
+                    }
+                });
+                
+                dateTo.addEventListener('change', function() {
+                    if (dateFrom.value && new Date(this.value) < new Date(dateFrom.value)) {
+                        dateFrom.value = '';
+                        Swal.fire({
+                            title: 'Date Range Invalid',
+                            text: 'To date cannot be before From date. From date has been cleared.',
+                            icon: 'warning',
+                            timer: 2000
+                        });
+                    }
+                });
+            }
+            
+            // Auto-submit on some filter changes
+            document.getElementById('status')?.addEventListener('change', function() {
+                if (this.value) filterForm.submit();
+            });
+        }
+    }
+    
+    // Setup export functionality
+    function setupExport() {
+        // CSV export confirmation
+        document.querySelectorAll('a[href*="export=csv"]').forEach(link => {
+            link.addEventListener('click', function(e) {
+                const deliveryCount = parseInt('{{ deliveries.paginator.count }}') || 0;
+                
+                if (deliveryCount > 1000) {
+                    e.preventDefault();
+                    Swal.fire({
+                        title: 'Large Export',
+                        text: `You are about to export ${deliveryCount} records. This might take a while. Continue?`,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Export CSV',
+                        cancelButtonText: 'Cancel'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            window.location.href = this.href;
+                        }
+                    });
+                }
+            });
+        });
+    }
+    
+    // Setup quick actions
+    function setupQuickActions() {
+        // Quick status update for delivery personnel
+        const quickUpdateBtns = document.querySelectorAll('[onclick*="quickUpdateStatus"]');
+        quickUpdateBtns.forEach(btn => {
+            const onclick = btn.getAttribute('onclick');
+            const match = onclick.match(/quickUpdateStatus\((\d+),\s*'(\w+)'\)/);
+            if (match) {
+                const deliveryId = match[1];
+                const newStatus = match[2];
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    quickUpdateStatus(deliveryId, newStatus);
+                });
+            }
+        });
+    }
+    
+    // Quick update status (for delivery personnel)
+    function quickUpdateStatus(deliveryId, newStatus) {
+        quickUpdateDeliveryId = deliveryId;
+        quickUpdateNewStatus = newStatus;
+        
+        const statusNames = {
+            'picked_up': 'Picked Up',
+            'in_transit': 'In Transit',
+            'delivered': 'Delivered'
+        };
+        
+        // Get delivery details
+        const deliveryRow = document.querySelector(`.delivery-checkbox[value="${deliveryId}"]`)?.closest('tr');
+        let trackingNumber = '';
+        
+        if (deliveryRow) {
+            const trackingCell = deliveryRow.querySelector('td:nth-child(2) strong');
+            if (trackingCell) trackingNumber = trackingCell.textContent;
+        }
+        
+        // Show confirmation modal
+        document.getElementById('quickUpdateMessage').textContent = 
+            `Are you sure you want to mark delivery ${trackingNumber} as "${statusNames[newStatus]}"?`;
+        
+        if (newStatus === 'delivered') {
+            document.getElementById('quickUpdateDetails').innerHTML = `
+                <div class="alert alert-warning mt-3">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Important:</strong> This action will notify the customer and mark the delivery as complete.
+                    Please ensure you have collected any required signatures or proof of delivery.
+                </div>`;
+        } else {
+            document.getElementById('quickUpdateDetails').innerHTML = '';
+        }
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('quickUpdateModal'));
+        modal.show();
+    }
+    
+    // Confirm quick update
+    document.getElementById('confirmQuickUpdate').addEventListener('click', async function() {
+        if (!quickUpdateDeliveryId || !quickUpdateNewStatus) return;
+        
+        const btn = this;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Updating...';
+        btn.disabled = true;
+        
+        try {
+            const response = await fetch(`/delivery/${quickUpdateDeliveryId}/update-status/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    status: quickUpdateNewStatus,
+                    notes: 'Quick update via delivery list'
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                Swal.fire({
+                    title: 'Success!',
+                    text: data.message || 'Status updated successfully',
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    // Refresh the page to show updated status
+                    window.location.reload();
+                });
+            } else {
+                throw new Error('Failed to update status');
+            }
+        } catch (error) {
+            console.error('Error updating status:', error);
+            Swal.fire({
+                title: 'Error!',
+                text: 'Failed to update delivery status. Please try again.',
+                icon: 'error'
+            });
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('quickUpdateModal'));
+            modal.hide();
+        }
+    });
+    
+    // Perform bulk update
+    async function performBulkUpdate() {
+        const newStatus = document.getElementById('bulkStatus').value;
+        const notes = document.getElementById('bulkNotes').value;
+        
+        if (!newStatus) {
+            Swal.fire({
+                title: 'Status Required',
+                text: 'Please select a status for the bulk update.',
+                icon: 'warning'
+            });
+            return;
+        }
+        
+        if (selectedDeliveries.size === 0) {
+            Swal.fire({
+                title: 'No Deliveries Selected',
+                text: 'Please select at least one delivery to update.',
+                icon: 'warning'
+            });
+            return;
+        }
+        
+        const result = await Swal.fire({
+            title: 'Confirm Bulk Update',
+            html: `Are you sure you want to update <strong>${selectedDeliveries.size}</strong> deliveries to "${newStatus}"?`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Update All',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: '#3085d6'
+        });
+        
+        if (!result.isConfirmed) return;
+        
+        // Show loading
+        Swal.fire({
+            title: 'Updating...',
+            text: 'Please wait while we update the deliveries',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        try {
+            const response = await fetch('{% url "delivery:bulk_update_status" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    delivery_ids: Array.from(selectedDeliveries),
+                    status: newStatus,
+                    notes: notes
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                Swal.fire({
+                    title: 'Success!',
+                    html: data.message || `Successfully updated ${selectedDeliveries.size} deliveries.`,
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    // Refresh the page
+                    window.location.reload();
+                });
+            } else {
+                throw new Error('Bulk update failed');
+            }
+        } catch (error) {
+            console.error('Bulk update error:', error);
+            Swal.fire({
+                title: 'Error!',
+                text: 'Failed to update deliveries. Please try again.',
+                icon: 'error'
+            });
+        }
+    }
+    
+    // Auto-refresh if there are pending deliveries
+    function autoRefreshIfPending() {
+        const pendingRows = document.querySelectorAll('.delivery-row[data-status="pending"]');
+        const assignedRows = document.querySelectorAll('.delivery-row[data-status="assigned"]');
+        const inTransitRows = document.querySelectorAll('.delivery-row[data-status="in_transit"]');
+        
+        // If there are active deliveries, refresh every 30 seconds
+        if (pendingRows.length > 0 || assignedRows.length > 0 || inTransitRows.length > 0) {
+            setTimeout(() => {
+                // Only refresh if page is visible and user is not interacting with forms
+                if (document.visibilityState === 'visible' && 
+                    !document.querySelector('.modal.show') &&
+                    !document.querySelector('form:focus-within')) {
+                    
+                    // Check if filters are set to show these statuses
+                    const currentStatus = '{{ filter_status }}';
+                    const shouldRefresh = !currentStatus || 
+                                         ['pending', 'assigned', 'in_transit', 'out_for_delivery'].includes(currentStatus);
+                    
+                    if (shouldRefresh) {
+                        console.log('Auto-refreshing for active deliveries...');
+                        window.location.reload();
+                    }
+                }
+            }, 30000); // 30 seconds
+        }
+    }
+    
+    // Utility functions
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    // Print optimized delivery list
+    function printDeliveryList() {
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+            <head>
+                <title>Delivery List - {{ request.site.name }}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    h1 { color: #333; border-bottom: 2px solid #06d6a0; padding-bottom: 10px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th { background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 8px; text-align: left; }
+                    td { border: 1px solid #dee2e6; padding: 8px; }
+                    .status-badge { padding: 3px 8px; border-radius: 3px; font-size: 12px; }
+                    .status-pending { background-color: #fff3cd; color: #856404; }
+                    .status-delivered { background-color: #d1e7dd; color: #0f5132; }
+                    .text-muted { color: #6c757d; }
+                    @media print {
+                        body { margin: 0; }
+                        h1 { font-size: 18px; }
+                        th, td { font-size: 12px; }
+                    }
+                </style>
+            </head>
+            <body>
+                <h1>Delivery List - {{ request.site.name }}</h1>
+                <p>Generated: ${new Date().toLocaleString()}</p>
+                <p>Filters: 
+                    ${'{{ filter_status }}' ? 'Status: ' + '{{ filter_status }}' : ''}
+                    ${'{{ date_from }}' ? ' | From: ' + '{{ date_from }}' : ''}
+                    ${'{{ date_to }}' ? ' | To: ' + '{{ date_to }}' : ''}
+                    ${'{{ search }}' ? ' | Search: ' + '{{ search }}' : ''}
+                </p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tracking #</th>
+                            <th>Recipient</th>
+                            <th>Status</th>
+                            <th>Driver</th>
+                            <th>Fee</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${Array.from(document.querySelectorAll('.delivery-row')).map(row => `
+                            <tr>
+                                <td>${row.querySelector('td:nth-child(2) strong')?.textContent || ''}</td>
+                                <td>${row.querySelector('td:nth-child(4) strong')?.textContent || ''}</td>
+                                <td><span class="status-badge status-${row.dataset.status}">${row.dataset.status}</span></td>
+                                <td>${row.querySelector('td:nth-child(7) div')?.textContent || 'Not assigned'}</td>
+                                <td>${row.querySelector('td:nth-child(8) strong')?.textContent || ''}</td>
+                                <td>${row.querySelector('td:nth-child(9) div')?.textContent || ''}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <p style="margin-top: 30px; color: #6c757d; font-size: 12px;">
+                    Printed by: {{ request.user.get_full_name }}<br>
+                    Total records: {{ deliveries.paginator.count }}
+                </p>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+    }
+    
+    // Add keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // Ctrl/Cmd + F to focus search
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+            e.preventDefault();
+            const searchInput = document.getElementById('search');
+            if (searchInput) {
+                searchInput.focus();
+                searchInput.select();
+            }
+        }
+        
+        // Ctrl/Cmd + P to print
+        if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+            e.preventDefault();
+            printDeliveryList();
+        }
+        
+        // Ctrl/Cmd + E to export
+        if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+            e.preventDefault();
+            const exportBtn = document.querySelector('a[href*="export=csv"]');
+            if (exportBtn) exportBtn.click();
+        }
+        
+        // Esc to clear selection
+        if (e.key === 'Escape') {
+            selectedDeliveries.clear();
+            document.querySelectorAll('.delivery-checkbox').forEach(cb => cb.checked = false);
+            document.getElementById('selectAll').checked = false;
+            updateBulkActionUI();
+        }
+    });
+    
+    // Add row click handler for better UX
+    document.querySelectorAll('.delivery-row').forEach(row => {
+        row.addEventListener('click', function(e) {
+            // Don't trigger if clicking on links or buttons
+            if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || 
+                e.target.closest('a') || e.target.closest('button')) {
+                return;
+            }
+            
+            // Toggle selection on row click
+            const checkbox = this.querySelector('.delivery-checkbox');
+            if (checkbox) {
+                checkbox.checked = !checkbox.checked;
+                checkbox.dispatchEvent(new Event('change'));
+            }
         });
     });
     
-    // Bulk update function
-    function bulkUpdate() {
-        const checkboxes = document.querySelectorAll('.delivery-checkbox:checked');
-        const status = document.getElementById('bulkStatus').value;
-        const notes = document.getElementById('bulkNotes').value;
-        
-        if (checkboxes.length === 0) {
-            alert('Please select at least one delivery.');
-            return;
-        }
-        
-        if (!status) {
-            alert('Please select a status.');
-            return;
-        }
-        
-        const deliveryIds = Array.from(checkboxes).map(cb => cb.value);
-        
-        fetch('{% url "delivery:bulk_update_status" %}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify({
-                delivery_ids: deliveryIds,
-                status: status,
-                notes: notes
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert(data.message);
-                location.reload();
-            } else {
-                alert('Error: ' + data.error);
-            }
-        })
-        .catch(error => {
-            alert('Error: ' + error);
-        });
-    }
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
 </script>
-{% endblock %}
 {% endblock %}

@@ -12,13 +12,16 @@ from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db import transaction
 from datetime import timedelta, datetime
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_GET, require_POST, require_http_methods
+from django.views.decorators.csrf import csrf_exempt
 import json
 import logging
 from decimal import Decimal
 from collections import defaultdict
 from .decorators import store_owner_required, analytics_access_required, store_limit_check
-from .models import Store, Subscription, MpesaPayment, StockMovement, StoreReview
+from .models import Store, Subscription, MpesaPayment, StockMovement, StoreReview, WithdrawalRequest
+from .models import PayoutVerification
+from .mpesa import MpesaGateway
 from .forms import StoreForm, UpgradeForm, SubscriptionPlanForm, StoreReviewForm
 from .mpesa import MpesaGateway
 from .monitoring import PaymentMonitor
@@ -377,12 +380,7 @@ def store_edit(request, slug):
 @login_required
 @store_owner_required
 def product_create(request, store_slug):
-    """
-    Create a listing for the user's storefront. Behavior:
-    - Enforce a per-user free listing limit (FREE_LISTING_LIMIT).
-    - Auto-create a single Store for the user if they don't have one yet.
-    - If the provided store_slug doesn't match the user's store, redirect to the correct store slug.
-    """
+    
     FREE_LISTING_LIMIT = getattr(settings, 'STORE_FREE_LISTING_LIMIT', 5)
 
     # Count all listings created by this user (global per-user limit)
@@ -675,14 +673,12 @@ def cancel_subscription(request, slug):
 
 @login_required
 def payment_monitor(request):
-    """
-    Comprehensive payment dashboard for sellers showing all payment types:
-    - Subscription payments
-    - Order payments (customer purchases)
-    - Escrow releases to sellers
-    """
+   
     # Get user's stores
     user_stores = Store.objects.filter(owner=request.user)
+    
+    # Get primary store for withdrawal context
+    store = user_stores.first()
 
     # Get time period from query params
     period = request.GET.get('period', '30d')
@@ -744,7 +740,7 @@ def payment_monitor(request):
         actual_release_date__isnull=True
     ).aggregate(total=Sum('amount'))['total'] or 0
 
-    # Released escrow funds
+    # Released escrow funds (available for withdrawal)
     released_escrow = Payment.objects.filter(
         order__order_items__listing__store__in=user_stores,
         status='completed',
@@ -758,7 +754,7 @@ def payment_monitor(request):
         status='completed'
     ).aggregate(total=Sum('amount'))['total'] or 0
 
-    # Recent failed payments
+    # Recent failed payments (both subscription and order)
     failed_payments = []
     failed_subs = MpesaPayment.objects.filter(
         subscription__store__in=user_stores,
@@ -773,15 +769,42 @@ def payment_monitor(request):
     failed_payments.sort(key=lambda x: x.created_at, reverse=True)
     failed_payments = failed_payments[:20]
 
+    # ===== WITHDRAWAL REQUESTS =====
+    from storefront.models import WithdrawalRequest
+    withdrawals = WithdrawalRequest.objects.filter(
+        store__in=user_stores
+    ).select_related('store').order_by('-requested_at')
+
+    if time_period:
+        withdrawals = withdrawals.filter(requested_at__gte=time_period)
+
+    withdrawals = withdrawals[:50]
+
+    # ===== CUSTOMER PURCHASES (Orders user bought from other sellers) =====
+    customer_purchases = Payment.objects.filter(
+        order__user=request.user
+    ).select_related(
+        'order',
+        'order__user'
+    ).prefetch_related('order__order_items__listing', 'order__order_items__listing__seller').distinct()
+
+    if time_period:
+        customer_purchases = customer_purchases.filter(created_at__gte=time_period)
+
+    customer_purchases = customer_purchases.order_by('-created_at')[:50]
+
     context = {
         'period': period,
         'user_stores': user_stores,
+        'store': store,  # Primary store for withdrawal UI
 
         # Payment collections
         'subscription_payments': subscription_payments,
         'order_payments': order_payments,
         'escrow_releases': escrow_releases,
         'failed_payments': failed_payments,
+        'withdrawals': withdrawals,
+        'customer_purchases': customer_purchases,
 
         # Statistics
         'total_earnings': total_earnings,
@@ -795,9 +818,80 @@ def payment_monitor(request):
         'order_count': order_payments.count(),
         'escrow_count': escrow_releases.count(),
         'failed_count': len(failed_payments),
+        'customer_purchase_count': customer_purchases.count(),
     }
 
     return render(request, 'storefront/payment_monitor_enhanced.html', context)
+
+
+@login_required
+def start_payout_verification(request, slug):
+    
+    store = get_object_or_404(Store, slug=slug)
+    if store.owner != request.user:
+        return HttpResponseForbidden('Not authorized')
+
+    phone = request.POST.get('phone')
+    if not phone:
+        messages.error(request, 'Phone is required')
+        return redirect('storefront:store_edit', slug=slug)
+
+    mpesa = MpesaGateway()
+    try:
+        phone_norm = mpesa._normalize_phone(phone)
+    except Exception as e:
+        messages.error(request, f'Invalid phone: {e}')
+        return redirect('storefront:store_edit', slug=slug)
+
+    # Small amount STK push for verification (e.g., KSh 1)
+    amount = 1
+    account_ref = f'VERIFY{store.id}'
+    try:
+        resp = mpesa.initiate_stk_push(phone_norm, amount, account_ref)
+        # Create a PayoutVerification record
+        pv = PayoutVerification.objects.create(store=store, phone=phone_norm, amount=amount, checkout_request_id=resp.get('CheckoutRequestID') or resp.get('checkout_request_id') or '')
+        messages.success(request, 'Verification STK push initiated. Complete verification by approving the prompt on your phone.')
+    except Exception as e:
+        messages.error(request, f'Failed to initiate verification: {e}')
+
+    return redirect('storefront:store_edit', slug=slug)
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def payout_verification_callback(request):
+    """Callback endpoint for verification STK push. Marks PayoutVerification and Store payout_verified.
+
+    This reuses existing mpesa callback structure; expects `CheckoutRequestID` to map.
+    """
+    data = json.loads(request.body or '{}')
+    try:
+        checkout = data.get('Body', {}).get('stkCallback', {}).get('CheckoutRequestID')
+        result_code = data.get('Body', {}).get('stkCallback', {}).get('ResultCode')
+        if not checkout:
+            return JsonResponse({'success': False, 'error': 'Missing CheckoutRequestID'}, status=400)
+
+        pv = PayoutVerification.objects.filter(checkout_request_id=checkout).first()
+        if not pv:
+            return JsonResponse({'success': False, 'error': 'Verification not found'}, status=404)
+
+        if result_code == 0:
+            pv.verified = True
+            pv.verified_at = timezone.now()
+            pv.save()
+            # Update store payout phone and mark verified
+            store = pv.store
+            store.payout_phone = pv.phone
+            store.payout_verified = True
+            store.payout_verified_at = timezone.now()
+            store.save()
+            return JsonResponse({'success': True})
+        else:
+            pv.verified = False
+            pv.save()
+            return JsonResponse({'success': False, 'error': 'Verification failed'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 # Helper function to serialize Decimal objects
 def dumps_with_decimals(data):
@@ -1987,7 +2081,7 @@ def undo_movement(request, slug, movement_id):
 @login_required
 @store_owner_required
 def get_movement_details(request, slug, movement_id):
-    """Get detailed movement information"""
+    #"""Get detailed movement information"""
     try:
         movement = StockMovement.objects.get(
             id=movement_id,
@@ -2216,3 +2310,34 @@ def product_performance(request, slug):
             'performance_metrics': performance_metrics
         }
     })
+
+
+@login_required
+@require_POST
+def request_withdrawal(request, slug):
+    store = get_object_or_404(Store, slug=slug)
+    if store.owner != request.user:
+        return HttpResponseForbidden('Not authorized')
+
+    amount_raw = request.POST.get('amount')
+    try:
+        amount = Decimal(amount_raw)
+    except Exception:
+        messages.error(request, 'Invalid amount')
+        return redirect('storefront:payment_monitor')
+
+    # Enforce payout phone verification
+    if not store.payout_verified or not store.payout_phone:
+        messages.error(request, 'Please add and verify your payout phone before requesting withdrawals.')
+        return redirect('storefront:payment_monitor')
+
+    wr = WithdrawalRequest.objects.create(store=store, amount=amount)
+    if not wr.schedule():
+        messages.error(request, f'Withdrawal must be at least KSh {WithdrawalRequest.MIN_WITHDRAWAL}')
+        return redirect('storefront:payment_monitor')
+
+    messages.success(request, f'Withdrawal request for KSh {amount:,.0f} scheduled. Processing will occur on the next Thursday.')
+    return redirect('storefront:payment_monitor')
+
+    messages.success(request, 'Withdrawal scheduled for processing on the next Thursday.')
+    return redirect('storefront:payment_monitor')

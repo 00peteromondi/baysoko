@@ -2,427 +2,1282 @@
 {% load humanize %}
 {% load delivery_filters %}
 
-{% block title %}Delivery #{{ delivery.tracking_number }} - Delivery Management{% endblock %}
+{% block title %}Delivery #{{ delivery.tracking_number }} - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Delivery Detail Styling */
+    .delivery-detail-container {
+        min-height: calc(100vh - 70px - 3rem);
+        background: var(--bg-primary);
+    }
+    
+    /* Status Timeline */
+    .timeline {
+        position: relative;
+        padding-left: 2rem;
+        margin-top: 1.5rem;
+    }
+    
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 15px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--border-color);
+    }
+    
+    .timeline-item {
+        position: relative;
+        margin-bottom: 2rem;
+    }
+    
+    .timeline-item:last-child {
+        margin-bottom: 0;
+    }
+    
+    .timeline-marker {
+        position: absolute;
+        left: -2rem;
+        top: 0;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--bg-secondary);
+        border: 2px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2;
+    }
+    
+    .timeline-marker.current {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+    }
+    
+    .timeline-marker.completed {
+        background: var(--success);
+        border-color: var(--success);
+        color: white;
+    }
+    
+    .timeline-content {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 1.25rem;
+        margin-left: 1.5rem;
+    }
+    
+    .timeline-title {
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 0.5rem;
+    }
+    
+    .timeline-time {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+    }
+    
+    /* Package Details */
+    .package-tags {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+    }
+    
+    .package-tag {
+        padding: 0.375rem 0.75rem;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+    }
+    
+    .package-tag.warning {
+        background: rgba(255, 158, 31, 0.1);
+        color: #ff9e1f;
+    }
+    
+    .package-tag.info {
+        background: rgba(17, 138, 178, 0.1);
+        color: #118ab2;
+    }
+    
+    /* Map Container */
+    .map-container {
+        height: 300px;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        position: relative;
+    }
+    
+    .map-placeholder {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.1) 0%, 
+            rgba(5, 184, 138, 0.05) 100%);
+    }
+    
+    /* Proof Gallery */
+    .proof-gallery {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .proof-item {
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        cursor: pointer;
+        transition: var(--transition);
+    }
+    
+    .proof-item:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+    }
+    
+    .proof-image {
+        height: 120px;
+        background: var(--bg-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        color: var(--text-tertiary);
+    }
+    
+    .proof-info {
+        padding: 0.75rem;
+        background: var(--card-bg);
+    }
+    
+    /* Signature Preview */
+    .signature-preview {
+        background: white;
+        padding: 1rem;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        margin-top: 1rem;
+    }
+    
+    /* Driver Card */
+    .driver-card {
+        background: linear-gradient(135deg, 
+            rgba(255, 209, 102, 0.1) 0%, 
+            rgba(255, 158, 31, 0.05) 100%);
+        border: 1px solid rgba(255, 209, 102, 0.2);
+        border-radius: var(--radius-lg);
+        padding: 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    
+    .driver-avatar {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: var(--primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+    
+    .driver-info h6 {
+        margin-bottom: 0.25rem;
+        color: var(--text-primary);
+    }
+    
+    .driver-stats {
+        display: flex;
+        gap: 1rem;
+        margin-top: 0.75rem;
+    }
+    
+    .driver-stat {
+        text-align: center;
+    }
+    
+    .driver-stat-value {
+        font-weight: 700;
+        color: var(--primary);
+    }
+    
+    .driver-stat-label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+    }
+    
+    /* Status Actions */
+    .status-actions {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-top: 1rem;
+    }
+    
+    .status-btn {
+        padding: 0.625rem 1.25rem;
+        border-radius: var(--radius-md);
+        font-weight: 600;
+        font-size: 0.9rem;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: var(--transition);
+        border: none;
+        cursor: pointer;
+    }
+    
+    .status-btn-primary {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+    }
+    
+    .status-btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .status-btn-secondary {
+        background: var(--bg-secondary);
+        color: var(--text-secondary);
+        border: 1px solid var(--border-color);
+    }
+    
+    .status-btn-secondary:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+    
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .timeline {
+            padding-left: 1.5rem;
+        }
+        
+        .timeline-marker {
+            left: -1.75rem;
+            width: 28px;
+            height: 28px;
+        }
+        
+        .proof-gallery {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .driver-card {
+            flex-direction: column;
+            text-align: center;
+        }
+        
+        .driver-stats {
+            justify-content: center;
+        }
+        
+        .status-actions {
+            flex-direction: column;
+        }
+        
+        .status-btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+    
+    @media (max-width: 576px) {
+        .timeline {
+            padding-left: 1rem;
+        }
+        
+        .timeline-marker {
+            left: -1.5rem;
+        }
+        
+        .proof-gallery {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-md-8">
-        <nav aria-label="breadcrumb">
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="{% url 'delivery:dashboard' %}">Dashboard</a></li>
-                <li class="breadcrumb-item"><a href="{% url 'delivery:delivery_list' %}">Deliveries</a></li>
-                <li class="breadcrumb-item active" aria-current="page">{{ delivery.tracking_number }}</li>
-            </ol>
-        </nav>
-        <h2 class="mb-1">Delivery #{{ delivery.tracking_number }}</h2>
-        <div class="d-flex align-items-center">
-            <span class="status-badge status-{{ delivery.status }} me-2">
-                {{ delivery.get_status_display }}
-            </span>
-            <span class="text-muted">Created: {{ delivery.created_at|date:"F d, Y H:i" }}</span>
+<div class="delivery-detail-container">
+    <!-- Toast Container -->
+    <div class="toast-container"></div>
+    
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'delivery:dashboard' %}" class="text-decoration-none">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'delivery:delivery_list' %}" class="text-decoration-none">Deliveries</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">#{{ delivery.tracking_number }}</li>
+                </ol>
+            </nav>
+            <div class="d-flex align-items-center gap-3">
+                <h1 class="h2 fw-bold mb-0 animate-fade-in">
+                    <i class="bi bi-box-seam me-2 text-primary"></i>
+                    Delivery #{{ delivery.tracking_number }}
+                </h1>
+                <span class="status-badge status-{{ delivery.status }}">
+                    {{ delivery.get_status_display }}
+                </span>
+            </div>
+            <p class="text-muted mb-0 mt-2">
+                Created {{ delivery.created_at|naturaltime }}
+                {% if delivery.delivery_person %}
+                • Assigned to {{ delivery.delivery_person.user.get_full_name|default:delivery.delivery_person.employee_id }}
+                {% endif %}
+            </p>
         </div>
-    </div>
-    <div class="col-md-4 text-md-end">
-        <div class="btn-group" role="group">
-            <a href="{% url 'delivery:update_status' delivery.pk %}" class="btn btn-warning">
-                <i class="fas fa-edit"></i> Update Status
+        <div class="d-flex gap-2">
+            <a href="{% url 'delivery:update_status' delivery.pk %}" class="btn btn-delivery">
+                <i class="bi bi-pencil me-2"></i>Update Status
             </a>
-            <a href="/delivery/track/{{ delivery.tracking_number }}/" class="btn btn-info" target="_blank">
-                <i class="fas fa-map-marker-alt"></i> Track
-            </a>
-            <button class="btn btn-primary" onclick="window.print()">
-                <i class="fas fa-print"></i> Print
-            </button>
-        </div>
-    </div>
-</div>
-
-<div class="row">
-    <!-- Left Column: Delivery Details -->
-    <div class="col-lg-8">
-        <!-- Delivery Information Card -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">Delivery Information</h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6 class="text-muted mb-3">Pickup Details</h6>
-                        <p>
-                            <strong>{{ delivery.pickup_name }}</strong><br>
-                            {{ delivery.pickup_address|linebreaksbr }}<br>
-                            <i class="fas fa-phone"></i> {{ delivery.pickup_phone }}<br>
-                            {% if delivery.pickup_email %}
-                            <i class="fas fa-envelope"></i> {{ delivery.pickup_email }}
-                            {% endif %}
-                        </p>
-                        {% if delivery.pickup_notes %}
-                        <div class="alert alert-light">
-                            <strong>Pickup Notes:</strong><br>
-                            {{ delivery.pickup_notes }}
-                        </div>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <h6 class="text-muted mb-3">Delivery Details</h6>
-                        <p>
-                            <strong>{{ delivery.recipient_name }}</strong><br>
-                            {{ delivery.recipient_address|linebreaksbr }}<br>
-                            <i class="fas fa-phone"></i> {{ delivery.recipient_phone }}<br>
-                            {% if delivery.recipient_email %}
-                            <i class="fas fa-envelope"></i> {{ delivery.recipient_email }}
-                            {% endif %}
-                        </p>
-                        {% if delivery.estimated_delivery_time %}
-                        <div class="alert alert-info">
-                            <i class="fas fa-clock"></i> 
-                            <strong>Estimated Delivery:</strong><br>
-                            {{ delivery.estimated_delivery_time|date:"F d, Y H:i" }}
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
-                
-                <hr>
-                
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6 class="text-muted mb-3">Package Details</h6>
-                        <p>
-                            <strong>Description:</strong> {{ delivery.package_description }}<br>
-                            <strong>Weight:</strong> {{ delivery.package_weight }} kg<br>
-                            {% if delivery.package_length %}
-                            <strong>Dimensions:</strong> {{ delivery.package_length }}×{{ delivery.package_width }}×{{ delivery.package_height }} cm<br>
-                            {% endif %}
-                            <strong>Declared Value:</strong> KES {{ delivery.declared_value|intcomma }}
-                        </p>
-                        <div class="mt-2">
-                            {% if delivery.is_fragile %}
-                            <span class="badge bg-warning me-2">Fragile</span>
-                            {% endif %}
-                            {% if delivery.requires_signature %}
-                            <span class="badge bg-info">Signature Required</span>
-                            {% endif %}
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <h6 class="text-muted mb-3">Service Information</h6>
-                        <p>
-                            {% if delivery.delivery_service %}
-                            <strong>Service:</strong> {{ delivery.delivery_service.name }}<br>
-                            {% endif %}
-                            {% if delivery.delivery_zone %}
-                            <strong>Zone:</strong> {{ delivery.delivery_zone.name }}<br>
-                            {% endif %}
-                            {% if delivery.delivery_person %}
-                            <strong>Driver:</strong> 
-                            <span class="d-flex align-items-center">
-                                <span class="driver-status status-{{ delivery.delivery_person.current_status }} me-1"></span>
-                                {{ delivery.delivery_person.user.get_full_name|default:delivery.delivery_person.employee_id }}
-                            </span>
-                            {% endif %}
-                        </p>
-                        
-                        <h6 class="text-muted mb-3 mt-3">Order Information</h6>
-                        <p>
-                            <strong>Order ID:</strong> {{ delivery.order_id|default:"N/A" }}<br>
-                            {% if delivery.external_order_ref %}
-                            <strong>External Ref:</strong> {{ delivery.external_order_ref }}
-                            {% endif %}
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Status Timeline -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">Status History</h5>
-            </div>
-            <div class="card-body">
-                <div class="timeline">
-                    {% for history in status_history %}
-                    <div class="timeline-item">
-                        <div class="d-flex justify-content-between">
-                            <div>
-                                <strong>{{ history.get_new_status_display }}</strong>
-                                <p class="mb-1">{{ history.notes|default:"No notes" }}</p>
-                            </div>
-                            <div class="text-muted text-end">
-                                <small>{{ history.created_at|date:"M d, Y H:i" }}</small><br>
-                                <small>{{ history.changed_by|user_display }}</small>
-                            </div>
-                        </div>
-                        {% if not forloop.last %}
-                        <div class="mt-2 mb-3" style="border-bottom: 1px dashed #dee2e6;"></div>
-                        {% endif %}
-                    </div>
-                    {% empty %}
-                    <div class="text-center py-4">
-                        <i class="fas fa-history fa-2x text-muted mb-3"></i>
-                        <p class="text-muted">No status history yet</p>
-                    </div>
-                    {% endfor %}
-                </div>
+            <div class="dropdown">
+                <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-three-dots"></i>
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="/delivery/track/{{ delivery.tracking_number }}/" target="_blank">
+                        <i class="bi bi-geo-alt me-2"></i>Track Package
+                    </a></li>
+                    <li><a class="dropdown-item" href="#" onclick="window.print()">
+                        <i class="bi bi-printer me-2"></i>Print Details
+                    </a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item text-danger" href="#" data-bs-toggle="modal" data-bs-target="#cancelModal">
+                        <i class="bi bi-x-circle me-2"></i>Cancel Delivery
+                    </a></li>
+                </ul>
             </div>
         </div>
     </div>
     
-    <!-- Right Column: Actions & Info -->
-    <div class="col-lg-4">
-        <!-- Financial Information -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">Financial Information</h5>
-            </div>
-            <div class="card-body">
-                <table class="table table-sm">
-                    <tr>
-                        <td>Delivery Fee:</td>
-                        <td class="text-end">KES {{ delivery.delivery_fee|intcomma }}</td>
-                    </tr>
-                    {% if delivery.tax_amount %}
-                    <tr>
-                        <td>Tax:</td>
-                        <td class="text-end">KES {{ delivery.tax_amount|intcomma }}</td>
-                    </tr>
-                    {% endif %}
-                    {% if delivery.insurance_fee %}
-                    <tr>
-                        <td>Insurance:</td>
-                        <td class="text-end">KES {{ delivery.insurance_fee|intcomma }}</td>
-                    </tr>
-                    {% endif %}
-                    <tr class="table-active">
-                        <th>Total Amount:</th>
-                        <th class="text-end">KES {{ delivery.total_amount|intcomma }}</th>
-                    </tr>
-                </table>
-                
-                <div class="mt-3">
-                    <span class="badge bg-{% if delivery.payment_status == 'paid' %}success{% elif delivery.payment_status == 'pending' %}warning{% else %}danger{% endif %}">
-                        {{ delivery.get_payment_status_display }}
-                    </span>
+    <!-- Main Content -->
+    <div class="row g-4">
+        <!-- Left Column -->
+        <div class="col-lg-8">
+            <!-- Delivery Information Card -->
+            <div class="card animate-fade-in">
+                <div class="card-header bg-transparent border-bottom">
+                    <h5 class="fw-bold mb-0">
+                        <i class="bi bi-info-circle me-2 text-primary"></i>
+                        Delivery Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <!-- Pickup Details -->
+                        <div class="col-md-6">
+                            <div class="bg-light rounded p-3">
+                                <h6 class="fw-bold mb-3 text-primary">
+                                    <i class="bi bi-box-arrow-up me-2"></i>
+                                    Pickup Details
+                                </h6>
+                                <div class="mb-3">
+                                    <label class="form-label text-muted small mb-1">Name</label>
+                                    <p class="mb-2 fw-medium">{{ delivery.pickup_name }}</p>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label text-muted small mb-1">Address</label>
+                                    <p class="mb-2">{{ delivery.pickup_address|linebreaksbr }}</p>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label text-muted small mb-1">Contact</label>
+                                    <p class="mb-1">
+                                        <i class="bi bi-telephone me-2"></i>{{ delivery.pickup_phone }}
+                                    </p>
+                                    {% if delivery.pickup_email %}
+                                    <p class="mb-0">
+                                        <i class="bi bi-envelope me-2"></i>{{ delivery.pickup_email }}
+                                    </p>
+                                    {% endif %}
+                                </div>
+                                {% if delivery.pickup_notes %}
+                                <div class="alert alert-light mt-3">
+                                    <strong>Pickup Notes:</strong>
+                                    <p class="mb-0 mt-1">{{ delivery.pickup_notes }}</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Delivery Details -->
+                        <div class="col-md-6">
+                            <div class="bg-light rounded p-3">
+                                <h6 class="fw-bold mb-3 text-primary">
+                                    <i class="bi bi-box-arrow-down me-2"></i>
+                                    Delivery Details
+                                </h6>
+                                <div class="mb-3">
+                                    <label class="form-label text-muted small mb-1">Recipient</label>
+                                    <p class="mb-2 fw-medium">{{ delivery.recipient_name }}</p>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label text-muted small mb-1">Address</label>
+                                    <p class="mb-2">{{ delivery.recipient_address|linebreaksbr }}</p>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label text-muted small mb-1">Contact</label>
+                                    <p class="mb-1">
+                                        <i class="bi bi-telephone me-2"></i>{{ delivery.recipient_phone }}
+                                    </p>
+                                    {% if delivery.recipient_email %}
+                                    <p class="mb-0">
+                                        <i class="bi bi-envelope me-2"></i>{{ delivery.recipient_email }}
+                                    </p>
+                                    {% endif %}
+                                </div>
+                                {% if delivery.estimated_delivery_time %}
+                                <div class="alert alert-info mt-3">
+                                    <i class="bi bi-clock me-2"></i>
+                                    <strong>Estimated Delivery:</strong>
+                                    <p class="mb-0 mt-1">{{ delivery.estimated_delivery_time|date:"F d, Y H:i" }}</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <!-- Package Information -->
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <h6 class="fw-bold mb-3">
+                                <i class="bi bi-box me-2 text-primary"></i>
+                                Package Details
+                            </h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <tbody>
+                                        <tr>
+                                            <td class="text-muted" width="40%">Description</td>
+                                            <td class="fw-medium">{{ delivery.package_description }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Weight</td>
+                                            <td class="fw-medium">{{ delivery.package_weight }} kg</td>
+                                        </tr>
+                                        {% if delivery.package_length %}
+                                        <tr>
+                                            <td class="text-muted">Dimensions</td>
+                                            <td class="fw-medium">{{ delivery.package_length }}×{{ delivery.package_width }}×{{ delivery.package_height }} cm</td>
+                                        </tr>
+                                        {% endif %}
+                                        <tr>
+                                            <td class="text-muted">Declared Value</td>
+                                            <td class="fw-medium">KSh {{ delivery.declared_value|intcomma }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <div class="package-tags">
+                                {% if delivery.is_fragile %}
+                                <span class="package-tag warning">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    Fragile
+                                </span>
+                                {% endif %}
+                                {% if delivery.requires_signature %}
+                                <span class="package-tag info">
+                                    <i class="bi bi-pen"></i>
+                                    Signature Required
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h6 class="fw-bold mb-3">
+                                <i class="bi bi-truck me-2 text-primary"></i>
+                                Service Information
+                            </h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <tbody>
+                                        {% if delivery.delivery_service %}
+                                        <tr>
+                                            <td class="text-muted" width="40%">Service</td>
+                                            <td class="fw-medium">{{ delivery.delivery_service.name }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if delivery.delivery_zone %}
+                                        <tr>
+                                            <td class="text-muted">Zone</td>
+                                            <td class="fw-medium">{{ delivery.delivery_zone.name }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if delivery.order_id %}
+                                        <tr>
+                                            <td class="text-muted">Order ID</td>
+                                            <td class="fw-medium">
+                                                {{ delivery.order_id }}
+                                                {% if delivery.external_order_ref %}
+                                                <small class="text-muted d-block">{{ delivery.external_order_ref }}</small>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if delivery.delivery_person %}
+                                        <tr>
+                                            <td class="text-muted">Driver</td>
+                                            <td class="fw-medium">
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="driver-status status-{{ delivery.delivery_person.current_status }}"></div>
+                                                    {{ delivery.delivery_person.user.get_full_name|default:delivery.delivery_person.employee_id }}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endif %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
-        
-        <!-- Quick Actions -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">Quick Actions</h5>
-            </div>
-            <div class="card-body">
-                {% if can_update_status %}
-                <div class="mb-3">
-                    <label class="form-label">Update Status</label>
-                    <select id="quickStatus" class="form-select mb-2">
-                        {% for status_code, status_name in status_choices %}
-                        <option value="{{ status_code }}" {% if delivery.status == status_code %}selected{% endif %}>
-                            {{ status_name }}
-                        </option>
+            
+            <!-- Status Timeline -->
+            <div class="card mt-4 animate-fade-in" style="animation-delay: 0.1s">
+                <div class="card-header bg-transparent border-bottom">
+                    <h5 class="fw-bold mb-0">
+                        <i class="bi bi-clock-history me-2 text-primary"></i>
+                        Status Timeline
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        {% for history in status_history %}
+                        <div class="timeline-item">
+                            <div class="timeline-marker {% if forloop.first %}current{% else %}completed{% endif %}">
+                                <i class="bi bi-check"></i>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h6 class="timeline-title mb-0">
+                                        {{ history.get_new_status_display }}
+                                    </h6>
+                                    <span class="timeline-time">
+                                        {{ history.created_at|date:"M d, Y" }} • {{ history.created_at|time:"H:i" }}
+                                    </span>
+                                </div>
+                                <p class="mb-2">{{ history.notes|default:"Status updated" }}</p>
+                                <small class="text-muted">
+                                    Changed by: {% if history.changed_by %}{{ history.changed_by.get_full_name|default:history.changed_by.username }}{% else %}System{% endif %}
+                                </small>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-clock-history fs-1 text-muted mb-3"></i>
+                            <p class="text-muted">No status history yet</p>
+                        </div>
                         {% endfor %}
-                    </select>
-                    <textarea id="statusNotes" class="form-control mb-2" rows="2" placeholder="Add notes..."></textarea>
-                    <button class="btn btn-primary w-100" onclick="updateDeliveryStatus()">
-                        <i class="fas fa-save"></i> Update Status
-                    </button>
-                </div>
-                {% endif %}
-                
-                <div class="list-group">
-                    <a href="{% url 'delivery:update_status' delivery.pk %}" class="list-group-item list-group-item-action">
-                        <i class="fas fa-edit me-2"></i> Full Status Update
-                    </a>
-                    <a href="#" class="list-group-item list-group-item-action" data-bs-toggle="modal" data-bs-target="#proofModal">
-                        <i class="fas fa-camera me-2"></i> Add Proof of Delivery
-                    </a>
-                    <a href="#" class="list-group-item list-group-item-action" onclick="copyTracking()">
-                        <i class="fas fa-copy me-2"></i> Copy Tracking Number
-                    </a>
-                    <a href="mailto:{{ delivery.recipient_email }}" class="list-group-item list-group-item-action">
-                        <i class="fas fa-envelope me-2"></i> Email Recipient
-                    </a>
+                    </div>
                 </div>
             </div>
         </div>
         
-        <!-- Proof of Delivery -->
-        {% if proofs %}
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Proof of Delivery</h5>
-            </div>
-            <div class="card-body">
-                {% for proof in proofs %}
-                <div class="mb-3">
-                    <strong>{{ proof.get_proof_type_display }}</strong><br>
-                    <small class="text-muted">{{ proof.created_at|date:"M d, Y H:i" }}</small>
-                    
-                    {% if proof.file %}
-                    <div class="mt-2">
-                        <a href="{{ proof.file.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
-                            <i class="fas fa-download"></i> Download File
-                        </a>
-                    </div>
-                    {% endif %}
-                    
-                    {% if proof.signature_data %}
-                    <div class="mt-2">
-                        <img src="{{ proof.signature_data }}" alt="Signature" style="max-width: 100%; background: #f8f9fa; padding: 10px;">
-                    </div>
-                    {% endif %}
-                    
-                    {% if proof.notes %}
-                    <div class="mt-2">
-                        <small>{{ proof.notes }}</small>
-                    </div>
-                    {% endif %}
+        <!-- Right Column -->
+        <div class="col-lg-4">
+            <!-- Financial Information -->
+            <div class="card animate-fade-in" style="animation-delay: 0.2s">
+                <div class="card-header bg-transparent border-bottom">
+                    <h5 class="fw-bold mb-0">
+                        <i class="bi bi-currency-exchange me-2 text-primary"></i>
+                        Financial Information
+                    </h5>
                 </div>
-                {% if not forloop.last %}<hr>{% endif %}
-                {% endfor %}
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <tbody>
+                                <tr>
+                                    <td class="text-muted">Delivery Fee</td>
+                                    <td class="text-end fw-bold">KSh {{ delivery.delivery_fee|intcomma }}</td>
+                                </tr>
+                                {% if delivery.tax_amount %}
+                                <tr>
+                                    <td class="text-muted">Tax</td>
+                                    <td class="text-end">KSh {{ delivery.tax_amount|intcomma }}</td>
+                                </tr>
+                                {% endif %}
+                                {% if delivery.insurance_fee %}
+                                <tr>
+                                    <td class="text-muted">Insurance</td>
+                                    <td class="text-end">KSh {{ delivery.insurance_fee|intcomma }}</td>
+                                </tr>
+                                {% endif %}
+                                <tr class="border-top">
+                                    <td class="text-muted pt-3">Total Amount</td>
+                                    <td class="text-end fw-bold pt-3 text-primary">KSh {{ delivery.total_amount|intcomma }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <span class="badge bg-{% if delivery.payment_status == 'paid' %}success{% elif delivery.payment_status == 'pending' %}warning{% else %}danger{% endif %}">
+                            {{ delivery.get_payment_status_display }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Quick Status Update -->
+            {% if can_update_status %}
+            <div class="card mt-4 animate-fade-in" style="animation-delay: 0.3s">
+                <div class="card-header bg-transparent border-bottom">
+                    <h5 class="fw-bold mb-0">
+                        <i class="bi bi-lightning me-2 text-primary"></i>
+                        Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Update Status</label>
+                        <div class="input-group mb-2">
+                            <select id="quickStatus" class="form-select">
+                                {% for status_code, status_name in status_choices %}
+                                <option value="{{ status_code }}" {% if delivery.status == status_code %}selected{% endif %}>
+                                    {{ status_name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <textarea id="statusNotes" class="form-control mb-2" rows="2" placeholder="Add notes (optional)..."></textarea>
+                        <button class="btn btn-delivery w-100" onclick="updateDeliveryStatus()">
+                            <i class="bi bi-check-circle me-2"></i>
+                            Update Status
+                        </button>
+                    </div>
+                    
+                    <div class="status-actions">
+                        <a href="{% url 'delivery:update_status' delivery.pk %}" class="status-btn status-btn-secondary">
+                            <i class="bi bi-pencil"></i>Advanced Update
+                        </a>
+                        <button class="status-btn status-btn-secondary" data-bs-toggle="modal" data-bs-target="#proofModal">
+                            <i class="bi bi-camera"></i>Add Proof
+                        </button>
+                        <button class="status-btn status-btn-secondary" onclick="copyTracking()">
+                            <i class="bi bi-clipboard"></i>Copy Tracking
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Driver Information -->
+            {% if delivery.delivery_person %}
+            <div class="driver-card mt-4 animate-fade-in" style="animation-delay: 0.4s">
+                <div class="driver-avatar">
+                    {{ delivery.delivery_person.user.get_full_name|first|default:delivery.delivery_person.employee_id|first|upper }}
+                </div>
+                <div class="driver-info">
+                    <h6 class="mb-0">{{ delivery.delivery_person.user.get_full_name|default:delivery.delivery_person.employee_id }}</h6>
+                    <small class="text-muted">{{ delivery.delivery_person.vehicle_type|title }}</small>
+                    
+                    <div class="driver-stats">
+                        <div class="driver-stat">
+                            <div class="driver-stat-value">{{ delivery.delivery_person.rating|default:"0.0"|floatformat:1 }}</div>
+                            <div class="driver-stat-label">Rating</div>
+                        </div>
+                        <div class="driver-stat">
+                            <div class="driver-stat-value">{{ delivery.delivery_person.completed_deliveries|default:0 }}</div>
+                            <div class="driver-stat-label">Completed</div>
+                        </div>
+                        <div class="driver-stat">
+                            <div class="driver-stat-value">{{ delivery.delivery_person.total_deliveries|default:0 }}</div>
+                            <div class="driver-stat-label">Total</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-2">
+                        <span class="status-badge status-{{ delivery.delivery_person.current_status }}">
+                            {{ delivery.delivery_person.get_current_status_display }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Proof of Delivery -->
+            {% if proofs %}
+            <div class="card mt-4 animate-fade-in" style="animation-delay: 0.5s">
+                <div class="card-header bg-transparent border-bottom">
+                    <h5 class="fw-bold mb-0">
+                        <i class="bi bi-shield-check me-2 text-primary"></i>
+                        Proof of Delivery
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="proof-gallery">
+                        {% for proof in proofs %}
+                        <div class="proof-item" onclick="viewProof({{ proof.id }})">
+                            <div class="proof-image">
+                                {% if proof.file %}
+                                <i class="bi bi-file-earmark-image"></i>
+                                {% elif proof.signature_data %}
+                                <i class="bi bi-pen"></i>
+                                {% else %}
+                                <i class="bi bi-check-circle"></i>
+                                {% endif %}
+                            </div>
+                            <div class="proof-info">
+                                <small class="fw-medium d-block">{{ proof.get_proof_type_display }}</small>
+                                <small class="text-muted">{{ proof.created_at|date:"M d, Y" }}</small>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Map Preview -->
+            <div class="card mt-4 animate-fade-in" style="animation-delay: 0.6s">
+                <div class="card-header bg-transparent border-bottom">
+                    <h5 class="fw-bold mb-0">
+                        <i class="bi bi-geo-alt me-2 text-primary"></i>
+                        Location
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="map-container">
+                        <div class="map-placeholder">
+                            <div class="text-center">
+                                <i class="bi bi-map fs-1 text-muted mb-3"></i>
+                                <p class="text-muted">Map view coming soon</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        {% endif %}
     </div>
 </div>
 
 <!-- Proof of Delivery Modal -->
 <div class="modal fade" id="proofModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Add Proof of Delivery</h5>
+                <h5 class="modal-title">
+                    <i class="bi bi-camera me-2"></i>
+                    Add Proof of Delivery
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="post" action="{% url 'delivery:submit_proof' delivery.pk %}" enctype="multipart/form-data">
+            <form method="post" action="{% url 'delivery:submit_proof' delivery.pk %}" enctype="multipart/form-data" id="proofForm">
                 {% csrf_token %}
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Proof Type</label>
-                        <select name="proof_type" class="form-select" required>
-                            <option value="">Select type...</option>
-                            <option value="signature">Signature</option>
-                            <option value="photo">Photo</option>
-                            <option value="code">Verification Code</option>
-                            <option value="id_verification">ID Verification</option>
-                        </select>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">File (Photo/Scan)</label>
-                        <input type="file" name="file" class="form-control" accept="image/*,.pdf">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Notes</label>
-                        <textarea name="notes" class="form-control" rows="3"></textarea>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Proof Type</label>
+                            <select name="proof_type" class="form-select" id="proofTypeSelect" required>
+                                <option value="">Select type...</option>
+                                <option value="photo">Photo</option>
+                                <option value="signature">Signature</option>
+                                <option value="code">Verification Code</option>
+                                <option value="id_verification">ID Verification</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label">Recipient Verification</label>
+                            <input type="text" name="recipient_name" class="form-control" placeholder="Recipient name (if different)">
+                        </div>
+                        
+                        <!-- Photo Upload -->
+                        <div class="col-12" id="photoSection">
+                            <label class="form-label">Upload Photo/File</label>
+                            <div class="file-upload-area border rounded p-4 text-center">
+                                <i class="bi bi-cloud-arrow-up fs-1 text-muted d-block mb-2"></i>
+                                <p class="text-muted mb-2">Drag & drop or click to upload</p>
+                                <input type="file" name="file" class="form-control" accept="image/*,.pdf" id="proofFile">
+                                <small class="text-muted">Max file size: 5MB. Supported: JPG, PNG, PDF</small>
+                            </div>
+                        </div>
+                        
+                        <!-- Signature Canvas -->
+                        <div class="col-12 d-none" id="signatureSection">
+                            <label class="form-label">Signature</label>
+                            <div class="signature-canvas border rounded p-3">
+                                <canvas id="signatureCanvas" width="600" height="200" class="w-100 border"></canvas>
+                                <div class="d-flex gap-2 mt-2">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearSignature()">
+                                        <i class="bi bi-eraser"></i> Clear
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="undoSignature()">
+                                        <i class="bi bi-arrow-counterclockwise"></i> Undo
+                                    </button>
+                                </div>
+                            </div>
+                            <input type="hidden" name="signature_data" id="signatureData">
+                        </div>
+                        
+                        <!-- Verification Code -->
+                        <div class="col-12 d-none" id="codeSection">
+                            <label class="form-label">Verification Code</label>
+                            <input type="text" name="verification_code" class="form-control" placeholder="Enter verification code">
+                        </div>
+                        
+                        <!-- ID Verification -->
+                        <div class="col-12 d-none" id="idSection">
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="form-label">ID Type</label>
+                                    <select name="recipient_id_type" class="form-select">
+                                        <option value="">Select ID type...</option>
+                                        <option value="national_id">National ID</option>
+                                        <option value="passport">Passport</option>
+                                        <option value="drivers_license">Driver's License</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">ID Number</label>
+                                    <input type="text" name="recipient_id_number" class="form-control" placeholder="ID number">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-12">
+                            <label class="form-label">Notes</label>
+                            <textarea name="notes" class="form-control" rows="3" placeholder="Additional notes..."></textarea>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Submit Proof</button>
+                    <button type="submit" class="btn btn-delivery">Submit Proof</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
+<!-- View Proof Modal -->
+<div class="modal fade" id="viewProofModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="proofModalTitle"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="proofModalContent">
+                <!-- Proof content will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="downloadProofBtn">
+                    <i class="bi bi-download"></i> Download
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cancel Delivery Modal -->
+<div class="modal fade" id="cancelModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-danger">
+                    <i class="bi bi-x-circle me-2"></i>
+                    Cancel Delivery
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Are you sure you want to cancel this delivery?
+                </div>
+                <p class="mb-3">This action cannot be undone. The recipient will be notified of the cancellation.</p>
+                <label class="form-label">Reason for cancellation</label>
+                <textarea id="cancelReason" class="form-control" rows="3" placeholder="Please provide a reason..."></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Keep Delivery</button>
+                <button type="button" class="btn btn-danger" onclick="cancelDelivery()">Cancel Delivery</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% block extra_js %}
 <script>
-    function updateDeliveryStatus() {
+    let signatureCanvas = null;
+    let signatureCtx = null;
+    let isDrawing = false;
+    let lastX = 0;
+    let lastY = 0;
+    let undoStack = [];
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        // Setup proof type selector
+        const proofTypeSelect = document.getElementById('proofTypeSelect');
+        if (proofTypeSelect) {
+            proofTypeSelect.addEventListener('change', function() {
+                updateProofSections(this.value);
+            });
+        }
+        
+        // Setup signature canvas if needed
+        initSignatureCanvas();
+        
+        // Load any existing data
+        loadDeliveryDetails();
+    });
+    
+    // Update delivery status
+    async function updateDeliveryStatus() {
         const status = document.getElementById('quickStatus').value;
         const notes = document.getElementById('statusNotes').value;
         
-        fetch('{% url "delivery:update_status" delivery.pk %}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: `status=${status}&notes=${notes}`
-        })
-        .then(response => {
+        try {
+            const response = await fetch('{% url "delivery:update_status" delivery.pk %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: `status=${status}&notes=${encodeURIComponent(notes)}`
+            });
+            
             if (response.ok) {
-                location.reload();
+                showToast('Status updated successfully', 'success');
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
             } else {
-                alert('Error updating status');
+                showToast('Error updating status', 'error');
             }
-        });
+        } catch (error) {
+            console.error('Error:', error);
+            showToast('Failed to update status', 'error');
+        }
     }
     
+    // Copy tracking number
     function copyTracking() {
         navigator.clipboard.writeText('{{ delivery.tracking_number }}')
-            .then(() => alert('Tracking number copied to clipboard!'))
-            .catch(err => alert('Failed to copy: ' + err));
+            .then(() => showToast('Tracking number copied to clipboard', 'success'))
+            .catch(err => showToast('Failed to copy: ' + err, 'error'));
     }
     
-    // Show signature canvas for signature proof
-    document.querySelector('select[name="proof_type"]').addEventListener('change', function() {
-        const signatureDiv = document.getElementById('signatureDiv');
-        if (this.value === 'signature' && !signatureDiv) {
-            const div = document.createElement('div');
-            div.id = 'signatureDiv';
-            div.innerHTML = `
-                <label class="form-label mt-3">Signature</label>
-                <canvas id="signatureCanvas" width="400" height="200" style="border:1px solid #ddd; background:#fff;"></canvas>
-                <div class="mt-2">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearSignature()">Clear</button>
-                </div>
-                <input type="hidden" name="signature_data" id="signatureData">
-            `;
-            this.parentNode.parentNode.appendChild(div);
-            initSignaturePad();
-        }
-    });
-    
-    function initSignaturePad() {
-        const canvas = document.getElementById('signatureCanvas');
-        const ctx = canvas.getContext('2d');
-        let drawing = false;
+    // Update proof sections based on selected type
+    function updateProofSections(type) {
+        // Hide all sections first
+        document.getElementById('photoSection').style.display = 'none';
+        document.getElementById('signatureSection').classList.add('d-none');
+        document.getElementById('codeSection').classList.add('d-none');
+        document.getElementById('idSection').classList.add('d-none');
         
+        // Show relevant section
+        switch(type) {
+            case 'photo':
+                document.getElementById('photoSection').style.display = 'block';
+                break;
+            case 'signature':
+                document.getElementById('signatureSection').classList.remove('d-none');
+                initSignatureCanvas();
+                break;
+            case 'code':
+                document.getElementById('codeSection').classList.remove('d-none');
+                break;
+            case 'id_verification':
+                document.getElementById('idSection').classList.remove('d-none');
+                break;
+        }
+    }
+    
+    // Initialize signature canvas
+    function initSignatureCanvas() {
+        const canvas = document.getElementById('signatureCanvas');
+        if (!canvas) return;
+        
+        signatureCanvas = canvas;
+        signatureCtx = canvas.getContext('2d');
+        
+        // Set canvas style
+        signatureCtx.lineWidth = 2;
+        signatureCtx.lineCap = 'round';
+        signatureCtx.lineJoin = 'round';
+        signatureCtx.strokeStyle = '#000000';
+        
+        // Clear canvas
+        clearSignature();
+        
+        // Add event listeners
         canvas.addEventListener('mousedown', startDrawing);
         canvas.addEventListener('mousemove', draw);
         canvas.addEventListener('mouseup', stopDrawing);
         canvas.addEventListener('mouseout', stopDrawing);
         
-        function startDrawing(e) {
-            drawing = true;
-            draw(e);
-        }
+        // Touch support
+        canvas.addEventListener('touchstart', handleTouchStart);
+        canvas.addEventListener('touchmove', handleTouchMove);
+        canvas.addEventListener('touchend', stopDrawing);
+    }
+    
+    function handleTouchStart(e) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const rect = signatureCanvas.getBoundingClientRect();
+        lastX = touch.clientX - rect.left;
+        lastY = touch.clientY - rect.top;
+        isDrawing = true;
+    }
+    
+    function handleTouchMove(e) {
+        e.preventDefault();
+        if (!isDrawing) return;
         
-        function draw(e) {
-            if (!drawing) return;
-            
-            ctx.lineWidth = 2;
-            ctx.lineCap = 'round';
-            ctx.strokeStyle = '#000';
-            
-            const rect = canvas.getBoundingClientRect();
-            ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
-            
-            // Update hidden input
-            document.getElementById('signatureData').value = canvas.toDataURL();
-        }
+        const touch = e.touches[0];
+        const rect = signatureCanvas.getBoundingClientRect();
+        const currentX = touch.clientX - rect.left;
+        const currentY = touch.clientY - rect.top;
         
-        function stopDrawing() {
-            drawing = false;
-            ctx.beginPath();
-        }
+        drawLine(lastX, lastY, currentX, currentY);
+        
+        lastX = currentX;
+        lastY = currentY;
+    }
+    
+    function startDrawing(e) {
+        isDrawing = true;
+        const rect = signatureCanvas.getBoundingClientRect();
+        lastX = e.clientX - rect.left;
+        lastY = e.clientY - rect.top;
+        
+        // Save state for undo
+        undoStack.push(signatureCanvas.toDataURL());
+    }
+    
+    function draw(e) {
+        if (!isDrawing) return;
+        
+        const rect = signatureCanvas.getBoundingClientRect();
+        const currentX = e.clientX - rect.left;
+        const currentY = e.clientY - rect.top;
+        
+        drawLine(lastX, lastY, currentX, currentY);
+        
+        lastX = currentX;
+        lastY = currentY;
+    }
+    
+    function drawLine(x1, y1, x2, y2) {
+        signatureCtx.beginPath();
+        signatureCtx.moveTo(x1, y1);
+        signatureCtx.lineTo(x2, y2);
+        signatureCtx.stroke();
+        
+        // Update hidden input
+        document.getElementById('signatureData').value = signatureCanvas.toDataURL();
+    }
+    
+    function stopDrawing() {
+        isDrawing = false;
     }
     
     function clearSignature() {
-        const canvas = document.getElementById('signatureCanvas');
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        signatureCtx.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+        signatureCtx.fillStyle = '#ffffff';
+        signatureCtx.fillRect(0, 0, signatureCanvas.width, signatureCanvas.height);
         document.getElementById('signatureData').value = '';
+        undoStack = [];
+    }
+    
+    function undoSignature() {
+        if (undoStack.length > 0) {
+            const img = new Image();
+            img.onload = function() {
+                signatureCtx.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+                signatureCtx.drawImage(img, 0, 0);
+                document.getElementById('signatureData').value = signatureCanvas.toDataURL();
+            };
+            img.src = undoStack.pop();
+        }
+    }
+    
+    // View proof details
+    async function viewProof(proofId) {
+        try {
+            const response = await fetch(`/api/delivery/proof/${proofId}/`);
+            const proof = await response.json();
+            
+            document.getElementById('proofModalTitle').textContent = 
+                `${proof.proof_type_display} - ${new Date(proof.created_at).toLocaleDateString()}`;
+            
+            let content = '';
+            if (proof.file_url) {
+                content = `
+                    <div class="text-center">
+                        <img src="${proof.file_url}" class="img-fluid rounded" alt="Proof">
+                        ${proof.notes ? `<p class="mt-3">${proof.notes}</p>` : ''}
+                    </div>
+                `;
+            } else if (proof.signature_data) {
+                content = `
+                    <div class="text-center">
+                        <div class="signature-preview">
+                            <img src="${proof.signature_data}" alt="Signature" class="img-fluid">
+                        </div>
+                        ${proof.notes ? `<p class="mt-3">${proof.notes}</p>` : ''}
+                    </div>
+                `;
+            } else {
+                content = `
+                    <div class="text-center py-4">
+                        <i class="bi bi-check-circle fs-1 text-success mb-3"></i>
+                        <h5>${proof.proof_type_display}</h5>
+                        ${proof.notes ? `<p class="mt-3">${proof.notes}</p>` : ''}
+                        ${proof.verification_code ? `<p><strong>Code:</strong> ${proof.verification_code}</p>` : ''}
+                    </div>
+                `;
+            }
+            
+            document.getElementById('proofModalContent').innerHTML = content;
+            
+            // Setup download button
+            const downloadBtn = document.getElementById('downloadProofBtn');
+            downloadBtn.onclick = function() {
+                if (proof.file_url) {
+                    window.open(proof.file_url, '_blank');
+                } else if (proof.signature_data) {
+                    const link = document.createElement('a');
+                    link.href = proof.signature_data;
+                    link.download = `signature-${proofId}.png`;
+                    link.click();
+                }
+            };
+            
+            const modal = new bootstrap.Modal(document.getElementById('viewProofModal'));
+            modal.show();
+        } catch (error) {
+            console.error('Error loading proof:', error);
+            showToast('Failed to load proof details', 'error');
+        }
+    }
+    
+    // Cancel delivery
+    async function cancelDelivery() {
+        const reason = document.getElementById('cancelReason').value;
+        if (!reason.trim()) {
+            showToast('Please provide a reason for cancellation', 'warning');
+            return;
+        }
+        
+        try {
+            const response = await fetch('{% url "delivery:update_status" delivery.pk %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: `status=cancelled&notes=${encodeURIComponent('Cancelled: ' + reason)}`
+            });
+            
+            if (response.ok) {
+                showToast('Delivery cancelled successfully', 'success');
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            } else {
+                showToast('Error cancelling delivery', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showToast('Failed to cancel delivery', 'error');
+        }
+    }
+    
+    // Load delivery details
+    async function loadDeliveryDetails() {
+        try {
+            // You can add additional data loading here if needed
+            console.log('Delivery detail page loaded');
+        } catch (error) {
+            console.error('Error loading delivery details:', error);
+        }
+    }
+    
+    // Utility functions from dashboard
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    function showToast(message, type = 'success') {
+        const container = document.querySelector('.toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        
+        const icon = type === 'success' ? 'check-circle' : 
+                    type === 'error' ? 'exclamation-circle' : 
+                    type === 'warning' ? 'exclamation-triangle' : 'info-circle';
+        
+        toast.innerHTML = `
+            <i class="bi bi-${icon} text-${type} fs-5"></i>
+            <div class="flex-grow-1">
+                <strong class="text-${type}">${type.charAt(0).toUpperCase() + type.slice(1)}</strong>
+                <div class="text-muted">${message}</div>
+            </div>
+            <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+        `;
+        
+        container.appendChild(toast);
+        
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.remove();
+            }
+        }, 5000);
     }
 </script>
 {% endblock %}

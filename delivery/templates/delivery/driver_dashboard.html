@@ -1,299 +1,572 @@
 {% extends 'delivery/base.html' %}
 {% load humanize %}
 
-{% block title %}Driver Dashboard - Delivery Management{% endblock %}
+{% block title %}Driver Dashboard - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Driver Dashboard Specific Styles */
+    .driver-header-card {
+        background: linear-gradient(135deg, 
+            rgba(255, 209, 102, 0.2) 0%, 
+            rgba(255, 158, 31, 0.1) 100%);
+        border: 1px solid rgba(255, 209, 102, 0.3);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .driver-avatar-large {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 2rem;
+        font-weight: 700;
+    }
+    
+    .status-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 0.5rem;
+    }
+    
+    .status-available { background: var(--success); }
+    .status-busy { background: var(--warning); }
+    .status-offline { background: var(--secondary); }
+    
+    .driver-metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .metric-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        text-align: center;
+    }
+    
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 800;
+        color: var(--primary);
+        line-height: 1;
+        margin-bottom: 0.5rem;
+    }
+    
+    .metric-label {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+    }
+    
+    .metric-trend {
+        font-size: 0.8rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        margin-top: 0.5rem;
+        display: inline-block;
+    }
+    
+    .trend-up {
+        background: rgba(6, 214, 160, 0.1);
+        color: var(--success);
+    }
+    
+    .trend-down {
+        background: rgba(239, 71, 111, 0.1);
+        color: var(--danger);
+    }
+    
+    .assignment-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 1.25rem;
+        margin-bottom: 1rem;
+        transition: var(--transition);
+    }
+    
+    .assignment-card:hover {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .assignment-priority {
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .priority-high { background: rgba(239, 71, 111, 0.1); color: var(--danger); }
+    .priority-medium { background: rgba(255, 158, 31, 0.1); color: #ff9e1f; }
+    .priority-low { background: rgba(17, 138, 178, 0.1); color: #118ab2; }
+    
+    .route-optimization {
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(5, 184, 138, 0.02) 100%);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+    }
+    
+    .route-step {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .route-step:last-child {
+        border-bottom: none;
+    }
+    
+    .step-marker {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--bg-secondary);
+        border: 2px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+    }
+    
+    .step-marker.current {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+    }
+    
+    .earnings-chart-container {
+        height: 200px;
+        position: relative;
+    }
+    
+    .quick-action-buttons {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+    }
+    
+    .quick-action-btn {
+        padding: 1rem;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        text-align: center;
+        text-decoration: none;
+        color: var(--text-primary);
+        transition: var(--transition);
+    }
+    
+    .quick-action-btn:hover {
+        border-color: var(--primary);
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(5, 184, 138, 0.02) 100%);
+        transform: translateY(-2px);
+    }
+    
+    .quick-action-icon {
+        font-size: 1.5rem;
+        color: var(--primary);
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Map Container */
+    .driver-map-container {
+        height: 300px;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        position: relative;
+    }
+    
+    @media (max-width: 768px) {
+        .driver-metrics-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .quick-action-buttons {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .route-step {
+            flex-direction: column;
+            text-align: center;
+        }
+    }
+    
+    @media (max-width: 576px) {
+        .quick-action-buttons {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-md-8">
-        <h2 class="mb-1">Driver Dashboard</h2>
-        <div class="d-flex align-items-center">
-            <span class="driver-status status-{{ user.delivery_person.current_status }} me-2"></span>
-            <span class="me-3">{{ user.get_full_name|default:user.username }}</span>
-            <span class="badge bg-secondary">{{ user.delivery_person.vehicle_type|title }}</span>
-        </div>
-    </div>
-    <div class="col-md-4 text-md-end">
-        <div class="btn-group" role="group">
-            <button class="btn btn-success" onclick="updateDriverStatus('available')">
-                <i class="fas fa-check-circle"></i> Available
-            </button>
-            <button class="btn btn-warning" onclick="updateDriverStatus('busy')">
-                <i class="fas fa-running"></i> Busy
-            </button>
-            <button class="btn btn-secondary" onclick="updateDriverStatus('offline')">
-                <i class="fas fa-power-off"></i> Offline
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- Driver Stats -->
-<div class="row mb-4">
-    <div class="col-md-3 mb-3">
-        <div class="card stat-card">
-            <div class="card-body text-center">
-                <h1 class="display-5 mb-1">{{ driver_stats.total }}</h1>
-                <p class="text-muted mb-0">Total Assignments</p>
-            </div>
-        </div>
-    </div>
+<div class="dashboard-container">
+    <!-- Toast Container -->
+    <div class="toast-container"></div>
     
-    <div class="col-md-3 mb-3">
-        <div class="card stat-card delivered">
-            <div class="card-body text-center">
-                <h1 class="display-5 mb-1">{{ driver_stats.completed }}</h1>
-                <p class="text-muted mb-0">Completed</p>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3 mb-3">
-        <div class="card stat-card">
-            <div class="card-body text-center">
-                <h1 class="display-5 mb-1">{{ driver_stats.success_rate|floatformat:1 }}%</h1>
-                <p class="text-muted mb-0">Success Rate</p>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3 mb-3">
-        <div class="card stat-card">
-            <div class="card-body text-center">
-                <div class="d-flex align-items-center justify-content-center">
-                    <h1 class="display-5 mb-0 me-2">{{ driver_stats.rating|floatformat:1 }}</h1>
+    <!-- Driver Header -->
+    <div class="driver-header-card animate-fade-in">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="driver-avatar-large">
+                        {{ user.get_full_name|first|default:user.username|first|upper }}
+                    </div>
                     <div>
-                        {% for i in "12345"|make_list %}
-                        {% if forloop.counter <= driver_stats.rating %}
-                        <i class="fas fa-star text-warning"></i>
-                        {% else %}
-                        <i class="far fa-star text-warning"></i>
-                        {% endif %}
-                        {% endfor %}
+                        <h2 class="h3 fw-bold mb-1">
+                            {{ user.get_full_name|default:user.username }}
+                            <span class="badge bg-secondary ms-2">{{ user.delivery_person.vehicle_type|title }}</span>
+                        </h2>
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="d-flex align-items-center">
+                                <span class="status-indicator status-{{ user.delivery_person.current_status }}"></span>
+                                <span class="text-muted">{{ user.delivery_person.get_current_status_display }}</span>
+                            </span>
+                            <span class="text-muted">
+                                <i class="bi bi-geo-alt me-1"></i>
+                                {% if user.delivery_person.current_latitude %}
+                                    Location Active
+                                {% else %}
+                                    Location Offline
+                                {% endif %}
+                            </span>
+                        </div>
                     </div>
                 </div>
-                <p class="text-muted mb-0">Rating</p>
+            </div>
+            <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                <div class="btn-group" role="group">
+                    <button class="btn btn-success" onclick="updateDriverStatus('available')">
+                        <i class="bi bi-check-circle"></i> Available
+                    </button>
+                    <button class="btn btn-warning" onclick="updateDriverStatus('busy')">
+                        <i class="bi bi-clock"></i> Busy
+                    </button>
+                    <button class="btn btn-secondary" onclick="updateDriverStatus('offline')">
+                        <i class="bi bi-power"></i> Offline
+                    </button>
+                </div>
             </div>
         </div>
     </div>
-</div>
-
-<div class="row">
-    <!-- Today's Assignments -->
-    <div class="col-lg-8 mb-4">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Today's Assignments</h5>
-                <span class="badge bg-primary">{{ today_assignments.count }} deliveries</span>
-            </div>
-            <div class="card-body p-0">
-                {% if today_assignments %}
-                <div class="table-responsive">
-                    <table class="table table-delivery mb-0">
-                        <thead>
-                            <tr>
-                                <th>Tracking #</th>
-                                <th>Recipient</th>
-                                <th>Address</th>
-                                <th>Status</th>
-                                <th>Est. Time</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for assignment in today_assignments %}
-                            <tr>
-                                <td>
-                                    <strong>{{ assignment.tracking_number|truncatechars:10 }}</strong><br>
-                                    <small class="text-muted">Priority: {{ assignment.priority }}</small>
-                                </td>
-                                <td>
-                                    {{ assignment.recipient_name }}<br>
-                                    <small class="text-muted">{{ assignment.recipient_phone }}</small>
-                                </td>
-                                <td>
-                                    <small>{{ assignment.recipient_address|truncatechars:30 }}</small>
-                                </td>
-                                <td>
-                                    <span class="status-badge status-{{ assignment.status }}">
-                                        {{ assignment.get_status_display }}
-                                    </span>
-                                </td>
-                                <td>
-                                    {% if assignment.estimated_delivery_time %}
-                                    <small>{{ assignment.estimated_delivery_time|time }}</small>
-                                    {% else %}
-                                    <small class="text-muted">Not set</small>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <div class="btn-group" role="group">
-                                        <a href="{% url 'delivery:delivery_detail' assignment.pk %}" class="btn btn-sm btn-outline-primary">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                        <a href="{% url 'delivery:update_status' assignment.pk %}" class="btn btn-sm btn-outline-warning">
-                                            <i class="fas fa-edit"></i>
-                                        </a>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="text-center py-5">
-                    <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
-                    <h5 class="text-muted">No assignments for today</h5>
-                    <p class="text-muted">Check back later or update your status to available</p>
-                </div>
-                {% endif %}
+    
+    <!-- Driver Metrics -->
+    <div class="driver-metrics-grid">
+        <div class="metric-card animate-fade-in">
+            <div class="metric-value">{{ driver_stats.total }}</div>
+            <div class="metric-label">Total Assignments</div>
+            <div class="metric-trend trend-up">
+                <i class="bi bi-arrow-up me-1"></i>
+                12% this week
             </div>
         </div>
         
-        <!-- Location Update -->
-        <div class="card mt-4">
-            <div class="card-header">
-                <h5 class="mb-0">Location Update</h5>
+        <div class="metric-card animate-fade-in" style="animation-delay: 0.1s">
+            <div class="metric-value">{{ driver_stats.completed }}</div>
+            <div class="metric-label">Completed</div>
+            <div class="metric-trend trend-up">
+                <i class="bi bi-arrow-up me-1"></i>
+                8% this week
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-8">
-                        <div class="map-container mb-3" id="map">
-                            <!-- Map will be loaded here -->
-                            <div class="d-flex align-items-center justify-content-center h-100">
-                                <div class="text-center">
-                                    <i class="fas fa-map-marker-alt fa-3x text-muted mb-3"></i>
-                                    <p class="text-muted">Click "Share Location" to load map</p>
+        </div>
+        
+        <div class="metric-card animate-fade-in" style="animation-delay: 0.2s">
+            <div class="metric-value">{{ driver_stats.success_rate|floatformat:1 }}%</div>
+            <div class="metric-label">Success Rate</div>
+            <div class="metric-trend trend-up">
+                <i class="bi bi-arrow-up me-1"></i>
+                5% this month
+            </div>
+        </div>
+        
+        <div class="metric-card animate-fade-in" style="animation-delay: 0.3s">
+            <div class="d-flex align-items-center justify-content-center mb-2">
+                <div class="metric-value me-2">{{ driver_stats.rating|floatformat:1 }}</div>
+                <div>
+                    {% for i in "12345"|make_list %}
+                    {% if forloop.counter <= driver_stats.rating %}
+                    <i class="bi bi-star-fill text-warning"></i>
+                    {% else %}
+                    <i class="bi bi-star text-warning"></i>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="metric-label">Average Rating</div>
+        </div>
+    </div>
+    
+    <div class="row g-4">
+        <!-- Today's Assignments -->
+        <div class="col-lg-8">
+            <div class="card animate-fade-in">
+                <div class="card-header bg-transparent border-bottom d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0">
+                        <i class="bi bi-clipboard-check me-2 text-primary"></i>
+                        Today's Assignments
+                    </h5>
+                    <span class="badge bg-primary">{{ today_assignments.count }} deliveries</span>
+                </div>
+                <div class="card-body">
+                    {% if today_assignments %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Tracking #</th>
+                                    <th>Recipient</th>
+                                    <th>Address</th>
+                                    <th>Status</th>
+                                    <th>Est. Time</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for assignment in today_assignments %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ assignment.tracking_number|truncatechars:10 }}</strong>
+                                        <div>
+                                            <span class="assignment-priority priority-{{ assignment.priority }}">
+                                                {{ assignment.priority }}
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {{ assignment.recipient_name }}
+                                        <div class="small text-muted">{{ assignment.recipient_phone }}</div>
+                                    </td>
+                                    <td>
+                                        <small>{{ assignment.recipient_address|truncatechars:30 }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="status-badge status-{{ assignment.status }}">
+                                            {{ assignment.get_status_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if assignment.estimated_delivery_time %}
+                                        <small>{{ assignment.estimated_delivery_time|time }}</small>
+                                        {% else %}
+                                        <small class="text-muted">Not set</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="{% url 'delivery:delivery_detail' assignment.pk %}" 
+                                               class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            <a href="{% url 'delivery:update_status' assignment.pk %}" 
+                                               class="btn btn-sm btn-outline-warning">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-clipboard-x fs-1 text-muted mb-3"></i>
+                        <h5 class="text-muted">No assignments for today</h5>
+                        <p class="text-muted">Check back later or update your status to available</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Location & Route Optimization -->
+            <div class="row mt-4">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-header bg-transparent border-bottom">
+                            <h5 class="fw-bold mb-0">
+                                <i class="bi bi-geo-alt me-2 text-primary"></i>
+                                Location & Navigation
+                            </h5>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="driver-map-container">
+                                <div class="map-placeholder">
+                                    <div class="text-center">
+                                        <i class="bi bi-map fs-1 text-muted mb-3"></i>
+                                        <p class="text-muted">Map view coming soon</p>
+                                        <button class="btn btn-sm btn-primary mt-2" onclick="shareLocation()">
+                                            <i class="bi bi-geo-alt"></i> Share Location
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="mb-3">
-                            <button class="btn btn-primary w-100 mb-2" onclick="shareLocation()">
-                                <i class="fas fa-location-arrow"></i> Share Current Location
-                            </button>
-                            <button class="btn btn-outline-secondary w-100" onclick="centerMap()">
-                                <i class="fas fa-crosshairs"></i> Center Map
-                            </button>
-                        </div>
-                        
-                        <div class="card bg-light">
-                            <div class="card-body">
-                                <h6>Current Location</h6>
-                                <p id="locationInfo" class="mb-0">
-                                    {% if user.delivery_person.current_latitude %}
-                                    Lat: {{ user.delivery_person.current_latitude|floatformat:4 }}<br>
-                                    Lng: {{ user.delivery_person.current_longitude|floatformat:4 }}
-                                    {% else %}
-                                    Location not set
-                                    {% endif %}
-                                </p>
+                </div>
+                <div class="col-md-4">
+                    <div class="route-optimization h-100">
+                        <h6 class="fw-bold mb-3">
+                            <i class="bi bi-sign-turn-right me-2"></i>
+                            Route Optimization
+                        </h6>
+                        {% if today_assignments %}
+                        <div class="route-steps">
+                            {% for assignment in today_assignments|slice:":3" %}
+                            <div class="route-step">
+                                <div class="step-marker {% if forloop.first %}current{% endif %}">
+                                    {{ forloop.counter }}
+                                </div>
+                                <div class="flex-grow-1">
+                                    <small class="fw-medium d-block">{{ assignment.recipient_name }}</small>
+                                    <small class="text-muted">{{ assignment.recipient_address|truncatechars:20 }}</small>
+                                </div>
                             </div>
+                            {% endfor %}
                         </div>
+                        <button class="btn btn-outline-primary w-100 mt-3">
+                            <i class="bi bi-arrow-clockwise"></i> Optimize Route
+                        </button>
+                        {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-sign-turn-right fs-3 text-muted mb-3"></i>
+                            <p class="text-muted small">No deliveries to optimize</p>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Pending Pickups & Recent Deliveries -->
-    <div class="col-lg-4">
-        <!-- Pending Pickups -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0">Pending Pickups</h5>
-            </div>
-            <div class="card-body">
-                {% if pending_pickups %}
-                <div class="list-group list-group-flush">
-                    {% for pickup in pending_pickups %}
-                    <div class="list-group-item">
-                        <div class="d-flex w-100 justify-content-between align-items-center">
-                            <div>
-                                <h6 class="mb-1">{{ pickup.pickup_name }}</h6>
-                                <small class="text-muted">{{ pickup.pickup_phone }}</small>
-                            </div>
-                            <a href="{% url 'delivery:update_status' pickup.pk %}?status=picked_up" class="btn btn-sm btn-success">
-                                <i class="fas fa-check"></i> Pickup
-                            </a>
-                        </div>
-                        <p class="mb-1 small">{{ pickup.pickup_address|truncatechars:40 }}</p>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <div class="text-center py-4">
-                    <i class="fas fa-box-open fa-2x text-muted mb-3"></i>
-                    <p class="text-muted mb-0">No pending pickups</p>
-                </div>
-                {% endif %}
             </div>
         </div>
         
-        <!-- Recent Deliveries -->
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Recent Deliveries</h5>
-            </div>
-            <div class="card-body">
-                {% if recent_deliveries %}
-                <div class="list-group list-group-flush">
-                    {% for delivery in recent_deliveries %}
-                    <div class="list-group-item">
-                        <div class="d-flex w-100 justify-content-between">
-                            <div>
-                                <h6 class="mb-1">{{ delivery.recipient_name }}</h6>
-                                <small>{{ delivery.recipient_address|truncatechars:30 }}</small>
+        <!-- Right Column -->
+        <div class="col-lg-4">
+            <!-- Pending Pickups -->
+            <div class="card mb-4 animate-fade-in" style="animation-delay: 0.2s">
+                <div class="card-header bg-transparent border-bottom">
+                    <h5 class="fw-bold mb-0">
+                        <i class="bi bi-box-arrow-up me-2 text-primary"></i>
+                        Pending Pickups
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if pending_pickups %}
+                    <div class="list-group list-group-flush">
+                        {% for pickup in pending_pickups %}
+                        <div class="list-group-item border-0 px-0">
+                            <div class="d-flex w-100 justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">{{ pickup.pickup_name }}</h6>
+                                    <small class="text-muted">{{ pickup.pickup_phone }}</small>
+                                </div>
+                                <a href="{% url 'delivery:update_status' pickup.pk %}?status=picked_up" 
+                                   class="btn btn-sm btn-success">
+                                    <i class="bi bi-check"></i> Pickup
+                                </a>
                             </div>
-                            <small class="text-muted">{{ delivery.actual_delivery_time|date:"H:i" }}</small>
+                            <p class="mb-1 small">{{ pickup.pickup_address|truncatechars:40 }}</p>
                         </div>
-                        <div class="mt-2">
-                            <a href="{% url 'delivery:delivery_detail' delivery.pk %}" class="btn btn-sm btn-outline-primary">
-                                <i class="fas fa-eye"></i> View
-                            </a>
-                        </div>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-box-open fs-3 text-muted mb-3"></i>
+                        <p class="text-muted mb-0">No pending pickups</p>
+                    </div>
+                    {% endif %}
                 </div>
-                {% else %}
-                <div class="text-center py-4">
-                    <i class="fas fa-history fa-2x text-muted mb-3"></i>
-                    <p class="text-muted mb-0">No recent deliveries</p>
+            </div>
+            
+            <!-- Recent Deliveries -->
+            <div class="card mb-4 animate-fade-in" style="animation-delay: 0.3s">
+                <div class="card-header bg-transparent border-bottom">
+                    <h5 class="fw-bold mb-0">
+                        <i class="bi bi-clock-history me-2 text-primary"></i>
+                        Recent Deliveries
+                    </h5>
                 </div>
-                {% endif %}
+                <div class="card-body">
+                    {% if recent_deliveries %}
+                    <div class="list-group list-group-flush">
+                        {% for delivery in recent_deliveries %}
+                        <div class="list-group-item border-0 px-0">
+                            <div class="d-flex w-100 justify-content-between">
+                                <div>
+                                    <h6 class="mb-1">{{ delivery.recipient_name }}</h6>
+                                    <small>{{ delivery.recipient_address|truncatechars:30 }}</small>
+                                </div>
+                                <small class="text-muted">{{ delivery.actual_delivery_time|date:"H:i" }}</small>
+                            </div>
+                            <div class="mt-2">
+                                <a href="{% url 'delivery:delivery_detail' delivery.pk %}" 
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i> View
+                                </a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-history fs-3 text-muted mb-3"></i>
+                        <p class="text-muted mb-0">No recent deliveries</p>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
-        </div>
-        
-        <!-- Quick Actions -->
-        <div class="card mt-4">
-            <div class="card-header">
-                <h5 class="mb-0">Quick Actions</h5>
-            </div>
-            <div class="card-body">
-                <div class="row g-2">
-                    <div class="col-6">
-                        <a href="#" class="btn btn-outline-primary w-100">
-                            <i class="fas fa-qrcode"></i><br>
+            
+            <!-- Quick Actions -->
+            <div class="card animate-fade-in" style="animation-delay: 0.4s">
+                <div class="card-header bg-transparent border-bottom">
+                    <h5 class="fw-bold mb-0">
+                        <i class="bi bi-lightning me-2 text-primary"></i>
+                        Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="quick-action-buttons">
+                        <a href="#" class="quick-action-btn">
+                            <div class="quick-action-icon">
+                                <i class="bi bi-qr-code"></i>
+                            </div>
                             <small>Scan QR</small>
                         </a>
-                    </div>
-                    <div class="col-6">
-                        <a href="#" class="btn btn-outline-success w-100" data-bs-toggle="modal" data-bs-target="#proofModal">
-                            <i class="fas fa-camera"></i><br>
+                        <a href="#" class="quick-action-btn" data-bs-toggle="modal" data-bs-target="#proofModal">
+                            <div class="quick-action-icon">
+                                <i class="bi bi-camera"></i>
+                            </div>
                             <small>Add Proof</small>
                         </a>
-                    </div>
-                    <div class="col-6">
-                        <a href="#" class="btn btn-outline-info w-100">
-                            <i class="fas fa-route"></i><br>
+                        <a href="#" class="quick-action-btn">
+                            <div class="quick-action-icon">
+                                <i class="bi bi-route"></i>
+                            </div>
                             <small>Optimize Route</small>
                         </a>
-                    </div>
-                    <div class="col-6">
-                        <a href="#" class="btn btn-outline-warning w-100">
-                            <i class="fas fa-chart-line"></i><br>
+                        <a href="#" class="quick-action-btn">
+                            <div class="quick-action-icon">
+                                <i class="bi bi-graph-up"></i>
+                            </div>
                             <small>My Stats</small>
                         </a>
                     </div>
@@ -308,13 +581,16 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Add Proof of Delivery</h5>
+                <h5 class="modal-title">
+                    <i class="bi bi-camera me-2"></i>
+                    Add Proof of Delivery
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
                     <label class="form-label">Select Delivery</label>
-                    <select class="form-select">
+                    <select class="form-select" id="proofDeliverySelect">
                         {% for assignment in today_assignments %}
                         <option value="{{ assignment.pk }}">{{ assignment.tracking_number }} - {{ assignment.recipient_name }}</option>
                         {% endfor %}
@@ -322,7 +598,7 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Proof Type</label>
-                    <select class="form-select">
+                    <select class="form-select" id="proofTypeSelect">
                         <option value="photo">Photo</option>
                         <option value="signature">Signature</option>
                         <option value="code">Verification Code</option>
@@ -330,7 +606,11 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Upload Image</label>
-                    <input type="file" class="form-control" accept="image/*">
+                    <div class="file-upload-area border rounded p-3 text-center">
+                        <i class="bi bi-cloud-arrow-up fs-4 text-muted d-block mb-2"></i>
+                        <p class="text-muted small mb-2">Click or drag to upload</p>
+                        <input type="file" class="form-control" accept="image/*">
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -342,147 +622,232 @@
 </div>
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    let map;
-    let marker;
+    // Global driver state
+    let driverState = {
+        currentStatus: '{{ user.delivery_person.current_status }}',
+        location: {
+            lat: {{ user.delivery_person.current_latitude|default:0 }},
+            lng: {{ user.delivery_person.current_longitude|default:0 }}
+        },
+        isSharingLocation: false,
+        locationInterval: null
+    };
     
-    function initMap() {
-        const defaultLocation = { lat: -0.52, lng: 34.45 }; // Homabay coordinates
+    // Initialize driver dashboard
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Initializing driver dashboard...');
         
-        map = new google.maps.Map(document.getElementById('map'), {
-            center: defaultLocation,
-            zoom: 12
+        // Initialize charts
+        initEarningsChart();
+        
+        // Start location sharing if available
+        if (navigator.geolocation) {
+            startLocationSharing();
+        }
+        
+        // Set up auto-refresh for assignments
+        setInterval(refreshAssignments, 30000);
+    });
+    
+    // Initialize earnings chart
+    function initEarningsChart() {
+        const ctx = document.createElement('canvas');
+        const container = document.createElement('div');
+        container.className = 'earnings-chart-container';
+        container.appendChild(ctx);
+        
+        // Find a place to insert the chart
+        const metricsGrid = document.querySelector('.driver-metrics-grid');
+        if (metricsGrid) {
+            metricsGrid.parentNode.insertBefore(container, metricsGrid.nextSibling);
+        }
+        
+        const earningsChart = new Chart(ctx.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                datasets: [{
+                    label: 'Earnings (KES)',
+                    data: [1200, 1900, 1500, 2500, 2200, 3000, 2800],
+                    borderColor: 'rgb(6, 214, 160)',
+                    backgroundColor: 'rgba(6, 214, 160, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return 'KES ' + value;
+                            }
+                        }
+                    }
+                }
+            }
         });
-        
-        {% if user.delivery_person.current_latitude %}
-        const currentLocation = {
-            lat: {{ user.delivery_person.current_latitude }},
-            lng: {{ user.delivery_person.current_longitude }}
-        };
-        map.setCenter(currentLocation);
-        
-        marker = new google.maps.Marker({
-            position: currentLocation,
-            map: map,
-            title: 'Your Location'
-        });
-        {% endif %}
     }
     
-    function shareLocation() {
+    // Update driver status
+    async function updateDriverStatus(status) {
+        try {
+            const response = await fetch('{% url "delivery:update_driver_status" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ status: status })
+            });
+            
+            if (response.ok) {
+                driverState.currentStatus = status;
+                showToast(`Status updated to ${status}`, 'success');
+                
+                // Update status indicator
+                const statusIndicators = document.querySelectorAll('.status-indicator');
+                statusIndicators.forEach(indicator => {
+                    indicator.className = `status-indicator status-${status}`;
+                });
+                
+                // Update status text
+                const statusText = document.querySelectorAll('.status-indicator + .text-muted');
+                statusText.forEach(text => {
+                    text.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+                });
+            }
+        } catch (error) {
+            console.error('Error updating driver status:', error);
+            showToast('Failed to update status', 'error');
+        }
+    }
+    
+    // Start location sharing
+    function startLocationSharing() {
+        if (driverState.locationInterval) {
+            clearInterval(driverState.locationInterval);
+        }
+        
+        driverState.locationInterval = setInterval(shareLocation, 30000); // Every 30 seconds
+        shareLocation(); // Immediate first share
+    }
+    
+    // Share current location
+    async function shareLocation() {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
-                function(position) {
+                async function(position) {
                     const lat = position.coords.latitude;
                     const lng = position.coords.longitude;
                     
-                    // Update location info
-                    document.getElementById('locationInfo').innerHTML = `
-                        Lat: ${lat.toFixed(4)}<br>
-                        Lng: ${lng.toFixed(4)}
-                    `;
+                    driverState.location = { lat, lng };
                     
-                    // Update map
-                    const newLocation = { lat, lng };
-                    if (map) {
-                        map.setCenter(newLocation);
-                        if (marker) {
-                            marker.setPosition(newLocation);
-                        } else {
-                            marker = new google.maps.Marker({
-                                position: newLocation,
-                                map: map,
-                                title: 'Your Location'
-                            });
-                        }
+                    try {
+                        await fetch('{% url "delivery:update_driver_location" %}', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCookie('csrftoken')
+                            },
+                            body: JSON.stringify({
+                                latitude: lat,
+                                longitude: lng
+                            })
+                        });
+                        
+                        // Update location indicator
+                        const locationIndicators = document.querySelectorAll('.bi-geo-alt + .text-muted');
+                        locationIndicators.forEach(indicator => {
+                            indicator.textContent = 'Location Active';
+                        });
+                        
+                    } catch (error) {
+                        console.error('Error updating location:', error);
                     }
-                    
-                    // Send to server
-                    fetch('{% url "delivery:update_driver_location" %}', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': getCookie('csrftoken')
-                        },
-                        body: JSON.stringify({
-                            latitude: lat,
-                            longitude: lng
-                        })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            showToast('Location updated successfully', 'success');
-                        }
-                    });
                 },
                 function(error) {
-                    alert('Unable to get location: ' + error.message);
-                }
-            );
-        } else {
-            alert('Geolocation is not supported by this browser.');
-        }
-    }
-    
-    function centerMap() {
-        if (navigator.geolocation && map) {
-            navigator.geolocation.getCurrentPosition(
-                function(position) {
-                    map.setCenter({
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude
-                    });
+                    console.error('Error getting location:', error);
                 }
             );
         }
     }
     
-    function updateDriverStatus(status) {
-        fetch('{% url "delivery:driver_dashboard" %}?status=' + status)
-            .then(() => location.reload());
+    // Refresh assignments
+    async function refreshAssignments() {
+        try {
+            const response = await fetch('{% url "delivery:driver_assignments" %}', {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                // Update assignment count
+                const badge = document.querySelector('.badge.bg-primary');
+                if (badge) {
+                    badge.textContent = data.assignments.length + ' deliveries';
+                }
+            }
+        } catch (error) {
+            console.error('Error refreshing assignments:', error);
+        }
     }
     
-    function showToast(message, type) {
-        // Create toast element
+    // Utility functions from dashboard
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    function showToast(message, type = 'success') {
+        const container = document.querySelector('.toast-container');
         const toast = document.createElement('div');
-        toast.className = `toast align-items-center text-bg-${type} border-0`;
-        toast.setAttribute('role', 'alert');
+        toast.className = `toast toast-${type}`;
+        
+        const icon = type === 'success' ? 'check-circle' : 
+                    type === 'error' ? 'exclamation-circle' : 
+                    type === 'warning' ? 'exclamation-triangle' : 'info-circle';
+        
         toast.innerHTML = `
-            <div class="d-flex">
-                <div class="toast-body">${message}</div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            <i class="bi bi-${icon} text-${type} fs-5"></i>
+            <div class="flex-grow-1">
+                <strong class="text-${type}">${type.charAt(0).toUpperCase() + type.slice(1)}</strong>
+                <div class="text-muted">${message}</div>
             </div>
+            <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
         `;
         
-        // Add to page
-        const container = document.createElement('div');
-        container.className = 'position-fixed bottom-0 end-0 p-3';
-        container.style.zIndex = '1050';
         container.appendChild(toast);
-        document.body.appendChild(container);
         
-        // Show toast
-        const bsToast = new bootstrap.Toast(toast);
-        bsToast.show();
-        
-        // Remove after hidden
-        toast.addEventListener('hidden.bs.toast', function() {
-            container.remove();
-        });
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.remove();
+            }
+        }, 5000);
     }
-    
-    // Load Google Maps API
-    function loadGoogleMaps() {
-        const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&callback=initMap`;
-        script.async = true;
-        script.defer = true;
-        document.head.appendChild(script);
-    }
-    
-    // Load maps when page is ready
-    document.addEventListener('DOMContentLoaded', loadGoogleMaps);
 </script>
 {% endblock %}
 {% endblock %}

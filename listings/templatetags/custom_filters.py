@@ -1,5 +1,6 @@
 # listings/templatetags/custom_filters.py
 from django import template
+import json
 
 register = template.Library()
 
@@ -57,3 +58,21 @@ def div(value, arg):
 def abs_value(value):
     """Return absolute value"""
     return abs(value)
+
+@register.filter
+def prettify_json(value):
+    """Pretty-print JSON data for display"""
+    if not value:
+        return ""
+    
+    try:
+        # If it's already a dict/list, convert to JSON string
+        if isinstance(value, (dict, list)):
+            json_str = json.dumps(value, indent=2, default=str)
+        else:
+            # If it's a string, try to parse and re-format
+            json_str = json.dumps(json.loads(str(value)), indent=2, default=str)
+        return json_str
+    except (json.JSONDecodeError, TypeError, ValueError):
+        # If it's not valid JSON, just return as-is
+        return str(value)

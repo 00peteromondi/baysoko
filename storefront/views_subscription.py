@@ -247,7 +247,7 @@ def subscription_manage(request, slug):
         store=store
     ).order_by('-created_at')
     
-    # Use centralized helper to fetch effective subscription (may create a seeded free row)
+    # Get effective subscription (may be None for free plan)
     current_subscription = store.get_effective_subscription(owner=request.user)
     
     # Get recent payments
@@ -259,27 +259,47 @@ def subscription_manage(request, slug):
     action_required = None
     now = timezone.now()
     
+    # If no subscription, use free plan
     if not current_subscription:
+        current_subscription = SimpleNamespace(
+            plan='free',
+            status='none',
+            amount=0,
+            trial_ends_at=None,
+            current_period_end=None,
+            started_at=None,
+            canceled_at=None,
+            is_active=lambda: False,
+            get_plan_display=lambda: 'Free',
+            get_status_display=lambda: 'Free Plan',
+            payments=[],
+            mpesa_phone=None,
+            metadata={}
+        )
         if requires_upgrade:
             action_required = 'free_limit_reached'
         else:
             action_required = 'no_subscription'
-    elif current_subscription.status == 'trialing':
-        if current_subscription.trial_ends_at and now > current_subscription.trial_ends_at:
-            action_required = 'trial_expired'
-        elif current_subscription.trial_ends_at and (current_subscription.trial_ends_at - now).days <= 2:
-            action_required = 'trial_ending'
-    elif current_subscription.status == 'past_due':
-        action_required = 'past_due'
-    elif current_subscription.status == 'canceled':
-        action_required = 'renew'
-    elif requires_upgrade and current_subscription.plan == 'basic':
-        action_required = 'upgrade_needed'
-
-    # Compute effective status and whether premium features should be active.
+    else:
+        # Existing subscription logic
+        if current_subscription.status == 'trialing':
+            if current_subscription.trial_ends_at and now > current_subscription.trial_ends_at:
+                action_required = 'trial_expired'
+            elif current_subscription.trial_ends_at and (current_subscription.trial_ends_at - now).days <= 2:
+                action_required = 'trial_ending'
+        elif current_subscription.status == 'past_due':
+            action_required = 'past_due'
+        elif current_subscription.status == 'canceled':
+            action_required = 'renew'
+        elif requires_upgrade and current_subscription.plan == 'basic':
+            action_required = 'upgrade_needed'
+    
+    # Compute effective status and flags
     effective_status = None
     features_active = False
-    if current_subscription:
+    
+    if current_subscription and hasattr(current_subscription, 'plan'):
+        current_plan = current_subscription.plan
         # If on trial but trial ended, treat as 'trial_expired' for display and logic
         if current_subscription.status == 'trialing' and current_subscription.trial_ends_at and now > current_subscription.trial_ends_at:
             effective_status = 'trial_expired'
@@ -287,21 +307,44 @@ def subscription_manage(request, slug):
             effective_status = current_subscription.status
 
         # Features are active only when subscription is active or still in a valid trial
-        if current_subscription.is_active():
+        try:
+            is_active = current_subscription.is_active()
+        except:
+            is_active = current_subscription.status == 'active'
+            
+        if is_active:
             features_active = True
         elif current_subscription.status == 'trialing' and current_subscription.trial_ends_at and now <= current_subscription.trial_ends_at:
             features_active = True
         else:
             features_active = False
-
     else:
+        current_plan = 'free'
         effective_status = 'none'
-
-    # Read requested feature from query string (sent by plan_required decorator)
+    
+    # Determine trial-related flags
+    is_trialing = current_subscription and getattr(current_subscription, 'status', None) == 'trialing'
+    is_trial_expired = False
+    if is_trialing and current_subscription.trial_ends_at and now > current_subscription.trial_ends_at:
+        is_trial_expired = True
+    
+    is_paid_plan = current_plan in ['basic', 'premium', 'enterprise']
+    
+    # Calculate trial info
+    trial_info = None
+    if current_subscription and getattr(current_subscription, 'trial_ends_at', None):
+        remaining_days = (current_subscription.trial_ends_at - now).days
+        is_expired = now > current_subscription.trial_ends_at
+        trial_info = {
+            'remaining_days': max(0, remaining_days),
+            'ends_at': current_subscription.trial_ends_at,
+            'is_expired': is_expired,
+        }
+    
+    # Read requested feature from query string
     requested_feature = request.GET.get('feature')
     upgrade_message = None
     if requested_feature:
-        # Provide an actionable message tailored to the feature
         feature_map = {
             'inventory': 'Inventory management (add/edit products) requires a Premium or higher plan.',
             'bulk_operations': 'Bulk operations (bulk upload, bulk edits) require a Premium plan.',
@@ -310,18 +353,6 @@ def subscription_manage(request, slug):
             'api_access': 'API access is available on Enterprise plans.',
         }
         upgrade_message = feature_map.get(requested_feature, 'This feature requires an upgraded subscription. Please upgrade to access it.')
-    
-    # Calculate trial info
-    trial_info = None
-    if current_subscription and current_subscription.trial_ends_at:
-        remaining_days = (current_subscription.trial_ends_at - now).days
-        is_expired = now > current_subscription.trial_ends_at
-        # Provide trial info whether status is trialing or already transitioned
-        trial_info = {
-            'remaining_days': max(0, remaining_days),
-            'ends_at': current_subscription.trial_ends_at,
-            'is_expired': is_expired,
-        }
     
     # Format subscription history
     formatted_history = []
@@ -337,17 +368,42 @@ def subscription_manage(request, slug):
             'trial_ends_at': sub.trial_ends_at,
             'cancelled_at': sub.canceled_at,
             'created_at': sub.created_at,
-            'is_current': sub.id == current_subscription.id if current_subscription else False,
+            'is_current': sub.id == current_subscription.id if hasattr(current_subscription, 'id') else False,
         })
     
+    # Get trial status
+    trial_status = SubscriptionService.get_user_trial_status(request.user)
+    # Determine if a recently expired/paused paid subscription exists that can be reactivated
+    reactivate_available = False
+    reactivate_subscription = None
+    try:
+        last_paid = Subscription.objects.filter(
+            store=store,
+            plan__in=['basic', 'premium', 'enterprise']
+        ).exclude(status='active').order_by('-created_at').first()
+
+        # Consider reactivateable statuses
+        if last_paid and last_paid.status in ['canceled', 'past_due', 'unpaid']:
+            # Optionally restrict to recent cancellations (e.g., 90 days)
+            from django.utils import timezone as dj_tz
+            recent_threshold = dj_tz.now() - timedelta(days=90)
+            if last_paid.created_at and last_paid.created_at >= recent_threshold:
+                reactivate_available = True
+                reactivate_subscription = last_paid
+            else:
+                # Allow reactivation even if older; keep conservative default True
+                reactivate_available = True
+                reactivate_subscription = last_paid
+    except Exception:
+        reactivate_available = False
+        reactivate_subscription = None
     context = {
         'store': store,
         'subscription': current_subscription,
         'subscription_history': formatted_history,
         'recent_payments': recent_payments,
         'trial_info': trial_info,
-        # Provide explicit trial display fields
-        'trial_days_remaining': (trial_info['remaining_days'] if trial_info else None),
+        'trial_days_remaining': trial_info['remaining_days'] if trial_info else None,
         'trial_status_message': (
             f"{trial_info['remaining_days']} day(s) remaining" if trial_info and not trial_info.get('is_expired') else (
                 'Trial period ended' if trial_info and trial_info.get('is_expired') else None
@@ -360,19 +416,23 @@ def subscription_manage(request, slug):
         'remaining_slots': limit_info['remaining_slots'],
         'percentage_used': limit_info['percentage_used'],
         'plan_details': SubscriptionService.PLAN_DETAILS,
-        'is_active': current_subscription and current_subscription.is_active(),
-        'is_trialing': current_subscription and current_subscription.status == 'trialing',
-        'is_expired': current_subscription and (not current_subscription.is_active()) and current_subscription.status in ['past_due', 'canceled'],
-        # Effective status accounts for trials that have ended but still marked 'trialing' in DB
+        'is_active': getattr(current_subscription, 'is_active', lambda: False)(),
+        'is_trialing': is_trialing,
+        'is_trial_expired': is_trial_expired,
+        'is_paid_plan': is_paid_plan,
         'effective_status': effective_status,
         'features_active': features_active,
-        'trial_count': SubscriptionService.get_user_trial_status(request.user)['trial_count'],
-        'remaining_trials': SubscriptionService.get_user_trial_status(request.user)['summary']['remaining_trials'],
-        'trial_limit': SubscriptionService.get_user_trial_status(request.user)['trial_limit'],
-        'trial_available': SubscriptionService.get_user_trial_status(request.user)['can_start_trial'],
-        'can_change_plan': current_subscription and current_subscription.status in ['active', 'trialing'],
+        'current_plan': current_plan,
+        'trial_count': trial_status['trial_count'],
+        'remaining_trials': trial_status['summary']['remaining_trials'],
+        'trial_limit': trial_status['trial_limit'],
+        'trial_available': trial_status['can_start_trial'],
+        'can_change_plan': current_subscription and hasattr(current_subscription, 'status') and current_subscription.status in ['active', 'trialing'] and not is_trial_expired,
         'requested_feature': requested_feature,
         'upgrade_message': upgrade_message,
+        'now': now,  # Pass current time to template
+        'reactivate_available': reactivate_available,
+        'reactivate_subscription': reactivate_subscription,
     }
     
     return render(request, 'storefront/subscription_manage.html', context)

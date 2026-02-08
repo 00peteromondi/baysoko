@@ -19,15 +19,13 @@ from django.db.models.functions import TruncDate
 from django.utils.timezone import make_aware
 from django.contrib import messages
 
-
 logger = logging.getLogger(__name__)
-
 
 from .models import (
     DeliveryRequest, DeliveryPerson, DeliveryService, DeliveryZone,
     DeliveryStatusHistory, DeliveryProof, DeliveryRoute, DeliveryRating,
     DeliveryNotification, DeliveryPackageType, DeliveryTimeSlot,
-    DeliveryPricingRule, DeliveryAnalytics
+    DeliveryPricingRule, DeliveryAnalytics, DeliveryConfirmation
 )
 from .forms import (
     DeliveryRequestForm, DeliveryPersonForm, DeliveryServiceForm,
@@ -37,6 +35,24 @@ from .forms import (
 from .utils import calculate_delivery_fee, optimize_route, send_delivery_notification
 from .decorators import delivery_person_required, admin_required, seller_or_delivery_or_admin_required
 from storefront.models import Store
+from listings.models import Order, OrderItem
+
+
+
+
+def _get_store_name_for_delivery(delivery):
+    """Get store name for a delivery request via its order"""
+    try:
+        order = Order.objects.get(id=delivery.order_id)
+        order_item = order.order_items.first()
+        if order_item and order_item.listing and order_item.listing.store:
+            return order_item.listing.store.name
+        # Fallback to seller name if no store
+        if order_item and order_item.listing and order_item.listing.seller:
+            return order_item.listing.seller.get_full_name() or order_item.listing.seller.username
+    except (Order.DoesNotExist, OrderItem.DoesNotExist, AttributeError):
+        pass
+    return "Unknown Store"
 
 
 def _get_deliveries_for_user(user, request=None):
@@ -109,9 +125,344 @@ def _get_deliveries_for_user(user, request=None):
     return DeliveryRequest.objects.none()
 
 
+# ============================================================================
+# AJAX/API VIEWS FOR DYNAMIC LOADING AND POLLING
+# ============================================================================
+
+@require_GET
+@login_required
+def quick_stats(request):
+    """Return quick stats for sidebar (AJAX)"""
+    user = request.user
+    base_qs = _get_deliveries_for_user(user, request)
+    
+    today = timezone.now().date()
+    
+    data = {
+        'today_deliveries': base_qs.filter(created_at__date=today).count(),
+        'active_deliveries': base_qs.filter(
+            status__in=['assigned', 'picked_up', 'in_transit', 'out_for_delivery']
+        ).count(),
+        'pending_count': base_qs.filter(status__in=['pending', 'accepted', 'assigned']).count(),
+        'success_rate': 0
+    }
+    
+    # Calculate success rate if we have deliveries
+    total_completed = base_qs.filter(status='delivered').count()
+    total_deliveries = base_qs.count()
+    if total_deliveries > 0:
+        data['success_rate'] = round((total_completed / total_deliveries) * 100, 1)
+    
+    return JsonResponse(data)
+
+
+@require_GET
+@login_required
+def notification_count(request):
+    """Return unread notification count (AJAX)"""
+    count = DeliveryNotification.objects.filter(
+        user=request.user,
+        is_read=False
+    ).count()
+    
+    # Also return recent notifications for dropdown
+    notifications = DeliveryNotification.objects.filter(
+        user=request.user
+    ).order_by('-created_at')[:5]
+    
+    notification_list = []
+    for notification in notifications:
+        notification_list.append({
+            'id': notification.id,
+            'title': notification.title,
+            'message': notification.message,
+            'type': notification.notification_type,
+            'icon': notification.get_icon(),
+            'time_ago': notification.get_time_ago(),
+            'is_read': notification.is_read,
+            'url': notification.get_absolute_url() if hasattr(notification, 'get_absolute_url') else '#'
+        })
+    
+    return JsonResponse({
+        'count': count,
+        'notifications': notification_list
+    })
+
+
+@require_GET
+@login_required
+@delivery_person_required
+def driver_active_deliveries(request):
+    """Return active deliveries for driver (AJAX)"""
+    driver = request.user.delivery_person
+    active_deliveries = DeliveryRequest.objects.filter(
+        delivery_person=driver,
+        status__in=['assigned', 'picked_up', 'in_transit', 'out_for_delivery']
+    ).order_by('priority', 'estimated_delivery_time')
+    
+    deliveries_data = []
+    for delivery in active_deliveries:
+        deliveries_data.append({
+            'id': delivery.id,
+            'tracking_number': delivery.tracking_number,
+            'status': delivery.status,
+            'status_display': delivery.get_status_display(),
+            'recipient_name': delivery.recipient_name,
+            'recipient_address': delivery.recipient_address,
+            'delivery_fee': delivery.delivery_fee,
+            'estimated_delivery_time': delivery.estimated_delivery_time.isoformat() if delivery.estimated_delivery_time else None,
+            'priority': delivery.priority,
+            'store_name': _get_store_name_for_delivery(delivery),
+            'has_updates': delivery.status_updates.filter(is_read=False).exists()
+        })
+    
+    return JsonResponse({
+        'has_updates': any(d['has_updates'] for d in deliveries_data),
+        'assignments': deliveries_data
+    })
+
+
+@require_GET
+@login_required
+@delivery_person_required
+def driver_updates(request):
+    """Check for driver updates (AJAX for polling)"""
+    driver = request.user.delivery_person
+    
+    # Check for new assignments
+    new_assignments = DeliveryRequest.objects.filter(
+        delivery_person=driver,
+        status='assigned',
+        created_at__gte=timezone.now() - timedelta(minutes=5)
+    ).exists()
+    
+    # Check for status updates
+    status_updates = DeliveryRequest.objects.filter(
+        delivery_person=driver,
+        status_updates__is_read=False
+    ).exists()
+    
+    return JsonResponse({
+        'has_updates': new_assignments or status_updates,
+        'new_assignments': new_assignments,
+        'status_updates': status_updates
+    })
+
+
+@require_GET
+@login_required
+def dashboard_stats(request):
+    """Return dashboard statistics (AJAX)"""
+    user = request.user
+    base_qs = _get_deliveries_for_user(user, request)
+    
+    # Get today's date
+    today = timezone.now().date()
+    yesterday = today - timedelta(days=1)
+    week_ago = today - timedelta(days=7)
+    
+    # Calculate current stats
+    total_deliveries = base_qs.count()
+    pending_deliveries = base_qs.filter(status__in=['pending', 'accepted', 'assigned']).count()
+    in_transit_deliveries = base_qs.filter(status__in=['picked_up', 'in_transit', 'out_for_delivery']).count()
+    completed_deliveries = base_qs.filter(status='delivered').count()
+    
+    # Calculate trends
+    total_yesterday = base_qs.filter(created_at__date=yesterday).count()
+    total_week_ago = base_qs.filter(created_at__date=week_ago).count()
+    
+    trend_total = calculate_trend(total_deliveries, total_yesterday)
+    trend_pending = calculate_trend(
+        pending_deliveries,
+        base_qs.filter(status__in=['pending', 'accepted', 'assigned'], created_at__date=yesterday).count()
+    )
+    trend_transit = calculate_trend(
+        in_transit_deliveries,
+        base_qs.filter(status__in=['picked_up', 'in_transit', 'out_for_delivery'], created_at__date=yesterday).count()
+    )
+    trend_completed = calculate_trend(
+        completed_deliveries,
+        base_qs.filter(status='delivered', created_at__date=yesterday).count()
+    )
+    
+    # For delivery persons, add earnings data
+    earnings_today = 0
+    if hasattr(user, 'delivery_person'):
+        earnings_today = base_qs.filter(
+            delivery_person=user.delivery_person,
+            status='delivered',
+            actual_delivery_time__date=today
+        ).aggregate(total=Sum('delivery_fee'))['total'] or 0
+        earnings_today = float(earnings_today * Decimal('0.7'))  # 70% commission
+    
+    return JsonResponse({
+        'total_deliveries': total_deliveries,
+        'pending_deliveries': pending_deliveries,
+        'in_transit_deliveries': in_transit_deliveries,
+        'completed_deliveries': completed_deliveries,
+        'today_deliveries': base_qs.filter(created_at__date=today).count(),
+        'earnings_today': earnings_today,
+        'trend_total': trend_total,
+        'trend_pending': trend_pending,
+        'trend_transit': trend_transit,
+        'trend_completed': trend_completed
+    })
+
+
+@require_GET
+@login_required
+def recent_deliveries(request):
+    """Return recent deliveries for dashboard (AJAX)"""
+    user = request.user
+    base_qs = _get_deliveries_for_user(user, request)
+    
+    # Apply status filter if provided
+    status = request.GET.get('status')
+    if status:
+        base_qs = base_qs.filter(status=status)
+    
+    # Apply limit
+    limit = min(int(request.GET.get('limit', 10)), 50)
+    
+    deliveries = base_qs.select_related(
+        'delivery_person', 'delivery_service'
+    ).order_by('-created_at')[:limit]
+    
+    deliveries_data = []
+    for delivery in deliveries:
+        deliveries_data.append({
+            'id': delivery.id,
+            'tracking_number': delivery.tracking_number,
+            'status': delivery.status,
+            'status_display': delivery.get_status_display(),
+            'recipient_name': delivery.recipient_name,
+            'recipient_address': delivery.recipient_address,
+            'delivery_fee': delivery.delivery_fee,
+            'created_at': delivery.created_at.isoformat(),
+            'estimated_delivery': delivery.estimated_delivery_time.isoformat() if delivery.estimated_delivery_time else None,
+            'priority': delivery.priority,
+            'delivery_person': delivery.delivery_person.user.get_full_name() if delivery.delivery_person else None,
+            'store_name': _get_store_name_for_delivery(delivery)
+        })
+    
+    return JsonResponse({
+        'deliveries': deliveries_data,
+        'count': len(deliveries_data)
+    })
+
+
+@require_GET
+@login_required
+def chart_data(request):
+    """Return chart data for dashboard (AJAX)"""
+    user = request.user
+    base_qs = _get_deliveries_for_user(user, request)
+    
+    # Status distribution
+    status_distribution = []
+    status_counts = base_qs.values('status').annotate(count=Count('id'))
+    for item in status_counts:
+        status_distribution.append({
+            'status': item['status'].replace('_', ' ').title(),
+            'count': item['count']
+        })
+    
+    # Weekly activity
+    weekly_activity = []
+    today = timezone.now().date()
+    for i in range(6, -1, -1):  # Last 7 days including today
+        date = today - timedelta(days=i)
+        count = base_qs.filter(created_at__date=date).count()
+        weekly_activity.append({
+            'date': date.isoformat(),
+            'day': date.strftime('%a'),
+            'count': count
+        })
+    
+    # Monthly revenue if seller/admin
+    monthly_revenue = []
+    if user.is_staff or user.is_superuser or Store.objects.filter(owner=user).exists():
+        for i in range(5, -1, -1):  # Last 6 months
+            month_start = today.replace(day=1) - timedelta(days=30*i)
+            month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+            revenue = base_qs.filter(
+                created_at__date__range=[month_start, month_end],
+                payment_status='paid'
+            ).aggregate(total=Sum('total_amount'))['total'] or 0
+            monthly_revenue.append({
+                'month': month_start.strftime('%b'),
+                'revenue': float(revenue)
+            })
+    
+    return JsonResponse({
+        'status_distribution': status_distribution,
+        'weekly_activity': weekly_activity,
+        'monthly_revenue': monthly_revenue
+    })
+
+
+@require_GET
+@login_required
+@delivery_person_required
+def driver_assignments(request):
+    """Return driver assignments (AJAX)"""
+    driver = request.user.delivery_person
+    
+    # Get today's assignments
+    today = timezone.now().date()
+    assignments = DeliveryRequest.objects.filter(
+        delivery_person=driver,
+        status__in=['assigned', 'picked_up', 'in_transit', 'out_for_delivery']
+    ).order_by('priority', 'estimated_delivery_time')
+    
+    assignments_data = []
+    for assignment in assignments:
+        assignments_data.append({
+            'id': assignment.id,
+            'tracking_number': assignment.tracking_number,
+            'status': assignment.status,
+            'status_display': assignment.get_status_display(),
+            'recipient_name': assignment.recipient_name,
+            'recipient_address': assignment.recipient_address,
+            'estimated_delivery_time': assignment.estimated_delivery_time.strftime('%I:%M %p') if assignment.estimated_delivery_time else 'N/A',
+            'priority': assignment.priority,
+            'delivery_fee': assignment.delivery_fee,
+            'store_name': _get_store_name_for_delivery(assignment),
+            'pickup_name': assignment.pickup_name,
+            'pickup_address': assignment.pickup_address,
+            'phone': assignment.recipient_phone
+        })
+    
+    # Driver stats
+    driver_stats = {
+        'total_completed': driver.completed_deliveries,
+        'rating': driver.rating,
+        'completed_today': assignments.filter(status='delivered', actual_delivery_time__date=today).count(),
+        'earnings_today': float((assignments.filter(status='delivered', actual_delivery_time__date=today).aggregate(total=Sum('delivery_fee'))['total'] or 0) * Decimal('0.7')),
+        'active_assignments': assignments.filter(status__in=['assigned', 'picked_up', 'in_transit', 'out_for_delivery']).count()
+    }
+    
+    return JsonResponse({
+        'assignments': assignments_data,
+        'driver_stats': driver_stats
+    })
+
+
+def calculate_trend(current, previous):
+    """Calculate percentage trend between current and previous values"""
+    if previous == 0:
+        return 100 if current > 0 else 0
+    return round(((current - previous) / previous) * 100, 1)
+
+
+# ============================================================================
+# MAIN VIEWS
+# ============================================================================
+
 class DashboardView(LoginRequiredMixin, TemplateView):
     """Delivery system dashboard"""
     template_name = 'delivery/dashboard.html'
+    
     def dispatch(self, request, *args, **kwargs):
         user = request.user
         # Allow admins and delivery persons
@@ -122,13 +473,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         try:
             from storefront.models import Store
             if not Store.objects.filter(owner=user).exists():
-                from django.contrib import messages
-                from django.shortcuts import redirect
                 messages.warning(request, 'Delivery system is for sellers and delivery personnel only.')
                 return redirect('order_list')
         except Exception:
-            from django.contrib import messages
-            from django.shortcuts import redirect
             messages.warning(request, 'Delivery system is for sellers and delivery personnel only.')
             return redirect('order_list')
 
@@ -204,10 +551,27 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 delivery_person=delivery_person,
                 status__in=['assigned', 'picked_up', 'in_transit', 'out_for_delivery']
             ).order_by('-priority', 'estimated_delivery_time')[:5]
-            context['my_stats'] = {
-                'total': delivery_person.total_deliveries,
-                'completed': delivery_person.completed_deliveries,
+            
+            # Calculate driver stats
+            earnings_today = base_qs.filter(
+                delivery_person=delivery_person,
+                status='delivered',
+                actual_delivery_time__date=today
+            ).aggregate(total=Sum('delivery_fee'))['total'] or 0
+            
+            context['driver_stats'] = {
+                'total_completed': delivery_person.completed_deliveries,
                 'rating': delivery_person.rating,
+                'completed_today': base_qs.filter(
+                    delivery_person=delivery_person,
+                    status='delivered',
+                    actual_delivery_time__date=today
+                ).count(),
+                'earnings_today': float(earnings_today * Decimal('0.7')),
+                'active_assignments': base_qs.filter(
+                    delivery_person=delivery_person,
+                    status__in=['assigned', 'picked_up', 'in_transit', 'out_for_delivery']
+                ).count()
             }
 
         # Notifications
@@ -222,7 +586,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
         # Add user role context for templates
         context['is_admin'] = user.is_staff or user.is_superuser
-        context['is_seller'] = getattr(context.get('stores'), 'exists', lambda: False)() or (context['stores'] and len(context['stores']) > 0)
+        context['is_seller'] = Store.objects.filter(owner=user).exists()
 
         return context
     
@@ -254,6 +618,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         
         return activity
 
+
 class DeliveryListView(LoginRequiredMixin, ListView):
     """List all deliveries"""
     model = DeliveryRequest
@@ -263,59 +628,7 @@ class DeliveryListView(LoginRequiredMixin, ListView):
     
     def get_queryset(self):
         user = self.request.user
-        
-        # Start with appropriate base queryset
-        if user.is_staff or user.is_superuser:
-            queryset = DeliveryRequest.objects.all()
-        elif hasattr(user, 'delivery_person'):
-            queryset = DeliveryRequest.objects.filter(delivery_person=user.delivery_person)
-        else:
-            # For sellers and regular users: sellers should only see deliveries
-            # that belong to their stores or deliveries tied to orders that
-            # include listings sold by them.
-            try:
-                from storefront.models import Store
-                stores = Store.objects.filter(owner=user)
-                # Require store ownership for seller access
-                if not stores.exists():
-                    return DeliveryRequest.objects.none()
-                store_ids = [s.id for s in stores]
-
-                store_q = None
-                if store_ids:
-                    store_lookup = []
-                    for store_id in store_ids:
-                        store_lookup.append(Q(metadata__store_id=store_id))
-                        store_lookup.append(Q(metadata__store=str(store_id)))
-                    from functools import reduce
-                    from operator import or_
-                    store_q = reduce(or_, store_lookup)
-
-                # Deliveries tied to orders that contain listings sold by this user
-                try:
-                    from listings.models import Order
-                    sold_order_ids = Order.objects.filter(
-                        order_items__listing__seller=user
-                    ).values_list('id', flat=True).distinct()
-                    sold_order_ids = [str(i) for i in sold_order_ids]
-                except Exception:
-                    sold_order_ids = []
-
-                seller_q = Q()
-                if sold_order_ids:
-                    seller_q = Q(order_id__in=sold_order_ids) | Q(metadata__seller_id=user.id) | Q(metadata__seller=str(user.id))
-
-                if store_q and seller_q:
-                    queryset = DeliveryRequest.objects.filter(store_q | seller_q)
-                elif store_q:
-                    queryset = DeliveryRequest.objects.filter(store_q)
-                elif seller_q:
-                    queryset = DeliveryRequest.objects.filter(seller_q)
-                else:
-                    # Regular users without stores should not access delivery listings here
-                    queryset = DeliveryRequest.objects.none()
-            except Exception:
-                queryset = DeliveryRequest.objects.none()
+        queryset = _get_deliveries_for_user(user, request=self.request)
         
         # Apply additional filters
         queryset = queryset.select_related(
@@ -350,25 +663,6 @@ class DeliveryListView(LoginRequiredMixin, ListView):
                 Q(pickup_name__icontains=search)
             )
         
-        # Filter by store if seller has multiple stores
-        if not (user.is_staff or user.is_superuser) and not hasattr(user, 'delivery_person'):
-            store_filter = self.request.GET.get('store')
-            if store_filter and store_filter.isdigit():
-                store_id = int(store_filter)
-                # Ensure the requested store belongs to the requesting user
-                try:
-                    from storefront.models import Store
-                    if not Store.objects.filter(id=store_id, owner=user).exists():
-                        # Deny access to other sellers' stores
-                        return DeliveryRequest.objects.none()
-                except Exception:
-                    return DeliveryRequest.objects.none()
-
-                queryset = queryset.filter(
-                    Q(metadata__store_id=store_id) | 
-                    Q(metadata__store=str(store_id))
-                )
-        
         return queryset
     
     def get_context_data(self, **kwargs):
@@ -392,10 +686,7 @@ class DeliveryListView(LoginRequiredMixin, ListView):
                 context['stores'] = []
                 context['store_filter'] = ''
         
-        return context    
-
-
-    # (dispatch decorators applied after class definitions)
+        return context
 
 
 class DeliveryDetailView(LoginRequiredMixin, DetailView):
@@ -404,41 +695,6 @@ class DeliveryDetailView(LoginRequiredMixin, DetailView):
     template_name = 'delivery/delivery_detail.html'
     context_object_name = 'delivery'
     
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        
-        # Get status history with safe user info
-        status_history = []
-        for history in self.object.status_history.all().order_by('-created_at'):
-            status_history.append({
-                'id': history.id,
-                'old_status': history.old_status,
-                'old_status_display': history.get_old_status_display(),
-                'new_status': history.new_status,
-                'new_status_display': history.get_new_status_display(),
-                'notes': history.notes,
-                'created_at': history.created_at,
-                'changed_by': history.changed_by,
-                'changed_by_display': history.get_changed_by_display(),  # Use the safe method
-            })
-        
-        context['status_history'] = status_history
-        context['proofs'] = self.object.proofs.all()
-        context['can_update_status'] = self.can_update_status()
-        context['status_choices'] = DeliveryRequest.STATUS_CHOICES
-        
-        # Add user's stores context for permission checking
-        user = self.request.user
-        if not (user.is_staff or user.is_superuser) and not hasattr(user, 'delivery_person'):
-            try:
-                from storefront.models import Store
-                stores = Store.objects.filter(owner=user)
-                context['user_stores'] = stores
-            except Exception:
-                context['user_stores'] = []
-        
-        return context
-
     def dispatch(self, request, *args, **kwargs):
         # Ensure only allowed users can view this delivery
         user = request.user
@@ -487,6 +743,41 @@ class DeliveryDetailView(LoginRequiredMixin, DetailView):
 
         from django.http import HttpResponseForbidden
         return HttpResponseForbidden('You do not have permission to view this delivery.')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get status history with safe user info
+        status_history = []
+        for history in self.object.status_history.all().order_by('-created_at'):
+            status_history.append({
+                'id': history.id,
+                'old_status': history.old_status,
+                'old_status_display': history.get_old_status_display(),
+                'new_status': history.new_status,
+                'new_status_display': history.get_new_status_display(),
+                'notes': history.notes,
+                'created_at': history.created_at,
+                'changed_by': history.changed_by,
+                'changed_by_display': history.get_changed_by_display(),
+            })
+        
+        context['status_history'] = status_history
+        context['proofs'] = self.object.proofs.all()
+        context['can_update_status'] = self.can_update_status()
+        context['status_choices'] = DeliveryRequest.STATUS_CHOICES
+        
+        # Add user's stores context for permission checking
+        user = self.request.user
+        if not (user.is_staff or user.is_superuser) and not hasattr(user, 'delivery_person'):
+            try:
+                from storefront.models import Store
+                stores = Store.objects.filter(owner=user)
+                context['user_stores'] = stores
+            except Exception:
+                context['user_stores'] = []
+        
+        return context
     
     def can_update_status(self):
         """Check if user can update delivery status"""
@@ -542,6 +833,66 @@ class DeliveryDetailView(LoginRequiredMixin, DetailView):
         
         return False
 
+
+@login_required
+@require_POST
+def confirm_delivery(request):
+    """Endpoint for buyer to confirm receipt of a delivery.
+
+    Expects POST body with either `tracking_number` or `delivery_id`.
+    """
+    data = request.POST
+    tracking = data.get('tracking_number') or data.get('tracking')
+    delivery_id = data.get('delivery_id')
+
+    dr = None
+    if tracking:
+        dr = DeliveryRequest.objects.filter(tracking_number=tracking).first()
+    elif delivery_id:
+        dr = DeliveryRequest.objects.filter(id=delivery_id).first()
+
+    if not dr:
+        return JsonResponse({'success': False, 'error': 'Delivery not found'}, status=404)
+
+    # Ensure the requesting user is the intended recipient or the order's user
+    allowed = False
+    try:
+        # If metadata contains user_id use it
+        if isinstance(dr.metadata, dict) and dr.metadata.get('user_id'):
+            if int(dr.metadata.get('user_id')) == request.user.id:
+                allowed = True
+        # fallback: try to map to Order
+        if not allowed and dr.order_id:
+            try:
+                oid = int(str(dr.order_id).split('_')[-1])
+                from listings.models import Order
+                order = Order.objects.filter(id=oid).first()
+                if order and getattr(order, 'user', None) and order.user.id == request.user.id:
+                    allowed = True
+            except Exception:
+                pass
+    except Exception:
+        allowed = False
+
+    if not allowed:
+        return JsonResponse({'success': False, 'error': 'Not authorized'}, status=403)
+
+    # Create confirmation (idempotent) and process release
+    try:
+        from .models import DeliveryConfirmation
+        confirmation, created = DeliveryConfirmation.objects.get_or_create(
+            delivery_request=dr,
+            confirmed_by=request.user
+        )
+        # Process release (best-effort)
+        confirmation.process_release()
+        return JsonResponse({'success': True, 'created': created})
+    except Exception as e:
+        logger.exception('Error confirming delivery')
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@method_decorator(seller_or_delivery_or_admin_required, name='dispatch')
 class CreateDeliveryView(LoginRequiredMixin, CreateView):
     """Create a new delivery request"""
     model = DeliveryRequest
@@ -549,55 +900,162 @@ class CreateDeliveryView(LoginRequiredMixin, CreateView):
     template_name = 'delivery/create_delivery.html'
     success_url = reverse_lazy('delivery:dashboard')
     
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get user's pending orders that don't have deliveries yet
+        user = self.request.user
+        
+        try:
+            from listings.models import Order
+            from django.db.models import Q
+            from storefront.models import Store
+            
+            # Get user's stores
+            user_stores = Store.objects.filter(owner=user)
+            
+            # For sellers: get their store orders
+            if user_stores.exists():
+                store_ids = user_stores.values_list('id', flat=True)
+                
+                # Get orders from user's stores
+                pending_orders = Order.objects.filter(
+                    Q(order_items__listing__store__id__in=store_ids) |
+                    Q(order_items__listing__seller=user)
+                ).distinct()
+            else:
+                # For other users, get their own orders
+                pending_orders = Order.objects.filter(user=user)
+            
+            # Filter orders that don't have a delivery request yet
+            orders_with_delivery = DeliveryRequest.objects.filter(
+                order_id__isnull=False
+            ).values_list('order_id', flat=True)
+            
+            # Convert to string for comparison (since order_id is CharField)
+            orders_with_delivery = [str(id) for id in orders_with_delivery]
+            
+            # Exclude orders that already have deliveries
+            pending_orders = pending_orders.exclude(
+                Q(id__in=orders_with_delivery) |
+                Q(tracking_number__isnull=False)
+            ).order_by('-created_at')[:50]
+            
+            context['pending_orders'] = pending_orders
+            
+            # Get user's default store for pre-filling pickup info
+            try:
+                from storefront.models import Store
+                default_store = Store.objects.filter(owner=user).first()
+                context['default_store'] = default_store
+            except Exception:
+                context['default_store'] = None
+                
+        except Exception as e:
+            logger.error(f"Error fetching pending orders: {e}")
+            context['pending_orders'] = []
+            context['default_store'] = None
+        
+        # Get delivery services and zones for dropdowns
+        context['delivery_services'] = DeliveryService.objects.filter(is_active=True)
+        context['delivery_zones'] = DeliveryZone.objects.filter(is_active=True)
+        
+        # Add API URLs for AJAX calls
+        context['get_user_orders_url'] = reverse_lazy('delivery:get_user_orders')
+        context['get_order_details_url'] = reverse_lazy('delivery:order_details')
+        context['calculate_fee_url'] = reverse_lazy('delivery:calculate_fee_api')
+        
+        return context
+    
+    def get_initial(self):
+        initial = super().get_initial()
+        user = self.request.user
+        
+        # Set default pickup information from user's store
+        try:
+            from storefront.models import Store
+            default_store = Store.objects.filter(owner=user).first()
+            if default_store:
+                initial.update({
+                    'pickup_name': default_store.name,
+                    'pickup_address': default_store.address if hasattr(default_store, 'address') else '',
+                    'pickup_phone': default_store.phone if hasattr(default_store, 'phone') else '',
+                    'pickup_email': user.email,
+                })
+        except Exception:
+            pass
+        
+        # Set default delivery service
+        default_service = DeliveryService.objects.filter(is_active=True).first()
+        if default_service:
+            initial['delivery_service'] = default_service
+        
+        # Set default estimated delivery time (tomorrow)
+        initial['estimated_delivery_time'] = timezone.now() + timedelta(days=1)
+        
+        return initial
+    
     def form_valid(self, form):
         # Set tracking number
-        form.instance.tracking_number = f"DLV{timezone.now().strftime('%Y%m%d%H%M%S')}"
+        import uuid
+        timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
+        unique_id = str(uuid.uuid4())[:8].upper()
+        form.instance.tracking_number = f"DLV{timestamp}{unique_id}"
         
         # Calculate delivery fee
         delivery_fee = calculate_delivery_fee(
             weight=form.cleaned_data['package_weight'],
-            distance=None,  # Will be calculated from coordinates
+            distance=None,
             service_type=form.cleaned_data.get('delivery_service'),
             zone=form.cleaned_data.get('delivery_zone')
         )
         form.instance.delivery_fee = delivery_fee
         form.instance.total_amount = delivery_fee
         
-        # Set created by
-        form.instance.metadata['created_by'] = self.request.user.username
+        # Set metadata
+        form.instance.metadata = {
+            'created_by': self.request.user.username,
+            'created_via': 'manual_form',
+            'user_id': self.request.user.id,
+        }
 
-        # Try to attach store_id to metadata: prefer POST value, otherwise use user's single store if available
-        store_id = self.request.POST.get('store_id')
-        if store_id and store_id.isdigit():
-            form.instance.metadata['store_id'] = int(store_id)
+        # Attach store_id if available
+        if self.request.POST.get('store_id'):
+            form.instance.metadata['store_id'] = int(self.request.POST.get('store_id'))
         else:
             try:
+                from storefront.models import Store
                 user_stores = Store.objects.filter(owner=self.request.user)
                 if user_stores.count() == 1:
                     form.instance.metadata['store_id'] = user_stores.first().id
             except Exception:
                 pass
         
+        # Save the form
         response = super().form_valid(form)
         
+        # Update order tracking number if order_id was provided
+        if form.instance.order_id:
+            try:
+                from listings.models import Order
+                order = Order.objects.filter(id=form.instance.order_id).first()
+                if order and not order.tracking_number:
+                    order.tracking_number = form.instance.tracking_number
+                    order.save(update_fields=['tracking_number'])
+            except Exception as e:
+                logger.error(f"Error updating order tracking: {e}")
+        
         # Send notification
-        send_delivery_notification(
-            delivery=self.object,
-            notification_type='delivery_created',
-            recipient=self.request.user
-        )
+        try:
+            send_delivery_notification(
+                delivery=self.object,
+                notification_type='delivery_created',
+                recipient=self.request.user
+            )
+        except Exception as e:
+            logger.error(f"Error sending notification: {e}")
         
         return response
-    
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user
-        return kwargs
-
-
-# Protect create view as well
-CreateDeliveryView.dispatch = method_decorator(seller_or_delivery_or_admin_required)(CreateDeliveryView.dispatch)
-
 
 @method_decorator(seller_or_delivery_or_admin_required, name='dispatch')
 class UpdateDeliveryStatusView(LoginRequiredMixin, UpdateView):
@@ -682,9 +1140,6 @@ class UpdateDeliveryStatusView(LoginRequiredMixin, UpdateView):
         return context
 
 
-    # UpdateDeliveryStatusView dispatch is protected via @method_decorator above
-
-
 @method_decorator(delivery_person_required, name='dispatch')
 class DriverDashboardView(LoginRequiredMixin, TemplateView):
     """Dashboard for delivery drivers"""
@@ -715,12 +1170,13 @@ class DriverDashboardView(LoginRequiredMixin, TemplateView):
         ).order_by('-actual_delivery_time')[:10]
         
         # Driver statistics
+        weekly_earnings = self.calculate_weekly_earnings(driver)
         context['driver_stats'] = {
             'total': driver.total_deliveries,
             'completed': driver.completed_deliveries,
             'success_rate': (driver.completed_deliveries / driver.total_deliveries * 100) if driver.total_deliveries > 0 else 0,
             'rating': driver.rating,
-            'weekly_earnings': self.calculate_weekly_earnings(driver),
+            'weekly_earnings': weekly_earnings,
         }
         
         # Update driver status if needed
@@ -746,34 +1202,73 @@ class DriverDashboardView(LoginRequiredMixin, TemplateView):
         )['total'] or 0
         
         # Assume driver gets 70% of delivery fee
-        return earnings * Decimal('0.7')
+        return float(earnings * Decimal('0.7'))
 
 
 @login_required
 @delivery_person_required
+@require_POST
 def update_driver_location(request):
     """Update driver's current location"""
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            lat = data.get('latitude')
-            lng = data.get('longitude')
+    try:
+        data = json.loads(request.body)
+        lat = data.get('latitude')
+        lng = data.get('longitude')
+        status = data.get('status')
+        
+        driver = request.user.delivery_person
+        
+        if lat and lng:
+            driver.current_latitude = lat
+            driver.current_longitude = lng
+            driver.location_updated_at = timezone.now()
             
-            if lat and lng:
-                driver = request.user.delivery_person
-                driver.update_location(lat, lng)
-                
-                return JsonResponse({
-                    'success': True,
-                    'message': 'Location updated successfully'
-                })
-        except (json.JSONDecodeError, ValueError):
-            pass
-    
-    return JsonResponse({
-        'success': False,
-        'error': 'Invalid request'
-    }, status=400)
+        if status:
+            driver.current_status = status
+            driver.is_available = (status == 'available')
+            
+        driver.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Location updated successfully'
+        })
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid request'
+        }, status=400)
+
+
+@login_required
+@delivery_person_required
+@require_POST
+def update_driver_status(request):
+    """Update driver's status"""
+    try:
+        data = json.loads(request.body)
+        status = data.get('status')
+        
+        if status not in dict(DeliveryPerson.STATUS_CHOICES):
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid status'
+            }, status=400)
+        
+        driver = request.user.delivery_person
+        driver.current_status = status
+        driver.is_available = (status == 'available')
+        driver.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Status updated to {status}'
+        })
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid request'
+        }, status=400)
 
 
 @login_required
@@ -863,6 +1358,64 @@ def submit_proof(request, pk):
 
     # If not POST, redirect back
     return redirect('delivery:delivery_detail', pk=delivery.pk)
+
+
+@login_required
+@seller_or_delivery_or_admin_required
+def delivery_reports(request):
+    """Generate delivery reports"""
+    report_type = request.GET.get('type', 'daily')
+    
+    if report_type == 'daily':
+        return generate_daily_report(request)
+    elif report_type == 'weekly':
+        return generate_weekly_report(request)
+    elif report_type == 'monthly':
+        return generate_monthly_report(request)
+    elif report_type == 'driver':
+        return generate_driver_report(request)
+    elif report_type == 'zone':
+        return generate_zone_report(request)
+    
+    return render(request, 'delivery/reports/daily_report.html')
+
+
+def generate_daily_report(request):
+    """Generate daily delivery report"""
+    date = request.GET.get('date', timezone.now().date())
+    
+    if isinstance(date, str):
+        date = datetime.strptime(date, '%Y-%m-%d').date()
+    
+    base_qs = _get_deliveries_for_user(request.user, request=request)
+    deliveries = base_qs.filter(
+        created_at__date=date
+    ).select_related('delivery_person', 'delivery_service')
+    
+    # Summary statistics
+    summary = {
+        'total': deliveries.count(),
+        'delivered': deliveries.filter(status='delivered').count(),
+        'pending': deliveries.filter(status__in=['pending', 'accepted', 'assigned']).count(),
+        'in_transit': deliveries.filter(status__in=['picked_up', 'in_transit', 'out_for_delivery']).count(),
+        'failed': deliveries.filter(status='failed').count(),
+        'revenue': deliveries.filter(payment_status='paid').aggregate(
+            total=Sum('total_amount')
+        )['total'] or 0,
+    }
+    
+    context = {
+        'report_type': 'daily',
+        'date': date,
+        'deliveries': deliveries,
+        'summary': summary,
+    }
+    
+    if request.GET.get('format') == 'csv':
+        return export_to_csv(deliveries, f'daily_report_{date}.csv')
+    
+    return render(request, 'delivery/reports/daily_report.html', context)
+
 
 def generate_weekly_report(request):
     """Generate weekly delivery report"""
@@ -994,62 +1547,6 @@ def generate_zone_report(request):
     
     return render(request, 'delivery/reports/zone_report.html', context)
 
-@login_required
-@seller_or_delivery_or_admin_required
-def delivery_reports(request):
-    """Generate delivery reports"""
-    report_type = request.GET.get('type', 'daily')
-    
-    if report_type == 'daily':
-        return generate_daily_report(request)
-    elif report_type == 'weekly':
-        return generate_weekly_report(request)
-    elif report_type == 'monthly':
-        return generate_monthly_report(request)
-    elif report_type == 'driver':
-        return generate_driver_report(request)
-    elif report_type == 'zone':
-        return generate_zone_report(request)
-    
-    return render(request, 'delivery/reports/daily_report.html')
-
-
-def generate_daily_report(request):
-    """Generate daily delivery report"""
-    date = request.GET.get('date', timezone.now().date())
-    
-    if isinstance(date, str):
-        date = datetime.strptime(date, '%Y-%m-%d').date()
-    
-    base_qs = _get_deliveries_for_user(request.user, request=request)
-    deliveries = base_qs.filter(
-        created_at__date=date
-    ).select_related('delivery_person', 'delivery_service')
-    
-    # Summary statistics
-    summary = {
-        'total': deliveries.count(),
-        'delivered': deliveries.filter(status='delivered').count(),
-        'pending': deliveries.filter(status__in=['pending', 'accepted', 'assigned']).count(),
-        'in_transit': deliveries.filter(status__in=['picked_up', 'in_transit', 'out_for_delivery']).count(),
-        'failed': deliveries.filter(status='failed').count(),
-        'revenue': deliveries.filter(payment_status='paid').aggregate(
-            total=Sum('total_amount')
-        )['total'] or 0,
-    }
-    
-    context = {
-        'report_type': 'daily',
-        'date': date,
-        'deliveries': deliveries,
-        'summary': summary,
-    }
-    
-    if request.GET.get('format') == 'csv':
-        return export_to_csv(deliveries, f'daily_report_{date}.csv')
-    
-    return render(request, 'delivery/reports/daily_report.html', context)
-
 
 @require_POST
 @login_required
@@ -1083,6 +1580,7 @@ def bulk_update_status(request):
         
     except (json.JSONDecodeError, ValueError) as e:
         return JsonResponse({'error': str(e)}, status=400)
+
 
 @login_required
 def delivery_analytics(request):
@@ -1221,6 +1719,7 @@ def delivery_analytics(request):
     
     return render(request, 'delivery/reports/analytics.html', context)
 
+
 def export_to_csv(queryset, filename):
     """Export queryset to CSV"""
     response = HttpResponse(content_type='text/csv')
@@ -1251,3 +1750,233 @@ def export_to_csv(queryset, filename):
         ])
     
     return response
+
+@require_GET
+@login_required
+@seller_or_delivery_or_admin_required
+def get_order_details(request, order_id):
+    """Get order details for pre-filling delivery form"""
+    try:
+        from listings.models import Order, CartItem
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        # Get the order
+        order = Order.objects.filter(id=order_id).first()
+        if not order:
+            return JsonResponse({'error': 'Order not found'}, status=404)
+        
+        # Check permission
+        user = request.user
+        if not (user.is_staff or user.is_superuser):
+            # Check if user owns a store that sold items in this order
+            try:
+                from storefront.models import Store
+                stores = Store.objects.filter(owner=user)
+                if not stores.exists():
+                    return JsonResponse({'error': 'Access denied'}, status=403)
+                
+                # Check if order contains items from user's stores
+                order_has_user_items = False
+                for item in order.order_items.all():
+                    if hasattr(item.listing, 'store') and item.listing.store in stores:
+                        order_has_user_items = True
+                        break
+                    elif hasattr(item, 'product') and hasattr(item.product, 'store') and item.product.store in stores:
+                        order_has_user_items = True
+                        break
+                
+                if not order_has_user_items:
+                    return JsonResponse({'error': 'Access denied'}, status=403)
+            except Exception as e:
+                logger.error(f"Permission check error: {e}")
+                return JsonResponse({'error': 'Access denied'}, status=403)
+        
+        # Calculate package weight
+        package_weight = 0.0
+        package_items = []
+        
+        try:
+            # Try order_items first
+            for item in order.order_items.all():
+                try:
+                    weight = getattr(item.listing, 'weight', 1.0)
+                    if weight:
+                        item_weight = float(weight) * (item.quantity or 1)
+                        package_weight += item_weight
+                        package_items.append({
+                            'name': item.listing.title,
+                            'quantity': item.quantity,
+                            'weight': item_weight
+                        })
+                except Exception:
+                    package_weight += 1.0 * (item.quantity or 1)
+        except Exception:
+            # Fallback to cart items
+            try:
+                cart_items = CartItem.objects.filter(order=order)
+                for item in cart_items:
+                    try:
+                        weight = getattr(item.product, 'weight', 1.0)
+                        item_weight = float(weight) * item.quantity
+                        package_weight += item_weight
+                        package_items.append({
+                            'name': item.product.name,
+                            'quantity': item.quantity,
+                            'weight': item_weight
+                        })
+                    except Exception:
+                        package_weight += 1.0 * item.quantity
+            except Exception:
+                package_weight = 1.0
+        
+        # Prepare response data
+        data = {
+            'success': True,
+            'order': {
+                'id': order.id,
+                'order_number': getattr(order, 'order_number', str(order.id)),
+                'created_at': order.created_at.isoformat() if order.created_at else None,
+                'total_amount': float(order.total_price) if order.total_price else 0.0,
+                'currency': 'KES',
+            },
+            'customer': {
+                'name': f"{order.first_name} {order.last_name}".strip() or 
+                       (order.user.get_full_name() if order.user else ''),
+                'email': order.email or (order.user.email if order.user else ''),
+                'phone': order.phone_number or '',
+                'shipping_address': order.shipping_address or '',
+                'city': getattr(order, 'city', ''),
+                'state': getattr(order, 'state', ''),
+                'zip_code': getattr(order, 'zip_code', ''),
+            },
+            'package': {
+                'weight': round(package_weight, 2),
+                'items': package_items,
+                'item_count': len(package_items),
+                'total_value': float(order.total_price) if order.total_price else 0.0,
+            },
+            'pickup': {
+                'name': getattr(order, 'store_name', ''),
+                'address': getattr(order, 'store_address', ''),
+            }
+        }
+        
+        return JsonResponse(data)
+        
+    except Exception as e:
+        logger.error(f"Error fetching order details: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@require_POST
+@login_required
+def calculate_delivery_fee_api(request):
+    """Calculate delivery fee based on parameters"""
+    try:
+        import json
+        data = json.loads(request.body)
+        weight = Decimal(data.get('weight', '0'))
+        service_id = data.get('service_id')
+        zone_id = data.get('zone_id')
+        distance = data.get('distance')
+        
+        service = None
+        zone = None
+        
+        if service_id:
+            service = get_object_or_404(DeliveryService, id=service_id)
+        if zone_id:
+            zone = get_object_or_404(DeliveryZone, id=zone_id)
+        
+        fee = calculate_delivery_fee(
+            weight=weight,
+            service_type=service,
+            zone=zone,
+            distance=distance
+        )
+        
+        return JsonResponse({
+            'delivery_fee': str(fee),
+            'currency': 'KES',
+            'calculation': {
+                'weight': str(weight),
+                'service': service.name if service else 'Standard',
+                'zone': zone.name if zone else 'Default',
+                'distance': distance
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error calculating delivery fee: {e}")
+        return JsonResponse(
+            {'error': str(e)},
+            status=400
+        )
+
+
+@require_GET
+@login_required
+@seller_or_delivery_or_admin_required
+def get_user_orders(request):
+    """Get user's orders for dropdown"""
+    try:
+        from listings.models import Order
+        from django.db.models import Q
+        
+        user = request.user
+        orders = []
+        
+        # Get pending orders without deliveries
+        if user.is_staff or user.is_superuser:
+            # Admins can see all orders
+            all_orders = Order.objects.all()
+        else:
+            # Sellers see orders from their stores
+            try:
+                from storefront.models import Store
+                stores = Store.objects.filter(owner=user)
+                if stores.exists():
+                    store_ids = stores.values_list('id', flat=True)
+                    # Orders containing items from user's stores
+                    all_orders = Order.objects.filter(
+                        Q(order_items__listing__store__id__in=store_ids) |
+                        Q(order_items__listing__seller=user)
+                    ).distinct()
+                else:
+                    # Regular users see their own orders
+                    all_orders = Order.objects.filter(user=user)
+            except Exception:
+                all_orders = Order.objects.filter(user=user)
+        
+        # Get orders that don't have deliveries yet
+        orders_with_delivery = DeliveryRequest.objects.filter(
+            order_id__isnull=False
+        ).values_list('order_id', flat=True)
+        
+        orders_with_delivery = [str(id) for id in orders_with_delivery]
+        
+        # Get recent orders (last 100)
+        pending_orders = all_orders.exclude(
+            Q(id__in=orders_with_delivery) |
+            Q(tracking_number__isnull=False)
+        ).order_by('-created_at')[:100]
+        
+        for order in pending_orders:
+            orders.append({
+                'id': order.id,
+                'order_number': getattr(order, 'order_number', f"#{order.id}"),
+                'customer_name': f"{order.first_name} {order.last_name}".strip() or 
+                               (order.user.get_full_name() if order.user else 'Anonymous'),
+                'customer_email': order.email or (order.user.email if order.user else ''),
+                'created_at': order.created_at.strftime('%Y-%m-%d %H:%M'),
+                'total_amount': float(order.total_price) if order.total_price else 0.0,
+                'item_count': order.order_items.count() if hasattr(order, 'order_items') else 0,
+                'status': getattr(order, 'status', 'pending'),
+                'shipping_address': order.shipping_address or '',
+            })
+        
+        return JsonResponse({'orders': orders})
+        
+    except Exception as e:
+        logger.error(f"Error fetching user orders: {e}")
+        return JsonResponse({'orders': [], 'error': str(e)})

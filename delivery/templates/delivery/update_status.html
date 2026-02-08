@@ -1,157 +1,401 @@
 {% extends 'delivery/base.html' %}
 
-{% block title %}Update Status - Delivery #{{ delivery.tracking_number }}{% endblock %}
+{% block title %}Update Status - Delivery #{{ delivery.tracking_number }} - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Status Update Specific Styles */
+    .status-flow {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 2rem 0;
+        position: relative;
+    }
+    
+    .status-flow::before {
+        content: '';
+        position: absolute;
+        top: 15px;
+        left: 50px;
+        right: 50px;
+        height: 2px;
+        background: var(--border-color);
+        z-index: 1;
+    }
+    
+    .status-node {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--bg-secondary);
+        border: 2px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        z-index: 2;
+        position: relative;
+    }
+    
+    .status-node.completed {
+        background: var(--success);
+        border-color: var(--success);
+        color: white;
+    }
+    
+    .status-node.current {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+        transform: scale(1.2);
+    }
+    
+    .status-node.pending {
+        background: var(--bg-secondary);
+        border-color: var(--border-color);
+        color: var(--text-tertiary);
+    }
+    
+    .status-label {
+        position: absolute;
+        top: 40px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 0.75rem;
+        text-align: center;
+        white-space: nowrap;
+    }
+    
+    .transition-arrows {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 1rem 0 2rem;
+    }
+    
+    .transition-arrow {
+        text-align: center;
+        flex: 1;
+    }
+    
+    .transition-arrow i {
+        font-size: 1.5rem;
+        color: var(--text-tertiary);
+    }
+    
+    .status-options {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1rem;
+        margin: 1.5rem 0;
+    }
+    
+    .status-option {
+        padding: 1.5rem;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        text-align: center;
+        cursor: pointer;
+        transition: var(--transition);
+    }
+    
+    .status-option:hover {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .status-option.selected {
+        border-color: var(--primary);
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(5, 184, 138, 0.02) 100%);
+    }
+    
+    .status-option-icon {
+        font-size: 2rem;
+        color: var(--primary);
+        margin-bottom: 0.75rem;
+    }
+    
+    .status-option-title {
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+    }
+    
+    .status-option-desc {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+    }
+    
+    .proof-upload-area {
+        border: 2px dashed var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 2rem;
+        text-align: center;
+        background: var(--bg-secondary);
+        cursor: pointer;
+        transition: var(--transition);
+    }
+    
+    .proof-upload-area:hover {
+        border-color: var(--primary);
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(5, 184, 138, 0.02) 100%);
+    }
+    
+    .proof-upload-area i {
+        font-size: 3rem;
+        color: var(--text-tertiary);
+        margin-bottom: 1rem;
+    }
+    
+    .signature-canvas {
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 1rem;
+        background: white;
+    }
+    
+    @media (max-width: 768px) {
+        .status-flow {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2rem;
+        }
+        
+        .status-flow::before {
+            display: none;
+        }
+        
+        .status-node {
+            margin-bottom: 0.5rem;
+        }
+        
+        .status-options {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-lg-6 mx-auto">
-        <div class="card">
-            <div class="card-header">
-                <h3 class="mb-0">
-                    <i class="fas fa-edit me-2"></i>Update Delivery Status
-                </h3>
-                <p class="text-muted mb-0">
-                    Delivery #{{ delivery.tracking_number }} - Current Status: 
-                    <span class="status-badge status-{{ delivery.status }}">
-                        {{ delivery.get_status_display }}
-                    </span>
-                </p>
-            </div>
-            <div class="card-body">
-                <form method="post" enctype="multipart/form-data">
-                    {% csrf_token %}
-                    
-                    <!-- Current Delivery Info -->
-                    <div class="alert alert-info mb-4">
-                        <div class="row">
-                            <div class="col-6">
-                                <strong>Recipient:</strong><br>
-                                {{ delivery.recipient_name }}<br>
-                                {{ delivery.recipient_phone }}
-                            </div>
-                            <div class="col-6">
-                                <strong>Driver:</strong><br>
-                                {% if delivery.delivery_person %}
-                                {{ delivery.delivery_person.user.get_full_name|default:delivery.delivery_person.employee_id }}
-                                {% else %}
-                                <span class="text-muted">Unassigned</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Status Update -->
-                    <div class="mb-4">
-                        <h5 class="border-bottom pb-2 mb-3">Status Update</h5>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label for="{{ form.status.id_for_label }}" class="form-label">New Status</label>
-                                <select name="status" id="{{ form.status.id_for_label }}" class="form-select form-select-lg" required>
-                                    {% for status_code, status_name in form.fields.status.choices %}
-                                    <option value="{{ status_code }}" 
-                                        {% if status_code == delivery.status %}selected{% endif %}
-                                        {% if status_code not in valid_transitions %}disabled{% endif %}>
-                                        {{ status_name }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                                <div class="form-text mt-1">
-                                    Current status: <strong>{{ delivery.get_status_display }}</strong>
-                                </div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label for="notes" class="form-label">Notes</label>
-                                <textarea name="notes" id="notes" class="form-control" rows="4" placeholder="Add notes about this status change..."></textarea>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Status Flow Diagram -->
-                    <div class="card bg-light mb-4">
-                        <div class="card-body">
-                            <h6 class="card-title">Status Flow</h6>
-                            <div class="status-flow">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    {% for status_code, status_name in status_choices %}
-                                    <div class="text-center">
-                                        <div class="status-node {% if status_code == delivery.status %}current{% endif %}">
-                                            {{ forloop.counter }}
-                                        </div>
-                                        <small class="d-block mt-1">{{ status_name|truncatechars:10 }}</small>
-                                    </div>
-                                    {% if not forloop.last %}
-                                    <div class="flex-grow-1 border-top"></div>
-                                    {% endif %}
-                                    {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Proof of Delivery (if marking as delivered) -->
-                    <div class="mb-4" id="proofSection" style="display: none;">
-                        <h5 class="border-bottom pb-2 mb-3">Proof of Delivery</h5>
-                        <div class="mb-3">
-                            <label class="form-label">Proof Type</label>
-                            <select class="form-select" name="proof_type">
-                                <option value="">Select proof type...</option>
-                                <option value="signature">Signature</option>
-                                <option value="photo">Photo</option>
-                                <option value="code">Verification Code</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Upload File (Optional)</label>
-                            <input type="file" class="form-control" name="proof_file">
-                        </div>
-                    </div>
-                    
-                    <!-- Form Actions -->
-                    <div class="d-flex justify-content-between align-items-center">
-                        <a href="{% url 'delivery:delivery_detail' delivery.pk %}" class="btn btn-outline-secondary">
-                            <i class="fas fa-times"></i> Cancel
-                        </a>
-                        <button type="submit" class="btn btn-success btn-lg">
-                            <i class="fas fa-check me-1"></i> Update Status
-                        </button>
-                    </div>
-                </form>
-            </div>
+<div class="dashboard-container">
+    <!-- Toast Container -->
+    <div class="toast-container"></div>
+    
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'delivery:dashboard' %}" class="text-decoration-none">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'delivery:delivery_detail' delivery.pk %}" class="text-decoration-none">Delivery #{{ delivery.tracking_number }}</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Update Status</li>
+                </ol>
+            </nav>
+            <h1 class="h2 fw-bold mb-2 animate-fade-in">
+                <i class="bi bi-pencil me-2 text-primary"></i>
+                Update Delivery Status
+            </h1>
+            <p class="text-muted mb-0">
+                Delivery #{{ delivery.tracking_number }} • 
+                <span class="status-badge status-{{ delivery.status }}">
+                    {{ delivery.get_status_display }}
+                </span>
+            </p>
         </div>
-        
-        <!-- Status History -->
-        <div class="card mt-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-history me-2"></i>Recent Status History</h5>
-            </div>
-            <div class="card-body">
-                {% if delivery.status_history.all %}
-                <div class="list-group list-group-flush">
-                    {% for history in delivery.status_history.all|slice:":5" %}
-                    <div class="list-group-item">
-                        <div class="d-flex w-100 justify-content-between">
-                            <h6 class="mb-1">
-                                <span class="badge bg-{% if history.new_status == 'delivered' %}success{% elif history.new_status == 'failed' %}danger{% else %}info{% endif %}">
-                                    {{ history.get_new_status_display }}
-                                </span>
-                            </h6>
-                            <small>{{ history.created_at|timesince }} ago</small>
-                        </div>
-                        <p class="mb-1">{{ history.notes|default:"No notes provided" }}</p>
-                        <small class="text-muted">Changed by: 
-                            {% if history.changed_by %}
-                                {{ history.changed_by.get_full_name|default:history.changed_by.username }}
-                            {% else %}
-                                System
-                            {% endif %}
-                        </small>
-                    </div>
-                    {% endfor %}
+        <div>
+            <a href="{% url 'delivery:delivery_detail' delivery.pk %}" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left me-2"></i>Back to Delivery
+            </a>
+        </div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card animate-fade-in">
+                <div class="card-header bg-transparent border-bottom">
+                    <h5 class="fw-bold mb-0">
+                        <i class="bi bi-arrow-right-circle me-2 text-primary"></i>
+                        Status Update for Delivery #{{ delivery.tracking_number }}
+                    </h5>
                 </div>
-                {% else %}
-                <p class="text-muted text-center mb-0">No status history yet</p>
-                {% endif %}
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data" id="statusUpdateForm">
+                        {% csrf_token %}
+                        
+                        <!-- Current Status Summary -->
+                        <div class="alert alert-info mb-4">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>Recipient:</strong><br>
+                                    {{ delivery.recipient_name }}<br>
+                                    {{ delivery.recipient_phone }}
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>Driver:</strong><br>
+                                    {% if delivery.delivery_person %}
+                                    {{ delivery.delivery_person.user.get_full_name|default:delivery.delivery_person.employee_id }}
+                                    {% else %}
+                                    <span class="text-muted">Unassigned</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Status Flow -->
+                        <div class="mb-4">
+                            <h6 class="fw-bold mb-3">Current Status Flow</h6>
+                            <div class="status-flow">
+                                {% for status_code, status_name in form.fields.status.choices %}
+                                {% if forloop.counter <= 5 %}
+                                <div class="text-center">
+                                    <div class="status-node 
+                                        {% if status_code == delivery.status %}current
+                                        {% elif status_code in completed_statuses %}completed
+                                        {% else %}pending{% endif %}">
+                                        {{ forloop.counter }}
+                                    </div>
+                                    <div class="status-label">{{ status_name|truncatechars:12 }}</div>
+                                </div>
+                                {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <!-- Status Selection -->
+                        <div class="mb-4">
+                            <h6 class="fw-bold mb-3">Select New Status</h6>
+                            <div class="status-options" id="statusOptions">
+                                {% for status_code, status_name in form.fields.status.choices %}
+                                {% if status_code in valid_transitions or status_code == delivery.status %}
+                                <div class="status-option 
+                                    {% if status_code == delivery.status %}selected{% endif %}"
+                                    onclick="selectStatus('{{ status_code }}')"
+                                    data-status="{{ status_code }}">
+                                    <div class="status-option-icon">
+                                        {% if status_code == 'delivered' %}
+                                        <i class="bi bi-check-circle"></i>
+                                        {% elif status_code == 'in_transit' %}
+                                        <i class="bi bi-truck"></i>
+                                        {% elif status_code == 'picked_up' %}
+                                        <i class="bi bi-box-arrow-up"></i>
+                                        {% elif status_code == 'failed' %}
+                                        <i class="bi bi-x-circle"></i>
+                                        {% elif status_code == 'cancelled' %}
+                                        <i class="bi bi-x-octagon"></i>
+                                        {% else %}
+                                        <i class="bi bi-info-circle"></i>
+                                        {% endif %}
+                                    </div>
+                                    <div class="status-option-title">{{ status_name }}</div>
+                                    <div class="status-option-desc">
+                                        {% if status_code == delivery.status %}
+                                        Current status
+                                        {% elif status_code in valid_transitions %}
+                                        Available transition
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                                {% endfor %}
+                            </div>
+                            
+                            <input type="hidden" name="status" id="selectedStatus" value="{{ delivery.status }}">
+                        </div>
+                        
+                        <!-- Status Notes -->
+                        <div class="mb-4">
+                            <label for="statusNotes" class="form-label fw-bold">
+                                <i class="bi bi-chat-left-text me-2"></i>
+                                Status Notes
+                            </label>
+                            <textarea name="notes" id="statusNotes" class="form-control" 
+                                      rows="4" placeholder="Add detailed notes about this status change..."></textarea>
+                            <div class="form-text">
+                                These notes will be visible to the recipient and logged in the status history.
+                            </div>
+                        </div>
+                        
+                        <!-- Proof of Delivery (Conditional) -->
+                        <div class="mb-4" id="proofSection" style="display: none;">
+                            <h6 class="fw-bold mb-3 border-bottom pb-2">
+                                <i class="bi bi-shield-check me-2"></i>
+                                Proof of Delivery
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Proof Type</label>
+                                    <select class="form-select" name="proof_type" id="proofTypeSelect">
+                                        <option value="">Select proof type...</option>
+                                        <option value="signature">Signature</option>
+                                        <option value="photo">Photo</option>
+                                        <option value="code">Verification Code</option>
+                                        <option value="id_verification">ID Verification</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Recipient Name (if different)</label>
+                                    <input type="text" class="form-control" name="recipient_name" 
+                                           placeholder="Enter recipient name">
+                                </div>
+                            </div>
+                            
+                            <!-- Dynamic proof sections -->
+                            <div class="mt-3" id="dynamicProofSection">
+                                <!-- Sections will be loaded here based on proof type -->
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
+                            <a href="{% url 'delivery:delivery_detail' delivery.pk %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-x-circle me-2"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-delivery btn-lg">
+                                <i class="bi bi-check-circle me-2"></i> Update Status
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Status History -->
+            <div class="card mt-4 animate-fade-in" style="animation-delay: 0.1s">
+                <div class="card-header bg-transparent border-bottom">
+                    <h5 class="fw-bold mb-0">
+                        <i class="bi bi-clock-history me-2 text-primary"></i>
+                        Recent Status History
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if delivery.status_history.all %}
+                    <div class="list-group list-group-flush">
+                        {% for history in delivery.status_history.all|slice:":5" %}
+                        <div class="list-group-item border-0 px-0">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">
+                                    <span class="status-badge status-{{ history.new_status }}">
+                                        {{ history.get_new_status_display }}
+                                    </span>
+                                </h6>
+                                <small>{{ history.created_at|timesince }} ago</small>
+                            </div>
+                            <p class="mb-1">{{ history.notes|default:"No notes provided" }}</p>
+                            <small class="text-muted">
+                                Changed by: {% if history.changed_by %}{{ history.changed_by.get_full_name|default:history.changed_by.username }}{% else %}System{% endif %}
+                            </small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center mb-0">No status history yet</p>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
@@ -159,43 +403,286 @@
 
 {% block extra_js %}
 <script>
-    // Show proof section when marking as delivered (safe guards)
+    let currentStatus = '{{ delivery.status }}';
+    let signatureCanvas = null;
+    let signatureCtx = null;
+    
+    // Initialize
     document.addEventListener('DOMContentLoaded', function() {
-        const statusSelect = document.getElementById('{{ form.status.id_for_label }}');
-        const proofSection = document.getElementById('proofSection');
-        if (!statusSelect) return;
-
-        function updateProofVisibility() {
-            if (statusSelect.value === 'delivered') {
-                proofSection.style.display = 'block';
-            } else {
-                proofSection.style.display = 'none';
-            }
-        }
-
-        statusSelect.addEventListener('change', updateProofVisibility);
+        // Update proof section visibility
         updateProofVisibility();
+        
+        // Setup status select listener
+        document.getElementById('selectedStatus').addEventListener('change', function() {
+            updateProofVisibility();
+            updateProofSection(this.value);
+        });
+        
+        // Setup proof type listener
+        const proofTypeSelect = document.getElementById('proofTypeSelect');
+        if (proofTypeSelect) {
+            proofTypeSelect.addEventListener('change', function() {
+                updateProofSection(this.value);
+            });
+        }
     });
-</script>
-
-<style>
-    .status-node {
-        width: 30px;
-        height: 30px;
-        border-radius: 50%;
-        background: #e9ecef;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: bold;
-        margin: 0 auto;
+    
+    // Select status option
+    function selectStatus(status) {
+        // Update selected status input
+        document.getElementById('selectedStatus').value = status;
+        
+        // Update UI
+        const options = document.querySelectorAll('.status-option');
+        options.forEach(option => {
+            option.classList.remove('selected');
+            if (option.dataset.status === status) {
+                option.classList.add('selected');
+            }
+        });
+        
+        // Update proof section
+        updateProofVisibility();
+        updateProofSection(status);
     }
     
-    .status-node.current {
-        background: var(--secondary-color);
-        color: white;
-        transform: scale(1.2);
+    // Update proof section visibility
+    function updateProofVisibility() {
+        const proofSection = document.getElementById('proofSection');
+        const selectedStatus = document.getElementById('selectedStatus').value;
+        
+        if (selectedStatus === 'delivered') {
+            proofSection.style.display = 'block';
+        } else {
+            proofSection.style.display = 'none';
+        }
     }
-</style>
+    
+    // Update proof section based on status
+    function updateProofSection(status) {
+        const dynamicSection = document.getElementById('dynamicProofSection');
+        
+        if (status === 'delivered') {
+            // Show proof type selector
+            document.getElementById('proofTypeSelect').value = '';
+            
+            // Clear dynamic section
+            dynamicSection.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Select a proof type above to add delivery verification.
+                </div>
+            `;
+        } else {
+            dynamicSection.innerHTML = '';
+        }
+    }
+    
+    // Update proof section based on proof type
+    function updateProofSectionByType(proofType) {
+        const dynamicSection = document.getElementById('dynamicProofSection');
+        
+        switch(proofType) {
+            case 'photo':
+                dynamicSection.innerHTML = `
+                    <div class="mt-3">
+                        <label class="form-label">Upload Photo/File</label>
+                        <div class="proof-upload-area" onclick="document.getElementById('proofFile').click()">
+                            <i class="bi bi-cloud-arrow-up"></i>
+                            <p class="mb-2">Click or drag to upload photo</p>
+                            <small class="text-muted">Max file size: 5MB. Supported: JPG, PNG</small>
+                            <input type="file" id="proofFile" name="file" accept="image/*" style="display: none;" 
+                                   onchange="previewProofFile(this)">
+                        </div>
+                        <div id="filePreview" class="mt-2"></div>
+                    </div>
+                `;
+                break;
+                
+            case 'signature':
+                dynamicSection.innerHTML = `
+                    <div class="mt-3">
+                        <label class="form-label">Signature</label>
+                        <div class="signature-canvas">
+                            <canvas id="signatureCanvas" width="500" height="200" class="w-100 border"></canvas>
+                            <div class="d-flex gap-2 mt-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearSignature()">
+                                    <i class="bi bi-eraser"></i> Clear
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="undoSignature()">
+                                    <i class="bi bi-arrow-counterclockwise"></i> Undo
+                                </button>
+                            </div>
+                        </div>
+                        <input type="hidden" name="signature_data" id="signatureData">
+                        <div class="form-text mt-1">Have the recipient sign above to confirm delivery.</div>
+                    </div>
+                `;
+                initSignatureCanvas();
+                break;
+                
+            case 'code':
+                dynamicSection.innerHTML = `
+                    <div class="mt-3">
+                        <label class="form-label">Verification Code</label>
+                        <input type="text" class="form-control" name="verification_code" 
+                               placeholder="Enter verification code provided by recipient">
+                        <div class="form-text mt-1">Enter the code provided by the recipient to verify delivery.</div>
+                    </div>
+                `;
+                break;
+                
+            case 'id_verification':
+                dynamicSection.innerHTML = `
+                    <div class="mt-3">
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <label class="form-label">ID Type</label>
+                                <select name="recipient_id_type" class="form-select">
+                                    <option value="">Select ID type...</option>
+                                    <option value="national_id">National ID</option>
+                                    <option value="passport">Passport</option>
+                                    <option value="drivers_license">Driver's License</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">ID Number</label>
+                                <input type="text" name="recipient_id_number" class="form-control" placeholder="ID number">
+                            </div>
+                        </div>
+                    </div>
+                `;
+                break;
+                
+            default:
+                dynamicSection.innerHTML = `
+                    <div class="alert alert-info mt-3">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Select a proof type to continue.
+                    </div>
+                `;
+        }
+    }
+    
+    // Preview proof file
+    function previewProofFile(input) {
+        const preview = document.getElementById('filePreview');
+        preview.innerHTML = '';
+        
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                preview.innerHTML = `
+                    <div class="d-flex align-items-center gap-2">
+                        <img src="${e.target.result}" class="rounded" style="width: 100px; height: 100px; object-fit: cover;">
+                        <div>
+                            <small class="d-block">${input.files[0].name}</small>
+                            <small class="text-muted">${(input.files[0].size / 1024 / 1024).toFixed(2)} MB</small>
+                        </div>
+                    </div>
+                `;
+            };
+            
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+    
+    // Initialize signature canvas
+    function initSignatureCanvas() {
+        const canvas = document.getElementById('signatureCanvas');
+        if (!canvas) return;
+        
+        signatureCanvas = canvas;
+        signatureCtx = canvas.getContext('2d');
+        
+        // Set canvas style
+        signatureCtx.lineWidth = 2;
+        signatureCtx.lineCap = 'round';
+        signatureCtx.lineJoin = 'round';
+        signatureCtx.strokeStyle = '#000000';
+        
+        // Clear canvas
+        clearSignature();
+        
+        // Add event listeners
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+    }
+    
+    let isDrawing = false;
+    let lastX = 0;
+    let lastY = 0;
+    
+    function startDrawing(e) {
+        isDrawing = true;
+        const rect = signatureCanvas.getBoundingClientRect();
+        [lastX, lastY] = [e.clientX - rect.left, e.clientY - rect.top];
+    }
+    
+    function draw(e) {
+        if (!isDrawing) return;
+        
+        const rect = signatureCanvas.getBoundingClientRect();
+        const currentX = e.clientX - rect.left;
+        const currentY = e.clientY - rect.top;
+        
+        signatureCtx.beginPath();
+        signatureCtx.moveTo(lastX, lastY);
+        signatureCtx.lineTo(currentX, currentY);
+        signatureCtx.stroke();
+        
+        [lastX, lastY] = [currentX, currentY];
+        
+        // Update hidden input
+        document.getElementById('signatureData').value = signatureCanvas.toDataURL();
+    }
+    
+    function stopDrawing() {
+        isDrawing = false;
+    }
+    
+    function clearSignature() {
+        signatureCtx.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+        signatureCtx.fillStyle = '#ffffff';
+        signatureCtx.fillRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+        document.getElementById('signatureData').value = '';
+    }
+    
+    function undoSignature() {
+        // Simple undo by clearing and starting over
+        clearSignature();
+    }
+    
+    // Utility function
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+
+<script>
+    // Update proof section when proof type changes
+    document.addEventListener('DOMContentLoaded', function() {
+        const proofTypeSelect = document.getElementById('proofTypeSelect');
+        if (proofTypeSelect) {
+            proofTypeSelect.addEventListener('change', function() {
+                updateProofSectionByType(this.value);
+            });
+        }
+    });
+</script>
 {% endblock %}
 {% endblock %}

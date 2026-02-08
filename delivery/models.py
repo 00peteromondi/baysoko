@@ -335,6 +335,73 @@ class DeliveryStatusHistory(models.Model):
         except Exception:
             return self.new_status
 
+
+class DeliveryConfirmation(models.Model):
+    """Record buyer confirmation of receipt for a delivery."""
+    delivery_request = models.ForeignKey(DeliveryRequest, on_delete=models.CASCADE, related_name='confirmations')
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='delivery_confirmations'
+    )
+    confirmed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-confirmed_at']
+        unique_together = ('delivery_request', 'confirmed_by')
+
+    def __str__(self):
+        return f"Confirmation for {self.delivery_request.tracking_number} by {self.confirmed_by.username} at {self.confirmed_at}"
+
+    def process_release(self):
+        """Process escrow release after buyer confirmation.
+
+        This locates the corresponding Order (if any) and releases associated
+        Escrow and Payment records. This method is idempotent.
+        """
+        try:
+            # Try to find an Order referenced by delivery_request.order_id
+            from listings.models import Order, Escrow, Payment
+            # order_id may be numeric or prefixed (e.g., 'ECOMM_123')
+            oid = None
+            raw = self.delivery_request.order_id
+            if not raw:
+                return False
+            try:
+                oid = int(str(raw).split('_')[-1])
+            except Exception:
+                try:
+                    oid = int(raw)
+                except Exception:
+                    oid = None
+
+            if not oid:
+                return False
+
+            order = Order.objects.filter(id=oid).first()
+            if not order:
+                return False
+
+            # Release escrow if present and held
+            escrow = getattr(order, 'escrow', None)
+            if escrow and escrow.status == 'held':
+                escrow.release_funds()
+
+            # Mark associated payment as released from escrow
+            payment = getattr(order, 'payment', None)
+            if payment and getattr(payment, 'is_held_in_escrow', False):
+                try:
+                    from django.utils import timezone
+                    payment.is_held_in_escrow = False
+                    payment.actual_release_date = timezone.now()
+                    if not payment.seller_payout_reference:
+                        payment.seller_payout_reference = f"PAYOUT-{order.id}-{int(timezone.now().timestamp())}"
+                    payment.save()
+                except Exception:
+                    pass
+
+            return True
+        except Exception:
+            return False
+
 class DeliveryProof(models.Model):
     """Proof of delivery"""
     PROOF_TYPES = [

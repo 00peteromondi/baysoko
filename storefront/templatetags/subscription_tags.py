@@ -163,3 +163,18 @@ def can_access_feature(subscription, feature_name):
     
     plan_features = features.get(subscription.plan, [])
     return feature_name in plan_features
+
+
+@register.filter
+def split(value, delimiter):
+    """Split a string by delimiter"""
+    if not value:
+        return []
+    return value.split(delimiter)
+
+@register.filter
+def get_item(dictionary, key):
+    """Get item from dictionary"""
+    if not dictionary:
+        return None
+    return dictionary.get(key)

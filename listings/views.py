@@ -907,8 +907,10 @@ def all_listings(request):
     if request.user.is_authenticated:
         user_favorite_count = Favorite.objects.filter(user=request.user).count()
 
-    # For AJAX requests, return JSON (using the new format)
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+    # For AJAX requests, return JSON only when explicitly requested via `ajax=1`
+    # This avoids returning JSON for normal navigation where X-Requested-With
+    # may be set by some clients and the user expects the full HTML page.
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' and request.GET.get('ajax') == '1':
         paginator = Paginator(listings, 12)
         page_number = request.GET.get('page', 1)
         
@@ -2154,6 +2156,15 @@ def order_list(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
+    # Build the delivery app order URL for managing orders
+    try:
+        from django.urls import reverse
+        delivery_order_url = reverse('delivery:manage_order', args=[0])
+        # Replace the 0 with {order_id} placeholder for JavaScript to replace
+        delivery_app_order_url = delivery_order_url.replace('/0/', '/{order_id}/')
+    except Exception:
+        delivery_app_order_url = None
+    
     context = {
         'orders': page_obj,
         'page_obj': page_obj,
@@ -2162,7 +2173,7 @@ def order_list(request):
         'buyer_orders_count': buyer_orders_count,
         'seller_orders_count': seller_orders_count,
         'total_orders_count': buyer_orders_count + seller_orders_count,
-        'delivery_app_order_url': getattr(settings, 'DELIVERY_APP_ORDER_URL', None),
+        'delivery_app_order_url': delivery_app_order_url,
     }
     
     return render(request, 'listings/order_list.html', context)

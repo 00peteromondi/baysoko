@@ -1,3 +1,23 @@
+from celery import shared_task
+from django.utils import timezone
+from .models import WithdrawalRequest
+
+
+@shared_task
+def process_scheduled_withdrawals():
+    """Celery task to process scheduled withdrawals. Typically run once daily.
+
+    It is safe to run daily; WithdrawalRequest.schedule() schedules for Thursday and
+    requests will only be processed when their `scheduled_for` is due.
+    """
+    now = timezone.now()
+    # Process only those scheduled for now or earlier
+    scheduled = WithdrawalRequest.objects.filter(status='scheduled', scheduled_for__lte=now)
+    results = []
+    for w in scheduled:
+        ok = w.process()
+        results.append({'id': w.id, 'ok': ok, 'status': w.status})
+    return results
 # storefront/tasks.py
 from celery import shared_task
 from django.utils import timezone

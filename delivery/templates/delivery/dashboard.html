@@ -1,33 +1,40 @@
 {% extends 'delivery/base.html' %}
 {% load humanize %}
 
-{% block title %}Dashboard - Delivery Management{% endblock %}
+{% block title %}Delivery Dashboard - Baysoko{% endblock %}
 
 {% block extra_css %}
 <style>
-    /* ===== DASHBOARD STATS ===== */
-    .stats-container {
+    /* Dashboard Styling */
+    .dashboard-container {
+        min-height: calc(100vh - 70px - 3rem);
+        background: var(--bg-primary);
+    }
+    
+    /* Stats Grid */
+    .stats-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 16px;
-        margin-bottom: 24px;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
     }
     
     .stat-card {
-        background: var(--bg-secondary);
-        border-radius: var(--radius-lg);
-        padding: 20px;
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(5, 184, 138, 0.02) 100%);
         border: 1px solid var(--border-color);
-        transition: all 0.3s ease;
-        box-shadow: var(--shadow-sm);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        transition: var(--transition);
         position: relative;
         overflow: hidden;
     }
     
     .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-lg);
         border-color: var(--primary);
-        box-shadow: var(--shadow-md);
-        transform: translateY(-2px);
     }
     
     .stat-card::before {
@@ -41,137 +48,159 @@
     }
     
     .stat-value {
-        font-size: 32px;
+        font-size: 2.5rem;
         font-weight: 800;
-        color: var(--text-primary);
-        margin-bottom: 4px;
+        color: var(--primary);
         line-height: 1;
+        margin-bottom: 0.5rem;
     }
     
     .stat-label {
-        font-size: 14px;
+        font-size: 0.9rem;
         color: var(--text-secondary);
         display: flex;
         align-items: center;
-        gap: 8px;
-    }
-    
-    .stat-icon {
-        font-size: 24px;
-        opacity: 0.8;
+        gap: 0.5rem;
     }
     
     .stat-trend {
-        font-size: 12px;
-        padding: 2px 8px;
-        border-radius: 12px;
+        font-size: 0.8rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        margin-top: 0.5rem;
         display: inline-block;
-        margin-top: 4px;
     }
     
-    .trend-up { background: rgba(40, 167, 69, 0.2); color: #28a745; }
-    .trend-down { background: rgba(220, 53, 69, 0.2); color: #dc3545; }
+    .trend-up {
+        background: rgba(6, 214, 160, 0.1);
+        color: var(--success);
+    }
     
-    /* ===== QUICK ACTIONS ===== */
+    .trend-down {
+        background: rgba(239, 71, 111, 0.1);
+        color: var(--danger);
+    }
+    
+    /* Status Badges */
+    .status-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-pending { background: rgba(255, 158, 31, 0.1); color: #ff9e1f; }
+    .status-accepted { background: rgba(17, 138, 178, 0.1); color: #118ab2; }
+    .status-assigned { background: rgba(6, 214, 160, 0.1); color: #06d6a0; }
+    .status-picked_up { background: rgba(255, 209, 102, 0.1); color: #ffd166; }
+    .status-in_transit { background: rgba(66, 133, 244, 0.1); color: #4285f4; }
+    .status-out_for_delivery { background: rgba(6, 214, 160, 0.1); color: #06d6a0; }
+    .status-delivered { background: rgba(6, 214, 160, 0.1); color: #06d6a0; }
+    .status-failed { background: rgba(239, 71, 111, 0.1); color: #ef476f; }
+    .status-cancelled { background: rgba(108, 117, 125, 0.1); color: #6c757d; }
+    
+    /* Quick Actions */
     .quick-actions {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-        gap: 12px;
-        margin-bottom: 24px;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
     }
     
     .action-card {
-        background: var(--bg-secondary);
-        border-radius: var(--radius-lg);
-        padding: 20px;
+        background: var(--card-bg);
         border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
         text-decoration: none;
-        transition: all 0.3s ease;
-        text-align: center;
+        color: var(--text-primary);
+        transition: var(--transition);
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 12px;
+        gap: 1rem;
+        text-align: center;
     }
     
     .action-card:hover {
         border-color: var(--primary);
-        background: var(--bg-tertiary);
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-md);
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(5, 184, 138, 0.02) 100%);
+        transform: translateY(-3px);
     }
     
     .action-icon {
-        font-size: 32px;
+        font-size: 2.5rem;
         color: var(--primary);
+        background: rgba(6, 214, 160, 0.1);
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
     
     .action-title {
-        font-weight: 600;
-        color: var(--text-primary);
+        font-weight: 700;
         margin: 0;
+        font-size: 1.1rem;
     }
     
     .action-desc {
-        font-size: 12px;
         color: var(--text-secondary);
+        font-size: 0.9rem;
         margin: 0;
     }
     
-    /* ===== RECENT DELIVERIES ===== */
+    /* Delivery Grid */
     .deliveries-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 16px;
+        gap: 1.5rem;
     }
     
-    .delivery-card {
-        background: var(--bg-secondary);
-        border-radius: var(--radius-lg);
+    .delivery-item {
+        background: var(--card-bg);
         border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
         overflow: hidden;
-        transition: all 0.3s ease;
+        transition: var(--transition);
     }
     
-    .delivery-card:hover {
+    .delivery-item:hover {
         border-color: var(--primary);
-        transform: translateY(-2px);
         box-shadow: var(--shadow-md);
     }
     
     .delivery-header {
-        background: var(--bg-tertiary);
-        padding: 16px;
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.1) 0%, 
+            rgba(5, 184, 138, 0.05) 100%);
+        padding: 1rem 1.5rem;
         border-bottom: 1px solid var(--border-color);
-    }
-    
-    .delivery-id {
-        font-weight: 700;
-        color: var(--text-primary);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 8px;
     }
     
     .delivery-meta {
         display: flex;
+        justify-content: space-between;
         align-items: center;
-        gap: 12px;
-        font-size: 12px;
-        color: var(--text-secondary);
+        margin-bottom: 0.5rem;
     }
     
     .delivery-content {
-        padding: 16px;
+        padding: 1.5rem;
     }
     
     .delivery-info-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 8px 0;
+        padding: 0.75rem 0;
         border-bottom: 1px solid var(--border-color);
     }
     
@@ -181,69 +210,103 @@
     
     .info-label {
         color: var(--text-secondary);
-        font-size: 13px;
+        font-size: 0.9rem;
     }
     
     .info-value {
+        font-weight: 600;
         color: var(--text-primary);
-        font-weight: 500;
-        font-size: 13px;
+        font-size: 0.95rem;
     }
     
     .delivery-actions {
         display: flex;
-        gap: 8px;
-        margin-top: 16px;
+        gap: 0.75rem;
+        margin-top: 1rem;
     }
     
-    /* ===== CHARTS ===== */
+    /* Charts Container */
     .charts-container {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 16px;
-        margin-top: 24px;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 1.5rem;
+        margin-top: 2rem;
     }
     
     .chart-card {
-        background: var(--bg-secondary);
-        border-radius: var(--radius-lg);
+        background: var(--card-bg);
         border: 1px solid var(--border-color);
-        padding: 20px;
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
     }
     
     .chart-title {
-        font-weight: 600;
+        font-weight: 700;
         color: var(--text-primary);
-        margin-bottom: 16px;
+        margin-bottom: 1rem;
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 0.5rem;
     }
     
-    /* ===== STORE FILTER ===== */
-    .store-filter {
-        background: var(--bg-secondary);
-        border-radius: var(--radius-md);
-        padding: 12px;
-        margin-bottom: 16px;
+    /* Empty State */
+    .empty-state {
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(5, 184, 138, 0.02) 100%);
+        border: 2px dashed var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 3rem 1.5rem;
+        text-align: center;
+    }
+    
+    .empty-icon {
+        font-size: 3.5rem;
+        color: var(--text-tertiary);
+        margin-bottom: 1rem;
+    }
+    
+    .empty-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        color: var(--text-primary);
+    }
+    
+    .empty-subtitle {
+        color: var(--text-secondary);
+        margin-bottom: 1.5rem;
+    }
+    
+    /* Filter Bar */
+    .filter-bar {
+        background: var(--card-bg);
         border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 1rem 1.5rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
     }
     
     .filter-buttons {
         display: flex;
-        gap: 8px;
+        gap: 0.5rem;
         flex-wrap: wrap;
     }
     
     .filter-btn {
-        padding: 8px 16px;
-        border-radius: var(--radius-md);
+        padding: 0.5rem 1rem;
         border: 1px solid var(--border-color);
-        background: var(--bg-tertiary);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
         color: var(--text-secondary);
-        font-size: 13px;
         text-decoration: none;
-        transition: all 0.2s ease;
+        font-size: 0.9rem;
+        transition: var(--transition-fast);
     }
     
     .filter-btn:hover {
@@ -257,480 +320,1058 @@
         color: white;
     }
     
-    /* ===== EMPTY STATE ===== */
-    .empty-state {
-        background: var(--bg-secondary);
-        border-radius: var(--radius-lg);
-        padding: 48px 24px;
-        text-align: center;
+    /* Store Selector */
+    .store-selector {
+        background: var(--card-bg);
         border: 1px solid var(--border-color);
-        margin-top: 20px;
+        border-radius: var(--radius-lg);
+        padding: 1rem 1.5rem;
+        margin-bottom: 1.5rem;
     }
     
-    .empty-icon {
-        font-size: 48px;
-        color: var(--text-secondary);
-        margin-bottom: 16px;
+    /* Driver Stats */
+    .driver-stats {
+        background: linear-gradient(135deg, 
+            rgba(255, 209, 102, 0.1) 0%, 
+            rgba(255, 158, 31, 0.05) 100%);
+        border: 1px solid rgba(255, 209, 102, 0.2);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
     }
     
-    .empty-title {
-        font-size: 18px;
-        font-weight: 700;
-        margin-bottom: 8px;
-        color: var(--text-primary);
+    /* Shimmer Loading */
+    .shimmer {
+        background: linear-gradient(90deg, 
+            var(--bg-secondary) 25%, 
+            var(--bg-tertiary) 50%, 
+            var(--bg-secondary) 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
     }
     
-    .empty-subtitle {
-        color: var(--text-secondary);
-        font-size: 14px;
-        margin-bottom: 24px;
+    @keyframes shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
     }
     
-    /* ===== RESPONSIVE ===== */
+    /* Animations */
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    
+    .pulse {
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .animate-fade-in {
+        animation: fadeIn 0.5s ease-out;
+    }
+    
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateX(-20px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+    
+    .animate-slide-in {
+        animation: slideIn 0.5s ease-out;
+    }
+    
+    /* Toast Notification */
+    .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+    }
+    
+    .toast {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 1rem 1.5rem;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        box-shadow: var(--shadow-lg);
+        animation: fadeIn 0.3s ease-out;
+    }
+    
+    .toast-success {
+        border-left: 4px solid var(--success);
+    }
+    
+    .toast-error {
+        border-left: 4px solid var(--danger);
+    }
+    
+    .toast-warning {
+        border-left: 4px solid var(--warning);
+    }
+    
+    /* Responsive Design */
     @media (max-width: 768px) {
-        .stats-container {
-            grid-template-columns: repeat(2, 1fr);
+        .stats-grid {
+            grid-template-columns: 1fr;
         }
         
         .deliveries-grid {
             grid-template-columns: 1fr;
         }
         
-        .quick-actions {
-            grid-template-columns: repeat(2, 1fr);
-        }
-    }
-    
-    @media (max-width: 576px) {
-        .stats-container {
+        .charts-container {
             grid-template-columns: 1fr;
         }
         
         .quick-actions {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .filter-bar {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        
+        .filter-buttons {
+            justify-content: center;
+        }
+    }
+    
+    @media (max-width: 576px) {
+        .quick-actions {
             grid-template-columns: 1fr;
+        }
+        
+        .delivery-actions {
+            flex-direction: column;
+        }
+        
+        .delivery-actions .btn {
+            width: 100%;
         }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="content-header">
-    <h1 class="page-title">
-        <i class="bi bi-speedometer2"></i> Delivery Dashboard
-    </h1>
-    <p class="page-subtitle">
-        Welcome back, {{ user.get_full_name|default:user.username }}
-        {% if is_seller %}
-        <span class="badge bg-info ms-1">Seller</span>
-        {% endif %}
-        {% if is_delivery_person %}
-        <span class="badge bg-warning ms-1">Driver</span>
-        {% endif %}
-    </p>
-</div>
-
-<!-- Store Filter for Sellers -->
-{% if is_seller and stores %}
-<div class="store-filter">
-    <div class="d-flex align-items-center mb-2">
-        <i class="bi bi-filter me-2"></i>
-        <span class="small">Filter by Store:</span>
-    </div>
-    <div class="filter-buttons">
-        <a href="?{% if filter_status %}status={{ filter_status }}{% endif %}" 
-           class="filter-btn {% if not selected_store_id %}active{% endif %}">
-            All Stores ({{ stores.count }})
-        </a>
-        {% for store in stores %}
-        <a href="?{% if filter_status %}status={{ filter_status }}&{% endif %}store_id={{ store.id }}" 
-           class="filter-btn {% if selected_store_id == store.id|stringformat:"i" %}active{% endif %}">
-            {{ store.name }}
-        </a>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
-
-<!-- Quick Create from Order -->
-{% if request.GET.order_id and is_seller %}
-<div class="alert alert-info d-flex align-items-center">
-    <i class="bi bi-info-circle fs-4 me-3"></i>
-    <div>
-        <strong>Quick action:</strong> Create a delivery for Order #{{ request.GET.order_id }}
-        <div class="mt-1">
-            <a href="{% url 'delivery:create_delivery' %}?order_id={{ request.GET.order_id }}" 
-               class="btn btn-sm btn-primary">
-                <i class="bi bi-plus-circle"></i> Create Delivery
-            </a>
-            <a href="{% url 'order_detail' request.GET.order_id %}" 
-               class="btn btn-sm btn-outline-primary ms-2">
-                <i class="bi bi-eye"></i> View Order
-            </a>
-        </div>
-    </div>
-</div>
-{% endif %}
-
-<!-- Stats Cards -->
-<div class="stats-container">
-    <div class="stat-card">
-        <div class="stat-value">{{ total_deliveries|intcomma }}</div>
-        <div class="stat-label">
-            <i class="bi bi-box-seam stat-icon"></i>
-            Total Deliveries
-        </div>
-        {% if is_seller and selected_store_id %}
-        <small class="text-info">
-            <i class="bi bi-shop"></i> For selected store
-        </small>
-        {% endif %}
-    </div>
+<div class="dashboard-container">
+    <!-- Toast Container -->
+    <div class="toast-container"></div>
     
-    <div class="stat-card">
-        <div class="stat-value">{{ pending_deliveries|intcomma }}</div>
-        <div class="stat-label">
-            <i class="bi bi-clock stat-icon"></i>
-            Pending
-        </div>
-        <span class="stat-trend trend-up">Awaiting processing</span>
-    </div>
-    
-    <div class="stat-card">
-        <div class="stat-value">{{ in_transit_deliveries|intcomma }}</div>
-        <div class="stat-label">
-            <i class="bi bi-truck stat-icon"></i>
-            In Transit
-        </div>
-        <span class="stat-trend trend-up">On the way</span>
-    </div>
-    
-    <div class="stat-card">
-        <div class="stat-value">{{ completed_deliveries|intcomma }}</div>
-        <div class="stat-label">
-            <i class="bi bi-check-circle stat-icon"></i>
-            Completed
-        </div>
-        {% if monthly_revenue > 0 %}
-        <span class="stat-trend trend-up">KES {{ monthly_revenue|intcomma }} revenue</span>
-        {% endif %}
-    </div>
-</div>
-
-<!-- Quick Actions -->
-<div class="quick-actions">
-    <a href="{% url 'delivery:create_delivery' %}" class="action-card">
-        <i class="bi bi-plus-circle action-icon"></i>
-        <h6 class="action-title">New Delivery</h6>
-        <p class="action-desc">Create a new delivery request</p>
-    </a>
-    
-    <a href="{% url 'delivery:delivery_list' %}" class="action-card">
-        <i class="bi bi-list-check action-icon"></i>
-        <h6 class="action-title">All Deliveries</h6>
-        <p class="action-desc">View all deliveries</p>
-    </a>
-    
-    {% if is_delivery_person %}
-    <a href="{% url 'delivery:driver_dashboard' %}" class="action-card">
-        <i class="bi bi-person-badge action-icon"></i>
-        <h6 class="action-title">Driver Tools</h6>
-        <p class="action-desc">Driver dashboard</p>
-    </a>
-    {% endif %}
-    
-    <a href="#" onclick="promptTracking()" class="action-card">
-        <i class="bi bi-search action-icon"></i>
-        <h6 class="action-title">Track Package</h6>
-        <p class="action-desc">Track any delivery</p>
-    </a>
-    
-    {% if is_seller or is_delivery_person %}
-    <a href="{% url 'delivery:reports' %}" class="action-card">
-        <i class="bi bi-bar-chart action-icon"></i>
-        <h6 class="action-title">Reports</h6>
-        <p class="action-desc">View delivery reports</p>
-    </a>
-    {% endif %}
-    
-    {% if is_delivery_person %}
-    <a href="#" onclick="updateDriverStatus('available')" class="action-card">
-        <i class="bi bi-circle-fill text-success action-icon"></i>
-        <h6 class="action-title">Mark Available</h6>
-        <p class="action-desc">Set status to available</p>
-    </a>
-    {% endif %}
-</div>
-
-<!-- Recent Deliveries -->
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="card-title mb-0">
-            <i class="bi bi-clock-history me-2"></i>
-            Recent Deliveries
-            {% if is_seller %}
-            <span class="badge bg-info ms-2">Your Stores</span>
-            {% endif %}
-        </h5>
-        <a href="{% url 'delivery:delivery_list' %}{% if selected_store_id %}?store={{ selected_store_id }}{% endif %}" 
-           class="btn btn-sm btn-outline-primary">
-            View All
-        </a>
-    </div>
-    <div class="card-body">
-        <!-- Status Filter -->
-        <div class="mb-3">
-            <form method="get" class="row g-2">
-                <div class="col-md-4">
-                    <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">All Statuses</option>
-                        {% for key, label in status_choices %}
-                        <option value="{{ key }}" {% if filter_status == key %}selected{% endif %}>
-                            {{ label }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                {% if selected_store_id %}
-                <input type="hidden" name="store_id" value="{{ selected_store_id }}">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 fw-bold mb-2 animate-fade-in">
+                <i class="bi bi-speedometer2 me-2 text-primary"></i>
+                Delivery Dashboard
+            </h1>
+            <p class="text-muted mb-0">
+                {% if is_seller %}
+                Manage deliveries for your stores
+                {% elif is_delivery_person %}
+                Track your active deliveries and earnings
+                {% else %}
+                Overview of all delivery operations
                 {% endif %}
-            </form>
+            </p>
         </div>
-        
-        {% if recent_deliveries %}
-        <div class="deliveries-grid">
-            {% for delivery in recent_deliveries %}
-            <div class="delivery-card">
-                <div class="delivery-header">
-                    <div class="delivery-id">
-                        {{ delivery.tracking_number|truncatechars:15 }}
-                        <span class="status-badge status-{{ delivery.status }}">
-                            {{ delivery.get_status_display }}
-                        </span>
+        <div>
+            <button class="btn btn-delivery" onclick="refreshDashboard()" id="refreshBtn">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        </div>
+    </div>
+    
+    <!-- Store Selector (for sellers) -->
+    {% if is_seller and stores %}
+    <div class="store-selector animate-fade-in">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-shop text-primary"></i>
+                <span class="fw-medium">Filter by Store:</span>
+            </div>
+            <div class="filter-buttons">
+                <a href="?{% if filter_status %}status={{ filter_status }}{% endif %}" 
+                   class="filter-btn {% if not selected_store_id %}active{% endif %}">
+                    All Stores
+                </a>
+                {% for store in stores %}
+                <a href="?{% if filter_status %}status={{ filter_status }}&{% endif %}store_id={{ store.id }}" 
+                   class="filter-btn {% if selected_store_id == store.id|stringformat:"i" %}active{% endif %}">
+                    {{ store.name|truncatechars:20 }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Driver Stats -->
+    {% if is_delivery_person and driver_stats %}
+    <div class="driver-stats animate-slide-in">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <div class="bg-warning bg-opacity-10 rounded-circle p-3">
+                        <i class="bi bi-person-badge text-warning fs-4"></i>
                     </div>
-                    <div class="delivery-meta">
-                        <span>{{ delivery.created_at|date:"M d" }}</span>
-                        {% if delivery.delivery_person %}
-                        <span><i class="bi bi-person"></i> {{ delivery.delivery_person.user.get_short_name }}</span>
-                        {% endif %}
+                    <div>
+                        <h5 class="fw-bold mb-1">Driver Performance</h5>
+                        <p class="text-muted mb-0">
+                            {% if driver_stats.completed_today %}
+                                {{ driver_stats.completed_today }} deliveries completed today
+                            {% else %}
+                                No deliveries completed yet today
+                            {% endif %}
+                        </p>
                     </div>
                 </div>
-                <div class="delivery-content">
-                    <div class="delivery-info-row">
-                        <span class="info-label">Order ID</span>
-                        <span class="info-value">{{ delivery.order_id|default:"-" }}</span>
+                <div class="row g-3">
+                    <div class="col-6 col-md-3">
+                        <div class="text-center">
+                            <div class="fw-bold fs-4 text-primary">{{ driver_stats.total_completed|default:0 }}</div>
+                            <small class="text-muted">Total Completed</small>
+                        </div>
                     </div>
-                    <div class="delivery-info-row">
-                        <span class="info-label">Recipient</span>
-                        <span class="info-value">{{ delivery.recipient_name|truncatechars:20 }}</span>
+                    <div class="col-6 col-md-3">
+                        <div class="text-center">
+                            <div class="fw-bold fs-4 text-success">{{ driver_stats.rating|default:"0.0"|floatformat:1 }}</div>
+                            <small class="text-muted">Avg Rating</small>
+                        </div>
                     </div>
-                    <div class="delivery-info-row">
-                        <span class="info-label">Fee</span>
-                        <span class="info-value">KES {{ delivery.delivery_fee|intcomma }}</span>
+                    <div class="col-6 col-md-3">
+                        <div class="text-center">
+                            <div class="fw-bold fs-4 text-info">KSh {{ driver_stats.earnings_today|default:0|intcomma }}</div>
+                            <small class="text-muted">Today's Earnings</small>
+                        </div>
                     </div>
-                    <div class="delivery-actions">
-                        <a href="{% url 'delivery:delivery_detail' delivery.pk %}" 
-                           class="btn btn-sm btn-outline-primary w-100">
-                            <i class="bi bi-eye"></i> View Details
-                        </a>
+                    <div class="col-6 col-md-3">
+                        <div class="text-center">
+                            <div class="fw-bold fs-4 text-warning">{{ driver_stats.active_assignments|default:0 }}</div>
+                            <small class="text-muted">Active Now</small>
+                        </div>
                     </div>
                 </div>
             </div>
+            <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                <a href="{% url 'delivery:driver_dashboard' %}" class="btn btn-delivery">
+                    <i class="bi bi-person-badge me-2"></i>
+                    Driver Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Stats Grid -->
+    <div id="statsContainer" class="stats-grid">
+        <!-- Stats will be loaded via AJAX -->
+        <div class="stat-card shimmer" style="height: 120px;"></div>
+        <div class="stat-card shimmer" style="height: 120px;"></div>
+        <div class="stat-card shimmer" style="height: 120px;"></div>
+        <div class="stat-card shimmer" style="height: 120px;"></div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+        <a href="{% url 'delivery:create_delivery' %}" class="action-card animate-fade-in">
+            <div class="action-icon">
+                <i class="bi bi-plus-lg"></i>
+            </div>
+            <h6 class="action-title">New Delivery</h6>
+            <p class="action-desc">Create a new delivery request</p>
+        </a>
+        
+        <a href="{% url 'delivery:delivery_list' %}" class="action-card animate-fade-in" style="animation-delay: 0.1s">
+            <div class="action-icon">
+                <i class="bi bi-list-check"></i>
+            </div>
+            <h6 class="action-title">All Deliveries</h6>
+            <p class="action-desc">View all delivery requests</p>
+        </a>
+        
+        {% if is_delivery_person %}
+        <a href="{% url 'delivery:driver_dashboard' %}" class="action-card animate-fade-in" style="animation-delay: 0.2s">
+            <div class="action-icon">
+                <i class="bi bi-person-badge"></i>
+            </div>
+            <h6 class="action-title">Driver Tools</h6>
+            <p class="action-desc">Manage your deliveries</p>
+        </a>
+        {% else %}
+        <a href="#" onclick="promptTracking(event)" class="action-card animate-fade-in" style="animation-delay: 0.2s">
+            <div class="action-icon">
+                <i class="bi bi-search"></i>
+            </div>
+            <h6 class="action-title">Track Package</h6>
+            <p class="action-desc">Track any delivery</p>
+        </a>
+        {% endif %}
+        
+        {% if is_seller or is_delivery_person or is_admin %}
+        <a href="{% url 'delivery:reports' %}" class="action-card animate-fade-in" style="animation-delay: 0.3s">
+            <div class="action-icon">
+                <i class="bi bi-bar-chart"></i>
+            </div>
+            <h6 class="action-title">Reports</h6>
+            <p class="action-desc">View delivery analytics</p>
+        </a>
+        {% else %}
+        <a href="{% url 'order_list' %}" class="action-card animate-fade-in" style="animation-delay: 0.3s">
+            <div class="action-icon">
+                <i class="bi bi-shop"></i>
+            </div>
+            <h6 class="action-title">Back to Shop</h6>
+            <p class="action-desc">Return to shopping</p>
+        </a>
+        {% endif %}
+    </div>
+    
+    <!-- Filter Bar -->
+    <div class="filter-bar animate-fade-in">
+        <div>
+            <h5 class="fw-bold mb-0">
+                Recent Deliveries
+                {% if is_seller %}
+                <span class="badge bg-primary ms-2">Your Stores</span>
+                {% endif %}
+            </h5>
+        </div>
+        <div class="filter-buttons">
+            <a href="?{% if selected_store_id %}store_id={{ selected_store_id }}{% endif %}" 
+               class="filter-btn {% if not filter_status %}active{% endif %}">
+                All
+            </a>
+            {% for key, label in status_choices %}
+            <a href="?{% if selected_store_id %}store_id={{ selected_store_id }}&{% endif %}status={{ key }}" 
+               class="filter-btn {% if filter_status == key %}active{% endif %}">
+                {{ label }}
+            </a>
             {% endfor %}
         </div>
-        {% else %}
-        <div class="text-center py-5">
-            <i class="bi bi-box-seam fs-1 text-muted mb-3"></i>
-            <p class="text-muted">
-                {% if is_seller %}
-                No deliveries found for your stores
-                {% else %}
-                No recent deliveries
-                {% endif %}
-            </p>
-            {% if is_seller %}
-            <a href="{% url 'delivery:create_delivery' %}" class="btn btn-primary">
-                <i class="bi bi-plus"></i> Create Your First Delivery
-            </a>
-            {% endif %}
+    </div>
+    
+    <!-- Deliveries Grid -->
+    <div id="deliveriesContainer" class="deliveries-grid">
+        <!-- Deliveries will be loaded via AJAX -->
+        <div class="delivery-item shimmer" style="height: 200px;"></div>
+        <div class="delivery-item shimmer" style="height: 200px;"></div>
+        <div class="delivery-item shimmer" style="height: 200px;"></div>
+    </div>
+    
+    <!-- Empty State (hidden initially) -->
+    <div id="emptyState" class="empty-state d-none">
+        <div class="empty-icon">
+            <i class="bi bi-truck"></i>
         </div>
-        {% endif %}
+        <h3 class="empty-title">No Deliveries Found</h3>
+        <p class="empty-subtitle">
+            {% if is_seller %}
+            You don't have any deliveries for the selected filter.
+            {% elif is_delivery_person %}
+            You don't have any active deliveries assigned.
+            {% else %}
+            There are no deliveries matching your criteria.
+            {% endif %}
+        </p>
+        <a href="{% url 'delivery:create_delivery' %}" class="btn btn-delivery">
+            <i class="bi bi-plus-circle me-2"></i>
+            Create Your First Delivery
+        </a>
+    </div>
+    
+    <!-- Charts Section -->
+    <div id="chartsContainer" class="charts-container d-none">
+        <div class="chart-card">
+            <h6 class="chart-title">
+                <i class="bi bi-pie-chart text-primary"></i>
+                Status Distribution
+            </h6>
+            <div style="position: relative; height: 250px;">
+                <canvas id="statusChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="chart-card">
+            <h6 class="chart-title">
+                <i class="bi bi-bar-chart text-primary"></i>
+                Weekly Activity
+            </h6>
+            <div style="position: relative; height: 250px;">
+                <canvas id="weeklyChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Driver Assignments (for drivers) -->
+    {% if is_delivery_person %}
+    <div id="driverAssignments" class="mt-4 d-none">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-bold mb-0">
+                <i class="bi bi-clipboard-check text-primary me-2"></i>
+                My Active Assignments
+            </h5>
+            <button class="btn btn-sm btn-outline-primary" onclick="refreshDriverAssignments()" id="refreshAssignmentsBtn">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
+        <div id="assignmentsList" class="deliveries-grid">
+            <!-- Driver assignments will be loaded via AJAX -->
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- View All Link -->
+    <div class="text-center mt-4">
+        <a href="{% url 'delivery:delivery_list' %}{% if selected_store_id %}?store_id={{ selected_store_id }}{% endif %}" 
+           class="btn btn-outline-primary">
+            <i class="bi bi-arrow-right me-2"></i>
+            View All Deliveries
+        </a>
     </div>
 </div>
 
-<!-- Driver Statistics (if driver) -->
-{% if is_delivery_person and my_assignments %}
-<div class="card mt-4">
-    <div class="card-header">
-        <h5 class="card-title mb-0">
-            <i class="bi bi-person-badge me-2"></i>
-            My Active Assignments
-        </h5>
+<!-- Confirmation Modal for Driver Actions -->
+<div class="modal fade" id="actionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Action</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="modalMessage">Are you sure you want to proceed?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmAction">Confirm</button>
+            </div>
+        </div>
     </div>
-    <div class="card-body">
-        <div class="deliveries-grid">
-            {% for delivery in my_assignments %}
-            <div class="delivery-card">
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Global dashboard state
+    let dashboardState = {
+        stats: null,
+        deliveries: [],
+        charts: null,
+        isLoading: false,
+        refreshInterval: null,
+        chartInstances: []
+    };
+    
+    // Utility functions
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    function showToast(message, type = 'success') {
+        const container = document.querySelector('.toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        
+        const icon = type === 'success' ? 'check-circle' : 
+                    type === 'error' ? 'exclamation-circle' : 
+                    type === 'warning' ? 'exclamation-triangle' : 'info-circle';
+        
+        toast.innerHTML = `
+            <i class="bi bi-${icon} text-${type} fs-5"></i>
+            <div class="flex-grow-1">
+                <strong class="text-${type}">${type.charAt(0).toUpperCase() + type.slice(1)}</strong>
+                <div class="text-muted">${message}</div>
+            </div>
+            <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+        `;
+        
+        container.appendChild(toast);
+        
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.remove();
+            }
+        }, 5000);
+    }
+    
+    function promptTracking(event) {
+        event.preventDefault();
+        const trackingNumber = prompt('Enter tracking number:');
+        if (trackingNumber) {
+            window.location.href = `/delivery/track/${trackingNumber}/`;
+        }
+    }
+    
+    // Initialize dashboard
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Initializing delivery dashboard...');
+        
+        // Load initial data
+        loadDashboardData();
+        
+        // Set up auto-refresh every 30 seconds
+        dashboardState.refreshInterval = setInterval(loadDashboardData, 30000);
+        
+        // Set up real-time updates for drivers
+        {% if is_delivery_person %}
+        setupDriverRealTimeUpdates();
+        {% endif %}
+        
+        // Handle visibility change
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                loadDashboardData();
+            }
+        });
+    });
+    
+    // Load all dashboard data
+    async function loadDashboardData() {
+        if (dashboardState.isLoading) return;
+        
+        dashboardState.isLoading = true;
+        
+        try {
+            await Promise.all([
+                loadStats(),
+                loadDeliveries(),
+                {% if is_delivery_person %}
+                loadDriverAssignments(),
+                {% endif %}
+                loadCharts()
+            ]);
+            
+            console.log('Dashboard data loaded successfully');
+        } catch (error) {
+            console.error('Error loading dashboard data:', error);
+            showToast('Failed to load dashboard data', 'error');
+        } finally {
+            dashboardState.isLoading = false;
+        }
+    }
+    
+    // Load statistics
+    async function loadStats() {
+        try {
+            const url = '{% url "delivery:dashboard_stats" %}' + 
+                '?{% if selected_store_id %}store_id={{ selected_store_id }}{% endif %}';
+            
+            const response = await fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                dashboardState.stats = data;
+                renderStats(data);
+            }
+        } catch (error) {
+            console.error('Error loading stats:', error);
+        }
+    }
+    
+    // Render statistics
+    function renderStats(data) {
+        const container = document.getElementById('statsContainer');
+        if (!container || !data) return;
+        
+        const stats = [
+            {
+                value: data.total_deliveries || 0,
+                label: 'Total Deliveries',
+                icon: 'bi-box-seam',
+                trend: data.trend_total,
+                color: 'primary'
+            },
+            {
+                value: data.pending_deliveries || 0,
+                label: 'Pending',
+                icon: 'bi-clock',
+                trend: data.trend_pending,
+                color: 'warning'
+            },
+            {
+                value: data.in_transit_deliveries || 0,
+                label: 'In Transit',
+                icon: 'bi-truck',
+                trend: data.trend_transit,
+                color: 'info'
+            },
+            {
+                value: data.completed_deliveries || 0,
+                label: 'Completed',
+                icon: 'bi-check-circle',
+                trend: data.trend_completed,
+                color: 'success'
+            }
+        ];
+        
+        let html = '';
+        
+        stats.forEach(stat => {
+            const trendHtml = stat.trend ? `
+                <span class="stat-trend ${stat.trend > 0 ? 'trend-up' : 'trend-down'}">
+                    <i class="bi ${stat.trend > 0 ? 'bi-arrow-up' : 'bi-arrow-down'} me-1"></i>
+                    ${Math.abs(stat.trend)}%
+                </span>
+            ` : '';
+            
+            html += `
+            <div class="stat-card animate-fade-in">
+                <div class="stat-value">${stat.value.toLocaleString()}</div>
+                <div class="stat-label">
+                    <i class="bi ${stat.icon} text-${stat.color}"></i>
+                    ${stat.label}
+                </div>
+                ${trendHtml}
+            </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    }
+    
+    // Load recent deliveries
+    async function loadDeliveries() {
+        try {
+            const url = '{% url "delivery:recent_deliveries" %}' + 
+                '?{% if selected_store_id %}store_id={{ selected_store_id }}{% if filter_status %}&{% endif %}{% endif %}' +
+                '{% if filter_status %}status={{ filter_status }}{% endif %}';
+            
+            const response = await fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                dashboardState.deliveries = data.deliveries || [];
+                renderDeliveries(data.deliveries || []);
+                
+                // Show/hide empty state
+                const emptyState = document.getElementById('emptyState');
+                const chartsContainer = document.getElementById('chartsContainer');
+                
+                if (data.deliveries && data.deliveries.length > 0) {
+                    emptyState.classList.add('d-none');
+                    chartsContainer.classList.remove('d-none');
+                } else {
+                    emptyState.classList.remove('d-none');
+                    chartsContainer.classList.add('d-none');
+                }
+            }
+        } catch (error) {
+            console.error('Error loading deliveries:', error);
+        }
+    }
+    
+    // Render deliveries
+    function renderDeliveries(deliveries) {
+        const container = document.getElementById('deliveriesContainer');
+        if (!container) return;
+        
+        if (!deliveries || deliveries.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+        
+        let html = '';
+        
+        deliveries.forEach((delivery, index) => {
+            const statusClass = `status-${delivery.status}`;
+            const statusText = delivery.status_display || delivery.status;
+            
+            const deliveryTime = delivery.estimated_delivery ? 
+                new Date(delivery.estimated_delivery).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 
+                'N/A';
+            
+            html += `
+            <div class="delivery-item animate-fade-in" style="animation-delay: ${index * 0.05}s">
                 <div class="delivery-header">
-                    <div class="delivery-id">
-                        {{ delivery.tracking_number|truncatechars:12 }}
-                        <span class="badge bg-warning">Priority: {{ delivery.priority }}</span>
+                    <div class="delivery-meta">
+                        <span class="fw-bold">${delivery.tracking_number || 'N/A'}</span>
+                        <span class="status-badge ${statusClass}">
+                            ${statusText}
+                        </span>
                     </div>
+                    <small class="text-muted">
+                        ${new Date(delivery.created_at).toLocaleDateString()}
+                    </small>
                 </div>
                 <div class="delivery-content">
                     <div class="delivery-info-row">
-                        <span class="info-label">To</span>
-                        <span class="info-value">{{ delivery.recipient_name }}</span>
+                        <span class="info-label">Recipient</span>
+                        <span class="info-value">${delivery.recipient_name || 'N/A'}</span>
                     </div>
                     <div class="delivery-info-row">
                         <span class="info-label">Address</span>
-                        <span class="info-value">{{ delivery.recipient_address|truncatechars:30 }}</span>
+                        <span class="info-value">${delivery.recipient_address ? delivery.recipient_address.substring(0, 30) + '...' : 'N/A'}</span>
                     </div>
-                    {% if delivery.estimated_delivery_time %}
                     <div class="delivery-info-row">
-                        <span class="info-label">Est. Delivery</span>
-                        <span class="info-value">{{ delivery.estimated_delivery_time|time }}</span>
+                        <span class="info-label">Delivery Fee</span>
+                        <span class="info-value">KSh ${delivery.delivery_fee ? delivery.delivery_fee.toLocaleString() : '0'}</span>
                     </div>
-                    {% endif %}
                     <div class="delivery-actions">
-                        <a href="{% url 'delivery:delivery_detail' delivery.pk %}" 
-                           class="btn btn-sm btn-primary w-100">
-                            <i class="bi bi-eye"></i> View & Update
+                        <a href="/delivery/deliveries/${delivery.id}/" class="btn btn-sm btn-outline-primary flex-grow-1">
+                            <i class="bi bi-eye me-1"></i> View
                         </a>
+                        {% if is_delivery_person and delivery.status == 'assigned' %}
+                        <button class="btn btn-sm btn-success flex-grow-1" onclick="updateDeliveryStatus(${delivery.id}, 'picked_up')">
+                            <i class="bi bi-check-circle me-1"></i> Pick Up
+                        </button>
+                        {% endif %}
                     </div>
                 </div>
             </div>
-            {% endfor %}
-        </div>
-    </div>
-</div>
-{% endif %}
-
-<!-- Charts Section -->
-{% if total_deliveries > 0 %}
-<div class="charts-container mt-4">
-    <div class="chart-card">
-        <h6 class="chart-title">
-            <i class="bi bi-pie-chart"></i>
-            Status Distribution
-        </h6>
-        <div class="chart-container" style="position: relative; height: 250px;">
-            <canvas id="statusChart"></canvas>
-        </div>
-    </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    }
     
-    <div class="chart-card">
-        <h6 class="chart-title">
-            <i class="bi bi-bar-chart"></i>
-            Weekly Activity
-        </h6>
-        <div class="chart-container" style="position: relative; height: 250px;">
-            <canvas id="weeklyChart"></canvas>
-        </div>
-    </div>
-</div>
-{% endif %}
-{% endblock %}
-
-
-{% block extra_js %}
-<!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-    // Status Distribution Chart
-    {% if total_deliveries > 0 %}
-    const statusCtx = document.getElementById('statusChart').getContext('2d');
-    const statusChart = new Chart(statusCtx, {
-        type: 'doughnut',
-        data: {
-            labels: [
-                {% for item in status_distribution %}
-                '{{ item.status|title }}',
-                {% endfor %}
-            ],
-            datasets: [{
-                data: [
-                    {% for item in status_distribution %}
-                    {{ item.count }},
-                    {% endfor %}
-                ],
-                backgroundColor: [
-                    'rgba(255, 193, 7, 0.8)',
-                    'rgba(23, 162, 184, 0.8)',
-                    'rgba(0, 123, 255, 0.8)',
-                    'rgba(40, 167, 69, 0.8)',
-                    'rgba(255, 107, 53, 0.8)',
-                    'rgba(108, 117, 125, 0.8)'
-                ],
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        color: 'var(--text-primary)'
-                    }
+    // Load driver assignments (for drivers only)
+    {% if is_delivery_person %}
+    async function loadDriverAssignments() {
+        try {
+            const response = await fetch('{% url "delivery:driver_assignments" %}', {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                renderDriverAssignments(data.assignments || []);
+                
+                // Show/hide assignments section
+                const container = document.getElementById('driverAssignments');
+                if (data.assignments && data.assignments.length > 0) {
+                    container.classList.remove('d-none');
+                } else {
+                    container.classList.add('d-none');
                 }
             }
+        } catch (error) {
+            console.error('Error loading driver assignments:', error);
         }
-    });
+    }
     
-    // Weekly Activity Chart
-    const weeklyCtx = document.getElementById('weeklyChart').getContext('2d');
-    const weeklyChart = new Chart(weeklyCtx, {
-        type: 'bar',
-        data: {
-            labels: [
-                {% for day in weekly_activity %}
-                '{{ day.day }}',
-                {% endfor %}
-            ],
-            datasets: [{
-                label: 'Deliveries',
-                data: [
-                    {% for day in weekly_activity %}
-                    {{ day.count }},
-                    {% endfor %}
-                ],
-                backgroundColor: 'rgba(255, 107, 53, 0.8)',
-                borderRadius: 5
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        stepSize: 1,
-                        color: 'var(--text-secondary)'
-                    },
-                    grid: {
-                        color: 'var(--border-color)'
-                    }
-                },
-                x: {
-                    ticks: {
-                        color: 'var(--text-secondary)'
-                    },
-                    grid: {
-                        color: 'var(--border-color)'
-                    }
-                }
-            },
-            plugins: {
-                legend: {
-                    labels: {
-                        color: 'var(--text-primary)'
-                    }
-                }
-            }
+    function renderDriverAssignments(assignments) {
+        const container = document.getElementById('assignmentsList');
+        if (!container) return;
+        
+        if (!assignments || assignments.length === 0) {
+            container.innerHTML = `
+                <div class="col-12">
+                    <div class="text-center py-4">
+                        <i class="bi bi-clipboard-x fs-1 text-muted"></i>
+                        <p class="text-muted mt-2">No active assignments</p>
+                    </div>
+                </div>
+            `;
+            return;
         }
-    });
+        
+        let html = '';
+        
+        assignments.forEach((assignment, index) => {
+            html += `
+            <div class="delivery-item animate-fade-in" style="animation-delay: ${index * 0.05}s">
+                <div class="delivery-header">
+                    <div class="delivery-meta">
+                        <span class="fw-bold">${assignment.tracking_number}</span>
+                        <span class="badge bg-warning">Priority: ${assignment.priority}</span>
+                    </div>
+                </div>
+                <div class="delivery-content">
+                    <div class="delivery-info-row">
+                        <span class="info-label">Store</span>
+                        <span class="info-value">${assignment.store_name || 'N/A'}</span>
+                    </div>
+                    <div class="delivery-info-row">
+                        <span class="info-label">To</span>
+                        <span class="info-value">${assignment.recipient_name}</span>
+                    </div>
+                    <div class="delivery-info-row">
+                        <span class="info-label">Est. Delivery</span>
+                        <span class="info-value">${assignment.estimated_delivery_time || 'N/A'}</span>
+                    </div>
+                    <div class="delivery-actions">
+                        <a href="/delivery/deliveries/${assignment.id}/" class="btn btn-sm btn-primary flex-grow-1">
+                            <i class="bi bi-eye me-1"></i> View Details
+                        </a>
+                        <button class="btn btn-sm btn-success flex-grow-1" onclick="updateDeliveryStatus(${assignment.id}, 'picked_up')">
+                            <i class="bi bi-check-circle me-1"></i> Pick Up
+                        </button>
+                    </div>
+                </div>
+            </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    }
     {% endif %}
+    
+    // Load charts
+    async function loadCharts() {
+        try {
+            const url = '{% url "delivery:chart_data" %}' + 
+                '?{% if selected_store_id %}store_id={{ selected_store_id }}{% endif %}';
+            
+            const response = await fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                dashboardState.charts = data;
+                renderCharts(data);
+            }
+        } catch (error) {
+            console.error('Error loading charts:', error);
+        }
+    }
+    
+    // Render charts
+    function renderCharts(data) {
+        // Destroy existing chart instances
+        dashboardState.chartInstances.forEach(chart => {
+            if (chart && typeof chart.destroy === 'function') {
+                chart.destroy();
+            }
+        });
+        dashboardState.chartInstances = [];
+        
+        // Status Distribution Chart
+        if (data.status_distribution && data.status_distribution.length > 0) {
+            const statusCtx = document.getElementById('statusChart');
+            if (statusCtx) {
+                const statusChart = new Chart(statusCtx.getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.status_distribution.map(d => d.status),
+                        datasets: [{
+                            data: data.status_distribution.map(d => d.count),
+                            backgroundColor: [
+                                'rgba(255, 158, 31, 0.8)',  // Pending
+                                'rgba(17, 138, 178, 0.8)',  // Accepted
+                                'rgba(6, 214, 160, 0.8)',   // Assigned
+                                'rgba(255, 209, 102, 0.8)', // Picked Up
+                                'rgba(66, 133, 244, 0.8)',  // In Transit
+                                'rgba(6, 214, 160, 0.8)',   // Delivered
+                                'rgba(239, 71, 111, 0.8)'   // Failed
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    color: '#6c757d',
+                                    padding: 20
+                                }
+                            }
+                        }
+                    }
+                });
+                dashboardState.chartInstances.push(statusChart);
+            }
+        }
+        
+        // Weekly Activity Chart
+        if (data.weekly_activity && data.weekly_activity.length > 0) {
+            const weeklyCtx = document.getElementById('weeklyChart');
+            if (weeklyCtx) {
+                const weeklyChart = new Chart(weeklyCtx.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: data.weekly_activity.map(d => d.day),
+                        datasets: [{
+                            label: 'Deliveries',
+                            data: data.weekly_activity.map(d => d.count),
+                            backgroundColor: 'rgba(6, 214, 160, 0.8)',
+                            borderRadius: 5
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    color: '#6c757d'
+                                },
+                                grid: {
+                                    color: 'rgba(0,0,0,0.1)'
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    color: '#6c757d'
+                                },
+                                grid: {
+                                    color: 'rgba(0,0,0,0.1)'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+                dashboardState.chartInstances.push(weeklyChart);
+            }
+        }
+    }
+    
+    // Update delivery status
+    async function updateDeliveryStatus(deliveryId, status) {
+        const statusMap = {
+            'picked_up': 'Pick Up',
+            'in_transit': 'Start Delivery',
+            'delivered': 'Mark as Delivered'
+        };
+        
+        const action = statusMap[status] || 'Update';
+        
+        // Show confirmation modal
+        const modal = new bootstrap.Modal(document.getElementById('actionModal'));
+        document.getElementById('modalMessage').textContent = 
+            `Are you sure you want to ${action.toLowerCase()} this delivery?`;
+        
+        document.getElementById('confirmAction').onclick = async function() {
+            try {
+                const response = await fetch(`/delivery/deliveries/${deliveryId}/update-status/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({ status: status })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        showToast(`Delivery ${action} successful`, 'success');
+                        modal.hide();
+                        
+                        // Refresh data
+                        setTimeout(() => {
+                            loadDashboardData();
+                        }, 1000);
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating delivery status:', error);
+                showToast('Failed to update delivery status', 'error');
+            }
+        };
+        
+        modal.show();
+    }
+    
+    // Refresh dashboard
+    window.refreshDashboard = function() {
+        if (dashboardState.isLoading) return;
+        
+        const refreshBtn = document.getElementById('refreshBtn');
+        const originalHtml = refreshBtn.innerHTML;
+        
+        if (refreshBtn) {
+            refreshBtn.innerHTML = '<i class="bi bi-arrow-clockwise spin"></i> Refreshing...';
+            refreshBtn.disabled = true;
+        }
+        
+        loadDashboardData().finally(() => {
+            if (refreshBtn) {
+                refreshBtn.innerHTML = originalHtml;
+                refreshBtn.disabled = false;
+            }
+        });
+    };
+    
+    {% if is_delivery_person %}
+    // Refresh driver assignments
+    window.refreshDriverAssignments = function() {
+        const btn = document.getElementById('refreshAssignmentsBtn');
+        const originalHtml = btn.innerHTML;
+        
+        btn.innerHTML = '<i class="bi bi-arrow-clockwise spin"></i>';
+        btn.disabled = true;
+        
+        loadDriverAssignments().finally(() => {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+        });
+    };
+    
+    // Set up real-time updates for drivers
+    function setupDriverRealTimeUpdates() {
+        // Use polling for now
+        setInterval(() => {
+            fetch('{% url "delivery:driver_updates" %}', {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.has_updates) {
+                    // Refresh assignments if there are updates
+                    loadDriverAssignments();
+                }
+            })
+            .catch(error => console.error('Error checking for updates:', error));
+        }, 10000); // Check every 10 seconds
+    }
+    {% endif %}
+    
+    // Add spin animation for refresh buttons
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .spin {
+            animation: spin 1s linear infinite;
+        }
+    `;
+    document.head.appendChild(style);
 </script>
 {% endblock %}

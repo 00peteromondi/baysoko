@@ -67,9 +67,14 @@ urlpatterns = [
     
     # Payment monitoring
     path('dashboard/monitor/payments/', views.payment_monitor, name='payment_monitor'),
+    path('dashboard/monitor/store/<slug:slug>/withdraw/', views.request_withdrawal, name='request_withdrawal'),
+    path('dashboard/verify-payout/<slug:slug>/', views.start_payout_verification, name='start_payout_verification'),
+    path('mpesa/payout-verification-callback/', views.payout_verification_callback, name='payout_verification_callback'),
     
     # M-Pesa webhook
     path('mpesa/callback/', mpesa_webhook.mpesa_callback, name='mpesa_callback'),
+    # Legacy callback path used in some envs/settings (keep for compatibility)
+    path('mpesa-callback/', mpesa_webhook.mpesa_callback, name='mpesa_callback_legacy'),
 ]
 
 urlpatterns += inventory_patterns + bulk_patterns + bundle_patterns
