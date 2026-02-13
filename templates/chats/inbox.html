@@ -4,132 +4,129 @@
 
 {% block title %}Messages - Baysoko{% endblock %}
 
-    // Render messages with proper attachment display
-    function renderMessages() {
-        const container = document.getElementById('messagesContainer');
-
-        if (messages.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state" style="padding: 40px 20px;">
-                    <div class="empty-state-icon">
-                        <i class="bi bi-chat-left"></i>
-                    </div>
-                    <h3>No messages yet</h3>
-                    <p>Start the conversation by sending a message</p>
-                </div>
-            `;
-            renderedMessageIds = new Set();
-            return;
-        }
-
-        let html = '';
-        let currentDate = null;
-        const seen = new Set();
-
-        // Build full message list (we don't rely on renderedMessageIds to skip rendering
-        // because renderMessages performs a full re-render of the conversation)
-        messages.forEach(msg => {
-            if (seen.has(msg.id)) return; // avoid duplicates within this render
-            seen.add(msg.id);
-
-            const messageDate = formatDate(msg.timestamp);
-
-            // Add date divider if date changed
-            if (messageDate !== currentDate) {
-                currentDate = messageDate;
-                html += `
-                    <div class="date-divider">
-                        <span>${messageDate}</span>
-                    </div>
-                `;
-            }
-
-            const messageTime = formatTime(msg.timestamp);
-            const isOwn = msg.is_own_message;
-
-            // Build message content
-            let messageContent = msg.content || '';
-            let attachmentsHtml = '';
-            const hasAttachments = msg.attachments && msg.attachments.length > 0;
-
-            // Check if message has attachments
-            if (hasAttachments) {
-                attachmentsHtml = `<div class="message-attachments">`;
-                msg.attachments.forEach(att => {
-                    const fileType = att.file_type || att.type || '';
-                    const fileName = att.name || att.filename || 'Attachment';
-                    const fileSize = att.size ? formatFileSize(att.size) : '';
-                    const fileUrl = att.url || att.file_url || '#';
-
-                    if (fileType && fileType.startsWith('image/')) {
-                        attachmentsHtml += `
-                            <div class="attachment-item">
-                                <div class="attachment-preview">
-                                    <img src="${fileUrl}" alt="${fileName}" 
-                                         onclick='showAttachmentViewer(${JSON.stringify(att).replace(/'/g, "\\'")})'
-                                         style="cursor: pointer; max-width: 300px; border-radius: 8px;">
-                                </div>
-                                <div class="attachment-info">
-                                    <div class="attachment-name">${fileName}</div>
-                                    <div class="attachment-type">${getFileTypeLabel(fileName)}</div>
-                                    ${fileSize ? `<div class="attachment-size">${fileSize}</div>` : ''}
-                                    <a href="${fileUrl}" class="attachment-download" target="_blank" download="${fileName}">
-                                        <i class="bi bi-download"></i> Download
-                                    </a>
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        const iconClass = getFileIcon(fileName);
-                        attachmentsHtml += `
-                            <div class="attachment-item" style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
-                                <div class="file-icon-wrapper" style="font-size: 28px; color: var(--primary);">
-                                    <i class="bi ${iconClass}"></i>
-                                </div>
-                                <div class="file-info" style="flex: 1;">
-                                    <div class="attachment-name" style="font-weight: 600;">${fileName}</div>
-                                    <div class="attachment-type" style="font-size: 0.85rem; color: var(--text-secondary);">${getFileTypeLabel(fileName)}</div>
-                                    ${fileSize ? `<div class="attachment-size" style="font-size: 0.8rem; color: var(--text-tertiary);">${fileSize}</div>` : ''}
-                                </div>
-                                <a href="${fileUrl}" class="attachment-download" target="_blank" download="${fileName}" style="padding: 8px 12px; background: var(--primary); color: white; border-radius: 6px; text-decoration: none; display: flex; align-items: center; gap: 6px; font-size: 0.85rem;">
-                                    <i class="bi bi-download"></i> Download
-                                </a>
-                            </div>
-                        `;
-                    }
-                });
-                attachmentsHtml += `</div>`;
-            }
-
-            html += `
-                <div class="message-group ${isOwn ? 'sent' : 'received'}">
-                    <div class="message-bubble ${isOwn ? 'sent' : 'received'}">
-                        ${messageContent ? `<div class="message-content">${escapeHtml(messageContent)}</div>` : ''}
-                        ${attachmentsHtml}
-                        <div class="message-time">
-                            ${messageTime}
-                            ${isOwn ? `
-                                <span class="message-status">
-                                    ${msg.is_read ? 
-                                        '<i class="bi bi-check2-all status-read status-icon"></i>' : 
-                                        '<i class="bi bi-check2 status-delivered status-icon"></i>'
-                                    }
-                                </span>
-                            ` : ''}
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
-
-        container.innerHTML = html;
-
-        // After rendering, update renderedMessageIds to reflect what is on screen
-        renderedMessageIds = new Set(messages.map(m => m.id));
-
-        // Scroll to bottom
-        container.scrollTop = container.scrollHeight;
+{% block extra_css %}
+<style>
+    /* ===== ORIGINAL INBOX STYLES – UNCHANGED ===== */
+    :root {
+        --primary-rgb: 255, 107, 53;
+        --primary: #FF6B35;
+        --primary-dark: #E55A2B;
+        --secondary: #FFD166;
+        --accent: #06D6A0;
+        --danger: #EF476F;
+        --success: #06D6A0;
+        --info: #118AB2;
     }
+
+    /* Hide global navigation elements in chat view */
+    body.chat-active .main-nav,
+    body.chat-active .bottom-nav,
+    body.chat-active .footer {
+        display: none !important;
+    }
+
+    body.chat-active {
+        overflow: hidden;
+        height: 100vh;
+    }
+
+    /* ===== INBOX LAYOUT ===== */
+    .inbox-container {
+        height: calc(100vh - 70px);
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-primary);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+    }
+
+    @media (max-width: 768px) {
+        .inbox-container {
+            height: calc(100vh - 130px);
+            margin-top: 0;
+            border-radius: 0;
+            border: none;
+            box-shadow: none;
+        }
+    }
+
+    /* ===== INBOX HEADER ===== */
+    .inbox-header {
+        padding: var(--spacing-md) var(--spacing-lg);
+        background: var(--bg-primary);
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-shrink: 0;
+    }
+
+    .inbox-header h1 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+    }
+
+    .unread-count-badge {
+        background: var(--primary);
+        color: white;
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 10px;
+        min-width: 24px;
+        text-align: center;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: var(--spacing-xs);
+    }
+
+    /* ===== INBOX CONTENT ===== */
+    .inbox-content {
+        flex: 1;
+        display: flex;
+        overflow: hidden;
+    }
+
+    /* ===== CONVERSATIONS SIDEBAR ===== */
+    .conversations-sidebar {
+        width: 350px;
+        border-right: 1px solid var(--border-color);
+        background: var(--bg-primary);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    @media (max-width: 992px) {
+        .conversations-sidebar {
+            width: 100%;
+        }
+        
+        .conversations-sidebar.hidden {
+            display: none;
+        }
+    }
+
+    .conversations-search {
+        padding: var(--spacing-md);
+        border-bottom: 1px solid var(--border-color);
+        background: var(--bg-primary);
+    }
+
+    .search-wrapper {
+        position: relative;
+    }
+
+    .search-wrapper i {
         position: absolute;
         left: 12px;
         top: 50%;
@@ -567,6 +564,7 @@
         overflow: hidden;
         background: rgba(0, 0, 0, 0.05);
         transition: var(--transition-fast);
+        cursor: pointer;
     }
 
     .message-bubble.received .attachment-item {
@@ -590,8 +588,7 @@
 
     .attachment-preview img {
         width: 100%;
-        height: auto;
-        display: block;
+        max-width: 100%;
         max-height: 200px;
         object-fit: cover;
         cursor: pointer;
@@ -718,6 +715,7 @@
 
     .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
     .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0s; }
 
     @keyframes typingBounce {
         0%, 80%, 100% {
@@ -744,7 +742,7 @@
         flex-shrink: 0;
     }
 
-    /* Attachments Preview - Hidden by default */
+    /* Attachments Preview */
     .attachments-preview {
         display: none;
         flex-wrap: wrap;
@@ -905,17 +903,57 @@
         cursor: not-allowed;
     }
 
+    /* ===== LOADING SPINNER ===== */
+    .loading-spinner {
+        text-align: center;
+        padding: 40px;
+        color: var(--text-secondary);
+    }
+    .loading-spinner .spinner-border {
+        width: 3rem;
+        height: 3rem;
+        color: var(--primary) !important;
+    }
+
+    /* ===== REPLY PREVIEW BAR ===== */
+    .reply-preview {
+        background: var(--bg-secondary);
+        border-left: 4px solid var(--primary);
+        border-radius: var(--radius-md);
+        padding: 8px 12px;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+    }
+    .reply-preview .reply-content {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .reply-preview .cancel-reply {
+        cursor: pointer;
+        padding: 4px;
+        color: var(--text-tertiary);
+    }
+    .reply-preview .cancel-reply:hover {
+        color: var(--danger);
+    }
+
     /* ===== EMOJI PICKER ===== */
     .emoji-picker-container {
         position: absolute;
-        bottom: 70px;
+        bottom: 80px;
         left: 12px;
         background: var(--card-bg);
         border-radius: var(--radius-lg);
         box-shadow: var(--shadow-lg);
         border: 1px solid var(--border-color);
-        width: 280px;
-        max-height: 300px;
+        width: 320px;
+        max-height: 350px;
         overflow: hidden;
         z-index: 1003;
         display: none;
@@ -952,6 +990,18 @@
         color: var(--text-primary);
     }
 
+    .emoji-picker-close {
+        background: none;
+        border: none;
+        color: var(--text-tertiary);
+        font-size: 1.2rem;
+        cursor: pointer;
+        padding: 0 4px;
+    }
+    .emoji-picker-close:hover {
+        color: var(--text-primary);
+    }
+
     .emoji-picker-search {
         width: 100%;
         padding: 6px 10px;
@@ -960,6 +1010,7 @@
         background: var(--bg-secondary);
         color: var(--text-primary);
         font-size: 0.85rem;
+        margin-top: 8px;
     }
 
     .emoji-picker-body {
@@ -1274,6 +1325,92 @@
         justify-content: center;
         margin-top: 20px;
     }
+
+    /* ===== ADDITIONS FOR NEW FEATURES ===== */
+    .message-actions {
+        position: absolute;
+        top: 0;
+        right: 0;
+        display: none;
+        background: var(--bg-primary);
+        border-radius: 12px;
+        padding: 4px;
+        box-shadow: var(--shadow-md);
+    }
+    .message-bubble:hover .message-actions {
+        display: flex;
+    }
+    .message-pin {
+        color: var(--warning);
+        margin-left: 6px;
+    }
+    .message-reply {
+        background: var(--bg-secondary);
+        padding: 6px 10px;
+        border-radius: 12px;
+        margin-bottom: 8px;
+        border-left: 3px solid var(--primary);
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+    .message-selected {
+        background: rgba(var(--primary-rgb), 0.15);
+        border: 1px solid var(--primary);
+    }
+    .batch-actions {
+        position: sticky;
+        bottom: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--card-bg);
+        border-radius: 40px;
+        padding: 8px 16px;
+        box-shadow: var(--shadow-lg);
+        display: none;
+        z-index: 10;
+        border: 1px solid var(--border-color);
+    }
+    .batch-actions.active {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+    }
+    .btn-icon {
+        background: transparent;
+        border: none;
+        color: var(--text-secondary);
+        padding: 4px 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: var(--transition-fast);
+    }
+    .btn-icon:hover {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+    }
+
+    /* ===== SENDING / FAILED MESSAGE STYLES ===== */
+    .message-bubble.sending {
+        opacity: 0.7;
+        background: var(--bg-tertiary);
+    }
+    .message-bubble.failed {
+        background: var(--danger);
+        cursor: pointer;
+    }
+    .retry-button {
+        margin-left: 8px;
+        color: white;
+        background: rgba(255,255,255,0.2);
+        border: none;
+        border-radius: 12px;
+        padding: 2px 8px;
+        font-size: 0.7rem;
+        cursor: pointer;
+    }
+    .retry-button:hover {
+        background: rgba(255,255,255,0.3);
+    }
 </style>
 {% endblock %}
 
@@ -1300,34 +1437,29 @@
 
         <!-- Content -->
         <div class="inbox-content">
-            <!-- Conversations Sidebar -->
+            <!-- Conversations Sidebar (grouped by participant) -->
             <div class="conversations-sidebar" id="conversationsSidebar">
-                <!-- Search -->
                 <div class="conversations-search">
                     <div class="search-wrapper">
                         <i class="bi bi-search"></i>
                         <input type="text" 
                                class="search-input" 
                                id="searchConversations" 
-                               placeholder="Search conversations...">
+                               placeholder="Search people...">
                     </div>
                 </div>
-
-                <!-- Conversations List -->
                 <div class="conversations-list" id="conversationsList">
                     <!-- Loading Skeleton -->
                     <div class="skeleton-loading">
                         <div class="conversation-item">
-                            <div class="conversation-avatar">
-                                <div class="avatar-img skeleton" style="width: 50px; height: 50px;"></div>
-                            </div>
-                            <div class="conversation-info" style="flex: 1;">
+                            <div class="conversation-avatar"><div class="avatar-img skeleton"></div></div>
+                            <div class="conversation-info">
                                 <div class="conversation-header">
-                                    <div class="conversation-name skeleton" style="width: 60%; height: 16px;"></div>
-                                    <div class="conversation-time skeleton" style="width: 40px; height: 12px;"></div>
+                                    <div class="conversation-name skeleton" style="width:60%"></div>
+                                    <div class="conversation-time skeleton" style="width:40px"></div>
                                 </div>
                                 <div class="conversation-preview">
-                                    <div class="conversation-message skeleton" style="width: 80%; height: 14px;"></div>
+                                    <div class="conversation-message skeleton" style="width:80%"></div>
                                 </div>
                             </div>
                         </div>
@@ -1335,9 +1467,8 @@
                 </div>
             </div>
 
-            <!-- Chat Area -->
+            <!-- Chat Area (unified view) -->
             <div class="chat-area" id="chatArea">
-                <!-- Chat Header -->
                 <div class="chat-header">
                     <div class="chat-header-left">
                         <button class="back-button" id="backButton">
@@ -1365,46 +1496,46 @@
 
                 <!-- Messages Container -->
                 <div class="messages-container" id="messagesContainer">
-                    <!-- Empty State -->
                     <div class="empty-state" id="emptyChatState">
-                        <div class="empty-state-icon">
-                            <i class="bi bi-chat-dots"></i>
-                        </div>
+                        <div class="empty-state-icon"><i class="bi bi-chat-dots"></i></div>
                         <h3>Your messages</h3>
                         <p>Select a conversation to start messaging, or start a new one.</p>
                         <button class="btn-custom btn-primary" id="startNewChatBtn">
-                            <i class="bi bi-plus-lg me-2"></i>
-                            Start New Chat
+                            <i class="bi bi-plus-lg me-2"></i>Start New Chat
                         </button>
                     </div>
                 </div>
 
+                <!-- Loading Spinner -->
+                <div class="loading-spinner" id="chatLoadingSpinner" style="display: none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p id="loadingMessage">Loading conversation...</p>
+                </div>
+
+                <!-- Reply Preview Bar (hidden by default) -->
+                <div id="replyPreviewBar" class="reply-preview" style="display: none;">
+                    <span class="reply-content" id="replyContent"></span>
+                    <span class="cancel-reply" id="cancelReplyBtn"><i class="bi bi-x"></i></span>
+                </div>
+
                 <!-- Message Input Area -->
                 <div class="message-input-area" id="messageInputArea" style="display: none;">
-                    <!-- Attachments Preview - Hidden by default -->
                     <div class="attachments-preview" id="attachmentsPreview"></div>
-                    
                     <div class="input-wrapper">
                         <div class="input-actions">
                             <label for="fileAttachment" class="input-action-btn" title="Attach file">
                                 <i class="bi bi-paperclip"></i>
-                                <input type="file" 
-                                       id="fileAttachment" 
-                                       multiple 
-                                       style="display: none;" 
+                                <input type="file" id="fileAttachment" multiple style="display: none;" 
                                        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt">
                             </label>
                             <button class="input-action-btn" id="emojiButton" title="Emoji">
                                 <i class="bi bi-emoji-smile"></i>
                             </button>
                         </div>
-                        <textarea class="message-textarea" 
-                                  id="messageInput" 
-                                  placeholder="Type a message..."
-                                  rows="1"></textarea>
-                        <button class="send-button" id="sendButton" disabled>
-                            <i class="bi bi-send"></i>
-                        </button>
+                        <textarea class="message-textarea" id="messageInput" placeholder="Type a message..." rows="1"></textarea>
+                        <button class="send-button" id="sendButton" disabled><i class="bi bi-send"></i></button>
                     </div>
                 </div>
             </div>
@@ -1412,15 +1543,21 @@
     </div>
 </div>
 
+<!-- Batch Actions Bar -->
+<div class="batch-actions" id="batchActionsBar">
+    <span id="selectedCount">0 selected</span>
+    <button class="btn-custom btn-ghost" id="deleteSelectedBtn"><i class="bi bi-trash"></i> Delete</button>
+    <button class="btn-custom btn-ghost" id="cancelSelectionBtn">Cancel</button>
+</div>
+
 <!-- Emoji Picker -->
 <div class="emoji-picker-container" id="emojiPicker">
     <div class="emoji-picker-header">
         <h4>Emoji</h4>
-        <input type="text" class="emoji-picker-search" placeholder="Search emojis..." id="emojiSearch">
+        <button class="emoji-picker-close" id="emojiPickerClose">&times;</button>
     </div>
-    <div class="emoji-picker-body" id="emojiPickerBody">
-        <!-- Emojis will be populated by JavaScript -->
-    </div>
+    <input type="text" class="emoji-picker-search" placeholder="Search emojis..." id="emojiSearch">
+    <div class="emoji-picker-body" id="emojiPickerBody"></div>
 </div>
 
 <!-- Attachment Viewer Modal -->
@@ -1431,22 +1568,17 @@
             <button type="button" class="btn-close" id="closeAttachmentViewer"></button>
         </div>
         <div class="modal-body">
-            <div class="attachment-viewer" id="attachmentViewerContent">
-                <!-- Attachment content will be loaded here -->
-            </div>
+            <div class="attachment-viewer" id="attachmentViewerContent"></div>
             <div class="attachment-viewer-actions">
                 <a href="#" class="btn-custom btn-primary" id="downloadAttachment" target="_blank">
                     <i class="bi bi-download me-2"></i>Download
                 </a>
-                <button class="btn-custom btn-ghost" id="closeAttachmentViewerBtn">
-                    Close
-                </button>
+                <button class="btn-custom btn-ghost" id="closeAttachmentViewerBtn">Close</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modals -->
 <!-- New Conversation Modal -->
 <div class="modal-overlay" id="newConversationModal">
     <div class="modal-content">
@@ -1457,16 +1589,10 @@
         <div class="modal-body">
             <div class="search-wrapper mb-4">
                 <i class="bi bi-search"></i>
-                <input type="text" 
-                       class="search-input" 
-                       id="searchUsersInput" 
-                       placeholder="Search users by name, username, or email...">
+                <input type="text" class="search-input" id="searchUsersInput" placeholder="Search users...">
             </div>
             <div class="user-search-results" id="userSearchResults">
-                <div class="empty-state" style="padding: 20px 0;">
-                    <i class="bi bi-search" style="font-size: 2rem;"></i>
-                    <p>Start typing to search for users</p>
-                </div>
+                <div class="empty-state"><i class="bi bi-search"></i><p>Start typing to search</p></div>
             </div>
         </div>
     </div>
@@ -1480,24 +1606,21 @@
             <button type="button" class="btn-close" id="closeConversationInfoModalBtn"></button>
         </div>
         <div class="modal-body">
-            <div style="text-align: center; margin-bottom: var(--spacing-lg);">
-                <div class="participant-avatar" style="width: 80px; height: 80px; margin: 0 auto var(--spacing-md);">
-                    <img id="infoParticipantAvatar" src="https://placehold.co/200x200/c2c2c2/1f1f1f?text=User" alt="User">
+            <div style="text-align:center; margin-bottom:var(--spacing-lg);">
+                <div class="participant-avatar" style="width:80px;height:80px;margin:0 auto var(--spacing-md);">
+                    <img id="infoParticipantAvatar" src="https://placehold.co/200x200/c2c2c2/1f1f1f?text=User">
                 </div>
                 <h4 id="infoParticipantName">Loading...</h4>
                 <p class="participant-status" id="infoParticipantStatus">Loading...</p>
             </div>
-            
-            <div style="border-top: 1px solid var(--border-color); padding-top: var(--spacing-lg);">
-                <h5 style="margin-bottom: var(--spacing-sm);">Actions</h5>
-                <div style="display: flex; flex-direction: column; gap: var(--spacing-xs);">
-                    <button class="btn-custom btn-secondary" id="muteConversationBtn" style="justify-content: flex-start;">
-                        <i class="bi bi-bell-slash me-2"></i>
-                        Mute notifications
+            <div style="border-top:1px solid var(--border-color);padding-top:var(--spacing-lg);">
+                <h5>Actions</h5>
+                <div style="display:flex;flex-direction:column;gap:var(--spacing-xs);">
+                    <button class="btn-custom btn-secondary" id="muteConversationBtn">
+                        <i class="bi bi-bell-slash me-2"></i>Mute notifications
                     </button>
-                    <button class="btn-custom btn-secondary" id="deleteChatBtn" style="justify-content: flex-start; color: var(--danger);">
-                        <i class="bi bi-trash me-2" style="color: var(--danger);"></i>
-                        Delete conversation
+                    <button class="btn-custom btn-secondary" id="deleteChatBtn" style="color:var(--danger);">
+                        <i class="bi bi-trash me-2" style="color:var(--danger);"></i>Delete conversation
                     </button>
                 </div>
             </div>
@@ -1506,1523 +1629,1196 @@
 </div>
 
 <script>
-    // ===== GLOBAL VARIABLES =====
-    let currentConversationId = null;
-    let currentParticipantId = null;
-    let currentParticipantName = '';
-    let currentParticipantAvatar = '';
-    let currentParticipantIsOnline = false;
-    let currentParticipantLastSeen = null;
-    let conversations = [];
-    let onlineUsers = new Set();
-    let messages = [];
-    let renderedMessageIds = new Set(); // Track rendered message IDs to prevent duplicates
-    let attachments = [];
-    let lastMessageId = 0;
-    let isTyping = false;
-    let typingTimeout = null;
-    let emojiPickerVisible = false;
-    
-    // Polling intervals
-    let messagePollInterval = null;
-    let typingPollInterval = null;
-    let onlineStatusInterval = null;
-    let unreadCountInterval = null;
-    
-    // Common emojis categorized
-    const emojiCategories = {
-        'smileys': ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🥸', '🤩', '🥳'],
-        'people': ['👋', '🤚', '🖐', '✋', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏'],
-        'nature': ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🐤', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄'],
-        'food': ['🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🥑', '🍆', '🥔', '🥕', '🌽', '🌶', '🫑', '🥒', '🥬', '🥦'],
-        'activities': ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🪀', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '🪃', '🥅', '⛳', '🪁', '🏹', '🎣', '🤿', '🥊', '🥋'],
-        'objects': ['💎', '🔪', '🏺', '🗿', '🪔', '🧭', '🧱', '💡', '🔦', '🏮', '🪔', '🧱', '💎', '📱', '💻', '⌨️', '🖥', '🖨', '🖱', '🖲', '🧮', '📸', '📹', '🎥', '📽', '🎞'],
-        'symbols': ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❤️‍🔥', '❤️‍🩹', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉', '☸️']
+// ========== GLOBAL VARIABLES ==========
+let currentParticipantId = null;
+let currentParticipantName = '';
+let currentParticipantAvatar = '';
+let currentParticipantIsOnline = false;
+let currentParticipantLastSeen = null;
+let allMessages = [];               // all messages in unified view (permanent)
+let conversationIds = [];           // all conversation IDs with this participant
+let lastMessageId = 0;              // max id among allMessages
+let onlineUsers = new Set();
+let typingTimeout = null;
+let isTyping = false;
+let selectedMessages = new Set();    // for bulk delete (stores id as string, can be temp)
+let replyingTo = null;               // message id being replied to
+let attachments = [];                // pending attachments (File objects)
+let temporaryMessages = new Map();   // tempId -> message object (with status, files)
+let otherIsTyping = false;          // whether the other participant is typing
+let otherTypingName = '';     
+let tempIdCounter = 0;
+
+// Polling handles
+let messagePollInterval = null;
+let typingPollInterval = null;
+let statusPollInterval = null;
+let conversationListPollInterval = null;
+
+// Loading flag
+let isLoadingMessages = false;
+
+// Common emoji categories
+const emojiCategories = {
+    'smileys': ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🥸','🤩','🥳'],
+    'people': ['👋','🤚','🖐','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏'],
+    'nature': ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄'],
+    'food': ['🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🥑','🍆','🥔','🥕','🌽','🌶','🫑','🥒','🥬','🥦'],
+    'activities': ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸','🏒','🏑','🥍','🏏','🪃','🥅','⛳','🪁','🏹','🎣','🤿','🥊','🥋'],
+    'objects': ['💎','🔪','🏺','🗿','🪔','🧭','🧱','💡','🔦','🏮','🪔','🧱','💎','📱','💻','⌨️','🖥','🖨','🖱','🖲','🧮','📸','📹','🎥','📽','🎞'],
+    'symbols': ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❤️‍🔥','❤️‍🩹','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☪️','🕉','☸️']
+};
+
+// ========== UTILITY FUNCTIONS ==========
+function getCSRFToken() {
+    const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+    return csrfInput ? csrfInput.value : '';
+}
+
+async function fetchJSON(url, options = {}) {
+    try {
+        const response = await fetch(url, {
+            ...options,
+            headers: {
+                'X-CSRFToken': getCSRFToken(),
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                ...options.headers
+            }
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await response.json();
+    } catch (error) {
+        console.error('Fetch error:', error);
+        showToast('Network error. Please try again.', 'error');
+        throw error;
+    }
+}
+
+function showToast(message, type = 'info', duration = 3000) {
+    if (window.showToast) {
+        window.showToast(message, type, duration);
+    } else {
+        const toast = document.createElement('div');
+        toast.className = 'custom-toast toast-' + type;
+        toast.style.cssText = `
+            position: fixed; top: 80px; right: 20px; z-index: 9999;
+            max-width: 300px; padding: 12px 16px; border-radius: var(--radius-md);
+            color: white; background: ${type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : 'var(--info)'};
+            animation: slideInRight 0.3s ease;
+        `;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, duration);
+    }
+}
+
+function formatLastSeen(dateString) {
+    if (!dateString) return 'Recently';
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now - date) / 1000);
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return minutes === 1 ? '1 minute ago' : `${minutes} minutes ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return days === 1 ? '1 day ago' : `${days} days ago`;
+    return date.toLocaleDateString();
+}
+
+function formatTime(dateString) {
+    return new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === today.toDateString()) return 'Today';
+    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function getFileIcon(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const icons = {
+        'pdf': 'bi-file-pdf pdf-icon', 'doc': 'bi-file-word doc-icon', 'docx': 'bi-file-word doc-icon',
+        'xls': 'bi-file-excel xls-icon', 'xlsx': 'bi-file-excel xls-icon',
+        'zip': 'bi-file-zip zip-icon', 'rar': 'bi-file-zip zip-icon',
+        'mp3': 'bi-file-music audio-icon', 'wav': 'bi-file-music audio-icon',
+        'mp4': 'bi-file-play video-icon', 'avi': 'bi-file-play video-icon',
+        'jpg': 'bi-file-image image-icon', 'jpeg': 'bi-file-image image-icon',
+        'png': 'bi-file-image image-icon', 'gif': 'bi-file-image image-icon',
+        'txt': 'bi-file-text txt-icon'
     };
-    
-    // ===== UTILITY FUNCTIONS =====
-    
-    // Format file size
-    function formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-    }
-    
-    // Get file icon class
-    function getFileIcon(filename) {
-        const ext = filename.split('.').pop().toLowerCase();
-        const iconMap = {
-            'pdf': 'bi-file-pdf pdf-icon',
-            'doc': 'bi-file-word doc-icon',
-            'docx': 'bi-file-word doc-icon',
-            'xls': 'bi-file-excel xls-icon',
-            'xlsx': 'bi-file-excel xls-icon',
-            'zip': 'bi-file-zip zip-icon',
-            'rar': 'bi-file-zip zip-icon',
-            '7z': 'bi-file-zip zip-icon',
-            'mp3': 'bi-file-music audio-icon',
-            'wav': 'bi-file-music audio-icon',
-            'ogg': 'bi-file-music audio-icon',
-            'mp4': 'bi-file-play video-icon',
-            'avi': 'bi-file-play video-icon',
-            'mov': 'bi-file-play video-icon',
-            'mkv': 'bi-file-play video-icon',
-            'jpg': 'bi-file-image image-icon',
-            'jpeg': 'bi-file-image image-icon',
-            'png': 'bi-file-image image-icon',
-            'gif': 'bi-file-image image-icon',
-            'webp': 'bi-file-image image-icon',
-            'txt': 'bi-file-text txt-icon'
-        };
-        return iconMap[ext] || 'bi-file-earmark';
-    }
-    
-    // Get file type label
-    function getFileTypeLabel(filename) {
-        const ext = filename.split('.').pop().toLowerCase();
-        const typeMap = {
-            'pdf': 'PDF Document',
-            'doc': 'Word Document',
-            'docx': 'Word Document',
-            'xls': 'Excel Spreadsheet',
-            'xlsx': 'Excel Spreadsheet',
-            'zip': 'ZIP Archive',
-            'rar': 'RAR Archive',
-            'mp3': 'Audio File',
-            'wav': 'Audio File',
-            'mp4': 'Video File',
-            'avi': 'Video File',
-            'jpg': 'Image',
-            'jpeg': 'Image',
-            'png': 'Image',
-            'gif': 'Image',
-            'txt': 'Text File'
-        };
-        return typeMap[ext] || 'File';
-    }
-    
-    // Format time for last seen
-    function formatLastSeen(dateString) {
-        if (!dateString) return 'Recently';
-        
-        const date = new Date(dateString);
-        const now = new Date();
-        const secondsAgo = Math.floor((now - date) / 1000);
-        
-        if (secondsAgo < 60) return 'Just now';
-        
-        const minutesAgo = Math.floor(secondsAgo / 60);
-        if (minutesAgo < 60) return minutesAgo === 1 ? '1 minute ago' : `${minutesAgo} minutes ago`;
-        
-        const hoursAgo = Math.floor(minutesAgo / 60);
-        if (hoursAgo < 24) return hoursAgo === 1 ? '1 hour ago' : `${hoursAgo} hours ago`;
-        
-        const daysAgo = Math.floor(hoursAgo / 24);
-        if (daysAgo < 7) return daysAgo === 1 ? '1 day ago' : `${daysAgo} days ago`;
-        
-        return date.toLocaleDateString();
-    }
-    
-    // Format time
-    function formatTime(dateString) {
-        const date = new Date(dateString);
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-    
-    // Format date for grouping
-    function formatDate(dateString) {
-        const date = new Date(dateString);
-        const today = new Date();
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        
-        if (date.toDateString() === today.toDateString()) {
-            return 'Today';
-        } else if (date.toDateString() === yesterday.toDateString()) {
-            return 'Yesterday';
-        } else if (today.getFullYear() === date.getFullYear()) {
-            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-        } else {
-            return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    return icons[ext] || 'bi-file-earmark';
+}
+
+function escapeHtml(unsafe) {
+    return unsafe.replace(/[&<>"']/g, function(m) {
+        if(m === '&') return '&amp;'; if(m === '<') return '&lt;'; if(m === '>') return '&gt;';
+        if(m === '"') return '&quot;'; if(m === "'") return '&#039;';
+        return m;
+    });
+}
+
+// ========== API CALLS ==========
+async function loadGroupedConversations() {
+    try {
+        const data = await fetchJSON('/chats/api/grouped-conversations/');
+        if (data.success) {
+            renderGroupedConversations(data.groups);
+            updateTotalUnreadCount();
         }
-    }
-    
-    // Show toast notification
-    function showToast(message, type = 'info', duration = 3000) {
-        if (window.showToast) {
-            window.showToast(message, type, duration);
-        } else {
-            const toast = document.createElement('div');
-            toast.className = 'custom-toast toast-' + type;
-            toast.style.cssText = `
-                position: fixed;
-                top: 80px;
-                right: 20px;
-                z-index: 9999;
-                max-width: 300px;
-                padding: 12px 16px;
-                border-radius: var(--radius-md);
-                color: white;
-                background: ${type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : 'var(--info)'};
-                animation: slideInRight 0.3s ease;
-            `;
-            toast.textContent = message;
-            document.body.appendChild(toast);
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transition = 'opacity 0.3s';
-                setTimeout(() => toast.remove(), 300);
-            }, duration);
-        }
-    }
-    
-    // ===== ATTACHMENT FUNCTIONS =====
-    
-    // Handle file selection
-    function handleFileSelect(event) {
-        const files = Array.from(event.target.files);
-        
-        // Check total size (max 25MB)
-        const totalSize = files.reduce((sum, file) => sum + file.size, 0);
-        const existingSize = attachments.reduce((sum, att) => sum + att.size, 0);
-        
-        if (totalSize + existingSize > 25 * 1024 * 1024) {
-            showToast('Total file size exceeds 25MB limit', 'error');
-            return;
-        }
-        
-        files.forEach(file => {
-            // Check individual file size (max 10MB)
-            if (file.size > 10 * 1024 * 1024) {
-                showToast(`File ${file.name} exceeds 10MB limit`, 'error');
-                return;
-            }
-            
-            attachments.push(file);
-            createAttachmentPreview(file);
-        });
-        
-        // Show attachments preview container
-        const previewContainer = document.getElementById('attachmentsPreview');
-        previewContainer.classList.add('has-attachments');
-        
-        // Enable send button if there's content
-        updateSendButtonState();
-        
-        // Clear file input
-        event.target.value = '';
-    }
-    
-    // Create attachment preview
-    function createAttachmentPreview(file) {
-        const previewContainer = document.getElementById('attachmentsPreview');
-        const previewItem = document.createElement('div');
-        previewItem.className = 'preview-item';
-        
-        if (file.type.startsWith('image/')) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                previewItem.innerHTML = `
-                    <img src="${e.target.result}" alt="${file.name}" loading="lazy">
-                    <button class="remove-attachment" data-filename="${file.name}" title="Remove">
-                        <i class="bi bi-x"></i>
-                    </button>
-                `;
-            };
-            reader.readAsDataURL(file);
-        } else {
-            const iconClass = getFileIcon(file.name);
-            previewItem.innerHTML = `
-                <div class="file-icon">
-                    <i class="bi ${iconClass}"></i>
-                </div>
-                <button class="remove-attachment" data-filename="${file.name}" title="Remove">
-                    <i class="bi bi-x"></i>
-                </button>
-            `;
-        }
-        
-        previewContainer.appendChild(previewItem);
-    }
-    
-    // Remove attachment
-    function removeAttachment(filename) {
-        attachments = attachments.filter(file => file.name !== filename);
-        
-        // Recreate previews
-        const previewContainer = document.getElementById('attachmentsPreview');
-        previewContainer.innerHTML = '';
-        
-        attachments.forEach(file => {
-            createAttachmentPreview(file);
-        });
-        
-        // Hide preview container if no attachments
-        if (attachments.length === 0) {
-            previewContainer.classList.remove('has-attachments');
-        }
-        
-        updateSendButtonState();
-    }
-    
-    // Update send button state
-    function updateSendButtonState() {
-        const messageInput = document.getElementById('messageInput');
-        const sendButton = document.getElementById('sendButton');
-        const hasContent = messageInput.value.trim().length > 0;
-        const hasAttachments = attachments.length > 0;
-        
-        sendButton.disabled = !(hasContent || hasAttachments);
-    }
-    
-    // Show attachment in viewer modal
-    function showAttachmentViewer(attachment) {
-        const modal = document.getElementById('attachmentViewerModal');
-        const content = document.getElementById('attachmentViewerContent');
-        const title = document.getElementById('attachmentViewerTitle');
-        const downloadLink = document.getElementById('downloadAttachment');
-        
-        title.textContent = attachment.name || 'Attachment';
-        downloadLink.href = attachment.url || attachment.file_url;
-        downloadLink.download = attachment.name || 'attachment';
-        
-        if (attachment.file_type && attachment.file_type.startsWith('image/')) {
-            content.innerHTML = `
-                <img src="${attachment.url || attachment.file_url}" alt="${attachment.name || 'Image'}" 
-                     style="max-width: 100%; max-height: 70vh; object-fit: contain;">
-                <div class="attachment-viewer-info">
-                    <p><strong>Name:</strong> ${attachment.name || 'Image'}</p>
-                    <p><strong>Type:</strong> ${getFileTypeLabel(attachment.name)}</p>
-                    ${attachment.size ? `<p><strong>Size:</strong> ${formatFileSize(attachment.size)}</p>` : ''}
-                </div>
-            `;
-        } else {
-            const iconClass = getFileIcon(attachment.name);
-            content.innerHTML = `
-                <div style="font-size: 4rem; color: var(--text-tertiary); margin: 20px 0;">
-                    <i class="bi ${iconClass}"></i>
-                </div>
-                <div class="attachment-viewer-info">
-                    <p><strong>Name:</strong> ${attachment.name || 'File'}</p>
-                    <p><strong>Type:</strong> ${getFileTypeLabel(attachment.name)}</p>
-                    ${attachment.size ? `<p><strong>Size:</strong> ${formatFileSize(attachment.size)}</p>` : ''}
-                    <p><strong>Download:</strong> <a href="${attachment.url || attachment.file_url}" target="_blank">Click here</a></p>
-                </div>
-            `;
-        }
-        
-        modal.classList.add('active');
-    }
-    
-    // ===== EMOJI FUNCTIONS =====
-    
-    // Initialize emoji picker
-    function initEmojiPicker() {
-        const emojiPickerBody = document.getElementById('emojiPickerBody');
-        let html = '';
-        
-        for (const [category, emojis] of Object.entries(emojiCategories)) {
-            html += `
-                <div class="emoji-category">
-                    <div class="emoji-category-title">${category}</div>
-                    <div class="emoji-grid">
-                        ${emojis.map(emoji => `
-                            <button class="emoji-btn" data-emoji="${emoji}">${emoji}</button>
-                        `).join('')}
-                    </div>
-                </div>
-            `;
-        }
-        
-        emojiPickerBody.innerHTML = html;
-        
-        // Add event listeners to emoji buttons
-        emojiPickerBody.querySelectorAll('.emoji-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                insertEmoji(btn.dataset.emoji);
-                hideEmojiPicker();
+    } catch (e) { console.error(e); }
+}
+
+async function updateTotalUnreadCount() {
+    try {
+        const data = await fetchJSON('/chats/api/unread-messages-count/');
+        document.getElementById('totalUnreadCount').textContent = data.count || 0;
+    } catch (e) {}
+}
+
+async function updateOnlineUsers() {
+    try {
+        const data = await fetchJSON('/chats/api/get-online-users/');
+        if (data.success) {
+            onlineUsers = new Set(data.online_users);
+            // update sidebar status dots
+            document.querySelectorAll('.conversation-item').forEach(el => {
+                const pid = parseInt(el.dataset.participantId);
+                const dot = el.querySelector('.online-status');
+                if (dot) dot.classList.toggle('online', onlineUsers.has(pid));
             });
-        });
+            // update current header
+            if (currentParticipantId) {
+                currentParticipantIsOnline = onlineUsers.has(currentParticipantId);
+                updateParticipantStatus();
+            }
+        }
+    } catch (e) {}
+}
+
+// ========== RENDER GROUPED CONVERSATIONS ==========
+function renderGroupedConversations(groups) {
+    const container = document.getElementById('conversationsList');
+    container.innerHTML = ''; // remove skeleton
+
+    if (!groups || groups.length === 0) {
+        container.innerHTML = `<div class="empty-state" style="padding:40px 20px;">
+            <i class="bi bi-chat-dots empty-state-icon"></i>
+            <h3>No conversations yet</h3>
+            <p>Start a new chat by clicking the button above.</p>
+        </div>`;
+        return;
     }
+
+    let html = '';
+    groups.forEach(g => {
+        const isOnline = onlineUsers.has(g.participant_id);
+        const lastTime = g.last_message_time ? formatTime(g.last_message_time) : '';
+        const isOwn = g.last_message_sender_id === window.currentUserId;
+        const preview = g.last_message_content || 'Start conversation';
+        // Avatar: use participant_avatar from backend, fallback to placeholder
+        const avatar = g.participant_avatar || 'https://placehold.co/200x200/c2c2c2/1f1f1f?text=User';
+        html += `
+        <div class="conversation-item" data-participant-id="${g.participant_id}"
+             data-participant-name="${escapeHtml(g.participant_name)}"
+             data-participant-avatar="${avatar}"
+             data-is-online="${isOnline}"
+             data-last-seen="${g.last_seen || ''}">
+            <div class="conversation-avatar">
+                <img src="${avatar}" class="avatar-img">
+                <div class="online-status ${isOnline ? 'online' : ''}"></div>
+            </div>
+            <div class="conversation-info">
+                <div class="conversation-header">
+                    <span class="conversation-name">${escapeHtml(g.participant_name)}</span>
+                    <span class="conversation-time">${lastTime}</span>
+                </div>
+                <div class="conversation-preview">
+                    <span class="conversation-message ${isOwn ? 'own' : ''}">${escapeHtml(preview)}</span>
+                    ${g.total_unread ? `<span class="conversation-unread">${g.total_unread}</span>` : ''}
+                </div>
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+    container.querySelectorAll('.conversation-item').forEach(el => {
+        el.addEventListener('click', () => openUnifiedConversation(el.dataset));
+    });
+}
+
+// ========== OPEN UNIFIED CONVERSATION ==========
+async function openUnifiedConversation(dataset) {
+    const pid = parseInt(dataset.participantId);
+    currentParticipantId = pid;
+    currentParticipantName = dataset.participantName;
+    currentParticipantAvatar = dataset.participantAvatar;
+    currentParticipantIsOnline = dataset.isOnline === 'true';
+    currentParticipantLastSeen = dataset.lastSeen || null;
+
+    // Update header
+    const participantNameEl = document.getElementById('participantName');
+    const participantAvatarEl = document.getElementById('participantAvatar');
+    const infoParticipantNameEl = document.getElementById('infoParticipantName');
+    const infoParticipantAvatarEl = document.getElementById('infoParticipantAvatar');
+    if (participantNameEl) participantNameEl.innerText = currentParticipantName;
+    if (participantAvatarEl) participantAvatarEl.src = currentParticipantAvatar;
+    if (infoParticipantNameEl) infoParticipantNameEl.innerText = currentParticipantName;
+    if (infoParticipantAvatarEl) infoParticipantAvatarEl.src = currentParticipantAvatar;
+    updateParticipantStatus();
+
+    // Show input area and hide empty state
+    const inputArea = document.getElementById('messageInputArea');
+    const emptyState = document.getElementById('emptyChatState');
+    if (inputArea) inputArea.style.display = 'block';
+    if (emptyState) emptyState.style.display = 'none';
+
+    // Show loading spinner
+    const spinner = document.getElementById('chatLoadingSpinner');
+    const loadingMsg = document.getElementById('loadingMessage');
+    if (spinner && loadingMsg) {
+        loadingMsg.innerText = `Loading conversation with ${currentParticipantName}...`;
+        spinner.style.display = 'block';
+    }
+
+    // Clear messages container
+    const messagesContainer = document.getElementById('messagesContainer');
+    if (messagesContainer) messagesContainer.innerHTML = '';
+
+    // Mobile view
+    if (window.innerWidth <= 992) {
+        document.body.classList.add('chat-active');
+        const sidebar = document.getElementById('conversationsSidebar');
+        const chatArea = document.getElementById('chatArea');
+        if (sidebar) sidebar.classList.add('hidden');
+        if (chatArea) chatArea.classList.add('active');
+    }
+
+    // Clear selection and reply
+    selectedMessages.clear();
+    replyingTo = null;
+    hideReplyPreview();
+    otherIsTyping = false;
+    otherTypingName = '';
+    const batchBar = document.getElementById('batchActionsBar');
+    if (batchBar) batchBar.classList.remove('active');
+
+    // Fetch messages
+    await fetchUnifiedMessages(pid);
     
-    // Toggle emoji picker
-    function toggleEmojiPicker() {
-        const emojiPicker = document.getElementById('emojiPicker');
-        emojiPickerVisible = !emojiPickerVisible;
-        
-        if (emojiPickerVisible) {
-            emojiPicker.classList.add('active');
-            
-            // Position the picker
-            positionEmojiPicker();
-            
-            // Focus search
-            document.getElementById('emojiSearch').focus();
+    // Hide spinner
+    if (spinner) spinner.style.display = 'none';
+    startPolling();
+    
+    // Immediately update unread count for this participant in sidebar
+    updateParticipantUnreadInSidebar(pid, 0);
+    updateTotalUnreadCount();
+}
+
+function updateParticipantStatus() {
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('participantStatus');
+    const infoStatus = document.getElementById('infoParticipantStatus');
+    if (currentParticipantIsOnline) {
+        if (statusDot) statusDot.className = 'status-dot online';
+        if (statusText) statusText.innerText = 'Online';
+        if (infoStatus) infoStatus.innerText = 'Online';
+    } else {
+        if (statusDot) statusDot.className = 'status-dot';
+        const lastSeenText = currentParticipantLastSeen ? `Last seen ${formatLastSeen(currentParticipantLastSeen)}` : 'Offline';
+        if (statusText) statusText.innerText = lastSeenText;
+        if (infoStatus) infoStatus.innerText = lastSeenText;
+    }
+}
+
+function updateParticipantUnreadInSidebar(participantId, newUnreadCount) {
+    const sidebarItem = document.querySelector(`.conversation-item[data-participant-id="${participantId}"]`);
+    if (!sidebarItem) return;
+    const unreadSpan = sidebarItem.querySelector('.conversation-unread');
+    if (newUnreadCount === 0) {
+        if (unreadSpan) unreadSpan.remove();
+    } else {
+        if (unreadSpan) {
+            unreadSpan.innerText = newUnreadCount;
         } else {
-            emojiPicker.classList.remove('active');
+            const preview = sidebarItem.querySelector('.conversation-preview');
+            const newBadge = document.createElement('span');
+            newBadge.className = 'conversation-unread';
+            newBadge.innerText = newUnreadCount;
+            preview.appendChild(newBadge);
         }
     }
-    
-    // Hide emoji picker
-    function hideEmojiPicker() {
-        const emojiPicker = document.getElementById('emojiPicker');
-        emojiPickerVisible = false;
-        emojiPicker.classList.remove('active');
+}
+
+async function fetchUnifiedMessages(participantId) {
+    if (isLoadingMessages) return;
+    isLoadingMessages = true;
+    try {
+        // ** Recommended backend improvement: add ?last_id= param to return only newer messages. **
+        // For now, we fetch all and filter client-side (works but inefficient for large history).
+        const url = `/chats/api/unified-conversation/${participantId}/`;
+        const data = await fetchJSON(url);
+        if (data.success) {
+            allMessages = data.messages;
+            conversationIds = data.conversation_ids;
+            lastMessageId = allMessages.length ? Math.max(...allMessages.map(m => m.id)) : 0;
+            renderMessages();
+        }
+    } catch (e) { 
+        console.error(e);
+        showToast('Failed to load messages', 'error');
+    } finally {
+        isLoadingMessages = false;
     }
-    
-    // Position emoji picker
-    function positionEmojiPicker() {
-        const emojiPicker = document.getElementById('emojiPicker');
-        const emojiButton = document.getElementById('emojiButton');
-        const inputArea = document.getElementById('messageInputArea');
-        
-        if (emojiButton && inputArea) {
-            const buttonRect = emojiButton.getBoundingClientRect();
-            const inputRect = inputArea.getBoundingClientRect();
-            
-            if (window.innerWidth <= 768) {
-                // Mobile positioning
-                emojiPicker.style.left = '12px';
-                emojiPicker.style.right = '12px';
-                emojiPicker.style.bottom = `${inputRect.height + 60}px`;
+}
+
+// ========== RENDER MESSAGES ==========
+function renderMessages() {
+    const container = document.getElementById('messagesContainer');
+    if (!container) return;
+
+    // Combine allMessages with temporaryMessages
+    const allDisplayMessages = [...allMessages];
+    temporaryMessages.forEach(msg => {
+        // Insert in correct chronological order (by timestamp)
+        const index = allDisplayMessages.findIndex(m => new Date(m.timestamp) > new Date(msg.timestamp));
+        if (index === -1) allDisplayMessages.push(msg);
+        else allDisplayMessages.splice(index, 0, msg);
+    });
+
+    let html = '';
+    let currentDate = '';
+    allDisplayMessages.forEach(msg => {
+        const msgDate = formatDate(msg.timestamp);
+        if (msgDate !== currentDate) {
+            currentDate = msgDate;
+            html += `<div class="date-divider"><span>${msgDate}</span></div>`;
+        }
+        html += renderMessageBubble(msg);
+    });
+
+    // Append typing indicator if the other user is typing
+    if (otherIsTyping) {
+        html += `<div class="typing-indicator"><div class="typing-dots"><span></span><span></span><span></span></div><span class="typing-text">${escapeHtml(otherTypingName)} is typing...</span></div>`;
+    }
+
+    container.innerHTML = html;
+    container.scrollTop = container.scrollHeight;
+    attachMessageEventListeners();
+}
+
+function renderMessageBubble(msg) {
+    const isOwn = msg.sender_id === window.currentUserId || msg.is_own;
+    const time = formatTime(msg.timestamp);
+    let readIcon = '';
+    if (isOwn && !msg.tempId) { // permanent sent messages
+        if (msg.is_read) readIcon = 'bi-check2-all status-read';
+        else if (msg.delivered) readIcon = 'bi-check2 status-delivered';
+        else readIcon = 'bi-check2 status-sent';
+    }
+
+    let attachmentsHtml = '';
+    if (msg.attachments && msg.attachments.length) {
+        attachmentsHtml = '<div class="message-attachments">';
+        msg.attachments.forEach(att => {
+            const fileUrl = att.url || att.file_url;
+            const fileName = att.name || att.filename || 'Attachment';
+            if (att.type && att.type.startsWith('image/')) {
+                attachmentsHtml += `<div class="attachment-item" onclick='showAttachmentViewer(${JSON.stringify(att).replace(/'/g, "&#39;")})'>
+                    <div class="attachment-preview"><img src="${fileUrl}" alt="${escapeHtml(fileName)}"></div>
+                    <div class="attachment-info">${escapeHtml(fileName)}</div>
+                </div>`;
             } else {
-                // Desktop positioning
-                emojiPicker.style.left = `${buttonRect.left}px`;
-                emojiPicker.style.bottom = `${window.innerHeight - inputRect.top + 60}px`;
-            }
-        }
-    }
-    
-    // Insert emoji at cursor position
-    function insertEmoji(emoji) {
-        const messageInput = document.getElementById('messageInput');
-        const cursorPos = messageInput.selectionStart;
-        const textBefore = messageInput.value.substring(0, cursorPos);
-        const textAfter = messageInput.value.substring(cursorPos);
-        
-        messageInput.value = textBefore + emoji + textAfter;
-        messageInput.focus();
-        messageInput.selectionStart = cursorPos + emoji.length;
-        messageInput.selectionEnd = cursorPos + emoji.length;
-        
-        updateSendButtonState();
-        sendTypingIndicator();
-    }
-    
-    // ===== API FUNCTIONS =====
-    
-    // Get CSRF token
-    function getCSRFToken() {
-        const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
-        return csrfInput ? csrfInput.value : '';
-    }
-    
-    // Fetch with error handling
-    async function fetchJSON(url, options = {}) {
-        try {
-            const response = await fetch(url, {
-                ...options,
-                headers: {
-                    'X-CSRFToken': getCSRFToken(),
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    ...options.headers
-                }
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            return await response.json();
-        } catch (error) {
-            console.error('Fetch error:', error);
-            showToast('Network error. Please try again.', 'error');
-            throw error;
-        }
-    }
-    
-    // ===== CONVERSATION FUNCTIONS =====
-    
-    // Load conversations
-    async function loadConversations() {
-        try {
-            const data = await fetchJSON('/chats/api/conversations-list/');
-            
-            if (data.success) {
-                conversations = data.conversations || [];
-                renderConversationsList();
-                updateTotalUnreadCount();
-            }
-        } catch (error) {
-            console.error('Error loading conversations:', error);
-        }
-    }
-    
-    // Render conversations list
-    function renderConversationsList(filterText = '') {
-        const container = document.getElementById('conversationsList');
-        const loadingSkeleton = container.querySelector('.skeleton-loading');
-        
-        if (loadingSkeleton) {
-            loadingSkeleton.remove();
-        }
-        
-        if (!conversations || conversations.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state" style="padding: 40px 20px;">
-                    <div class="empty-state-icon">
-                        <i class="bi bi-chat-dots"></i>
+                attachmentsHtml += `<div class="attachment-item file-attachment">
+                    <div class="file-icon-wrapper"><i class="bi ${getFileIcon(fileName)}"></i></div>
+                    <div class="file-info">
+                        <div>${escapeHtml(fileName)}</div>
+                        <a href="${fileUrl}" download>Download</a>
                     </div>
-                    <h3>No conversations yet</h3>
-                    <p>Start a conversation to begin messaging</p>
-                    <button class="btn-custom btn-primary" onclick="openNewConversationModal()" style="margin-top: 16px;">
-                        <i class="bi bi-plus-lg me-2"></i>
-                        Start New Chat
-                    </button>
-                </div>
-            `;
-            return;
-        }
-        
-        // Filter conversations if search text provided
-        let filteredConversations = conversations;
-        if (filterText) {
-            const searchLower = filterText.toLowerCase();
-            filteredConversations = conversations.filter(conv =>
-                conv.participant_name.toLowerCase().includes(searchLower) ||
-                (conv.last_message_content && conv.last_message_content.toLowerCase().includes(searchLower)) ||
-                conv.participant_username.toLowerCase().includes(searchLower)
-            );
-        }
-        
-        if (filteredConversations.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state" style="padding: 40px 20px;">
-                    <i class="bi bi-search" style="font-size: 2rem; color: var(--text-tertiary); margin-bottom: 16px;"></i>
-                    <h3>No matches found</h3>
-                    <p>Try searching with different keywords</p>
-                </div>
-            `;
-            return;
-        }
-        
-        let html = '';
-        
-        filteredConversations.forEach(conv => {
-            const isOnline = onlineUsers.has(conv.participant_id);
-            const lastMessageTime = conv.last_message_time ? formatTime(conv.last_message_time) : '';
-            const isOwnMessage = conv.last_message_sender_id === {{ user.id }};
-            const isActive = currentConversationId === conv.id;
-            const lastSeenAt = conv.participant_last_seen_at || null;
-            
-            // Check if last message has attachments
-            let previewText = conv.last_message_content || 'Start conversation';
-            if (conv.has_attachments && (!conv.last_message_content || conv.last_message_content === '[Attachment]')) {
-                previewText = '📎 Attachment';
+                </div>`;
             }
-            
-            html += `
-                <div class="conversation-item ${isActive ? 'active' : ''}" 
-                     data-conversation-id="${conv.id}"
-                     data-participant-id="${conv.participant_id}"
-                     data-participant-name="${conv.participant_name}"
-                     data-participant-avatar="${conv.participant_avatar || 'https://placehold.co/200x200/c2c2c2/1f1f1f?text=User'}"
-                     data-is-online="${isOnline}"
-                     data-last-seen="${lastSeenAt || ''}">
-                    
-                    <div class="conversation-avatar">
-                        <img src="${conv.participant_avatar || 'https://placehold.co/200x200/c2c2c2/1f1f1f?text=User'}" 
-                             alt="${conv.participant_name}" class="avatar-img">
-                        <div class="online-status ${isOnline ? 'online' : ''}"></div>
-                    </div>
-                    
-                    <div class="conversation-info">
-                        <div class="conversation-header">
-                            <div style="display:flex;flex-direction:column;gap:4px;">
-                                <div class="conversation-name text-truncate">${conv.participant_name}</div>
-                                <div class="conversation-substatus" style="font-size:0.8rem;color:var(--text-tertiary);">
-                                    ${isOnline ? 'Online' : (lastSeenAt ? `Last seen ${formatLastSeen(lastSeenAt)}` : 'Offline')}
-                                </div>
-                            </div>
-                            <div class="conversation-time">${lastMessageTime}</div>
-                        </div>
-                        
-                        <div class="conversation-preview">
-                            <div class="conversation-message ${isOwnMessage ? 'own' : ''} text-truncate">
-                                ${previewText}
-                            </div>
-                            ${conv.unread_count > 0 ? `
-                                <div class="conversation-unread">${conv.unread_count}</div>
-                            ` : ''}
-                        </div>
-                    </div>
-                </div>
-            `;
         });
-        
-        container.innerHTML = html;
-        
-        // Add event listeners
-        container.querySelectorAll('.conversation-item').forEach(item => {
-            item.addEventListener('click', () => {
-                const conversationId = parseInt(item.dataset.conversationId);
-                const participantId = parseInt(item.dataset.participantId);
-                const participantName = item.dataset.participantName;
-                const participantAvatar = item.dataset.participantAvatar;
-                const isOnline = item.dataset.isOnline === 'true';
-                const lastSeen = item.dataset.lastSeen || null;
-                
-                openConversation(conversationId, participantId, participantName, participantAvatar, isOnline, lastSeen);
-            });
+        attachmentsHtml += '</div>';
+    }
+
+    // Reply preview (simplified – you would need reply_to data from backend)
+    let replyHtml = '';
+    if (msg.reply_to_id) {
+        replyHtml = `<div class="message-reply">Replying to a message</div>`;
+    }
+
+    // Pin star
+    const pinStar = msg.is_pinned ? '<i class="bi bi-star-fill message-pin"></i>' : '';
+
+    // Selection class
+    const selectedClass = selectedMessages.has(msg.id || msg.tempId) ? 'message-selected' : '';
+
+    // Temporary message handling
+    let statusClass = '';
+    let extraContent = '';
+    if (msg.tempId) {
+        if (msg.status === 'sending') {
+            statusClass = 'sending';
+            extraContent = '<span class="spinner-border spinner-border-sm ms-2" role="status" aria-hidden="true"></span>';
+        } else if (msg.status === 'failed') {
+            statusClass = 'failed';
+            extraContent = `<button class="retry-button" onclick="retryMessage('${msg.tempId}')">Retry</button>`;
+        }
+    }
+
+    return `
+    <div class="message-group ${isOwn ? 'sent' : 'received'}" data-message-id="${msg.id || msg.tempId}">
+        <div class="message-bubble ${isOwn ? 'sent' : 'received'} ${selectedClass} ${statusClass}">
+            ${replyHtml}
+            <div class="message-content">${escapeHtml(msg.content || '')} ${extraContent}</div>
+            ${attachmentsHtml}
+            <div class="message-time">
+                ${time} ${pinStar}
+                ${isOwn && readIcon ? `<span class="message-status"><i class="bi ${readIcon} status-icon"></i></span>` : ''}
+            </div>
+            ${!msg.tempId ? `
+            <div class="message-actions">
+                <button class="btn-icon" onclick="replyToMessage(${msg.id})" title="Reply"><i class="bi bi-reply"></i></button>
+                <button class="btn-icon" onclick="editMessage(${msg.id})" title="Edit"><i class="bi bi-pencil"></i></button>
+                <button class="btn-icon" onclick="pinMessage(${msg.id})" title="Pin"><i class="bi bi-star"></i></button>
+                <button class="btn-icon" onclick="deleteSingleMessage(${msg.id})" title="Delete"><i class="bi bi-trash"></i></button>
+            </div>` : ''}
+        </div>
+    </div>`;
+}
+
+function attachMessageEventListeners() {
+    document.querySelectorAll('.message-group').forEach(el => {
+        el.addEventListener('dblclick', (e) => {
+            const msgId = el.dataset.messageId;
+            if (msgId && !isNaN(parseInt(msgId))) {
+                toggleMessageSelection(parseInt(msgId));
+            }
         });
-    }
-    
-    // Open conversation
-    async function openConversation(conversationId, participantId, participantName, participantAvatar, isOnline, lastSeenAt = null) {
-        // Update current conversation info
-        currentConversationId = conversationId;
-        currentParticipantId = participantId;
-        currentParticipantName = participantName;
-        currentParticipantAvatar = participantAvatar;
-        currentParticipantIsOnline = isOnline;
-        currentParticipantLastSeen = lastSeenAt;
-        
-        // Clear any existing attachments
-        attachments = [];
-        const previewContainer = document.getElementById('attachmentsPreview');
-        previewContainer.innerHTML = '';
-        previewContainer.classList.remove('has-attachments');
-        
-        // Clear message tracking for new conversation
-        messages = [];
-        renderedMessageIds = new Set();
-        lastMessageId = 0;
-        
-        // Clear typing indicator
-        const typingIndicator = document.getElementById('typingIndicatorContainer');
-        if (typingIndicator) {
-            typingIndicator.remove();
-        }
-        clearTimeout(typingTimeout);
-        
-        // Update UI
-        updateConversationHeader();
-        showChatView();
-        await loadMessages();
-        await markMessagesAsRead();
-        
-        // Start polling for this conversation
-        startConversationPolling();
-        
-        // Update active state in conversations list
-        document.querySelectorAll('.conversation-item').forEach(item => {
-            item.classList.toggle('active', parseInt(item.dataset.conversationId) === conversationId);
+    });
+}
+
+// ========== SEND MESSAGE (OPTIMISTIC) ==========
+async function sendMessage() {
+    const input = document.getElementById('messageInput');
+    if (!input) return;
+    const content = input.value.trim();
+    if (!content && attachments.length === 0) return;
+
+    // Disable send button to prevent double-send
+    const sendBtn = document.getElementById('sendButton');
+    if (sendBtn) sendBtn.disabled = true;
+
+    // Create temporary message
+    const tempId = 'temp_' + Date.now() + '_' + (tempIdCounter++);
+    const tempMessage = {
+        tempId: tempId,
+        content: content,
+        timestamp: new Date().toISOString(),
+        sender_id: window.currentUserId,
+        is_own: true,
+        attachments: attachments.map(f => ({ name: f.name, type: f.type, size: f.size })), // metadata only
+        status: 'sending',
+        delivered: false,
+        is_read: false,
+        files: attachments.slice() // keep actual File objects for retry
+    };
+    temporaryMessages.set(tempId, tempMessage);
+    renderMessages();
+
+    // Prepare FormData
+    const formData = new FormData();
+    formData.append('participant_id', currentParticipantId);
+    formData.append('content', content);
+    attachments.forEach(file => formData.append('attachment', file));
+    if (replyingTo) formData.append('reply_to_id', replyingTo);
+
+    try {
+        const response = await fetch('/chats/api/send-unified-message/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCSRFToken() },
+            body: formData
         });
-        
-        // Create typing indicator area
-        const messagesContainer = document.getElementById('messagesContainer');
-        if (!document.getElementById('typingIndicatorContainer')) {
-            const newTypingIndicator = document.createElement('div');
-            newTypingIndicator.id = 'typingIndicatorContainer';
-            newTypingIndicator.style.display = 'none';
-            newTypingIndicator.innerHTML = `
-                <div class="typing-indicator">
-                    <div class="typing-dots">
-                        <span></span>
-                        <span></span>
-                        <span></span>
-                    </div>
-                    <div class="typing-text">${participantName} is typing...</div>
-                </div>
-            `;
-            messagesContainer.appendChild(newTypingIndicator);
-        }
-    }
-    
-    // Show chat view (mobile/desktop handling)
-    function showChatView() {
-        const conversationsSidebar = document.getElementById('conversationsSidebar');
-        const chatArea = document.getElementById('chatArea');
-        const messageInputArea = document.getElementById('messageInputArea');
-        const emptyChatState = document.getElementById('emptyChatState');
-        
-        // Hide empty state
-        if (emptyChatState) {
-            emptyChatState.style.display = 'none';
-        }
-        
-        // Show message input
-        messageInputArea.style.display = 'block';
-        
-        // Mobile handling
-        if (window.innerWidth <= 992) {
-            document.body.classList.add('chat-active');
-            conversationsSidebar.classList.add('hidden');
-            chatArea.classList.add('active');
-        }
-    }
-    
-    // Hide chat view (mobile)
-    function hideChatView() {
-        const conversationsSidebar = document.getElementById('conversationsSidebar');
-        const chatArea = document.getElementById('chatArea');
-        const messageInputArea = document.getElementById('messageInputArea');
-        
-        document.body.classList.remove('chat-active');
-        conversationsSidebar.classList.remove('hidden');
-        chatArea.classList.remove('active');
-        messageInputArea.style.display = 'none';
-        
-        // Stop polling
-        stopConversationPolling();
-        
-        // Reset current conversation
-        currentConversationId = null;
-        currentParticipantId = null;
-        
-        // Show empty state
-        document.getElementById('emptyChatState').style.display = 'flex';
-    }
-    
-    // Update conversation header
-    function updateConversationHeader() {
-        document.getElementById('participantName').textContent = currentParticipantName;
-        document.getElementById('participantAvatar').src = currentParticipantAvatar;
-        document.getElementById('infoParticipantName').textContent = currentParticipantName;
-        document.getElementById('infoParticipantAvatar').src = currentParticipantAvatar;
-        
-        const statusDot = document.getElementById('statusDot');
-        const participantStatus = document.getElementById('participantStatus');
-        const infoParticipantStatus = document.getElementById('infoParticipantStatus');
-        
-        if (currentParticipantIsOnline) {
-            statusDot.className = 'status-dot online';
-            participantStatus.textContent = 'Online';
-            infoParticipantStatus.textContent = 'Online';
+        const data = await response.json();
+        if (data.success) {
+            // Replace temporary with real message
+            temporaryMessages.delete(tempId);
+            const newMsg = data.message;
+            if (!allMessages.some(m => m.id === newMsg.id)) {
+                allMessages.push(newMsg);
+                lastMessageId = Math.max(lastMessageId, newMsg.id);
+            }
+            renderMessages();
+            // Update sidebar preview
+            loadGroupedConversations(); // refresh list
         } else {
-            statusDot.className = 'status-dot';
-            const lastSeenText = currentParticipantLastSeen ? `Last seen ${formatLastSeen(currentParticipantLastSeen)}` : 'Offline';
-            participantStatus.textContent = lastSeenText;
-            infoParticipantStatus.textContent = lastSeenText;
-        }
-    }
-    
-    // ===== MESSAGE FUNCTIONS =====
-    
-    // Load messages
-    async function loadMessages() {
-        if (!currentConversationId) return;
-        
-        try {
-            const data = await fetchJSON(`/chats/api/get-new-messages/${currentConversationId}/?last_id=0`);
-            
-            if (data.success) {
-                messages = data.new_messages || [];
-                renderedMessageIds = new Set(); // Reset rendered IDs for new conversation
+            // Mark as failed
+            const failedMsg = temporaryMessages.get(tempId);
+            if (failedMsg) {
+                failedMsg.status = 'failed';
                 renderMessages();
-                
-                // Update last message ID
-                if (messages.length > 0) {
-                    lastMessageId = Math.max(...messages.map(m => m.id));
-                    // Mark all rendered message IDs
-                    messages.forEach(m => renderedMessageIds.add(m.id));
-                }
-                
-                // Update participant info if available
-                if (data.participant_info) {
-                    currentParticipantIsOnline = data.participant_info.is_online;
-                    currentParticipantLastSeen = data.participant_info.last_seen_at || null;
-                    updateConversationHeader();
-                }
-                
-                // Scroll to bottom
-                setTimeout(() => {
-                    const messagesContainer = document.getElementById('messagesContainer');
-                    if (messagesContainer) {
-                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                    }
-                }, 100);
             }
-        } catch (error) {
-            console.error('Error loading messages:', error);
+            showToast('Failed to send message', 'error');
         }
+    } catch (e) {
+        console.error(e);
+        const failedMsg = temporaryMessages.get(tempId);
+        if (failedMsg) {
+            failedMsg.status = 'failed';
+            renderMessages();
+        }
+        showToast('Error sending message', 'error');
+    } finally {
+        // Re-enable send button if content/attachments remain (they were cleared)
+        updateSendButtonState();
     }
-    
-    // Render messages with proper attachment display
-    function renderMessages() {
-        const container = document.getElementById('messagesContainer');
-        
-        if (messages.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state" style="padding: 40px 20px;">
-                    <div class="empty-state-icon">
-                        <i class="bi bi-chat-left"></i>
-                    </div>
-                    <h3>No messages yet</h3>
-                    <p>Start the conversation by sending a message</p>
-                </div>
-            `;
+
+    // Clear input and attachments
+    input.value = '';
+    input.style.height = 'auto';
+    attachments = [];
+    const preview = document.getElementById('attachmentsPreview');
+    if (preview) {
+        preview.innerHTML = '';
+        preview.classList.remove('has-attachments');
+    }
+    replyingTo = null;
+    hideReplyPreview();
+}
+
+function retryMessage(tempId) {
+    const failedMsg = temporaryMessages.get(tempId);
+    if (!failedMsg) return;
+
+    // Restore content and attachments
+    const input = document.getElementById('messageInput');
+    if (input) input.value = failedMsg.content;
+    attachments = failedMsg.files || [];  // retrieve stored File objects
+    // Re-create previews
+    const preview = document.getElementById('attachmentsPreview');
+    if (preview) {
+        preview.innerHTML = '';
+        attachments.forEach(f => createAttachmentPreview(f));
+        if (attachments.length) preview.classList.add('has-attachments');
+    }
+    replyingTo = null; // reply not preserved for simplicity
+
+    // Remove failed message and send again
+    temporaryMessages.delete(tempId);
+    sendMessage();
+}
+
+function updateSendButtonState() {
+    const input = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendButton');
+    if (input && sendBtn) {
+        sendBtn.disabled = !(input.value.trim() || attachments.length);
+    }
+}
+
+// ========== ATTACHMENTS ==========
+function handleFileSelect(e) {
+    const files = Array.from(e.target.files);
+    const totalSize = files.reduce((sum, f) => sum + f.size, 0) + attachments.reduce((sum, f) => sum + f.size, 0);
+    if (totalSize > 25 * 1024 * 1024) {
+        showToast('Total file size exceeds 25MB', 'error');
+        return;
+    }
+    files.forEach(file => {
+        if (file.size > 10 * 1024 * 1024) {
+            showToast(`File ${file.name} exceeds 10MB`, 'error');
             return;
         }
-        
-        let html = '';
-        let currentDate = null;
-        
-        // Group messages by date and deduplicate
-        messages.forEach(msg => {
-            // Skip if message ID already rendered (deduplicate)
-            if (renderedMessageIds.has(msg.id)) {
-                return;
-            }
-            
-            renderedMessageIds.add(msg.id);
-            const messageDate = formatDate(msg.timestamp);
-            
-            // Add date divider if date changed
-            if (messageDate !== currentDate) {
-                currentDate = messageDate;
-                html += `
-                    <div class="date-divider">
-                        <span>${messageDate}</span>
-                    </div>
-                `;
-            }
-            
-            const messageTime = formatTime(msg.timestamp);
-            const isOwn = msg.is_own_message;
-            
-            // Build message content
-            let messageContent = msg.content || '';
-            let attachmentsHtml = '';
-            const hasAttachments = msg.attachments && msg.attachments.length > 0;
-            
-            // Check if message has attachments
-            if (hasAttachments) {
-                attachmentsHtml = `<div class="message-attachments">`;
-                msg.attachments.forEach(att => {
-                    const fileType = att.file_type || att.type || '';
-                    const fileName = att.name || att.filename || 'Attachment';
-                    const fileSize = att.size ? formatFileSize(att.size) : '';
-                    const fileUrl = att.url || att.file_url || '#';
-                    
-                    if (fileType.startsWith('image/')) {
-                        attachmentsHtml += `
-                            <div class="attachment-item">
-                                <div class="attachment-preview">
-                                    <img src="${fileUrl}" alt="${fileName}" 
-                                         onclick="showAttachmentViewer(${JSON.stringify(att).replace(/"/g, '&quot;')})"
-                                         style="cursor: pointer; max-width: 300px; border-radius: 8px;">
-                                </div>
-                                <div class="attachment-info">
-                                    <div class="attachment-name">${fileName}</div>
-                                    <div class="attachment-type">${getFileTypeLabel(fileName)}</div>
-                                    ${fileSize ? `<div class="attachment-size">${fileSize}</div>` : ''}
-                                    <a href="${fileUrl}" class="attachment-download" target="_blank" download="${fileName}">
-                                        <i class="bi bi-download"></i> Download
-                                    </a>
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        const iconClass = getFileIcon(fileName);
-                        attachmentsHtml += `
-                            <div class="attachment-item" style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
-                                <div class="file-icon-wrapper" style="font-size: 28px; color: var(--primary);">
-                                    <i class="bi ${iconClass}"></i>
-                                </div>
-                                <div class="file-info" style="flex: 1;">
-                                    <div class="attachment-name" style="font-weight: 600;">${fileName}</div>
-                                    <div class="attachment-type" style="font-size: 0.85rem; color: var(--text-secondary);">${getFileTypeLabel(fileName)}</div>
-                                    ${fileSize ? `<div class="attachment-size" style="font-size: 0.8rem; color: var(--text-tertiary);">${fileSize}</div>` : ''}
-                                </div>
-                                <a href="${fileUrl}" class="attachment-download" target="_blank" download="${fileName}" style="padding: 8px 12px; background: var(--primary); color: white; border-radius: 6px; text-decoration: none; display: flex; align-items: center; gap: 6px; font-size: 0.85rem;">
-                                    <i class="bi bi-download"></i> Download
-                                </a>
-                            </div>
-                        `;
-                    }
-                });
-                attachmentsHtml += `</div>`;
-            }
-            
-            html += `
-                <div class="message-group ${isOwn ? 'sent' : 'received'}">
-                    <div class="message-bubble ${isOwn ? 'sent' : 'received'}">
-                        ${messageContent ? `<div class="message-content">${escapeHtml(messageContent)}</div>` : ''}
-                        ${attachmentsHtml}
-                        <div class="message-time">
-                            ${messageTime}
-                            ${isOwn ? `
-                                <span class="message-status">
-                                    ${msg.is_read ? 
-                                        '<i class="bi bi-check2-all status-read status-icon"></i>' : 
-                                        '<i class="bi bi-check2 status-delivered status-icon"></i>'
-                                    }
-                                </span>
-                            ` : ''}
-                        </div>
-                    </div>
-                </div>
-            `;
+        attachments.push(file);
+        createAttachmentPreview(file);
+    });
+    const preview = document.getElementById('attachmentsPreview');
+    if (preview) preview.classList.add('has-attachments');
+    updateSendButtonState();
+}
+
+function createAttachmentPreview(file) {
+    const preview = document.getElementById('attachmentsPreview');
+    if (!preview) return;
+    const item = document.createElement('div');
+    item.className = 'preview-item';
+    if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            item.innerHTML = `<img src="${e.target.result}" alt=""><button class="remove-attachment" data-filename="${file.name}"><i class="bi bi-x"></i></button>`;
+        };
+        reader.readAsDataURL(file);
+    } else {
+        item.innerHTML = `<div class="file-icon"><i class="bi ${getFileIcon(file.name)}"></i></div>
+            <button class="remove-attachment" data-filename="${file.name}"><i class="bi bi-x"></i></button>`;
+    }
+    preview.appendChild(item);
+}
+
+function removeAttachment(filename) {
+    attachments = attachments.filter(f => f.name !== filename);
+    const preview = document.getElementById('attachmentsPreview');
+    if (preview) {
+        preview.innerHTML = '';
+        attachments.forEach(f => createAttachmentPreview(f));
+        if (attachments.length === 0) preview.classList.remove('has-attachments');
+    }
+    updateSendButtonState();
+}
+
+// ========== TYPING INDICATOR ==========
+async function sendTypingIndicator() {
+    if (!currentParticipantId || isTyping || !conversationIds.length) return;
+    isTyping = true;
+    try {
+        await fetch(`/chats/api/send-typing/${conversationIds[0]}/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCSRFToken() }
         });
-        
-        container.innerHTML = html;
-        
-        // Scroll to bottom
-        container.scrollTop = container.scrollHeight;
-    }
-    
-    // Escape HTML to prevent XSS
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-    
-    // Send message with attachments
-    async function sendMessage() {
-        const messageInput = document.getElementById('messageInput');
-        const content = messageInput.value.trim();
-        
-        if (!content && attachments.length === 0) {
-            showToast('Message cannot be empty', 'warning');
-            return;
+    } catch (e) {}
+    setTimeout(() => { isTyping = false; }, 3000);
+}
+
+async function checkTyping() {
+    if (!currentParticipantId || !conversationIds.length) return;
+    try {
+        const data = await fetchJSON(`/chats/api/check-typing/${conversationIds[0]}/`);
+        const wasTyping = otherIsTyping;
+        otherIsTyping = data.typing;
+        if (data.typing) {
+            otherTypingName = data.user_name || (data.users && data.users.length ? data.users[0].name : currentParticipantName);
         }
-        
+        // Only re-render if the typing state changed
+        if (wasTyping !== otherIsTyping) {
+            renderMessages();
+        }
+    } catch (e) {
+        console.error('Typing check failed:', e);
+    }
+}
+
+// ========== MESSAGE ACTIONS ==========
+function replyToMessage(msgId) {
+    replyingTo = msgId;
+    const msg = allMessages.find(m => m.id === msgId);
+    if (msg) {
+        const preview = document.getElementById('replyContent');
+        const bar = document.getElementById('replyPreviewBar');
+        if (preview) preview.innerText = `Replying to: ${msg.content.substring(0, 50)}${msg.content.length > 50 ? '…' : ''}`;
+        if (bar) bar.style.display = 'flex';
+    }
+    const input = document.getElementById('messageInput');
+    if (input) input.focus();
+    showToast('Reply mode activated', 'info');
+}
+
+function hideReplyPreview() {
+    const bar = document.getElementById('replyPreviewBar');
+    if (bar) bar.style.display = 'none';
+    replyingTo = null;
+}
+
+async function editMessage(msgId) {
+    const newContent = prompt('Edit message:');
+    if (!newContent) return;
+    try {
+        const data = await fetchJSON(`/chats/api/edit-message/${msgId}/`, {
+            method: 'POST',
+            body: JSON.stringify({ content: newContent })
+        });
+        if (data.success) {
+            const msg = allMessages.find(m => m.id === msgId);
+            if (msg) msg.content = newContent;
+            renderMessages();
+        } else {
+            showToast('Edit failed', 'error');
+        }
+    } catch (e) {}
+}
+
+async function pinMessage(msgId) {
+    try {
+        const data = await fetchJSON(`/chats/api/pin-message/${msgId}/`, { method: 'POST' });
+        if (data.success) {
+            const msg = allMessages.find(m => m.id === msgId);
+            if (msg) msg.is_pinned = data.is_pinned;
+            renderMessages();
+        }
+    } catch (e) {}
+}
+
+async function deleteSingleMessage(msgId) {
+    if (!confirm('Delete this message?')) return;
+    try {
+        const data = await fetchJSON('/chats/api/delete-messages/', {
+            method: 'POST',
+            body: JSON.stringify({ message_ids: [msgId] })
+        });
+        if (data.success) {
+            allMessages = allMessages.filter(m => m.id !== msgId);
+            renderMessages();
+        }
+    } catch (e) {}
+}
+
+// ========== BULK SELECTION ==========
+function toggleMessageSelection(msgId) {
+    const idStr = msgId.toString();
+    if (selectedMessages.has(idStr)) {
+        selectedMessages.delete(idStr);
+    } else {
+        selectedMessages.add(idStr);
+    }
+    renderMessages();
+    const bar = document.getElementById('batchActionsBar');
+    const countSpan = document.getElementById('selectedCount');
+    if (selectedMessages.size && bar && countSpan) {
+        countSpan.innerText = `${selectedMessages.size} selected`;
+        bar.classList.add('active');
+    } else if (bar) {
+        bar.classList.remove('active');
+    }
+}
+
+async function deleteSelectedMessages() {
+    if (selectedMessages.size === 0) return;
+    if (!confirm(`Delete ${selectedMessages.size} message(s)?`)) return;
+    try {
+        const data = await fetchJSON('/chats/api/delete-messages/', {
+            method: 'POST',
+            body: JSON.stringify({ message_ids: Array.from(selectedMessages).filter(id => !id.startsWith('temp')) })
+        });
+        if (data.success) {
+            allMessages = allMessages.filter(m => !selectedMessages.has(m.id.toString()));
+            // Also remove temporary messages if selected (they can't be deleted via API)
+            selectedMessages.forEach(id => {
+                if (id.startsWith('temp')) temporaryMessages.delete(id);
+            });
+            selectedMessages.clear();
+            const bar = document.getElementById('batchActionsBar');
+            if (bar) bar.classList.remove('active');
+            renderMessages();
+        }
+    } catch (e) {}
+}
+
+function cancelSelection() {
+    selectedMessages.clear();
+    const bar = document.getElementById('batchActionsBar');
+    if (bar) bar.classList.remove('active');
+    renderMessages();
+}
+
+// ========== READ STATUS POLLING ==========
+async function pollReadStatus() {
+    if (!currentParticipantId || !conversationIds.length) return;
+    try {
+        const data = await fetchJSON(`/chats/api/get-message-status/${conversationIds[0]}/`);
+        if (data.success && data.status_data) {
+            let updated = false;
+            allMessages.forEach(msg => {
+                if (msg.sender_id === window.currentUserId) {
+                    const status = data.status_data[msg.id];
+                    if (status) {
+                        const newIsRead = status.is_read;
+                        if (msg.is_read !== newIsRead) {
+                            msg.is_read = newIsRead;
+                            updated = true;
+                        }
+                    }
+                }
+            });
+            if (updated) renderMessages();
+        }
+    } catch (e) {}
+}
+
+// ========== POLLING ==========
+function startPolling() {
+    stopPolling();
+    messagePollInterval = setInterval(async () => {
+        if (!currentParticipantId) return;
         try {
-            const formData = new FormData();
-            formData.append('conversation_id', currentConversationId);
-            formData.append('content', content || '');
-            
-            // Add attachments
-            attachments.forEach(file => {
-                formData.append('attachments', file);
-            });
-            
-            const response = await fetch('/chats/api/send-message/', {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCSRFToken(),
-                },
-                body: formData
-            });
-            
-            const data = await response.json();
-            
+            const url = `/chats/api/unified-conversation/${currentParticipantId}/?last_id=${lastMessageId}`;
+            const data = await fetchJSON(url);
             if (data.success) {
-                // Clear input and attachments
-                messageInput.value = '';
-                messageInput.style.height = 'auto';
-                attachments = [];
-                const previewContainer = document.getElementById('attachmentsPreview');
-                previewContainer.innerHTML = '';
-                previewContainer.classList.remove('has-attachments');
-                document.getElementById('sendButton').disabled = true;
-                
-                // Add message to our tracking system
-                const message = data.message;
-                messages.push(message);
-                lastMessageId = Math.max(lastMessageId, message.id);
-                
-                // Re-render all messages
-                renderMessages();
-                
-                // Update conversations list
-                await loadConversations();
-                
-                // Show success toast
-                showToast('Message sent', 'success');
-            }
-        } catch (error) {
-            console.error('Error sending message:', error);
-            showToast('Failed to send message. Please try again.', 'error');
-        }
-    }
-    
-    // Mark messages as read
-    async function markMessagesAsRead() {
-        if (!currentConversationId) return;
-        // Optimistically update UI immediately
-        try {
-            // Find conversation unread count in DOM (if present)
-            const convEl = document.querySelector(`.conversation-item[data-conversation-id="${currentConversationId}"]`);
-            let unreadForConv = 0;
-            if (convEl) {
-                const unreadEl = convEl.querySelector('.conversation-unread');
-                if (unreadEl) {
-                    unreadForConv = parseInt(unreadEl.textContent) || 0;
-                    // remove visual unread marker immediately
-                    unreadEl.remove();
-                }
-            }
-
-            // Optimistically update centralized badge manager by subtracting this conversation's unread count
-            try {
-                if (window.BadgeManager && typeof window.BadgeManager.update === 'function') {
-                    // derive current count from any badge element
-                    const badgeEl = document.getElementById('mobileMessagesBadge') || document.getElementById('desktopMessagesBadge') || document.getElementById('sideNavMessagesBadge') || document.getElementById('bottomNavMessagesBadge');
-                    let current = 0;
-                    if (badgeEl && badgeEl.textContent) {
-                        current = parseInt(badgeEl.textContent) || 0;
-                    }
-                    const newCount = Math.max(0, current - unreadForConv);
-                    window.BadgeManager.update('messages', newCount);
-                }
-            } catch (e) {
-                console.warn('BadgeManager optimistic update failed', e);
-            }
-
-            // Dispatch a messagesRead event so global listeners can update immediately
-            try {
-                document.dispatchEvent(new CustomEvent('messagesRead', { detail: { conversationId: currentConversationId, removed: unreadForConv } }));
-            } catch (e) {
-                console.warn('Failed to dispatch messagesRead', e);
-            }
-
-            // Tell server to mark as read (non-blocking)
-            fetch(`/chats/api/mark-read/${currentConversationId}/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCSRFToken(),
-                }
-            }).then(async resp => {
-                // After server confirms, refresh conversations and total count to ensure consistency
-                if (resp.ok) {
-                    await loadConversations();
-                    updateTotalUnreadCount();
-                } else {
-                    // On failure, we refresh to restore accurate state
-                    await loadConversations();
-                    updateTotalUnreadCount();
-                }
-            }).catch(async err => {
-                console.error('Error marking messages as read:', err);
-                await loadConversations();
-                updateTotalUnreadCount();
-            });
-        } catch (error) {
-            console.error('Error during optimistic mark-as-read:', error);
-        }
-    }
-    
-    // Send typing indicator
-    async function sendTypingIndicator() {
-        if (!currentConversationId || isTyping) return;
-        
-        isTyping = true;
-        
-        try {
-            await fetch(`/chats/api/send-typing/${currentConversationId}/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCSRFToken(),
-                }
-            });
-        } catch (error) {
-            console.error('Error sending typing indicator:', error);
-        }
-        
-        // Reset after 3 seconds
-        setTimeout(() => {
-            isTyping = false;
-        }, 3000);
-    }
-    
-    // Check for typing indicators
-    async function checkTyping() {
-        if (!currentConversationId) return;
-        
-        try {
-            const data = await fetchJSON(`/chats/api/check-typing/${currentConversationId}/`);
-            let typingIndicator = document.getElementById('typingIndicatorContainer');
-            
-            // Create typing indicator if it doesn't exist
-            if (!typingIndicator) {
-                const messagesContainer = document.getElementById('messagesContainer');
-                if (messagesContainer) {
-                    typingIndicator = document.createElement('div');
-                    typingIndicator.id = 'typingIndicatorContainer';
-                    typingIndicator.style.display = 'none';
-                    typingIndicator.innerHTML = `
-                        <div class="typing-indicator">
-                            <div class="typing-dots">
-                                <span></span>
-                                <span></span>
-                                <span></span>
-                            </div>
-                            <div class="typing-text">${currentParticipantName} is typing...</div>
-                        </div>
-                    `;
-                    messagesContainer.appendChild(typingIndicator);
-                }
-            }
-            
-            if (data.typing && typingIndicator) {
-                typingIndicator.style.display = 'block';
-                
-                // Auto hide after 3 seconds of inactivity
-                clearTimeout(typingTimeout);
-                typingTimeout = setTimeout(() => {
-                    if (typingIndicator) {
-                        typingIndicator.style.display = 'none';
-                    }
-                }, 3000);
-            } else if (typingIndicator) {
-                typingIndicator.style.display = 'none';
-            }
-        } catch (error) {
-            console.error('Error checking typing:', error);
-        }
-    }
-    
-    // ===== POLLING FUNCTIONS =====
-    
-    // Start conversation polling
-    function startConversationPolling() {
-        // Clear existing intervals
-        stopConversationPolling();
-        
-        // Poll for new messages every 3 seconds
-        messagePollInterval = setInterval(async () => {
-            if (!currentConversationId) return;
-            
-            try {
-                const data = await fetchJSON(`/chats/api/get-new-messages/${currentConversationId}/?last_id=${lastMessageId}`);
-                
-                if (data.success && data.new_messages && data.new_messages.length > 0) {
-                    // Deduplicate: only add messages we haven't seen
-                    const existingIds = new Set(messages.map(m => m.id));
-                    const newMessages = data.new_messages.filter(msg => !existingIds.has(msg.id));
-                    
-                    if (newMessages.length > 0) {
-                        // Add to messages array
-                        messages.push(...newMessages);
-                        
-                        // Update last message ID
-                        lastMessageId = Math.max(lastMessageId, ...newMessages.map(m => m.id));
-                        
-                        // Render new messages
+                const newMsgs = data.messages;  // backend returns only those > last_id
+                if (newMsgs.length) {
+                    const trulyNew = newMsgs.filter(nm => !allMessages.some(om => om.id === nm.id));
+                    if (trulyNew.length) {
+                        allMessages.push(...trulyNew);
+                        lastMessageId = Math.max(...trulyNew.map(m => m.id));
                         renderMessages();
-                        
-                        // Mark as read for non-own messages
-                        const receivedMessages = newMessages.filter(msg => !msg.is_own_message);
-                        if (receivedMessages.length > 0) {
-                            await markMessagesAsRead();
-                        }
-
-                        // Notify global listeners that new messages arrived so badges can update immediately
-                        try {
-                            document.dispatchEvent(new CustomEvent('newMessageReceived', { detail: { count: newMessages.length, conversationId: currentConversationId } }));
-                        } catch (e) {
-                            console.warn('Failed to dispatch newMessageReceived', e);
-                        }
-                        
-                        // Show notification for new messages from other user
-                        const otherMessages = newMessages.filter(m => !m.is_own_message);
-                        if (otherMessages.length > 0 && document.hidden) {
-                            showToast(`New message from ${currentParticipantName}`, 'info');
-                        }
+                        // Update sidebar for new messages (unread count)
+                        const otherUnread = allMessages.filter(m => !m.is_own && !m.is_read).length;
+                        updateParticipantUnreadInSidebar(currentParticipantId, otherUnread);
+                        updateTotalUnreadCount();
                     }
                 }
-            } catch (error) {
-                console.error('Error polling for messages:', error);
             }
-        }, 3000);
-        
-        // Check typing every second
-        typingPollInterval = setInterval(checkTyping, 1000);
+        } catch (e) {}
+    }, 3000);
+
+    typingPollInterval = setInterval(checkTyping, 2000);
+    statusPollInterval = setInterval(pollReadStatus, 5000);
+    conversationListPollInterval = setInterval(loadGroupedConversations, 10000);
+}
+
+function stopPolling() {
+    if (messagePollInterval) clearInterval(messagePollInterval);
+    if (typingPollInterval) clearInterval(typingPollInterval);
+    if (statusPollInterval) clearInterval(statusPollInterval);
+    if (conversationListPollInterval) clearInterval(conversationListPollInterval);
+}
+
+// ========== MODALS ==========
+function openNewConversationModal() {
+    const modal = document.getElementById('newConversationModal');
+    if (modal) modal.classList.add('active');
+    const input = document.getElementById('searchUsersInput');
+    if (input) input.focus();
+}
+
+async function searchUsers(query) {
+    const resultsContainer = document.getElementById('userSearchResults');
+    if (!resultsContainer) return;
+    if (query.length < 2) {
+        resultsContainer.innerHTML = `<div class="empty-state"><i class="bi bi-search"></i><p>Start typing to search</p></div>`;
+        return;
     }
-    
-    // Stop conversation polling
-    function stopConversationPolling() {
-        if (messagePollInterval) {
-            clearInterval(messagePollInterval);
-            messagePollInterval = null;
-        }
-        
-        if (typingPollInterval) {
-            clearInterval(typingPollInterval);
-            typingPollInterval = null;
-        }
+    try {
+        const data = await fetchJSON(`/chats/api/search-users/?q=${encodeURIComponent(query)}`);
+        if (data.success) renderUserSearchResults(data.users);
+    } catch (e) {}
+}
+
+function renderUserSearchResults(users) {
+    const container = document.getElementById('userSearchResults');
+    if (!container) return;
+    if (!users || users.length === 0) {
+        container.innerHTML = `<div class="empty-state"><p>No users found</p></div>`;
+        return;
     }
-    
-    // ===== ONLINE STATUS FUNCTIONS =====
-    
-    // Update online status
-    async function updateOnlineStatus() {
-        try {
-            const data = await fetchJSON('/chats/api/get-online-users/');
-            
-            if (data.success) {
-                onlineUsers = new Set(data.online_users || []);
-                
-                // Update conversation list
-                renderConversationsList();
-                
-                // Update current conversation if open
-                if (currentConversationId && currentParticipantId) {
-                    currentParticipantIsOnline = onlineUsers.has(currentParticipantId);
-                    updateConversationHeader();
-                }
-            }
-        } catch (error) {
-            console.error('Error updating online status:', error);
-        }
-    }
-    
-    // Update total unread count
-    async function updateTotalUnreadCount() {
-        try {
-            const data = await fetchJSON('/chats/api/unread-messages-count/');
-            
-            const totalUnreadCount = document.getElementById('totalUnreadCount');
-            if (totalUnreadCount) {
-                totalUnreadCount.textContent = data.count || 0;
-            }
-        } catch (error) {
-            console.error('Error updating unread count:', error);
-        }
-    }
-    
-    // ===== MODAL FUNCTIONS =====
-    
-    // Open new conversation modal
-    function openNewConversationModal() {
-        document.getElementById('newConversationModal').classList.add('active');
-        document.getElementById('searchUsersInput').focus();
-    }
-    
-    // Search users
-    async function searchUsers(query) {
-        if (query.length < 2) {
-            document.getElementById('userSearchResults').innerHTML = `
-                <div class="empty-state" style="padding: 20px 0;">
-                    <i class="bi bi-search" style="font-size: 2rem; color: var(--text-tertiary); margin-bottom: 16px;"></i>
-                    <p>Start typing to search for users</p>
-                </div>
-            `;
-            return;
-        }
-        
-        try {
-            const data = await fetchJSON(`/chats/api/search-users/?q=${encodeURIComponent(query)}`);
-            
-            if (data.success) {
-                renderUserSearchResults(data.users || []);
-            }
-        } catch (error) {
-            console.error('Error searching users:', error);
-        }
-    }
-    
-    // Render user search results
-    function renderUserSearchResults(users) {
-        const container = document.getElementById('userSearchResults');
-        
-        if (!users || users.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state" style="padding: 20px 0;">
-                    <i class="bi bi-search" style="font-size: 2rem; color: var(--text-tertiary); margin-bottom: 16px;"></i>
-                    <p>No users found</p>
-                </div>
-            `;
-            return;
-        }
-        
-        let html = '';
-        
-        users.forEach(user => {
-            html += `
-                <div class="user-result-item" data-user-id="${user.id}">
-                    <div class="user-result-avatar">
-                        <img src="${user.avatar || 'https://placehold.co/200x200/c2c2c2/1f1f1f?text=User'}" alt="${user.name}">
-                    </div>
-                    <div class="user-result-info">
-                        <h4>${user.name}</h4>
-                        <p>@${user.username}</p>
-                    </div>
-                </div>
-            `;
+    let html = '';
+    users.forEach(u => {
+        const avatar = u.avatar || 'https://placehold.co/200x200/c2c2c2/1f1f1f?text=User';
+        html += `
+        <div class="user-result-item" data-user-id="${u.id}" data-user-name="${u.name}" data-user-avatar="${avatar}">
+            <div class="user-result-avatar"><img src="${avatar}"></div>
+            <div class="user-result-info"><h4>${escapeHtml(u.name)}</h4><p>@${u.username}</p></div>
+        </div>`;
+    });
+    container.innerHTML = html;
+    container.querySelectorAll('.user-result-item').forEach(el => {
+        el.addEventListener('click', () => startNewConversation(el.dataset));
+    });
+}
+
+async function startNewConversation(dataset) {
+    const userId = dataset.userId;
+    const userName = dataset.userName;
+    const userAvatar = dataset.userAvatar;
+    // send a test message to create conversation
+    try {
+        const data = await fetchJSON('/chats/api/send-unified-message/', {
+            method: 'POST',
+            body: JSON.stringify({ participant_id: userId, content: 'Hello!' })
         });
-        
-        container.innerHTML = html;
-        
-        // Add event listeners
-        container.querySelectorAll('.user-result-item').forEach(item => {
-            item.addEventListener('click', async () => {
-                const userId = parseInt(item.dataset.userId);
-                const userName = item.querySelector('h4').textContent;
-                const userAvatar = item.querySelector('img').src;
-                
-                await startNewConversation(userId, userName, userAvatar);
-                document.getElementById('newConversationModal').classList.remove('active');
+        if (data.success) {
+            const modal = document.getElementById('newConversationModal');
+            if (modal) modal.classList.remove('active');
+            openUnifiedConversation({
+                participantId: userId,
+                participantName: userName,
+                participantAvatar: userAvatar,
+                isOnline: 'false',
+                lastSeen: null
             });
-        });
-    }
-    
-    // Start new conversation
-    async function startNewConversation(userId, userName, userAvatar) {
-        try {
-            const data = await fetchJSON('/chats/api/send-message/', {
-                method: 'POST',
-                body: JSON.stringify({
-                    recipient_id: userId,
-                    content: 'Hello!'
-                })
-            });
-            
-            if (data.success) {
-                // Open the new conversation
-                openConversation(
-                    data.conversation_id,
-                    userId,
-                    userName,
-                    userAvatar,
-                    onlineUsers.has(userId)
-                );
-                
-                // Refresh conversations list
-                await loadConversations();
-                
-                showToast('Conversation started', 'success');
-            }
-        } catch (error) {
-            console.error('Error starting conversation:', error);
-            showToast('Failed to start conversation', 'error');
+            loadGroupedConversations();
         }
+    } catch (e) {}
+}
+
+// ========== EMOJI PICKER ==========
+function initEmojiPicker() {
+    const pickerBody = document.getElementById('emojiPickerBody');
+    if (!pickerBody) return;
+    let emojiHtml = '';
+    for (const [cat, emojis] of Object.entries(emojiCategories)) {
+        emojiHtml += `<div class="emoji-category"><div class="emoji-category-title">${cat}</div><div class="emoji-grid">`;
+        emojis.forEach(e => emojiHtml += `<button class="emoji-btn" data-emoji="${e}">${e}</button>`);
+        emojiHtml += '</div></div>';
     }
-    
-    // ===== INITIALIZATION =====
-    
-    // Initialize inbox
-    function initializeInbox() {
-        // Initialize emoji picker
-        initEmojiPicker();
-        
-        // Load initial data
-        loadConversations();
-        updateOnlineStatus();
-        updateTotalUnreadCount();
-        
-        // Start periodic updates
-        setInterval(loadConversations, 10000);
-        setInterval(updateOnlineStatus, 30000);
-        setInterval(updateTotalUnreadCount, 30000);
-        
-        // ===== EVENT LISTENERS =====
-        
-        // Send message button
-        document.getElementById('sendButton').addEventListener('click', sendMessage);
-        
-        // Message input - Enter to send (Shift+Enter for new line)
-        const messageInput = document.getElementById('messageInput');
+    pickerBody.innerHTML = emojiHtml;
+    pickerBody.querySelectorAll('.emoji-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            insertEmoji(btn.dataset.emoji);
+            // Do NOT close picker – allow multiple selections
+        });
+    });
+}
+
+function insertEmoji(emoji) {
+    const input = document.getElementById('messageInput');
+    if (!input) return;
+    const start = input.selectionStart;
+    input.value = input.value.slice(0, start) + emoji + input.value.slice(input.selectionEnd);
+    input.focus();
+    input.selectionStart = input.selectionEnd = start + emoji.length;
+    updateSendButtonState();
+    sendTypingIndicator();
+}
+
+function hideEmojiPicker() {
+    const picker = document.getElementById('emojiPicker');
+    if (picker) picker.classList.remove('active');
+}
+
+// ========== ATTACHMENT VIEWER ==========
+window.showAttachmentViewer = (attachment) => {
+    const modal = document.getElementById('attachmentViewerModal');
+    const content = document.getElementById('attachmentViewerContent');
+    const title = document.getElementById('attachmentViewerTitle');
+    const downloadLink = document.getElementById('downloadAttachment');
+    if (!modal || !content || !title || !downloadLink) return;
+    title.innerText = attachment.name || 'Attachment';
+    downloadLink.href = attachment.url || attachment.file_url;
+    if (attachment.type && attachment.type.startsWith('image/')) {
+        content.innerHTML = `<img src="${attachment.url}" style="max-width:100%;max-height:70vh;">`;
+    } else {
+        content.innerHTML = `<p>File: ${attachment.name}</p>`;
+    }
+    modal.classList.add('active');
+};
+
+// ========== INITIALIZATION ==========
+document.addEventListener('DOMContentLoaded', () => {
+    // Set current user ID (passed from backend)
+    window.currentUserId = {{ request.user.id|safe }};
+
+    loadGroupedConversations();
+    updateOnlineUsers();
+    setInterval(updateOnlineUsers, 30000);
+    setInterval(updateTotalUnreadCount, 30000);
+
+    // Emoji picker init
+    initEmojiPicker();
+
+    // Event listeners
+    const sendBtn = document.getElementById('sendButton');
+    if (sendBtn) sendBtn.addEventListener('click', sendMessage);
+
+    const messageInput = document.getElementById('messageInput');
+    if (messageInput) {
+        messageInput.addEventListener('input', (e) => {
+            updateSendButtonState();
+            sendTypingIndicator();
+            e.target.style.height = 'auto';
+            e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+        });
         messageInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
             }
-            
-            // Auto-resize textarea
-            e.target.style.height = 'auto';
-            e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
         });
-        
-        // Message input - Typing indicator and send button state
-        messageInput.addEventListener('input', (e) => {
-            updateSendButtonState();
-            sendTypingIndicator();
-        });
-        
-        // File attachment
-        document.getElementById('fileAttachment').addEventListener('change', handleFileSelect);
-        
-        // Remove attachment (event delegation)
-        document.getElementById('attachmentsPreview').addEventListener('click', (e) => {
-            if (e.target.closest('.remove-attachment')) {
-                const button = e.target.closest('.remove-attachment');
-                const filename = button.dataset.filename;
-                removeAttachment(filename);
-            }
-        });
-        
-        // Emoji button
-        document.getElementById('emojiButton').addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleEmojiPicker();
-        });
-        
-        // Close emoji picker when clicking outside
-        document.addEventListener('click', (e) => {
-            const emojiPicker = document.getElementById('emojiPicker');
-            const emojiButton = document.getElementById('emojiButton');
-            
-            if (emojiPickerVisible && 
-                !emojiPicker.contains(e.target) && 
-                !emojiButton.contains(e.target)) {
-                hideEmojiPicker();
-            }
-        });
-        
-        // Emoji search
-        document.getElementById('emojiSearch').addEventListener('input', (e) => {
-            const searchTerm = e.target.value.toLowerCase();
-            const emojiButtons = document.querySelectorAll('.emoji-btn');
-            
-            emojiButtons.forEach(btn => {
-                const emoji = btn.dataset.emoji;
-                const matches = emoji.includes(searchTerm);
-                btn.style.display = matches ? 'flex' : 'none';
-            });
-        });
-        
-        // New conversation
-        document.getElementById('newConversationBtn').addEventListener('click', openNewConversationModal);
-        document.getElementById('startNewChatBtn').addEventListener('click', openNewConversationModal);
-        
-        // Refresh button
-        document.getElementById('refreshBtn').addEventListener('click', () => {
-            loadConversations();
-            showToast('Refreshed conversations', 'success');
-        });
-        
-        // Close modals
-        document.getElementById('closeNewConversationModalBtn')?.addEventListener('click', () => {
-            document.getElementById('newConversationModal').classList.remove('active');
-            document.getElementById('searchUsersInput').value = '';
-            document.getElementById('userSearchResults').innerHTML = `
-                <div class="empty-state" style="padding: 20px 0;">
-                    <i class="bi bi-search" style="font-size: 2rem; color: var(--text-tertiary); margin-bottom: 16px;"></i>
-                    <p>Start typing to search for users</p>
-                </div>
-            `;
-        });
-        
-        // Close attachment viewer
-        document.getElementById('closeAttachmentViewer')?.addEventListener('click', () => {
-            document.getElementById('attachmentViewerModal').classList.remove('active');
-        });
-        
-        document.getElementById('closeAttachmentViewerBtn')?.addEventListener('click', () => {
-            document.getElementById('attachmentViewerModal').classList.remove('active');
-        });
-        
-        // Close attachment viewer when clicking overlay
-        document.getElementById('attachmentViewerModal')?.addEventListener('click', (e) => {
-            if (e.target === document.getElementById('attachmentViewerModal')) {
-                document.getElementById('attachmentViewerModal').classList.remove('active');
-            }
-        });
-        
-        // Search users
-        document.getElementById('searchUsersInput').addEventListener('input', (e) => {
-            searchUsers(e.target.value);
-        });
-        
-        // Search conversations
-        document.getElementById('searchConversations').addEventListener('input', (e) => {
-            renderConversationsList(e.target.value);
-        });
-        
-        // Back button (mobile)
-        document.getElementById('backButton').addEventListener('click', hideChatView);
-        
-        // Info button
-        document.getElementById('infoButton').addEventListener('click', () => {
-            document.getElementById('conversationInfoModal').classList.add('active');
-        });
-        
-        // Close modals on overlay click
-        document.querySelectorAll('.modal-overlay').forEach(modal => {
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    modal.classList.remove('active');
-                }
-            });
-        });
-        
-        // Close conversation info modal
-        document.getElementById('closeConversationInfoModalBtn')?.addEventListener('click', () => {
-            document.getElementById('conversationInfoModal').classList.remove('active');
-        });
-        
-        // Delete conversation
-        document.getElementById('deleteChatBtn').addEventListener('click', async () => {
-            if (!currentConversationId) return;
-            
-            if (confirm('Are you sure you want to delete this conversation? This action cannot be undone.')) {
-                try {
-                    const data = await fetchJSON(`/chats/api/delete-conversation/${currentConversationId}/`, {
-                        method: 'POST'
-                    });
-                    
-                    if (data.success) {
-                        showToast('Conversation deleted', 'success');
-                        document.getElementById('conversationInfoModal').classList.remove('active');
-                        
-                        // Go back to list
-                        hideChatView();
-                        
-                        // Reload conversations
-                        await loadConversations();
-                    }
-                } catch (error) {
-                    console.error('Error deleting conversation:', error);
-                    showToast('Failed to delete conversation', 'error');
-                }
-            }
-        });
-        
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            if (window.innerWidth > 992) {
-                // On desktop, show both panels
-                document.body.classList.remove('chat-active');
-                document.getElementById('conversationsSidebar').classList.remove('hidden');
-                document.getElementById('chatArea').classList.remove('active');
-            } else if (currentConversationId) {
-                // On mobile with active conversation, show chat only
-                document.body.classList.add('chat-active');
-                document.getElementById('conversationsSidebar').classList.add('hidden');
-                document.getElementById('chatArea').classList.add('active');
-            }
-            
-            // Reposition emoji picker on resize
-            if (emojiPickerVisible) {
-                positionEmojiPicker();
-            }
-        });
-        
-        // Handle page visibility change
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && currentConversationId) {
-                // Page became visible, mark messages as read
-                markMessagesAsRead();
-            }
-        });
-        
-        // Handle escape key to close emoji picker and modals
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                if (emojiPickerVisible) {
-                    hideEmojiPicker();
-                }
-                document.querySelectorAll('.modal-overlay.active').forEach(modal => {
-                    modal.classList.remove('active');
-                });
-            }
-        });
-        
-        // Show welcome toast
-        setTimeout(() => {
-            showToast('Welcome to Baysoko Messages', 'info');
-        }, 1000);
     }
-    
-    // Initialize when DOM is loaded
-    document.addEventListener('DOMContentLoaded', initializeInbox);
+
+    const fileInput = document.getElementById('fileAttachment');
+    if (fileInput) fileInput.addEventListener('change', handleFileSelect);
+
+    const attachmentsPreview = document.getElementById('attachmentsPreview');
+    if (attachmentsPreview) {
+        attachmentsPreview.addEventListener('click', (e) => {
+            if (e.target.closest('.remove-attachment')) {
+                removeAttachment(e.target.closest('.remove-attachment').dataset.filename);
+            }
+        });
+    }
+
+    const emojiBtn = document.getElementById('emojiButton');
+    if (emojiBtn) {
+        emojiBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const picker = document.getElementById('emojiPicker');
+            if (picker) picker.classList.toggle('active');
+        });
+    }
+
+    const emojiClose = document.getElementById('emojiPickerClose');
+    if (emojiClose) emojiClose.addEventListener('click', hideEmojiPicker);
+
+    const emojiSearch = document.getElementById('emojiSearch');
+    if (emojiSearch) {
+        emojiSearch.addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            document.querySelectorAll('.emoji-btn').forEach(btn => {
+                btn.style.display = btn.dataset.emoji.includes(term) ? 'flex' : 'none';
+            });
+        });
+    }
+
+    const newConvBtn = document.getElementById('newConversationBtn');
+    if (newConvBtn) newConvBtn.addEventListener('click', openNewConversationModal);
+
+    const startNewChatBtn = document.getElementById('startNewChatBtn');
+    if (startNewChatBtn) startNewChatBtn.addEventListener('click', openNewConversationModal);
+
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
+            loadGroupedConversations();
+            showToast('Refreshed', 'success');
+        });
+    }
+
+    const backBtn = document.getElementById('backButton');
+    if (backBtn) {
+        backBtn.addEventListener('click', () => {
+            document.body.classList.remove('chat-active');
+            const sidebar = document.getElementById('conversationsSidebar');
+            const chatArea = document.getElementById('chatArea');
+            if (sidebar) sidebar.classList.remove('hidden');
+            if (chatArea) chatArea.classList.remove('active');
+            stopPolling();
+            currentParticipantId = null;
+        });
+    }
+
+    const infoBtn = document.getElementById('infoButton');
+    if (infoBtn) {
+        infoBtn.addEventListener('click', () => {
+            const modal = document.getElementById('conversationInfoModal');
+            if (modal) modal.classList.add('active');
+        });
+    }
+
+    const closeInfoBtn = document.getElementById('closeConversationInfoModalBtn');
+    if (closeInfoBtn) {
+        closeInfoBtn.addEventListener('click', () => {
+            const modal = document.getElementById('conversationInfoModal');
+            if (modal) modal.classList.remove('active');
+        });
+    }
+
+    const deleteChatBtn = document.getElementById('deleteChatBtn');
+    if (deleteChatBtn) {
+        deleteChatBtn.addEventListener('click', async () => {
+            if (!currentParticipantId) return;
+            if (!confirm('Delete entire conversation history?')) return;
+            // use delete-conversation endpoint for each conversation
+            for (let cid of conversationIds) {
+                await fetch(`/chats/api/delete-conversation/${cid}/`, { method: 'POST', headers: { 'X-CSRFToken': getCSRFToken() } });
+            }
+            showToast('Conversation deleted', 'success');
+            const modal = document.getElementById('conversationInfoModal');
+            if (modal) modal.classList.remove('active');
+            // go back to list
+            if (backBtn) backBtn.click();
+            loadGroupedConversations();
+        });
+    }
+
+    const muteBtn = document.getElementById('muteConversationBtn');
+    if (muteBtn) {
+        muteBtn.addEventListener('click', async () => {
+            if (!conversationIds.length) return;
+            const cid = conversationIds[0];
+            const data = await fetchJSON(`/chats/api/mute-conversation/${cid}/`, { method: 'POST' });
+            if (data.success) {
+                showToast(`Notifications ${data.status}`, 'success');
+            }
+        });
+    }
+
+    const closeNewConvModalBtn = document.getElementById('closeNewConversationModalBtn');
+    if (closeNewConvModalBtn) {
+        closeNewConvModalBtn.addEventListener('click', () => {
+            const modal = document.getElementById('newConversationModal');
+            if (modal) modal.classList.remove('active');
+        });
+    }
+
+    const searchUsersInput = document.getElementById('searchUsersInput');
+    if (searchUsersInput) {
+        searchUsersInput.addEventListener('input', (e) => searchUsers(e.target.value));
+    }
+
+    const searchConversations = document.getElementById('searchConversations');
+    if (searchConversations) {
+        searchConversations.addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            document.querySelectorAll('.conversation-item').forEach(el => {
+                const name = el.dataset.participantName.toLowerCase();
+                el.style.display = name.includes(term) ? 'flex' : 'none';
+            });
+        });
+    }
+
+    const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+    if (deleteSelectedBtn) deleteSelectedBtn.addEventListener('click', deleteSelectedMessages);
+
+    const cancelSelectionBtn = document.getElementById('cancelSelectionBtn');
+    if (cancelSelectionBtn) cancelSelectionBtn.addEventListener('click', cancelSelection);
+
+    // Cancel reply
+    const cancelReplyBtn = document.getElementById('cancelReplyBtn');
+    if (cancelReplyBtn) cancelReplyBtn.addEventListener('click', hideReplyPreview);
+
+    // close modals on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.classList.remove('active');
+        });
+    });
+
+    // attachment viewer close
+    const closeAttachmentViewer = document.getElementById('closeAttachmentViewer');
+    if (closeAttachmentViewer) {
+        closeAttachmentViewer.addEventListener('click', () => {
+            document.getElementById('attachmentViewerModal').classList.remove('active');
+        });
+    }
+    const closeAttachmentViewerBtn = document.getElementById('closeAttachmentViewerBtn');
+    if (closeAttachmentViewerBtn) {
+        closeAttachmentViewerBtn.addEventListener('click', () => {
+            document.getElementById('attachmentViewerModal').classList.remove('active');
+        });
+    }
+
+    // global escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
+            if (selectedMessages.size) cancelSelection();
+            hideEmojiPicker();
+        }
+    });
+
+    // Click outside to close emoji picker
+    document.addEventListener('click', (e) => {
+        const picker = document.getElementById('emojiPicker');
+        const emojiBtn = document.getElementById('emojiButton');
+        if (picker && !picker.contains(e.target) && !emojiBtn.contains(e.target)) {
+            picker.classList.remove('active');
+        }
+    });
+});
+
+// expose functions for inline onclick
+function showAttachmentViewer(att) { window.showAttachmentViewer(att); }
 </script>
 {% endblock %}

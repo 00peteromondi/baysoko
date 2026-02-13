@@ -39,6 +39,8 @@ class Message(models.Model):
     read_at = models.DateTimeField(null=True, blank=True)
     attachments = models.JSONField(default=list, blank=True)
     is_deleted = models.BooleanField(default=False)
+    reply_to = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL)
+    is_pinned = models.BooleanField(default=False)
     
     class Meta:
         ordering = ['timestamp']

@@ -30,6 +30,38 @@ def update_user_online_status(user):
     status.save(update_fields=['is_online', 'last_active', 'last_seen'])
     return status
 
+
+def get_avatar_url_for(user, request_obj=None):
+    """Return a safe avatar URL for a User instance.
+    Prefer `get_profile_picture_url()` when available, fall back to profile fields,
+    and finally to a static default. If `request_obj` is given and the returned
+    URL is relative, build an absolute URI.
+    """
+    default = '/static/images/default_profile_pic.svg'
+    try:
+        # Prefer user-level helper
+        if hasattr(user, 'get_profile_picture_url'):
+            url = user.get_profile_picture_url()
+        else:
+            # Try profile object
+            url = None
+            if hasattr(user, 'profile') and user.profile:
+                # profile may expose same helper or ImageField
+                if hasattr(user.profile, 'get_profile_picture_url'):
+                    url = user.profile.get_profile_picture_url()
+                elif hasattr(user.profile, 'profile_picture') and hasattr(user.profile.profile_picture, 'url'):
+                    url = user.profile.profile_picture.url
+        if url:
+            if request_obj and isinstance(url, str) and url.startswith('/'):
+                try:
+                    return request_obj.build_absolute_uri(url)
+                except Exception:
+                    return url
+            return url
+    except Exception:
+        pass
+    return default
+
 def get_online_user_ids():
     """Get list of online user IDs"""
     try:
@@ -119,13 +151,8 @@ def inbox(request):
         if not other_participant:
             continue
         
-        # Get profile picture URL
-        participant_avatar = 'https://placehold.co/50x50/c2c2c2/1f1f1f?text=User'
-        if hasattr(other_participant, 'profile') and other_participant.profile.profile_picture:
-            try:
-                participant_avatar = other_participant.profile.profile_picture.url
-            except:
-                pass
+        # Get profile picture URL (use helper to avoid direct attribute access)
+        participant_avatar = get_avatar_url_for(other_participant, request)
         
         # Get online status
         try:
@@ -828,14 +855,8 @@ def send_message_api(request):
                     
                     logger.info(f"Attachment saved: {filename}")
             
-            # Get user profile picture URL
-            sender_avatar = 'https://placehold.co/32x32/c2c2c2/1f1f1f?text=You'
-            if hasattr(request.user, 'profile'):
-                try:
-                    if request.user.profile.profile_picture and hasattr(request.user.profile.profile_picture, 'url'):
-                        sender_avatar = request.user.profile.profile_picture.url
-                except Exception as e:
-                    logger.warning(f"Could not get profile picture: {e}")
+            # Get user profile picture URL safely
+            sender_avatar = get_avatar_url_for(request.user, request)
             
             response_data = {
                 'success': True,
@@ -1410,11 +1431,11 @@ def get_conversation_status(request, conversation_id):
             'is_online': is_online,
             'last_seen': last_seen.isoformat() if last_seen else None,
             'unread_count': unread_count,
-            'participant_info': {
+                'participant_info': {
                 'id': other_participant.id,
                 'name': other_participant.get_full_name() or other_participant.username,
                 'username': other_participant.username,
-                'avatar': other_participant.profile.profile_picture.url if hasattr(other_participant, 'profile') and other_participant.profile.profile_picture else None
+                'avatar': get_avatar_url_for(other_participant, request)
             }
         })
     except Exception as e:
@@ -1449,7 +1470,7 @@ def group_conversations(request):
                         'id': other_participant.id,
                         'name': other_participant.get_full_name() or other_participant.username,
                         'username': other_participant.username,
-                        'avatar': other_participant.profile.profile_picture.url if hasattr(other_participant, 'profile') and other_participant.profile.profile_picture else None
+                        'avatar': get_avatar_url_for(other_participant, request)
                     },
                     'conversations': [],
                     'total_unread': 0
@@ -1491,3 +1512,374 @@ def group_conversations(request):
         
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+# chats/views.py (additions & modifications)
+
+from django.db.models import Q, Count, OuterRef, Subquery, Max, Prefetch
+from django.contrib.auth import get_user_model
+from django.views.decorators.csrf import csrf_exempt
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+from django.utils import timezone
+from datetime import timedelta
+import json, uuid, logging
+
+logger = logging.getLogger(__name__)
+User = get_user_model()
+
+# ------------------------------------------------------------------
+# NEW: Grouped conversations list (one entry per participant)
+# ------------------------------------------------------------------
+# chats/views.py – fixed grouped_conversations
+
+from django.contrib.staticfiles.storage import staticfiles_storage  # <-- ADD THIS IMPORT
+
+@login_required
+def grouped_conversations(request):
+    """Return all conversations grouped by the other participant."""
+    try:
+        # All conversations of the current user, not archived
+        convs = Conversation.objects.filter(
+            participants=request.user,
+            is_archived=False
+        ).prefetch_related('participants', 'messages')
+
+        # Prepare a reliable default avatar URL
+        # Use staticfiles_storage to check if the default avatar exists
+        default_avatar = request.build_absolute_uri(
+            staticfiles_storage.url('images/default-avatar.svg')
+        ) if staticfiles_storage.exists('images/default-avatar.svg') else \
+            'https://placehold.co/200x200/c2c2c2/1f1f1f?text=User'
+
+        # Group by participant ID
+        groups = {}
+        for conv in convs:
+            other = conv.get_other_participant(request.user)
+            if not other:
+                continue
+            pid = other.id
+            if pid not in groups:
+                # Get avatar URL safely
+                avatar_url = None
+                # Use helper to resolve avatar URL safely
+                avatar_url = get_avatar_url_for(other, request) or default_avatar
+
+                groups[pid] = {
+                    'participant': other,
+                    'avatar': avatar_url,
+                    'conversations': [],
+                    'total_unread': 0,
+                    'last_message': None,
+                    'last_message_time': None,
+                }
+            groups[pid]['conversations'].append(conv)
+            # unread count from this conversation
+            unread = conv.messages.filter(is_read=False).exclude(sender=request.user).count()
+            groups[pid]['total_unread'] += unread
+            # latest message overall
+            last_msg = conv.messages.order_by('-timestamp').first()
+            if last_msg and (not groups[pid]['last_message_time'] or last_msg.timestamp > groups[pid]['last_message_time']):
+                groups[pid]['last_message'] = last_msg
+                groups[pid]['last_message_time'] = last_msg.timestamp
+
+        # Format for JSON
+        result = []
+        online_ids = get_online_user_ids()
+        for pid, data in groups.items():
+            other = data['participant']
+            try:
+                status = UserOnlineStatus.objects.get(user=other)
+                is_online = status.is_online
+                last_seen = status.last_seen
+            except UserOnlineStatus.DoesNotExist:
+                is_online = False
+                last_seen = other.last_login
+
+            last_msg = data['last_message']
+            result.append({
+                'participant_id': other.id,
+                'participant_name': other.get_full_name() or other.username,
+                'participant_username': other.username,
+                'participant_avatar': data['avatar'],  # now always a valid URL
+                'is_online': is_online,
+                'last_seen': last_seen.isoformat() if last_seen else None,
+                'last_message_content': last_msg.content[:100] if last_msg else '',
+                'last_message_time': last_msg.timestamp.isoformat() if last_msg else None,
+                'last_message_sender_id': last_msg.sender_id if last_msg else None,
+                'total_unread': data['total_unread'],
+                'conversation_ids': [c.id for c in data['conversations']],
+                'listing_titles': [c.listing.title for c in data['conversations'] if c.listing],
+            })
+        # sort by last message time desc
+        result.sort(key=lambda x: x['last_message_time'] or '', reverse=True)
+        return JsonResponse({'success': True, 'groups': result})
+    except Exception as e:
+        logger.error(f"grouped_conversations error: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+            
+# ------------------------------------------------------------------
+# NEW: Unified conversation view – all messages with a participant
+# ------------------------------------------------------------------
+# chats/views.py (add/update this function)
+
+@login_required
+def unified_conversation_detail(request, participant_id):
+    """
+    Return all messages with the given participant, across all conversations.
+    If `last_id` is provided, return only messages with id > last_id.
+    """
+    participant = get_object_or_404(User, id=participant_id)
+    # ensure they have at least one common conversation
+    common_convs = Conversation.objects.filter(
+        participants=request.user
+    ).filter(participants=participant)
+    if not common_convs.exists():
+        return JsonResponse({'success': False, 'error': 'No conversation with this user'}, status=404)
+
+    # Base queryset: all messages from those conversations, not deleted
+    messages_qs = Message.objects.filter(
+        conversation__in=common_convs,
+        is_deleted=False
+    ).select_related('sender').order_by('timestamp')
+
+    # Handle last_id parameter for incremental updates
+    last_id = request.GET.get('last_id')
+    if last_id:
+        try:
+            last_id = int(last_id)
+            messages_qs = messages_qs.filter(id__gt=last_id)
+        except ValueError:
+            pass  # ignore invalid last_id
+
+    # Mark unread messages as read (only when loading full conversation, not for polling)
+    # To avoid marking read on every poll, we only do this when last_id is not provided (i.e., initial load)
+    if not last_id:
+        unread_msgs = messages_qs.filter(is_read=False).exclude(sender=request.user)
+        unread_msgs.update(is_read=True, read_at=timezone.now())
+
+    # Build response
+    messages_data = []
+    for msg in messages_qs:
+        # Get sender avatar safely
+        sender_avatar = None
+        if hasattr(msg.sender, 'profile') and msg.sender.profile:
+            try:
+                if msg.sender.profile.get_profile_picture_url():
+                    sender_avatar = request.build_absolute_uri(msg.sender.profile.get_profile_picture_url())
+            except Exception:
+                pass
+        if not sender_avatar:
+            sender_avatar = '/static/images/default-avatar.svg'  # fallback
+
+        messages_data.append({
+            'id': msg.id,
+            'conversation_id': msg.conversation_id,
+            'sender_id': msg.sender_id,
+            'sender_name': msg.sender.get_full_name() or msg.sender.username,
+            'sender_avatar': sender_avatar,
+            'content': msg.content,
+            'timestamp': msg.timestamp.isoformat(),
+            'is_read': msg.is_read,
+            'read_at': msg.read_at.isoformat() if msg.read_at else None,
+            'attachments': msg.attachments or [],
+            'is_own': msg.sender_id == request.user.id,
+            'is_deleted': msg.is_deleted,
+            'reply_to_id': msg.reply_to_id,
+            'is_pinned': msg.is_pinned,
+        })
+
+    # Participant online status
+    try:
+        status = UserOnlineStatus.objects.get(user=participant)
+        is_online = status.is_online
+        last_seen = status.last_seen
+    except UserOnlineStatus.DoesNotExist:
+        is_online = False
+        last_seen = participant.last_login
+    # Ensure participant avatar is always defined (avoid UnboundLocalError when no messages)
+    participant_avatar = None
+    try:
+        # prefer profile helper, fall back to user-level helper
+        if hasattr(participant, 'profile') and participant.profile:
+            if hasattr(participant.profile, 'get_profile_picture_url'):
+                url = participant.profile.get_profile_picture_url()
+                if url:
+                    participant_avatar = request.build_absolute_uri(url)
+        if not participant_avatar and hasattr(participant, 'get_profile_picture_url'):
+            url = participant.get_profile_picture_url()
+            if url:
+                participant_avatar = request.build_absolute_uri(url)
+    except Exception:
+        participant_avatar = None
+    if not participant_avatar:
+        participant_avatar = '/static/images/default-avatar.svg'
+
+    return JsonResponse({
+        'success': True,
+        'participant': {
+            'id': participant.id,
+            'name': participant.get_full_name() or participant.username,
+            'avatar': participant_avatar,
+            'is_online': is_online,
+            'last_seen': last_seen.isoformat() if last_seen else None,
+        },
+        'messages': messages_data,
+        'conversation_ids': list(common_convs.values_list('id', flat=True)),
+    })
+
+# ------------------------------------------------------------------
+# NEW: Send message to a participant (unified)
+# ------------------------------------------------------------------
+@login_required
+@csrf_exempt
+def send_unified_message(request):
+    """Send a message to a participant. Use the most recent conversation or create a new one."""
+    try:
+        if request.content_type == 'application/json':
+            data = json.loads(request.body)
+        else:
+            data = request.POST
+
+        participant_id = data.get('participant_id')
+        content = data.get('content', '').strip()
+        if not participant_id:
+            return JsonResponse({'success': False, 'error': 'participant_id required'}, status=400)
+
+        participant = get_object_or_404(User, id=participant_id)
+
+        # find most recent conversation with this participant (no listing preferred, but any works)
+        conversation = Conversation.objects.filter(
+            participants=request.user
+        ).filter(
+            participants=participant
+        ).order_by('-updated_at').first()
+
+        if not conversation:
+            # create a new conversation without listing
+            conversation = Conversation.objects.create()
+            conversation.participants.add(request.user, participant)
+
+        # create message
+        message = Message(
+            conversation=conversation,
+            sender=request.user,
+            content=content or '[Attachment]'
+        )
+
+        # handle attachments
+        attachments_data = []
+        if request.FILES:
+            for key, file in request.FILES.items():
+                ext = file.name.split('.')[-1] if '.' in file.name else 'bin'
+                filename = f"attachments/{uuid.uuid4()}.{ext}"
+                saved_path = default_storage.save(filename, ContentFile(file.read()))
+                file_url = default_storage.url(saved_path)
+                attachments_data.append({
+                    'name': file.name,
+                    'url': file_url,
+                    'type': file.content_type,
+                    'size': file.size,
+                    'filename': filename,
+                })
+            message.attachments = attachments_data
+
+        message.save()
+        conversation.updated_at = timezone.now()
+        conversation.save(update_fields=['updated_at'])
+
+        # update online status
+        update_user_online_status(request.user)
+
+        return JsonResponse({
+            'success': True,
+            'message_id': message.id,
+            'conversation_id': conversation.id,
+            'message': {
+                'id': message.id,
+                'content': message.content,
+                'timestamp': message.timestamp.isoformat(),
+                'sender_id': request.user.id,
+                'sender_name': request.user.get_full_name() or request.user.username,
+                'sender_avatar': get_avatar_url_for(request.user, request),
+                'attachments': attachments_data,
+                'is_own': True,
+                'is_read': False,
+            }
+        })
+    except Exception as e:
+        logger.error(f"send_unified_message error: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+# ------------------------------------------------------------------
+# NEW: Delete multiple messages
+# ------------------------------------------------------------------
+@login_required
+@csrf_exempt
+def delete_messages(request):
+    """Soft delete multiple messages (IDs in JSON list)."""
+    try:
+        data = json.loads(request.body)
+        message_ids = data.get('message_ids', [])
+        if not message_ids:
+            return JsonResponse({'success': False, 'error': 'No message IDs'}, status=400)
+
+        # only delete messages owned by the user
+        messages = Message.objects.filter(id__in=message_ids, sender=request.user)
+        count = messages.update(
+            is_deleted=True,
+            content='[Message deleted]',
+            attachments=[]
+        )
+        return JsonResponse({'success': True, 'deleted_count': count})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ------------------------------------------------------------------
+# NEW: Edit a message
+# ------------------------------------------------------------------
+@login_required
+@csrf_exempt
+def edit_message(request, message_id):
+    """Edit a message content (only own messages, within 1 hour)."""
+    try:
+        data = json.loads(request.body)
+        new_content = data.get('content', '').strip()
+        if not new_content:
+            return JsonResponse({'success': False, 'error': 'Content required'}, status=400)
+
+        message = get_object_or_404(Message, id=message_id, sender=request.user)
+        # optional: allow editing only for a limited time
+        if timezone.now() - message.timestamp > timedelta(hours=1):
+            return JsonResponse({'success': False, 'error': 'Cannot edit messages older than 1 hour'})
+
+        message.content = new_content
+        message.save(update_fields=['content'])
+        return JsonResponse({'success': True, 'content': new_content})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ------------------------------------------------------------------
+# NEW: Pin/Unpin a message
+# ------------------------------------------------------------------
+@login_required
+@csrf_exempt
+def pin_message(request, message_id):
+    """Toggle pin status of a message (only in conversation with participant)."""
+    try:
+        message = get_object_or_404(Message, id=message_id, conversation__participants=request.user)
+        # ensure it's not your own? up to you
+        message.is_pinned = not getattr(message, 'is_pinned', False)
+        if not hasattr(message, 'is_pinned'):
+            # add field if not exists – but better to add to model.
+            # quick solution: use a JSON field or custom attribute.
+            pass
+        message.save(update_fields=['is_pinned'])  # requires model field
+        return JsonResponse({'success': True, 'is_pinned': message.is_pinned})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
