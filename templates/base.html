@@ -48,68 +48,102 @@
         }
     </style>
     <style>
+        /* Toast container: desktop -> top-right; mobile -> centered bottom */
         .toast-container {
             position: fixed;
-            top: 80px;
+            top: 20px;
             right: 20px;
             z-index: 9999;
-            max-width: 350px;
+            max-width: 380px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            pointer-events: none; /* allow clicks through container; toasts themselves accept pointer-events */
         }
-        
+
+        .toast-container .custom-toast { pointer-events: auto; }
+
         .custom-toast {
             border: none;
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-lg);
+            border-radius: 14px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.12);
             overflow: hidden;
-            margin-bottom: 1rem;
-            animation: slideInRight 0.3s ease-out;
-        }
-        
-        .toast-success {
-            background: linear-gradient(135deg, var(--success) 0%, var(--accent-dark) 100%);
+            margin: 0;
+            animation: slideInRight 0.28s cubic-bezier(.2,.9,.2,1);
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.85rem 0.95rem;
+            min-height: 56px;
             color: white;
         }
-        
-        .toast-error {
-            background: linear-gradient(135deg, var(--danger) 0%, #d12a4e 100%);
-            color: white;
+
+        .custom-toast i { font-size: 1.15rem; flex-shrink: 0; }
+        .custom-toast .fw-medium { font-size: 0.95rem; line-height: 1.15; word-break: break-word; }
+        .custom-toast .btn-close { opacity: 0.9; filter: drop-shadow(0 1px 0 rgba(0,0,0,0.15)); }
+
+        /* Progress/countdown bar at bottom of toast */
+        .toast-progress-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 4px;
+            background: rgba(255,255,255,0.85);
+            transform-origin: left;
+            animation: toast-countdown linear forwards;
+            width: 100%;
         }
-        
-        .toast-warning {
-            background: linear-gradient(135deg, var(--warning) 0%, #e68900 100%);
-            color: white;
-        }
-        
-        .toast-info {
-            background: linear-gradient(135deg, var(--info) 0%, #0d6f8c 100%);
-            color: white;
-        }
-        
-        .toast-primary {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            color: white;
-        }
-        
+
+        /* Ensure good contrast on all toast variants */
+        .toast-success .toast-progress-bar,
+        .toast-error .toast-progress-bar,
+        .toast-warning .toast-progress-bar,
+        .toast-info .toast-progress-bar,
+        .toast-primary .toast-progress-bar { opacity: 0.95; }
+
+        @keyframes toast-countdown { from { width: 100%; } to { width: 0%; } }
+
+        /* Clean modern color palettes for each toast type */
+        .toast-success { background: linear-gradient(135deg, #06D6A0 0%, #05B88A 100%); }
+        .toast-error   { background: linear-gradient(135deg, #EF476F 0%, #D93A5F 100%); }
+        .toast-warning { background: linear-gradient(135deg, #FF9E1F 0%, #E68900 100%); }
+        .toast-info    { background: linear-gradient(135deg, #118AB2 0%, #0d6f8c 100%); }
+        .toast-primary { background: linear-gradient(135deg, #06D6A0 0%, #05B88A 100%); }
+
+        /* Entrance/exit animations */
         @keyframes slideInRight {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
+            from { transform: translateX(14px); opacity: 0; }
+            to   { transform: translateX(0); opacity: 1; }
         }
-        
         @keyframes slideOutRight {
-            from {
-                transform: translateX(0);
-                opacity: 1;
+            from { transform: translateX(0); opacity: 1; }
+            to   { transform: translateX(14px); opacity: 0; }
+        }
+
+        /* Responsive: make toasts centered and full-width on small screens */
+        @media (max-width: 576px) {
+            .toast-container {
+                top: auto;
+                bottom: 80px;
+                left: 50%;
+                right: auto;
+                transform: translateX(-50%);
+                width: calc(100% - 32px);
+                max-width: calc(100% - 32px);
+                align-items: center;
+                padding: 0 8px;
             }
-            to {
-                transform: translateX(100%);
-                opacity: 0;
+
+            .custom-toast {
+                width: 100%;
+                padding: 0.85rem 0.9rem;
+                min-height: 56px;
             }
+
+            .custom-toast i { font-size: 1.25rem; }
+            .custom-toast .fw-medium { font-size: 1rem; }
+            .toast-progress-bar { height: 4px; }
         }
     </style>
 
@@ -1944,11 +1978,16 @@
                         const config = badgeTypes[type];
                         if (!config) return;
                         
-                        // Update by ID
-                        config.ids.forEach(id => {
-                            const badge = document.getElementById(id);
-                            setBadgeCount(badge, count);
-                        });
+                                // Prevent noisy repeated updates: if count unchanged, skip
+                                if (this._lastCounts === undefined) this._lastCounts = {};
+                                if (this._lastCounts[type] !== undefined && this._lastCounts[type] === count) return;
+                                this._lastCounts[type] = count;
+
+                                // Update by ID
+                                config.ids.forEach(id => {
+                                    const badge = document.getElementById(id);
+                                    setBadgeCount(badge, count);
+                                });
                         
                         // Update by selector (for any other badges with same class)
                         document.querySelectorAll(config.selector).forEach(badge => {
@@ -2259,6 +2298,7 @@
                         </div>
                         <button type="button" class="btn-close btn-close-white ms-3" data-bs-dismiss="toast" aria-label="Close"></button>
                     </div>
+                    <div class="toast-progress-bar" style="animation-duration: ${duration}ms;"></div>
                 `;
                 
                 toastContainer.appendChild(toast);

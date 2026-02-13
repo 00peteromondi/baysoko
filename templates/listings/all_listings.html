@@ -2648,11 +2648,25 @@ function applyFilters() {
     fetch(url, {
         headers: {
             'X-Requested-With': 'XMLHttpRequest'
-        }
+        },
+        credentials: 'same-origin'
     })
     .then(response => {
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+            // Read body and log a helpful snippet for debugging (login redirects or error pages)
+            return response.text().then(text => {
+                try {
+                    console.error('Non-JSON response received from filters endpoint. First 1200 chars:\n', text.slice(0, 1200));
+                } catch (e) {
+                    console.error('Non-JSON response received and could not log body snippet');
+                }
+                const snippet = text ? text.slice(0, 600) : 'empty response';
+                throw new Error(`Expected JSON but received: ${snippet}`);
+            });
         }
         return response.json();
     })
@@ -2675,13 +2689,25 @@ function applyFilters() {
         }
     })
     .catch(error => {
-        console.error('Filter error:', error);
+        // Provide more detailed logging for debugging
+        try {
+            console.error('Filter error:', error, error && error.stack ? error.stack : 'no stack');
+        } catch (e) {
+            console.error('Filter error (failed to stringify):', e);
+        }
+
         if (window.showToast) {
             window.showToast('Error applying filters', 'error');
         }
     })
     .finally(() => {
-        loadingOverlay.classList.remove('active');
+        try {
+            if (loadingOverlay && loadingOverlay.classList) {
+                loadingOverlay.classList.remove('active');
+            }
+        } catch (e) {
+            console.warn('Failed to hide loadingOverlay', e);
+        }
     });
 }
 

@@ -19,9 +19,9 @@
     }
 
     function createSpinnerHtml(size='sm'){
-        // Use a compact spinner and inline sizing so it fits inside buttons/links
+        // Create a custom circular spinner using CSS animation
         const dim = size === 'sm' ? '1rem' : '1.25rem';
-        return `<span class="spinner-border spinner-border-${size} me-2" role="status" aria-hidden="true" style="width:${dim};height:${dim};vertical-align:middle"></span>`;
+        return `<span class="custom-spinner" role="status" aria-hidden="true" style="width:${dim};height:${dim};"></span>`;
     }
 
     // Wrap text nodes inside an element with a span so we can hide only textual content
@@ -48,6 +48,42 @@
             .btn-text-hidden{ visibility:hidden; display:inline-block; }
             .btn-spinner-inline{ display:inline-flex; align-items:center; justify-content:center; vertical-align:middle; }
             .loading-no-underline{ text-decoration:none !important; }
+            
+            /* Dotted Circular Spinner with Leading Dot */
+            .custom-spinner {
+                display: inline-block;
+                position: relative;
+                width: 1rem;
+                height: 1rem;
+                vertical-align: middle;
+                animation: spin-dots 2s linear infinite;
+            }
+            
+            .custom-spinner::after {
+                content: '';
+                display: block;
+                width: 100%;
+                height: 100%;
+                border-radius: 50%;
+                border: 1.5px dotted currentColor;
+                border-spacing: 16px;
+            }
+            
+            .custom-spinner::before {
+                content: '';
+                position: absolute;
+                width: 0.18rem;
+                height: 0.18rem;
+                background: currentColor;
+                border-radius: 50%;
+                top: -0.09rem;
+                left: 50%;
+                transform: translateX(-50%);
+            }
+            
+            @keyframes spin-dots {
+                to { transform: rotate(360deg); }
+            }
         `;
         const st = document.createElement('style'); st.id = 'global-ajax-spinner-css'; st.textContent = css; document.head.appendChild(st);
     }
@@ -55,6 +91,27 @@
     // Resolve a possibly-relative URL to an absolute href for robust comparisons
     function resolveUrl(u){
         try{ return new URL(u, window.location.origin).href; }catch(e){ return String(u || ''); }
+    }
+
+    // Horizontal Loader Control Functions
+    function showHorizontalLoader(){
+        const loader = document.getElementById('horizontalLoader');
+        if(loader){
+            loader.classList.remove('complete');
+            loader.classList.add('active');
+        }
+    }
+
+    function hideHorizontalLoader(){
+        const loader = document.getElementById('horizontalLoader');
+        if(loader){
+            loader.classList.remove('active');
+            loader.classList.add('complete');
+            // Remove complete class after animation finishes
+            setTimeout(() => {
+                loader.classList.remove('complete');
+            }, 600);
+        }
     }
 
     function setButtonLoading(btn, text){
@@ -490,6 +547,9 @@
 
         // Show spinner; leaving label empty will preserve original innerHTML (keeps images)
         setButtonLoading(el, label || '');
+        
+        // Show horizontal loader
+        showHorizontalLoader();
 
         // Navigate after a short delay so spinner provides feedback
         setTimeout(() => { window.location.href = href; }, 3000);
@@ -509,6 +569,9 @@
         const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
         const submitLabel = submitBtn && ((submitBtn.dataset && submitBtn.dataset.loadingText) || (submitBtn.innerText || submitBtn.value)) || 'Submitting...';
         setFormLoading(form, (submitLabel || 'Submitting...').trim());
+        
+        // Show horizontal loader
+        showHorizontalLoader();
 
         const action = form.getAttribute('action') || window.location.href;
         const method = (form.getAttribute('method') || 'GET').toUpperCase();
@@ -591,6 +654,7 @@
             }
         }).finally(() => {
             resetFormLoading(form);
+            hideHorizontalLoader();
         });
     });
 
@@ -598,17 +662,25 @@
     window.UIHelpers = {
         setButtonLoading: setButtonLoading,
         resetButton: resetButton,
-        fetchHtmlAndReplace: fetchHtmlAndReplace
+        fetchHtmlAndReplace: fetchHtmlAndReplace,
+        showHorizontalLoader: showHorizontalLoader,
+        hideHorizontalLoader: hideHorizontalLoader
     };
 
     // handle back/forward for pushState replacements
     window.addEventListener('popstate', function(e){
+        // Show loader for navigation
+        showHorizontalLoader();
+        
         // Load the page via AJAX when navigating back/forward
         fetchHtmlAndReplace(window.location.href, { 
             credentials: 'same-origin', 
             headers: { 'X-Requested-With': 'XMLHttpRequest' } 
+        }).then(() => {
+            hideHorizontalLoader();
         }).catch(err => {
             console.error('AJAX popstate navigation failed', err);
+            hideHorizontalLoader();
             window.location.reload();
         });
     });

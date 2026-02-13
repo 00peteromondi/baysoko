@@ -296,6 +296,7 @@
     .notification-item.unread {
         background: rgba(var(--primary-rgb), 0.05);
         border-left: 4px solid var(--primary);
+        transition: all var(--transition);
     }
 
     .notification-item.unread::before {
@@ -307,6 +308,18 @@
         width: 4px;
         background: var(--primary);
         border-radius: 4px 0 0 4px;
+        transition: all var(--transition);
+    }
+
+    .notification-item.read {
+        background: var(--bg-primary);
+        border-left: 4px solid transparent;
+        transition: all var(--transition);
+    }
+
+    .notification-item.read::before {
+        background: transparent;
+        transition: all var(--transition);
     }
 
     .notification-header {
@@ -1075,9 +1088,32 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        // Update UI
+                        // Update UI with proper styling transition
                         notificationItem.classList.remove('unread');
+                        notificationItem.classList.add('read');
                         notificationItem.querySelector('.status-dot').classList.remove('unread');
+                        
+                        // Update status text
+                        const statusText = notificationItem.querySelector('.notification-status span:last-child');
+                        if (statusText) {
+                            statusText.textContent = 'Read';
+                        }
+                        
+                        // Remove mark as read buttons with smooth animation
+                        const markReadBtn = notificationItem.querySelector('.notification-action-btn.read');
+                        const btnMarkRead = notificationItem.querySelector('.btn-mark-read');
+                        if (markReadBtn) {
+                            markReadBtn.style.transition = 'all 0.2s ease';
+                            markReadBtn.style.opacity = '0';
+                            markReadBtn.style.transform = 'scale(0.8)';
+                            setTimeout(() => markReadBtn.remove(), 200);
+                        }
+                        if (btnMarkRead) {
+                            btnMarkRead.style.transition = 'all 0.2s ease';
+                            btnMarkRead.style.opacity = '0';
+                            btnMarkRead.style.transform = 'scale(0.8)';
+                            setTimeout(() => btnMarkRead.remove(), 200);
+                        }
                         
                         // Update count
                         const unreadCountBadge = document.querySelector('.unread-count-badge-large');
@@ -1186,12 +1222,33 @@
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            // Update all notifications
+                            // Update all notifications with smooth transitions
                             document.querySelectorAll('.notification-item.unread').forEach(item => {
                                 item.classList.remove('unread');
+                                item.classList.add('read');
                                 item.querySelector('.status-dot').classList.remove('unread');
-                                item.querySelector('.notification-action-btn.read')?.remove();
-                                item.querySelector('.btn-mark-read')?.remove();
+                                
+                                // Update status text
+                                const statusText = item.querySelector('.notification-status span:last-child');
+                                if (statusText) {
+                                    statusText.textContent = 'Read';
+                                }
+                                
+                                // Remove mark as read buttons with fade effect
+                                const markReadBtn = item.querySelector('.notification-action-btn.read');
+                                const btnMarkRead = item.querySelector('.btn-mark-read');
+                                if (markReadBtn) {
+                                    markReadBtn.style.transition = 'all 0.2s ease';
+                                    markReadBtn.style.opacity = '0';
+                                    markReadBtn.style.transform = 'scale(0.8)';
+                                    setTimeout(() => markReadBtn.remove(), 200);
+                                }
+                                if (btnMarkRead) {
+                                    btnMarkRead.style.transition = 'all 0.2s ease';
+                                    btnMarkRead.style.opacity = '0';
+                                    btnMarkRead.style.transform = 'scale(0.8)';
+                                    setTimeout(() => btnMarkRead.remove(), 200);
+                                }
                             });
                             
                             // Update count
@@ -1214,8 +1271,12 @@
             });
         }
         
-        // Toast notification function
-        function showToast(message, type = 'info') {
+        // Toast notification function: delegate to global implementation when available
+        function showToast(message, type = 'info', duration = 3000) {
+            if (window.showToast && window.showToast !== showToast) {
+                window.showToast(message, type, duration);
+                return;
+            }
             const toast = document.createElement('div');
             toast.className = `custom-toast toast-${type}`;
             toast.style.cssText = `
@@ -1237,7 +1298,7 @@
                 toast.style.opacity = '0';
                 toast.style.transition = 'opacity 0.3s';
                 setTimeout(() => toast.remove(), 300);
-            }, 3000);
+            }, duration);
         }
     });
 </script>

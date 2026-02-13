@@ -18,35 +18,40 @@ function copyToClipboard(text) {
 }
 
 // Show toast notification
-function showToast(message, type = 'info') {
+function showToast(message, type = 'info', duration = 3000) {
     // Create toast container if it doesn't exist
     let toastContainer = document.querySelector('.toast-container');
     if (!toastContainer) {
         toastContainer = document.createElement('div');
-        toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        toastContainer.className = 'toast-container';
         document.body.appendChild(toastContainer);
     }
-    
-    // Create toast
+
+    // Create toast using unified modern style
     const toastId = 'toast-' + Date.now();
     const toast = document.createElement('div');
-    toast.className = `toast align-items-center text-bg-${type} border-0`;
+    toast.className = `custom-toast toast-${type}`;
     toast.id = toastId;
     toast.setAttribute('role', 'alert');
+
+    const icon = type === 'success' ? 'check-circle-fill' : (type === 'error' ? 'exclamation-circle-fill' : (type === 'warning' ? 'exclamation-triangle-fill' : 'info-circle-fill'));
+
     toast.innerHTML = `
-        <div class="d-flex">
-            <div class="toast-body">${message}</div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        <div class="d-flex align-items-center">
+            <i class="bi bi-${icon} me-3"></i>
+            <div class="flex-grow-1">
+                <div class="fw-medium">${message}</div>
+            </div>
+            <button type="button" class="btn-close btn-close-white ms-3" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
+        <div class="toast-progress-bar" style="animation-duration: ${duration}ms;"></div>
     `;
-    
+
     toastContainer.appendChild(toast);
-    
-    // Show toast
-    const bsToast = new bootstrap.Toast(toast);
+
+    const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: duration });
     bsToast.show();
-    
-    // Remove toast after it's hidden
+
     toast.addEventListener('hidden.bs.toast', function() {
         toast.remove();
     });

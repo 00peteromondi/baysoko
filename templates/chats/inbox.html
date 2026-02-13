@@ -1509,9 +1509,11 @@
     let currentParticipantName = '';
     let currentParticipantAvatar = '';
     let currentParticipantIsOnline = false;
+    let currentParticipantLastSeen = null;
     let conversations = [];
     let onlineUsers = new Set();
     let messages = [];
+    let renderedMessageIds = new Set(); // Track rendered message IDs to prevent duplicates
     let attachments = [];
     let lastMessageId = 0;
     let isTyping = false;
@@ -1597,6 +1599,28 @@
             'txt': 'Text File'
         };
         return typeMap[ext] || 'File';
+    }
+    
+    // Format time for last seen
+    function formatLastSeen(dateString) {
+        if (!dateString) return 'Recently';
+        
+        const date = new Date(dateString);
+        const now = new Date();
+        const secondsAgo = Math.floor((now - date) / 1000);
+        
+        if (secondsAgo < 60) return 'Just now';
+        
+        const minutesAgo = Math.floor(secondsAgo / 60);
+        if (minutesAgo < 60) return minutesAgo === 1 ? '1 minute ago' : `${minutesAgo} minutes ago`;
+        
+        const hoursAgo = Math.floor(minutesAgo / 60);
+        if (hoursAgo < 24) return hoursAgo === 1 ? '1 hour ago' : `${hoursAgo} hours ago`;
+        
+        const daysAgo = Math.floor(hoursAgo / 24);
+        if (daysAgo < 7) return daysAgo === 1 ? '1 day ago' : `${daysAgo} days ago`;
+        
+        return date.toLocaleDateString();
     }
     
     // Format time
@@ -1990,6 +2014,7 @@
             const lastMessageTime = conv.last_message_time ? formatTime(conv.last_message_time) : '';
             const isOwnMessage = conv.last_message_sender_id === {{ user.id }};
             const isActive = currentConversationId === conv.id;
+            const lastSeenAt = conv.participant_last_seen_at || null;
             
             // Check if last message has attachments
             let previewText = conv.last_message_content || 'Start conversation';
@@ -2003,7 +2028,8 @@
                      data-participant-id="${conv.participant_id}"
                      data-participant-name="${conv.participant_name}"
                      data-participant-avatar="${conv.participant_avatar || 'https://placehold.co/200x200/c2c2c2/1f1f1f?text=User'}"
-                     data-is-online="${isOnline}">
+                     data-is-online="${isOnline}"
+                     data-last-seen="${lastSeenAt || ''}">
                     
                     <div class="conversation-avatar">
                         <img src="${conv.participant_avatar || 'https://placehold.co/200x200/c2c2c2/1f1f1f?text=User'}" 
@@ -2040,26 +2066,40 @@
                 const participantName = item.dataset.participantName;
                 const participantAvatar = item.dataset.participantAvatar;
                 const isOnline = item.dataset.isOnline === 'true';
+                const lastSeen = item.dataset.lastSeen || null;
                 
-                openConversation(conversationId, participantId, participantName, participantAvatar, isOnline);
+                openConversation(conversationId, participantId, participantName, participantAvatar, isOnline, lastSeen);
             });
         });
     }
     
     // Open conversation
-    async function openConversation(conversationId, participantId, participantName, participantAvatar, isOnline) {
+    async function openConversation(conversationId, participantId, participantName, participantAvatar, isOnline, lastSeenAt = null) {
         // Update current conversation info
         currentConversationId = conversationId;
         currentParticipantId = participantId;
         currentParticipantName = participantName;
         currentParticipantAvatar = participantAvatar;
         currentParticipantIsOnline = isOnline;
+        currentParticipantLastSeen = lastSeenAt;
         
         // Clear any existing attachments
         attachments = [];
         const previewContainer = document.getElementById('attachmentsPreview');
         previewContainer.innerHTML = '';
         previewContainer.classList.remove('has-attachments');
+        
+        // Clear message tracking for new conversation
+        messages = [];
+        renderedMessageIds = new Set();
+        lastMessageId = 0;
+        
+        // Clear typing indicator
+        const typingIndicator = document.getElementById('typingIndicatorContainer');
+        if (typingIndicator) {
+            typingIndicator.remove();
+        }
+        clearTimeout(typingTimeout);
         
         // Update UI
         updateConversationHeader();
@@ -2075,13 +2115,13 @@
             item.classList.toggle('active', parseInt(item.dataset.conversationId) === conversationId);
         });
         
-        // Show typing indicator area
+        // Create typing indicator area
         const messagesContainer = document.getElementById('messagesContainer');
         if (!document.getElementById('typingIndicatorContainer')) {
-            const typingIndicator = document.createElement('div');
-            typingIndicator.id = 'typingIndicatorContainer';
-            typingIndicator.style.display = 'none';
-            typingIndicator.innerHTML = `
+            const newTypingIndicator = document.createElement('div');
+            newTypingIndicator.id = 'typingIndicatorContainer';
+            newTypingIndicator.style.display = 'none';
+            newTypingIndicator.innerHTML = `
                 <div class="typing-indicator">
                     <div class="typing-dots">
                         <span></span>
@@ -2091,7 +2131,7 @@
                     <div class="typing-text">${participantName} is typing...</div>
                 </div>
             `;
-            messagesContainer.appendChild(typingIndicator);
+            messagesContainer.appendChild(newTypingIndicator);
         }
     }
     
@@ -2157,8 +2197,9 @@
             infoParticipantStatus.textContent = 'Online';
         } else {
             statusDot.className = 'status-dot';
-            participantStatus.textContent = 'Offline';
-            infoParticipantStatus.textContent = 'Offline';
+            const lastSeenText = currentParticipantLastSeen ? `Last seen ${formatLastSeen(currentParticipantLastSeen)}` : 'Offline';
+            participantStatus.textContent = lastSeenText;
+            infoParticipantStatus.textContent = lastSeenText;
         }
     }
     
@@ -2173,16 +2214,20 @@
             
             if (data.success) {
                 messages = data.new_messages || [];
+                renderedMessageIds = new Set(); // Reset rendered IDs for new conversation
                 renderMessages();
                 
                 // Update last message ID
                 if (messages.length > 0) {
                     lastMessageId = Math.max(...messages.map(m => m.id));
+                    // Mark all rendered message IDs
+                    messages.forEach(m => renderedMessageIds.add(m.id));
                 }
                 
                 // Update participant info if available
                 if (data.participant_info) {
                     currentParticipantIsOnline = data.participant_info.is_online;
+                    currentParticipantLastSeen = data.participant_info.last_seen_at || null;
                     updateConversationHeader();
                 }
                 
@@ -2219,8 +2264,14 @@
         let html = '';
         let currentDate = null;
         
-        // Group messages by date
+        // Group messages by date and deduplicate
         messages.forEach(msg => {
+            // Skip if message ID already rendered (deduplicate)
+            if (renderedMessageIds.has(msg.id)) {
+                return;
+            }
+            
+            renderedMessageIds.add(msg.id);
             const messageDate = formatDate(msg.timestamp);
             
             // Add date divider if date changed
@@ -2239,9 +2290,10 @@
             // Build message content
             let messageContent = msg.content || '';
             let attachmentsHtml = '';
+            const hasAttachments = msg.attachments && msg.attachments.length > 0;
             
             // Check if message has attachments
-            if (msg.attachments && msg.attachments.length > 0) {
+            if (hasAttachments) {
                 attachmentsHtml = `<div class="message-attachments">`;
                 msg.attachments.forEach(att => {
                     const fileType = att.file_type || att.type || '';
@@ -2255,7 +2307,7 @@
                                 <div class="attachment-preview">
                                     <img src="${fileUrl}" alt="${fileName}" 
                                          onclick="showAttachmentViewer(${JSON.stringify(att).replace(/"/g, '&quot;')})"
-                                         style="cursor: pointer;">
+                                         style="cursor: pointer; max-width: 300px; border-radius: 8px;">
                                 </div>
                                 <div class="attachment-info">
                                     <div class="attachment-name">${fileName}</div>
@@ -2270,38 +2322,29 @@
                     } else {
                         const iconClass = getFileIcon(fileName);
                         attachmentsHtml += `
-                            <div class="attachment-item">
-                                <div class="file-attachment">
-                                    <div class="file-icon-wrapper">
-                                        <i class="bi ${iconClass}"></i>
-                                    </div>
-                                    <div class="file-info">
-                                        <div class="attachment-name">${fileName}</div>
-                                        <div class="attachment-type">${getFileTypeLabel(fileName)}</div>
-                                        ${fileSize ? `<div class="attachment-size">${fileSize}</div>` : ''}
-                                    </div>
+                            <div class="attachment-item" style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+                                <div class="file-icon-wrapper" style="font-size: 28px; color: var(--primary);">
+                                    <i class="bi ${iconClass}"></i>
                                 </div>
-                                <div class="attachment-info">
-                                    <a href="${fileUrl}" class="attachment-download" target="_blank" download="${fileName}">
-                                        <i class="bi bi-download"></i> Download
-                                    </a>
+                                <div class="file-info" style="flex: 1;">
+                                    <div class="attachment-name" style="font-weight: 600;">${fileName}</div>
+                                    <div class="attachment-type" style="font-size: 0.85rem; color: var(--text-secondary);">${getFileTypeLabel(fileName)}</div>
+                                    ${fileSize ? `<div class="attachment-size" style="font-size: 0.8rem; color: var(--text-tertiary);">${fileSize}</div>` : ''}
                                 </div>
+                                <a href="${fileUrl}" class="attachment-download" target="_blank" download="${fileName}" style="padding: 8px 12px; background: var(--primary); color: white; border-radius: 6px; text-decoration: none; display: flex; align-items: center; gap: 6px; font-size: 0.85rem;">
+                                    <i class="bi bi-download"></i> Download
+                                </a>
                             </div>
                         `;
                     }
                 });
                 attachmentsHtml += `</div>`;
-                
-                // If message only has attachments and no text, show attachment indicator
-                if (!msg.content || msg.content.trim() === '') {
-                    messageContent = '📎 Sent an attachment';
-                }
             }
             
             html += `
                 <div class="message-group ${isOwn ? 'sent' : 'received'}">
                     <div class="message-bubble ${isOwn ? 'sent' : 'received'}">
-                        ${messageContent ? `<div class="message-content">${messageContent}</div>` : ''}
+                        ${messageContent ? `<div class="message-content">${escapeHtml(messageContent)}</div>` : ''}
                         ${attachmentsHtml}
                         <div class="message-time">
                             ${messageTime}
@@ -2323,6 +2366,13 @@
         
         // Scroll to bottom
         container.scrollTop = container.scrollHeight;
+    }
+    
+    // Escape HTML to prevent XSS
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
     
     // Send message with attachments
@@ -2365,64 +2415,14 @@
                 previewContainer.classList.remove('has-attachments');
                 document.getElementById('sendButton').disabled = true;
                 
-                // Add message to UI
+                // Add message to our tracking system
                 const message = data.message;
-                const messageTime = formatTime(message.timestamp);
+                messages.push(message);
+                renderedMessageIds.add(message.id);
+                lastMessageId = Math.max(lastMessageId, message.id);
                 
-                // Build attachments HTML if any
-                let attachmentsHtml = '';
-                if (message.attachments && message.attachments.length > 0) {
-                    attachmentsHtml = `<div class="message-attachments">`;
-                    message.attachments.forEach(att => {
-                        const fileType = att.file_type || '';
-                        const fileName = att.name || 'Attachment';
-                        const fileUrl = att.url || att.file_url || '#';
-                        
-                        if (fileType.startsWith('image/')) {
-                            attachmentsHtml += `
-                                <div class="attachment-item">
-                                    <div class="attachment-preview">
-                                        <img src="${fileUrl}" alt="${fileName}">
-                                    </div>
-                                    <div class="attachment-info">
-                                        <div class="attachment-name">${fileName}</div>
-                                        <a href="${fileUrl}" class="attachment-download" target="_blank" download="${fileName}">
-                                            <i class="bi bi-download"></i> Download
-                                        </a>
-                                    </div>
-                                </div>
-                            `;
-                        }
-                    });
-                    attachmentsHtml += `</div>`;
-                }
-                
-                const messagesContainer = document.getElementById('messagesContainer');
-                const messageHtml = `
-                    <div class="message-group sent">
-                        <div class="message-bubble sent">
-                            <div class="message-content">${message.content || '📎 Sent an attachment'}</div>
-                            ${attachmentsHtml}
-                            <div class="message-time">
-                                ${messageTime}
-                                <span class="message-status">
-                                    <i class="bi bi-check2 status-sent status-icon"></i>
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                
-                // Remove empty state if present
-                const emptyState = messagesContainer.querySelector('.empty-state');
-                if (emptyState) {
-                    emptyState.remove();
-                }
-                
-                messagesContainer.innerHTML += messageHtml;
-                
-                // Scroll to bottom
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                // Re-render all messages
+                renderMessages();
                 
                 // Update conversations list
                 await loadConversations();
@@ -2531,12 +2531,33 @@
         
         try {
             const data = await fetchJSON(`/chats/api/check-typing/${currentConversationId}/`);
-            const typingIndicator = document.getElementById('typingIndicatorContainer');
+            let typingIndicator = document.getElementById('typingIndicatorContainer');
+            
+            // Create typing indicator if it doesn't exist
+            if (!typingIndicator) {
+                const messagesContainer = document.getElementById('messagesContainer');
+                if (messagesContainer) {
+                    typingIndicator = document.createElement('div');
+                    typingIndicator.id = 'typingIndicatorContainer';
+                    typingIndicator.style.display = 'none';
+                    typingIndicator.innerHTML = `
+                        <div class="typing-indicator">
+                            <div class="typing-dots">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                            <div class="typing-text">${currentParticipantName} is typing...</div>
+                        </div>
+                    `;
+                    messagesContainer.appendChild(typingIndicator);
+                }
+            }
             
             if (data.typing && typingIndicator) {
                 typingIndicator.style.display = 'block';
                 
-                // Auto hide after 3 seconds
+                // Auto hide after 3 seconds of inactivity
                 clearTimeout(typingTimeout);
                 typingTimeout = setTimeout(() => {
                     if (typingIndicator) {
@@ -2566,8 +2587,9 @@
                 const data = await fetchJSON(`/chats/api/get-new-messages/${currentConversationId}/?last_id=${lastMessageId}`);
                 
                 if (data.success && data.new_messages && data.new_messages.length > 0) {
-                    // Filter out own messages (they're added immediately)
-                    const newMessages = data.new_messages.filter(msg => !msg.is_own_message);
+                    // Deduplicate: only add messages we haven't seen
+                    const existingIds = new Set(messages.map(m => m.id));
+                    const newMessages = data.new_messages.filter(msg => !existingIds.has(msg.id));
                     
                     if (newMessages.length > 0) {
                         // Add to messages array
@@ -2579,8 +2601,11 @@
                         // Render new messages
                         renderMessages();
                         
-                        // Mark as read
-                        await markMessagesAsRead();
+                        // Mark as read for non-own messages
+                        const receivedMessages = newMessages.filter(msg => !msg.is_own_message);
+                        if (receivedMessages.length > 0) {
+                            await markMessagesAsRead();
+                        }
 
                         // Notify global listeners that new messages arrived so badges can update immediately
                         try {
@@ -2589,8 +2614,9 @@
                             console.warn('Failed to dispatch newMessageReceived', e);
                         }
                         
-                        // Show notification for new messages
-                        if (document.hidden) {
+                        // Show notification for new messages from other user
+                        const otherMessages = newMessages.filter(m => !m.is_own_message);
+                        if (otherMessages.length > 0 && document.hidden) {
                             showToast(`New message from ${currentParticipantName}`, 'info');
                         }
                     }

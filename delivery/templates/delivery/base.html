@@ -287,11 +287,48 @@
             0% { background-position: -200% 0; }
             100% { background-position: 200% 0; }
         }
+
+        /* Horizontal Progress Loader */
+        .horizontal-loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: transparent;
+            z-index: 2000;
+            pointer-events: none;
+        }
+
+        .horizontal-loader.active {
+            background: linear-gradient(90deg, var(--primary), var(--primary-light), var(--primary));
+            background-size: 200% 100%;
+            animation: progress-bar 1.5s ease-in-out infinite;
+        }
+
+        @keyframes progress-bar {
+            0% { background-position: -200% 0; }
+            50% { background-position: 100% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        .horizontal-loader.complete {
+            background: var(--success);
+            animation: progress-complete 0.6s ease-out forwards;
+        }
+
+        @keyframes progress-complete {
+            0% { opacity: 1; transform: scaleX(1); }
+            100% { opacity: 0; transform: scaleX(1); }
+        }
     </style>
     
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    <!-- Horizontal Progress Loader -->
+    <div class="horizontal-loader" id="horizontalLoader"></div>
+
     <!-- Navigation -->
     <nav class="delivery-nav">
         <div class="container-fluid h-100">
@@ -833,41 +870,42 @@
             }
         };
         
-        // Toast notification
-        window.showToast = function(message, type = 'info') {
+        // Toast notification (modern, responsive with progress bar)
+        window.showToast = function(message, type = 'info', duration = 3000) {
             // Create toast container if it doesn't exist
             let toastContainer = document.getElementById('deliveryToastContainer');
             if (!toastContainer) {
                 toastContainer = document.createElement('div');
                 toastContainer.id = 'deliveryToastContainer';
-                toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+                toastContainer.className = 'toast-container';
                 document.body.appendChild(toastContainer);
             }
-            
+
             const toastId = 'toast-' + Date.now();
             const toast = document.createElement('div');
-            toast.className = `toast align-items-center text-white bg-${type} border-0`;
+            toast.className = `custom-toast toast-${type}`;
             toast.id = toastId;
             toast.setAttribute('role', 'alert');
             toast.setAttribute('aria-live', 'assertive');
             toast.setAttribute('aria-atomic', 'true');
-            
+
+            const icon = type === 'success' ? 'check-circle-fill' : (type === 'error' ? 'exclamation-circle-fill' : (type === 'warning' ? 'exclamation-triangle-fill' : 'info-circle-fill'));
+
             toast.innerHTML = `
-                <div class="d-flex">
-                    <div class="toast-body">
-                        <i class="bi bi-${type === 'success' ? 'check-circle' : 
-                                       type === 'error' ? 'exclamation-circle' : 
-                                       type === 'warning' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
-                        ${message}
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-${icon} me-3"></i>
+                    <div class="flex-grow-1">
+                        <div class="fw-medium">${message}</div>
                     </div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    <button type="button" class="btn-close btn-close-white ms-3" data-bs-dismiss="toast" aria-label="Close"></button>
                 </div>
+                <div class="toast-progress-bar" style="animation-duration: ${duration}ms;"></div>
             `;
-            
+
             toastContainer.appendChild(toast);
-            const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+            const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: duration });
             bsToast.show();
-            
+
             toast.addEventListener('hidden.bs.toast', () => {
                 toast.remove();
             });
@@ -898,6 +936,9 @@
             });
         });
     </script>
+    
+    <!-- Global AJAX Handler -->
+    <script src="{% static 'js/global-ajax-handler.js' %}"></script>
     
     {% block extra_js %}{% endblock %}
 </body>

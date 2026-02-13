@@ -82,6 +82,109 @@ class ListingListView(ListView):
     context_object_name = 'listings'
     paginate_by = 12
 
+    def get(self, request, *args, **kwargs):
+        """Override get() to intercept AJAX requests early and return JSON."""
+        # Check if this is an AJAX request for filters
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return self._handle_ajax_request(request, *args, **kwargs)
+        
+        # Normal HTML request
+        return super().get(request, *args, **kwargs)
+
+    def _handle_ajax_request(self, request, *args, **kwargs):
+        """Handle AJAX filter requests and return JSON."""
+        try:
+            # Get the queryset using normal logic
+            queryset = self.get_queryset()
+            
+            # Get paginator and page
+            paginator = Paginator(queryset, self.paginate_by)
+            page_num = request.GET.get('page', 1)
+            page_obj = paginator.get_page(page_num)
+            
+            listings_data = []
+            for listing in page_obj.object_list:
+                try:
+                    img_url = ''
+                    if hasattr(listing, 'get_image_url') and callable(listing.get_image_url):
+                        img_url = listing.get_image_url()
+                    elif hasattr(listing, 'image') and listing.image:
+                        img_url = listing.image.url
+                    
+                    loc_display = ''
+                    if hasattr(listing, 'get_location_display') and callable(listing.get_location_display):
+                        loc_display = listing.get_location_display()
+                    else:
+                        loc_display = listing.location
+                    
+                    listings_data.append({
+                        'id': listing.id,
+                        'title': listing.title,
+                        'price': float(listing.price) if listing.price is not None else 0,
+                        'image_url': img_url,
+                        'category_id': listing.category.id if listing.category else None,
+                        'category': listing.category.name if listing.category else None,
+                        'category_icon': getattr(listing.category, 'icon', '') if listing.category else '',
+                        'location': listing.location,
+                        'location_name': loc_display,
+                        'stock': listing.stock,
+                        'is_featured': listing.is_featured,
+                        'is_recent': getattr(listing, 'is_recent', False),
+                        'is_sold': listing.is_sold,
+                        'seller_id': listing.seller_id if hasattr(listing, 'seller_id') else (listing.seller.id if listing.seller else None),
+                        'url': reverse('listing-detail', args=[listing.pk]) if listing.pk else '',
+                        'is_favorited': getattr(listing, 'is_favorited', False),
+                        'total_favorites': getattr(listing, 'total_favorites', 0),
+                        'cart_quantity': getattr(listing, 'cart_quantity', 0),
+                    })
+                except Exception as e:
+                    logger.warning(f"Error serializing listing {listing.id}: {e}")
+                    continue
+
+            pagination = {
+                'total_count': paginator.count,
+                'current_page': page_obj.number,
+                'num_pages': paginator.num_pages,
+                'has_next': page_obj.has_next(),
+                'has_previous': page_obj.has_previous(),
+                'next_page': page_obj.next_page_number() if page_obj.has_next() else None,
+                'previous_page': page_obj.previous_page_number() if page_obj.has_previous() else None,
+            }
+
+            user_fav_count = 0
+            if request.user.is_authenticated:
+                try:
+                    user_fav_count = Favorite.objects.filter(user=request.user).count()
+                except Exception as e:
+                    logger.warning(f"Error getting user favorite count: {e}")
+
+            # Get cart info if authenticated
+            cart_total = 0
+            cart_item_count = 0
+            if request.user.is_authenticated:
+                try:
+                    cart, _ = Cart.objects.get_or_create(user=request.user)
+                    cart_total = cart.get_total_price()
+                    cart_item_count = cart.items.count()
+                except Exception as e:
+                    logger.warning(f"Error getting cart: {e}")
+
+            data = {
+                'success': True,
+                'listings': listings_data,
+                'pagination': pagination,
+                'is_authenticated': request.user.is_authenticated,
+                'user_id': request.user.id if request.user.is_authenticated else None,
+                'user_favorite_count': user_fav_count,
+                'cart_total': cart_total,
+                'cart_item_count': cart_item_count,
+            }
+
+            return JsonResponse(data)
+        except Exception as e:
+            logger.error(f"Error in _handle_ajax_request: {e}", exc_info=True)
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
     def get_queryset(self):
         queryset = Listing.objects.filter(is_active=True).order_by('-date_created')
         
@@ -394,13 +497,6 @@ class ListingListView(ListView):
             context['blog_posts'] = []
 
         return context
-
-def ai_test_view(request):
-    from .ai_listing_helper import listing_ai
-    return render(request, 'listings/ai_test.html', {
-        'ai_enabled': listing_ai.enabled
-    })
-
 
 class ListingDetailView(DetailView):
     model = Listing
@@ -907,10 +1003,9 @@ def all_listings(request):
     if request.user.is_authenticated:
         user_favorite_count = Favorite.objects.filter(user=request.user).count()
 
-    # For AJAX requests, return JSON only when explicitly requested via `ajax=1`
-    # This avoids returning JSON for normal navigation where X-Requested-With
-    # may be set by some clients and the user expects the full HTML page.
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' and request.GET.get('ajax') == '1':
+    # For AJAX requests, return JSON
+    # X-Requested-With header indicates this is an AJAX/XHR request (sent by fetch API)
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         paginator = Paginator(listings, 12)
         page_number = request.GET.get('page', 1)
         

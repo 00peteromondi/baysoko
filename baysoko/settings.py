@@ -387,6 +387,12 @@ SECURE_CONTENT_TYPE_NOSNIFF = config('SECURE_CONTENT_TYPE_NOSNIFF', default=True
 
 # When running tests, avoid enforcing HTTPS redirects which cause 301 responses
 RUNNING_TESTS = len(sys.argv) > 1 and sys.argv[1] == 'test'
+RUNNING_RUNSERVER = len(sys.argv) > 1 and sys.argv[1] == 'runserver'
+
+if RUNNING_TESTS or RUNNING_RUNSERVER:
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+
 if RUNNING_TESTS:
     SECURE_SSL_REDIRECT = False
     # Ensure the Django test client host is allowed
@@ -406,13 +412,15 @@ if RUNNING_TESTS:
 try:
     hosts = ALLOWED_HOSTS if isinstance(ALLOWED_HOSTS, (list, tuple)) else [ALLOWED_HOSTS]
     # Only disable SSL redirect automatically for local development or tests
-    if any(h in ('localhost', '127.0.0.1') for h in hosts) and (DEBUG or RUNNING_TESTS):
+    if any(h in ('localhost', '127.0.0.1') for h in hosts) and (DEBUG or RUNNING_TESTS or RUNNING_RUNSERVER):
         SECURE_SSL_REDIRECT = False
 except Exception:
     pass
 
-# Ensure SSL redirect is enabled for deployment checks unless running tests
-if RUNNING_TESTS:
+# Ensure SSL redirect is enabled for deployment checks unless running tests or local dev
+if RUNNING_TESTS or RUNNING_RUNSERVER:
+    SECURE_SSL_REDIRECT = False
+elif DEBUG:
     SECURE_SSL_REDIRECT = False
 else:
     SECURE_SSL_REDIRECT = True
