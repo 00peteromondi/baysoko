@@ -106,8 +106,8 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         # For Facebook
         if provider == 'facebook':
             # Hardcoded Render.com URL
-            return "https://baysoko.onrender.com/accounts/facebook/callback/"
+            return "https://bay-soko.onrender.com/accounts/facebook/callback/"
         
         # Fallback - return the default allauth behavior for other providers
         # Note: DefaultSocialAccountAdapter doesn't have get_redirect_uri, so we return a default
-        return f"https://baysoko.onrender.com/accounts/{provider}/callback/"
+        return f"https://bay-soko.onrender.com/accounts/{provider}/callback/"

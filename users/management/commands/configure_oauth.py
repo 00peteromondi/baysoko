@@ -12,7 +12,7 @@ class Command(BaseCommand):
         
         # 1. Configure the Site
         site = Site.objects.get_current()
-        site.domain = 'baysoko.onrender.com'
+        site.domain = 'bay-soko.onrender.com'
         site.name = 'Baysoko Marketplace'
         site.save()
         
@@ -34,7 +34,7 @@ class Command(BaseCommand):
         self.stdout.write(f"  Redirect URI: https://bay-soko.onrender.com/accounts/google/callback/")
         self.stdout.write("")
         self.stdout.write("Facebook Developer Console:")
-        self.stdout.write(f"  Redirect URI: https://baysoko.onrender.com/accounts/facebook/callback/")
+        self.stdout.write(f"  Redirect URI: https://bay-soko.onrender.com/accounts/facebook/callback/")
         
         self.stdout.write("\n💡 Tip: Make sure these URIs are EXACTLY as shown above.")
         

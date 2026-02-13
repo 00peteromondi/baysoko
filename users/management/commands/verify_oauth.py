@@ -46,7 +46,7 @@ class Command(BaseCommand):
             self.stdout.write(f"✅ Facebook Sites: {list(facebook_app.sites.all())}")
             
             # Direct hardcoded redirect URI (matching what's in adapters.py)
-            facebook_redirect_uri = "https://baysoko.onrender.com/accounts/facebook/callback/"
+            facebook_redirect_uri = "https://bay-soko.onrender.com/accounts/facebook/callback/"
             self.stdout.write(f"✅ Facebook Redirect URI (hardcoded): {facebook_redirect_uri}")
             
         except SocialApp.DoesNotExist:
@@ -67,6 +67,6 @@ class Command(BaseCommand):
         # Check URLs in views
         self.stdout.write("\n🔍 Checking Hardcoded URLs in views.py:")
         self.stdout.write(f"✅ Google callback in views: https://bay-soko.onrender.com/accounts/google/callback/")
-        self.stdout.write(f"✅ Facebook callback in views: https://baysoko.onrender.com/accounts/facebook/callback/")
+        self.stdout.write(f"✅ Facebook callback in views: https://bay-soko.onrender.com/accounts/facebook/callback/")
         
         self.stdout.write("\n✅ OAuth Verification Complete!")

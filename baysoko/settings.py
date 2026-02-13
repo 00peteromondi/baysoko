@@ -123,7 +123,7 @@ except Exception:
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
-    ALLOWED_HOSTS.append('baysoko.onrender.com')
+    ALLOWED_HOSTS.append('bay-soko.onrender.com')
 
 # Cloudinary configuration - prefer python-decouple (reads .env) but allow CLOUDINARY_URL
 # Use config() so values from `.env` are picked up in development when not exported to the shell

@@ -19,7 +19,7 @@ def setup_oauth():
     site, created = Site.objects.get_or_create(
         id=1,
         defaults={
-            'domain': 'baysoko.onrender.com',
+            'domain': 'bay-soko.onrender.com',
             'name': 'Baysoko Marketplace'
         }
     )
@@ -27,7 +27,7 @@ def setup_oauth():
     if created:
         print(f"✅ Created new site: {site.name}")
     else:
-        site.domain = 'baysoko.onrender.com'
+        site.domain = 'bay-soko.onrender.com'
         site.name = 'Baysoko Marketplace'
         site.save()
         print(f"✅ Updated site: {site.name}")
@@ -83,7 +83,7 @@ def setup_oauth():
     print("\n✅ OAuth setup complete!")
     print(f"🌐 Site Domain: {site.domain}")
     print(f"🔗 Google Callback: https://bay-soko.onrender.com/accounts/google/callback/")
-    print(f"🔗 Facebook Callback: https://baysoko.onrender.com/accounts/facebook/callback/")
+    print(f"🔗 Facebook Callback: https://bay-soko.onrender.com/accounts/facebook/callback/")
 
 if __name__ == '__main__':
     setup_oauth()
