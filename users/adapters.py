@@ -101,7 +101,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         # For Google, use hardcoded render.com URL
         if provider == 'google':
             # Hardcoded Render.com URL
-            return "https://baysoko.onrender.com/accounts/google/callback/"
+            return "https://bay-soko.onrender.com/accounts/google/callback/"
         
         # For Facebook
         if provider == 'facebook':

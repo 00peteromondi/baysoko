@@ -82,7 +82,7 @@ def setup_oauth():
     
     print("\n✅ OAuth setup complete!")
     print(f"🌐 Site Domain: {site.domain}")
-    print(f"🔗 Google Callback: https://baysoko.onrender.com/accounts/google/callback/")
+    print(f"🔗 Google Callback: https://bay-soko.onrender.com/accounts/google/callback/")
     print(f"🔗 Facebook Callback: https://baysoko.onrender.com/accounts/facebook/callback/")
 
 if __name__ == '__main__':

@@ -23,11 +23,11 @@ class Command(BaseCommand):
             self.stdout.write(f"✅ Google Sites: {list(google_app.sites.all())}")
             
             # Direct hardcoded redirect URI (matching what's in adapters.py)
-            google_redirect_uri = "https://baysoko.onrender.com/accounts/google/callback/"
+            google_redirect_uri = "https://bay-soko.onrender.com/accounts/google/callback/"
             self.stdout.write(f"✅ Google Redirect URI (hardcoded): {google_redirect_uri}")
             
             # Verify it matches expected value
-            expected_uri = "https://baysoko.onrender.com/accounts/google/callback/"
+            expected_uri = "https://bay-soko.onrender.com/accounts/google/callback/"
             if google_redirect_uri == expected_uri:
                 self.stdout.write("✅ Google Redirect URI matches expected value!")
             else:
@@ -66,7 +66,7 @@ class Command(BaseCommand):
         
         # Check URLs in views
         self.stdout.write("\n🔍 Checking Hardcoded URLs in views.py:")
-        self.stdout.write(f"✅ Google callback in views: https://baysoko.onrender.com/accounts/google/callback/")
+        self.stdout.write(f"✅ Google callback in views: https://bay-soko.onrender.com/accounts/google/callback/")
         self.stdout.write(f"✅ Facebook callback in views: https://baysoko.onrender.com/accounts/facebook/callback/")
         
         self.stdout.write("\n✅ OAuth Verification Complete!")

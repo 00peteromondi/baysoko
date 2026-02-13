@@ -31,7 +31,7 @@ class Command(BaseCommand):
         self.stdout.write("\n📋 Redirect URIs to configure in provider dashboards:")
         self.stdout.write("-" * 50)
         self.stdout.write("Google OAuth Console:")
-        self.stdout.write(f"  Redirect URI: https://baysoko.onrender.com/accounts/google/callback/")
+        self.stdout.write(f"  Redirect URI: https://bay-soko.onrender.com/accounts/google/callback/")
         self.stdout.write("")
         self.stdout.write("Facebook Developer Console:")
         self.stdout.write(f"  Redirect URI: https://baysoko.onrender.com/accounts/facebook/callback/")
