@@ -65,4 +65,7 @@ urlpatterns = [
     path('profile/<int:pk>/edit/', ProfileUpdateView.as_view(), name='profile-edit'),
     path('oauth-diagnostics/', oauth_diagnostics, name='oauth-diagnostics'),
     path('ajax/password-change/', views.ajax_password_change, name='ajax_password_change'),
+    path('verify-email/', views.verify_email, name='verify_email'),
+    path('resend-code/', views.resend_code, name='resend_code'),
+    path('verify/', views.verification_required, name='verification_required'),
 ]

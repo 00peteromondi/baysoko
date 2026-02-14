@@ -760,6 +760,30 @@
         gap: 2px;
     }
 
+    /* Gallery navigation inside attachment viewer */
+    .attachment-viewer-modal .modal-body { position: relative; }
+    .gallery-nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(0,0,0,0.4);
+        color: white;
+        border: none;
+        width: 40px;
+        height: 40px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.6rem;
+        cursor: pointer;
+        z-index: 1200;
+    }
+    .gallery-nav.left { left: 10px; }
+    .gallery-nav.right { right: 10px; }
+    .gallery-nav:disabled { opacity: 0.4; cursor: default; }
+    }
+
     .message-bubble.received .attachment-info {
         background: var(--bg-secondary);
         color: var(--text-secondary);
@@ -1262,7 +1286,7 @@
         display: none;
         align-items: center;
         justify-content: center;
-        z-index: 1000;
+        z-index: 1100;
         opacity: 0;
         transition: var(--transition);
     }
@@ -1294,6 +1318,30 @@
         }
     }
 
+    /* Fullscreen mobile modal behavior and animation
+       - On small screens, modal-content becomes fullscreen and slides up.
+       - Adds a prominent circular 'X' close button at top-right. */
+    @media (max-width: 992px) {
+        .modal-overlay .modal-content {
+            width: 100%;
+            max-width: none;
+            height: 100%;
+            max-height: none;
+            border-radius: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            animation: modalFullscreenIn 320ms cubic-bezier(.2,.8,.2,1) forwards;
+        }
+
+        @keyframes modalFullscreenIn {
+            from { transform: translateY(100%); opacity: 0; }
+            to   { transform: translateY(0);     opacity: 1; }
+        }
+
+        /* modal-close-x removed: keep native modal close buttons */
+    }
+
     .modal-header {
         padding: var(--spacing-lg);
         border-bottom: 1px solid var(--border-color);
@@ -1308,8 +1356,11 @@
 
     .modal-body {
         padding: var(--spacing-lg);
-        max-height: 50vh;
+        max-height: 65vh;
         overflow-y: auto;
+        scrollbar-width: thin !important;
+        scrollbar-color: transparent !important;
+        
     }
 
     .modal-footer {
@@ -1403,7 +1454,7 @@
     /* ===== ADDITIONS FOR NEW FEATURES ===== */
     .message-actions {
         position: absolute;
-        top: 0;
+        top: 6px;
         right: 0;
         display: none;
         background: var(--bg-primary);
@@ -1413,6 +1464,20 @@
     }
     .message-bubble:hover .message-actions {
         display: flex;
+    }
+
+    /* Move action buttons further to the right for received messages
+       so they sit outside the left-aligned bubble and align closer to
+       the right side visually. Adjust as needed (negative right). */
+    .message-group.received .message-actions {
+        right: -10px; /* push actions outside the bubble */
+        top: 8px;
+    }
+
+    /* Keep sent messages actions aligned to the bubble's right edge */
+    .message-group.sent .message-actions {
+        right: 0;
+        top: 6px;
     }
     .message-pin {
         color: var(--warning);
@@ -1859,11 +1924,16 @@
             <button type="button" class="btn-close" id="closeAttachmentViewer"></button>
         </div>
         <div class="modal-body">
+            <button class="gallery-nav left" id="prevAttachment" aria-label="Previous">‹</button>
             <div class="attachment-viewer" id="attachmentViewerContent"></div>
+            <button class="gallery-nav right" id="nextAttachment" aria-label="Next">›</button>
             <div class="attachment-viewer-actions">
                 <a href="#" class="btn-custom btn-primary" id="downloadAttachment" target="_blank">
                     <i class="bi bi-download me-2"></i>Download
                 </a>
+                    <button class="btn-custom btn-ghost" id="downloadAllAttachments">
+                        <i class="bi bi-download me-2"></i>Download All
+                    </button>
                 <button class="btn-custom btn-ghost" id="closeAttachmentViewerBtn">Close</button>
             </div>
         </div>
@@ -1939,6 +2009,12 @@ let temporaryMessages = new Map();
 let otherIsTyping = false;
 let otherTypingName = '';
 let tempIdCounter = 0;
+let galleryImages = [];
+let galleryIndex = 0;
+
+function isImageAttachment(att) {
+    return att && (att.type && att.type.startsWith('image/')) || (att.url && /\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i.test(att.url || ''));
+}
 
 // Archived conversations
 let archivedConversations = [];
@@ -2524,6 +2600,8 @@ async function fetchUnifiedMessages(participantId) {
                 if (newMsgs.length) {
                     allMessages.push(...newMsgs);
                     lastMessageId = Math.max(...newMsgs.map(m => m.id));
+                    // New messages arrived for this conversation — refresh conversation list and unread counts immediately
+                    try { loadGroupedConversations(); updateTotalUnreadCount(); } catch (e) { console.warn('refresh grouped convs failed', e); }
                 }
             }
             lastMessageId = allMessages.length ? Math.max(...allMessages.map(m => m.id)) : 0;
@@ -3050,7 +3128,7 @@ function startPolling() {
 
     typingPollInterval = setInterval(checkTyping, 2000);
     statusPollInterval = setInterval(pollReadStatus, 5000);
-    conversationListPollInterval = setInterval(() => loadGroupedConversations(), 10000);
+    conversationListPollInterval = setInterval(() => loadGroupedConversations(), 5000);
 }
 
 function stopPolling() {
@@ -3178,14 +3256,100 @@ window.showAttachmentViewer = (attachment) => {
     const title = document.getElementById('attachmentViewerTitle');
     const downloadLink = document.getElementById('downloadAttachment');
     if (!modal || !content || !title || !downloadLink) return;
-    title.innerText = attachment.name || 'Attachment';
-    downloadLink.href = attachment.url || attachment.file_url;
-    if (attachment.type && attachment.type.startsWith('image/')) {
-        content.innerHTML = `<img src="${attachment.url}" style="max-width:100%;max-height:70vh;">`;
-    } else {
-        content.innerHTML = `<p>File: ${attachment.name}</p>`;
+
+    // Build gallery from allMessages (images in current conversation)
+    galleryImages = [];
+    allMessages.forEach(m => {
+        if (!m.attachments) return;
+        m.attachments.forEach(att => {
+            if (isImageAttachment(att)) {
+                const url = att.url || att.file_url;
+                galleryImages.push({ url: url, name: att.name || att.filename || ('image_' + (att.id || Math.random()).toString()), raw: att });
+            }
+        });
+    });
+
+    // If the passed attachment is part of the gallery, set index accordingly
+    const matchUrl = attachment.url || attachment.file_url;
+    galleryIndex = galleryImages.findIndex(g => g.url === matchUrl);
+    if (galleryIndex === -1) {
+        // fallback: single image view
+        galleryImages = [{ url: matchUrl, name: attachment.name || attachment.filename || 'Attachment', raw: attachment }];
+        galleryIndex = 0;
     }
+
+    function showImageAt(i) {
+        const item = galleryImages[i];
+        if (!item) return;
+        title.innerText = item.name || `Attachment ${i+1} of ${galleryImages.length}`;
+        downloadLink.href = item.url;
+        content.innerHTML = `<img src="${item.url}" style="max-width:100%;max-height:70vh;">`;
+        // update aria/state on nav buttons
+        const prev = document.getElementById('prevAttachment');
+        const next = document.getElementById('nextAttachment');
+        if (prev) prev.disabled = (i <= 0);
+        if (next) next.disabled = (i >= galleryImages.length - 1);
+    }
+
+    function onKey(e) {
+        if (!document.getElementById('attachmentViewerModal').classList.contains('active')) return;
+        if (e.key === 'ArrowLeft') {
+            if (galleryIndex > 0) { galleryIndex -= 1; showImageAt(galleryIndex); }
+        } else if (e.key === 'ArrowRight') {
+            if (galleryIndex < galleryImages.length - 1) { galleryIndex += 1; showImageAt(galleryIndex); }
+        } else if (e.key === 'Escape') {
+            document.getElementById('attachmentViewerModal').classList.remove('active');
+            window.removeEventListener('keydown', onKey);
+        }
+    }
+
+    // wire up buttons
+    const prevBtn = document.getElementById('prevAttachment');
+    const nextBtn = document.getElementById('nextAttachment');
+    if (prevBtn) prevBtn.onclick = () => { if (galleryIndex > 0) { galleryIndex--; showImageAt(galleryIndex); } };
+    if (nextBtn) nextBtn.onclick = () => { if (galleryIndex < galleryImages.length - 1) { galleryIndex++; showImageAt(galleryIndex); } };
+
+    const downloadAllBtn = document.getElementById('downloadAllAttachments');
+    if (downloadAllBtn) downloadAllBtn.onclick = (ev) => {
+        ev.preventDefault();
+        // Prefer server-side zip download when viewing a conversation
+        if (window.currentParticipantId) {
+            const url = `/chats/api/download-conversation-images/${window.currentParticipantId}/`;
+            // open in new tab to trigger browser download
+            window.open(url, '_blank');
+            return;
+        }
+
+        // Fallback: individual downloads (client-side)
+        (async () => {
+            if (!galleryImages.length) return;
+            downloadAllBtn.disabled = true;
+            for (let j = 0; j < galleryImages.length; j++) {
+                try {
+                    const res = await fetch(galleryImages[j].url);
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = galleryImages[j].name || `image_${j+1}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                } catch (err) {
+                    console.error('downloadAllAttachments error', err);
+                }
+            }
+            downloadAllBtn.disabled = false;
+        })();
+    };
+
+    // open modal and show current
     modal.classList.add('active');
+    showImageAt(galleryIndex);
+    // attach keyboard navigation (store handler so it can be removed on close)
+    window._attachmentViewerKeyHandler = onKey;
+    window.addEventListener('keydown', window._attachmentViewerKeyHandler);
 };
 
 function showAttachmentViewerInline(el) {
@@ -3402,7 +3566,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('.modal-overlay').forEach(modal => {
         modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.classList.remove('active');
+            if (e.target === modal) {
+                modal.classList.remove('active');
+                if (modal.id === 'attachmentViewerModal') {
+                    if (window._attachmentViewerKeyHandler) {
+                        window.removeEventListener('keydown', window._attachmentViewerKeyHandler);
+                        window._attachmentViewerKeyHandler = null;
+                    }
+                    galleryImages = [];
+                }
+            }
         });
     });
 
@@ -3410,14 +3583,26 @@ document.addEventListener('DOMContentLoaded', () => {
     if (closeAttachmentViewer) {
         closeAttachmentViewer.addEventListener('click', () => {
             document.getElementById('attachmentViewerModal').classList.remove('active');
+            if (window._attachmentViewerKeyHandler) {
+                window.removeEventListener('keydown', window._attachmentViewerKeyHandler);
+                window._attachmentViewerKeyHandler = null;
+            }
+            galleryImages = [];
         });
     }
     const closeAttachmentViewerBtn = document.getElementById('closeAttachmentViewerBtn');
     if (closeAttachmentViewerBtn) {
         closeAttachmentViewerBtn.addEventListener('click', () => {
             document.getElementById('attachmentViewerModal').classList.remove('active');
+            if (window._attachmentViewerKeyHandler) {
+                window.removeEventListener('keydown', window._attachmentViewerKeyHandler);
+                window._attachmentViewerKeyHandler = null;
+            }
+            galleryImages = [];
         });
     }
+
+    // No injected close button — rely on existing modal close elements.
 
     const scrollBottomBtn = document.getElementById('scrollBottomBtn');
     if (scrollBottomBtn) {

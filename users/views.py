@@ -32,6 +32,13 @@ import contextlib
 import smtplib
 import traceback
 from email.message import EmailMessage
+import random
+import string
+from datetime import timedelta
+from django.utils import timezone
+from django.template.loader import render_to_string
+from django.core.mail import send_mail
+
 
 
 
@@ -39,7 +46,6 @@ logger = logging.getLogger(__name__)
 
 def register(request):
     if request.user.is_authenticated:
-        messages.info(request, 'You are already logged in!')
         return redirect('home')
     
     if request.method == 'POST':
@@ -47,39 +53,133 @@ def register(request):
         if form.is_valid():
             try:
                 user = form.save(commit=False)
-                # Ensure location has a default value
                 if not user.location:
                     user.location = 'Homabay'
+                # Normalize empty phone numbers to None so UNIQUE constraint isn't violated
+                if not getattr(user, 'phone_number', None):
+                    user.phone_number = None
+                # Generate verification code
+                code = ''.join(random.choices(string.digits, k=7))
+                user.email_verification_code = code
+                user.email_verification_sent_at = timezone.now()
+                user.verification_attempts_today = 0
+                user.last_verification_attempt_date = timezone.now().date()
                 user.save()
                 
-                # Log the user in
-                login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+                # Send verification email
+                send_verification_email(user)
                 
-                messages.success(request, f'Registration successful! Welcome to Baysoko, {user.first_name}!')
-                
-                # Check if they came from a specific page
-                next_url = request.GET.get('next', 'home')
-                return redirect(next_url)
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': True,
+                        'message': 'Registration successful. Please check your email for verification code.',
+                        'user_id': user.id
+                    })
+                messages.success(request, 'Registration successful. Please check your email for verification code.')
+                return redirect('verification_required')
                 
             except Exception as e:
                 logger.error(f"Registration error: {str(e)}", exc_info=True)
-                messages.error(request, 'An error occurred during registration. Please try again.')
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'errors': {'__all__': str(e)}})
+                messages.error(request, 'An error occurred during registration.')
         else:
-            # Show form errors
-            for field, errors in form.errors.items():
-                for error in errors:
-                    messages.error(request, f"{field}: {error}")
-            # Add the form back to context with errors
-            return render(request, 'users/register.html', {
-                'form': form,
-            })
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'errors': form.errors})
+            return render(request, 'users/register.html', {'form': form})
+    
     else:
         form = CustomUserCreationForm()
     
-    return render(request, 'users/register.html', {
-        'form': form,
-    })
+    return render(request, 'users/register.html', {'form': form})
 
+def send_verification_email(user):
+    subject = 'Verify your email for Baysoko'
+    html_message = render_to_string('users/verification_email.html', {
+        'user': user,
+        'code': user.email_verification_code,
+        'site_name': 'Baysoko',
+    })
+    plain_message = f'Your verification code is: {user.email_verification_code}'
+    send_mail(
+        subject,
+        plain_message,
+        settings.DEFAULT_FROM_EMAIL,
+        [user.email],
+        html_message=html_message,
+        fail_silently=False,
+    )
+
+@csrf_exempt
+def verify_email(request):
+    if request.method == 'POST':
+        user_id = request.POST.get('user_id')
+        code = request.POST.get('code')
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'User not found.'})
+        
+        # Check if code matches and is not expired (24 hours)
+        if user.email_verification_code == code and user.email_verification_sent_at:
+            if timezone.now() - user.email_verification_sent_at > timedelta(hours=24):
+                return JsonResponse({'success': False, 'error': 'Code expired. Request a new one.'})
+            # Mark verified
+            user.email_verified = True
+            user.is_active = True
+            user.email_verification_code = None
+            user.save()
+            # Log the user in automatically
+            from django.contrib.auth import login
+            login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+            return JsonResponse({'success': True, 'redirect': '/'})
+        else:
+            return JsonResponse({'success': False, 'error': 'Invalid code.'})
+    return JsonResponse({'success': False, 'error': 'Invalid request.'})
+
+@csrf_exempt
+def resend_code(request):
+    if request.method == 'POST':
+        user_id = request.POST.get('user_id')
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'User not found.'})
+        
+        now = timezone.now()
+        today = now.date()
+        
+        if user.last_verification_attempt_date != today:
+            user.verification_attempts_today = 0
+            user.last_verification_attempt_date = today
+        
+        if user.verification_attempts_today >= 3:
+            return JsonResponse({'success': False, 'error': 'Maximum attempts reached. Try again tomorrow.'})
+        
+        if user.email_verification_sent_at and (now - user.email_verification_sent_at).seconds < 60:
+            wait = 60 - (now - user.email_verification_sent_at).seconds
+            return JsonResponse({'success': False, 'error': f'Please wait {wait} seconds.', 'wait': wait})
+        
+        # Generate new code
+        code = ''.join(random.choices(string.digits, k=7))
+        user.email_verification_code = code
+        user.email_verification_sent_at = now
+        user.verification_attempts_today += 1
+        user.save()
+        
+        send_verification_email(user)
+        return JsonResponse({'success': True, 'message': 'Code resent.'})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request.'})
+
+@login_required
+def verification_required(request):
+    """Page shown to unverified users"""
+    if request.user.email_verified:
+        return redirect('home')
+    return render(request, 'users/verify_email.html', {'user': request.user})
+
+    
 # Update the google_login function to handle registration
 def google_login(request):
     """Redirect to Google OAuth for login/registration"""

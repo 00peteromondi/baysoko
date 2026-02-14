@@ -11,6 +11,7 @@ urlpatterns = [
     path('api/online-users/', views.OnlineUsersListView.as_view(), name='online-users'),  # new endpoint
     path('api/search-users/', views.SearchUsersView.as_view(), name='search-users'),
     path('api/unified-conversation/<int:participant_id>/', views.UnifiedConversationView.as_view(), name='unified-conversation'),
+    path('api/download-conversation-images/<int:participant_id>/', views.download_conversation_images, name='download-conversation-images'),
     path('api/send-unified-message/', views.SendUnifiedMessageView.as_view(), name='send-unified-message'),
     path('api/send-typing/<int:conversation_id>/', views.SendTypingView.as_view(), name='send-typing'),
     path('api/check-typing/<int:conversation_id>/', views.CheckTypingView.as_view(), name='check-typing'),

@@ -10,7 +10,7 @@ from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db.models import Q, Count, OuterRef, Subquery, Max
-from django.http import JsonResponse, Http404
+from django.http import JsonResponse, Http404, HttpResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone
 from django.views import View
@@ -797,6 +797,47 @@ class EditMessageView(LoginRequiredMixin, View):
             msg = Message.objects.get(id=message_id, sender=request.user)
         except Message.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Message not found'}, status=404)
+
+
+@login_required
+def download_conversation_images(request, participant_id):
+    """Stream a ZIP archive of image attachments for the conversation with the given participant."""
+    try:
+        other = get_object_or_404(User, id=participant_id)
+        convos = Conversation.objects.filter(participants=request.user).filter(participants=other)
+        if not convos.exists():
+            return JsonResponse({'success': False, 'error': 'No conversation found'}, status=404)
+
+        atts = MessageAttachment.objects.filter(
+            message__conversation__in=convos,
+        ).filter(content_type__startswith='image/').order_by('message__timestamp')
+
+        if not atts.exists():
+            return JsonResponse({'success': False, 'error': 'No image attachments found'}, status=404)
+
+        import io, zipfile, os
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for att in atts:
+                try:
+                    filename = att.filename or os.path.basename(getattr(att.file, 'name', 'attachment'))
+                    # Read file from storage/backend
+                    with default_storage.open(att.file.name, 'rb') as f:
+                        data = f.read()
+                        zf.writestr(filename, data)
+                except Exception as e:
+                    logger.warning(f"Failed to add attachment {att.id} to zip: {e}")
+
+        buf.seek(0)
+        resp = HttpResponse(buf.getvalue(), content_type='application/zip')
+        resp['Content-Disposition'] = f'attachment; filename=conversation_{participant_id}_images.zip'
+        return resp
+    except Http404:
+        return JsonResponse({'success': False, 'error': 'Participant not found'}, status=404)
+    except Exception as e:
+        logger.exception('download_conversation_images error')
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
         data = json.loads(request.body)
         new_content = data.get('content')

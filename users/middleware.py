@@ -20,3 +20,37 @@ class SocialAuthExceptionMiddleware:
             messages.error(request, "Error during social authentication. Please try manual registration.")
             return redirect('register')
         return None
+
+# users/middleware.py
+from django.shortcuts import redirect
+from django.urls import reverse
+from django.conf import settings
+
+class EmailVerificationMiddleware:
+    """
+    Redirect authenticated users who have not verified their email
+    to the verification page, except for allowed paths.
+    """
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # List of paths that are exempt from verification check
+        exempt_paths = [
+            reverse('verify_email'),
+            reverse('resend_code'),
+            reverse('logout'),
+            reverse('verification_required'),
+            '/static/',
+            '/media/',
+        ]
+        # Also exempt admin if you wish
+        if request.path.startswith('/admin/'):
+            return self.get_response(request)
+
+        if request.user.is_authenticated and not request.user.email_verified:
+            # Check if current path is exempt
+            if not any(request.path.startswith(path) for path in exempt_paths):
+                return redirect('verification_required')
+        
+        return self.get_response(request)

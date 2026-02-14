@@ -1,0 +1,242 @@
+<!-- users/templates/users/verify_email.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Verify Your Email - Baysoko{% endblock %}
+
+{% block navbar %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Hide navbar completely */
+    .main-nav, .bottom-nav, .side-nav {
+        display: none !important;
+    }
+    .main-content {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.1) 0%, 
+            rgba(255, 209, 102, 0.1) 50%, 
+            rgba(255, 107, 53, 0.1) 100%);
+    }
+    .verification-container {
+        max-width: 450px;
+        width: 90%;
+        margin: 0 auto;
+    }
+    .modal-card {
+        background: var(--card-bg);
+        border-radius: 30px;
+        padding: 2rem;
+        text-align: center;
+        box-shadow: 0 30px 60px rgba(0,0,0,0.2);
+        border: 1px solid var(--border-color);
+        animation: slideInUp 0.5s ease-out;
+    }
+    .modal-icon {
+        font-size: 3rem;
+        color: var(--accent);
+        margin-bottom: 1rem;
+    }
+    .verification-input {
+        width: 100%;
+        padding: 1rem;
+        font-size: 2rem;
+        text-align: center;
+        letter-spacing: 8px;
+        border: 2px solid var(--border-color);
+        border-radius: 12px;
+        background: var(--input-bg);
+        color: var(--text-primary);
+        outline: none;
+        transition: all 0.3s ease;
+        font-family: monospace;
+    }
+    .verification-input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 4px rgba(6,214,160,0.2);
+    }
+    .timer {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        margin: 1rem 0;
+    }
+    .resend-btn {
+        background: none;
+        border: none;
+        color: var(--accent);
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+    }
+    .resend-btn:hover:not(:disabled) {
+        background: rgba(6,214,160,0.1);
+    }
+    .resend-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    @keyframes slideInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="verification-container">
+    <div class="modal-card">
+        <div class="modal-icon">
+            <i class="bi bi-envelope-check"></i>
+        </div>
+        <h3>Verify Your Email</h3>
+        <p>We've sent a 7‑digit code to <strong>{{ user.email }}</strong>. Enter it below to activate your account.</p>
+        <input type="text" class="verification-input" id="verificationCode" maxlength="7" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+        <div class="timer" id="timerDisplay"></div>
+        <button class="resend-btn" id="resendBtn" disabled>Resend Code</button>
+        <div id="verificationMessage" style="margin-top:1rem; font-size:0.9rem;"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const userId = {{ user.id }};
+    const verificationCode = document.getElementById('verificationCode');
+    const resendBtn = document.getElementById('resendBtn');
+    const timerDisplay = document.getElementById('timerDisplay');
+    let timerInterval = null;
+
+    // Auto-submit on 7 digits
+    verificationCode.addEventListener('input', function() {
+        if (this.value.length === 7) {
+            verifyCode(this.value);
+        }
+    });
+
+    function verifyCode(code) {
+        const formData = new FormData();
+        formData.append('user_id', userId);
+        formData.append('code', code);
+
+        fetch("{% url 'verify_email' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showGlobalCartMessage('Email verified! Redirecting...', 'success');
+                setTimeout(() => {
+                    window.location.href = data.redirect || '/';
+                }, 2000);
+            } else {
+                document.getElementById('verificationMessage').innerHTML = `<span class="text-danger">${data.error}</span>`;
+                verificationCode.value = '';
+                verificationCode.focus();
+            }
+        });
+    }
+
+    // Resend code
+    resendBtn.addEventListener('click', function() {
+        const formData = new FormData();
+        formData.append('user_id', userId);
+
+        fetch("{% url 'resend_code' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('verificationMessage').innerHTML = '<span class="text-success">Code resent. Check your email.</span>';
+                startResendTimer(60);
+            } else {
+                if (data.wait) {
+                    startResendTimer(data.wait);
+                    document.getElementById('verificationMessage').innerHTML = `<span class="text-warning">Please wait ${data.wait} seconds.</span>`;
+                } else {
+                    document.getElementById('verificationMessage').innerHTML = `<span class="text-danger">${data.error}</span>`;
+                }
+            }
+        });
+    });
+
+    function startResendTimer(seconds) {
+        resendBtn.disabled = true;
+        let remaining = seconds;
+        timerDisplay.textContent = `Resend available in ${remaining}s`;
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            remaining--;
+            if (remaining <= 0) {
+                clearInterval(timerInterval);
+                resendBtn.disabled = false;
+                timerDisplay.textContent = '';
+            } else {
+                timerDisplay.textContent = `Resend available in ${remaining}s`;
+            }
+        }, 1000);
+    }
+
+    // Start a timer on page load if needed (based on last sent)
+    {% if user.email_verification_sent_at %}
+    // You could calculate remaining cooldown here, but we'll just let the backend handle it
+    {% endif %}
+
+    // Global message function (same as in register)
+    window.showGlobalCartMessage = function(message, type) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `global-cart-message ${type}`;
+        msgDiv.style.cssText = `
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            z-index: 10000;
+            background: ${type === 'success' ? 'var(--success)' : 'var(--danger)'};
+            color: white;
+            animation: slideInRight 0.3s ease-out;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        `;
+        msgDiv.innerHTML = `<i class="bi ${type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill'}"></i>${message}`;
+        document.body.appendChild(msgDiv);
+        setTimeout(() => {
+            msgDiv.style.animation = 'slideOutRight 0.3s ease-out';
+            setTimeout(() => msgDiv.remove(), 300);
+        }, 5000);
+    };
+
+    // Add slideOutRight animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideOutRight {
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(100%); }
+        }
+    `;
+    document.head.appendChild(style);
+});
+</script>
+{% endblock %}

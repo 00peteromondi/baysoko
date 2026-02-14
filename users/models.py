@@ -1,3 +1,5 @@
+# users/models.py (full file with new fields)
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.conf import settings
@@ -24,39 +26,28 @@ class User(AbstractUser):
         profile_picture = CloudinaryField(
             'image',
             folder='baysoko/profiles/',
-            transformation=[
-                {'width': 300, 'height': 300, 'crop': 'fill'},
-                {'quality': 'auto'},
-                {'format': 'webp'}
-            ],
-            null=True,
-            blank=True
+            transformation=[{'width': 300, 'height': 300, 'crop': 'fill'}, {'quality': 'auto'}, {'format': 'webp'}],
+            null=True, blank=True
         )
         cover_photo = CloudinaryField(
             'image',
             folder='baysoko/covers/',
-            transformation=[
-                {'width': 1200, 'height': 400, 'crop': 'fill'},
-                {'quality': 'auto'},
-                {'format': 'webp'}
-            ],
-            null=True,
-            blank=True
+            transformation=[{'width': 1200, 'height': 400, 'crop': 'fill'}, {'quality': 'auto'}, {'format': 'webp'}],
+            null=True, blank=True
         )
     else:
-        # Fallback to regular ImageField
-        profile_picture = models.ImageField(
-            upload_to='profile_pics/',
-            null=True,
-            blank=True
-        )
-        cover_photo = models.ImageField(
-            upload_to='cover_photos/',
-            null=True,
-            blank=True
-        )
+        profile_picture = models.ImageField(upload_to='profile_pics/', null=True, blank=True)
+        cover_photo = models.ImageField(upload_to='cover_photos/', null=True, blank=True)
     
-    is_verified = models.BooleanField(default=False)
+    # Email verification fields
+    email_verified = models.BooleanField(default=False)
+    email_verification_code = models.CharField(max_length=7, blank=True, null=True)
+    email_verification_sent_at = models.DateTimeField(blank=True, null=True)
+    verification_attempts_today = models.IntegerField(default=0)
+    last_verification_attempt_date = models.DateField(blank=True, null=True)
+    
+    # Existing fields
+    is_verified = models.BooleanField(default=False)   # maybe for seller verification
     show_contact_info = models.BooleanField(default=True, help_text="Show my contact information to other users")
     date_joined = models.DateTimeField(auto_now_add=True)
 
@@ -64,17 +55,36 @@ class User(AbstractUser):
         """Safe method to get profile picture URL that works with both Cloudinary and local storage"""
         if self.profile_picture:
             try:
-                # For Cloudinary
-                if hasattr(self.profile_picture, 'url'):
-                    return self.profile_picture.url
-                # For regular ImageField
-                elif hasattr(self.profile_picture, 'name'):
+                # Prefer direct .url when available
+                try:
+                    if hasattr(self.profile_picture, 'url') and self.profile_picture.url:
+                        return self.profile_picture.url
+                except Exception:
+                    pass
+
+                # Try Cloudinary utils to build a URL from public_id/name
+                try:
+                    from cloudinary.utils import cloudinary_url
+                    public_id = None
+                    if hasattr(self.profile_picture, 'public_id') and self.profile_picture.public_id:
+                        public_id = self.profile_picture.public_id
+                    elif hasattr(self.profile_picture, 'name') and self.profile_picture.name:
+                        public_id = self.profile_picture.name
+                    elif isinstance(self.profile_picture, str):
+                        public_id = self.profile_picture
+                    if public_id:
+                        url, _ = cloudinary_url(public_id, secure=True)
+                        return url
+                except Exception:
+                    pass
+
+                # Fallback to local storage URL
+                if hasattr(self.profile_picture, 'name'):
                     from django.core.files.storage import default_storage
                     if default_storage.exists(self.profile_picture.name):
                         return default_storage.url(self.profile_picture.name)
             except Exception as e:
                 print(f"Error getting profile picture URL: {e}")
-                # Fallback to default image
                 return '/static/images/default_profile_pic.svg'
         return '/static/images/default_profile_pic.svg'
     
@@ -82,27 +92,41 @@ class User(AbstractUser):
         """Safe method to get cover photo URL that works with both Cloudinary and local storage"""
         if self.cover_photo:
             try:
-                # For Cloudinary
-                if hasattr(self.cover_photo, 'url'):
-                    return self.cover_photo.url
-                # For regular ImageField
-                elif hasattr(self.cover_photo, 'name'):
+                try:
+                    if hasattr(self.cover_photo, 'url') and self.cover_photo.url:
+                        return self.cover_photo.url
+                except Exception:
+                    pass
+
+                try:
+                    from cloudinary.utils import cloudinary_url
+                    public_id = None
+                    if hasattr(self.cover_photo, 'public_id') and self.cover_photo.public_id:
+                        public_id = self.cover_photo.public_id
+                    elif hasattr(self.cover_photo, 'name') and self.cover_photo.name:
+                        public_id = self.cover_photo.name
+                    elif isinstance(self.cover_photo, str):
+                        public_id = self.cover_photo
+                    if public_id:
+                        url, _ = cloudinary_url(public_id, secure=True)
+                        return url
+                except Exception:
+                    pass
+
+                if hasattr(self.cover_photo, 'name'):
                     from django.core.files.storage import default_storage
                     if default_storage.exists(self.cover_photo.name):
                         return default_storage.url(self.cover_photo.name)
             except Exception as e:
                 print(f"Error getting cover photo URL: {e}")
-                # Fallback to default image
                 return '/static/images/default_cover_photo.jpg'
         return '/static/images/default_cover_photo.jpg'
 
     def save(self, *args, **kwargs):
-        # Ensure the directory exists before saving for local storage
+        # Ensure directory exists for local storage
         if not CLOUDINARY_AVAILABLE and self.profile_picture:
-            # Create directory if it doesn't exist
             os.makedirs(os.path.join(settings.MEDIA_ROOT, 'profile_pics'), exist_ok=True)
         
-        # Ensure first_name and last_name are not empty
         if not self.first_name:
             self.first_name = self.username
         if not self.last_name:
@@ -115,7 +139,6 @@ class User(AbstractUser):
 
     @property
     def full_name(self):
-        """Return the full name of the user"""
         if self.first_name and self.last_name:
             return f"{self.first_name} {self.last_name}"
         elif self.first_name:
