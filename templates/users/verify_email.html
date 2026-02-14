@@ -61,6 +61,29 @@
         border-color: var(--accent);
         box-shadow: 0 0 0 4px rgba(6,214,160,0.2);
     }
+    .verification-input-wrap { display:flex; align-items:center; justify-content:center; }
+    .verification-icon {
+        position: absolute;
+        right: 18px;
+        top: 50%;
+        transform: translateY(-50%) scale(0.6);
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1rem;
+        opacity: 0;
+        transition: all 300ms cubic-bezier(.2,.9,.2,1);
+        pointer-events: none;
+    }
+    .verification-input.success { border-color: rgba(6,214,160,0.9); box-shadow: 0 6px 20px rgba(6,214,160,0.18); background: rgba(6,214,160,0.06); }
+    .verification-input.error { border-color: rgba(239,71,111,0.95); box-shadow: 0 6px 20px rgba(239,71,111,0.12); background: rgba(239,71,111,0.04); }
+    .verification-input.success + .verification-icon { background: rgba(6,214,160,0.95); opacity: 1; transform: translateY(-50%) scale(1); }
+    .verification-input.error + .verification-icon { background: rgba(239,71,111,0.95); opacity: 1; transform: translateY(-50%) scale(1); }
+    .verification-input.shake { animation: shake 0.45s ease-in-out; }
     .timer {
         font-size: 0.9rem;
         color: var(--text-secondary);
@@ -98,9 +121,15 @@
         </div>
         <h3>Verify Your Email</h3>
         <p>We've sent a 7‑digit code to <strong>{{ user.email }}</strong>. Enter it below to activate your account.</p>
-        <input type="text" class="verification-input" id="verificationCode" maxlength="7" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+        <div class="verification-input-wrap" style="position:relative; margin-top:0.8rem;">
+            <input type="text" class="verification-input" id="verificationCode" maxlength="7" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+            <span class="verification-icon" id="verificationIcon" aria-hidden="true"></span>
+        </div>
         <div class="timer" id="timerDisplay"></div>
-        <button class="resend-btn" id="resendBtn" disabled>Resend Code</button>
+        <div style="margin-top:0.6rem; display:flex; gap:0.5rem; justify-content:center;">
+            <button class="resend-btn" id="resendBtn" disabled>Resend Code</button>
+            <a href="{% url 'logout' %}" class="resend-btn" id="logoutBtn">Logout</a>
+        </div>
         <div id="verificationMessage" style="margin-top:1rem; font-size:0.9rem;"></div>
     </div>
 </div>
@@ -137,15 +166,32 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(data => {
+            // elements
+            const icon = document.getElementById('verificationIcon');
+            // reset classes
+            verificationCode.classList.remove('success', 'error');
+            icon.innerHTML = '';
+
             if (data.success) {
+                // success visual
+                verificationCode.classList.add('success');
+                icon.innerHTML = '<i class="bi bi-check-lg" aria-hidden="true"></i>';
                 showGlobalCartMessage('Email verified! Redirecting...', 'success');
                 setTimeout(() => {
                     window.location.href = data.redirect || '/';
-                }, 2000);
+                }, 900);
             } else {
+                // error visual
+                verificationCode.classList.add('error');
+                icon.innerHTML = '<i class="bi bi-x-lg" aria-hidden="true"></i>';
                 document.getElementById('verificationMessage').innerHTML = `<span class="text-danger">${data.error}</span>`;
-                verificationCode.value = '';
-                verificationCode.focus();
+                // brief shake then clear
+                verificationCode.classList.add('shake');
+                setTimeout(() => {
+                    verificationCode.classList.remove('shake');
+                    verificationCode.value = '';
+                    verificationCode.focus();
+                }, 550);
             }
         });
     }
