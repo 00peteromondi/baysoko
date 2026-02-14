@@ -5,12 +5,15 @@ from . import ai_views
 from . import order_views
 from django.shortcuts import redirect
 from notifications.views import notification_list
+from . import api_views
+
 
 urlpatterns = [
     path('', ListingListView.as_view(), name='home'),
     path('listing/<int:pk>/', ListingDetailView.as_view(), name='listing-detail'),
     path('all-listings/', views.all_listings, name='all-listings'),
     path('my-listings/', views.my_listings, name='my-listings'),
+    path('api/my-listings/', api_views.MyListingsView.as_view(), name='my_listings'),
     path('favorites/', views.favorite_listings, name='favorites'),
     path('listing/<int:listing_id>/toggle_favorite/', views.toggle_favorite, name='toggle_favorite'),
     path('favorites/toggle/<int:listing_id>/', views.toggle_favorite, name='toggle_favorite'),
