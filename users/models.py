@@ -5,7 +5,6 @@ from django.db import models
 from django.conf import settings
 import os
 
-# Try to import CloudinaryField, fallback to ImageField if not available
 try:
     from cloudinary.models import CloudinaryField
     CLOUDINARY_AVAILABLE = True
@@ -16,12 +15,11 @@ except ImportError:
 class User(AbstractUser):
     first_name = models.CharField(max_length=30)
     last_name = models.CharField(max_length=30)
-    phone_number = models.CharField(max_length=15, blank=True, null=True, unique=True)
+    phone_number = models.CharField(max_length=15, unique=True, null=True, blank=True)
     location = models.CharField(max_length=100, help_text="Your specific area in Homabay, e.g., Ndhiwa, Rodi Kopany")
     date_of_birth = models.DateField(verbose_name='Date of Birth', null=True, blank=True)
     bio = models.TextField(max_length=500, blank=True)
     
-    # Cloudinary field with proper configuration
     if CLOUDINARY_AVAILABLE and hasattr(settings, 'CLOUDINARY_CLOUD_NAME') and settings.CLOUDINARY_CLOUD_NAME:
         profile_picture = CloudinaryField(
             'image',
@@ -39,30 +37,24 @@ class User(AbstractUser):
         profile_picture = models.ImageField(upload_to='profile_pics/', null=True, blank=True)
         cover_photo = models.ImageField(upload_to='cover_photos/', null=True, blank=True)
     
-    # Email verification fields
     email_verified = models.BooleanField(default=False)
     email_verification_code = models.CharField(max_length=7, blank=True, null=True)
     email_verification_sent_at = models.DateTimeField(blank=True, null=True)
     verification_attempts_today = models.IntegerField(default=0)
     last_verification_attempt_date = models.DateField(blank=True, null=True)
     
-    # Existing fields
-    is_verified = models.BooleanField(default=False)   # maybe for seller verification
+    is_verified = models.BooleanField(default=False)   # seller verification
     show_contact_info = models.BooleanField(default=True, help_text="Show my contact information to other users")
     date_joined = models.DateTimeField(auto_now_add=True)
 
     def get_profile_picture_url(self):
-        """Safe method to get profile picture URL that works with both Cloudinary and local storage"""
         if self.profile_picture:
             try:
-                # Prefer direct .url when available
                 try:
                     if hasattr(self.profile_picture, 'url') and self.profile_picture.url:
                         return self.profile_picture.url
                 except Exception:
                     pass
-
-                # Try Cloudinary utils to build a URL from public_id/name
                 try:
                     from cloudinary.utils import cloudinary_url
                     public_id = None
@@ -77,8 +69,6 @@ class User(AbstractUser):
                         return url
                 except Exception:
                     pass
-
-                # Fallback to local storage URL
                 if hasattr(self.profile_picture, 'name'):
                     from django.core.files.storage import default_storage
                     if default_storage.exists(self.profile_picture.name):
@@ -89,7 +79,6 @@ class User(AbstractUser):
         return '/static/images/default_profile_pic.svg'
     
     def get_cover_photo_url(self):
-        """Safe method to get cover photo URL that works with both Cloudinary and local storage"""
         if self.cover_photo:
             try:
                 try:
@@ -97,7 +86,6 @@ class User(AbstractUser):
                         return self.cover_photo.url
                 except Exception:
                     pass
-
                 try:
                     from cloudinary.utils import cloudinary_url
                     public_id = None
@@ -112,7 +100,6 @@ class User(AbstractUser):
                         return url
                 except Exception:
                     pass
-
                 if hasattr(self.cover_photo, 'name'):
                     from django.core.files.storage import default_storage
                     if default_storage.exists(self.cover_photo.name):
@@ -123,15 +110,12 @@ class User(AbstractUser):
         return '/static/images/default_cover_photo.jpg'
 
     def save(self, *args, **kwargs):
-        # Ensure directory exists for local storage
         if not CLOUDINARY_AVAILABLE and self.profile_picture:
             os.makedirs(os.path.join(settings.MEDIA_ROOT, 'profile_pics'), exist_ok=True)
-        
         if not self.first_name:
             self.first_name = self.username
         if not self.last_name:
             self.last_name = 'User'
-            
         super().save(*args, **kwargs)
 
     def __str__(self):

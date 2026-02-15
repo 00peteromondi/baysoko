@@ -246,9 +246,25 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Start a timer on page load if needed (based on last sent)
-    {% if user.email_verification_sent_at %}
-    // You could calculate remaining cooldown here, but we'll just let the backend handle it
-    {% endif %}
+    (function() {
+        const sentAtIso = "{% if user.email_verification_sent_at %}{{ user.email_verification_sent_at|date:'c' }}{% else %}{% endif %}";
+        if (sentAtIso) {
+            const sent = new Date(sentAtIso);
+            const now = new Date();
+            const diff = Math.floor((now - sent) / 1000); // seconds
+            const wait = 60 - diff;
+            if (wait > 0) {
+                startResendTimer(wait);
+            } else {
+                // enable immediately
+                resendBtn.disabled = false;
+                timerDisplay.textContent = '';
+            }
+        } else {
+            // No record of a sent code — allow resend
+            resendBtn.disabled = false;
+        }
+    })();
 
     // Global message function (same as in register)
     window.showGlobalCartMessage = function(message, type) {
@@ -288,4 +304,5 @@ document.addEventListener('DOMContentLoaded', function() {
     document.head.appendChild(style);
 });
 </script>
+<script src="{% static 'js/global-ajax-handler.js' %}"></script>
 {% endblock %}

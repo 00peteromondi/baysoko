@@ -6,6 +6,10 @@ from django.core.exceptions import ValidationError
 import re
 from .models import User
 
+from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth import authenticate
+from django.utils.translation import gettext_lazy as _
+
 class CustomUserCreationForm(forms.ModelForm):
     password1 = forms.CharField(
         label='Password',
@@ -45,6 +49,7 @@ class CustomUserCreationForm(forms.ModelForm):
             },
             'first_name': {'required': 'First name is required.', 'max_length': 'First name is too long.'},
             'last_name': {'required': 'Last name is required.', 'max_length': 'Last name is too long.'},
+            'phone_number': {'required': 'Phone number is required.', 'max_length': 'Phone number is too long.'},
             'location': {'required': 'Location is required.', 'max_length': 'Location is too long.'},
         }
 
@@ -82,8 +87,15 @@ class CustomUserCreationForm(forms.ModelForm):
         phone_number = self.cleaned_data.get('phone_number')
         if phone_number:
             phone_number = phone_number.strip()
-            if not re.match(r'^\+?[\d\s\-\(\)]+$', phone_number):
+            leading_plus = phone_number.startswith('+')
+            digits = re.sub(r'[^0-9]', '', phone_number)
+            phone_number = f"+{digits}" if leading_plus else digits
+            if not re.match(r'^\+?[0-9]+$', phone_number):
                 raise ValidationError("Please enter a valid phone number.")
+            if User.objects.filter(phone_number=phone_number).exists():
+                raise ValidationError("This phone number is already registered.")
+        else:
+            phone_number = None
         return phone_number
 
     def clean(self):
@@ -97,7 +109,9 @@ class CustomUserCreationForm(forms.ModelForm):
     def save(self, commit=True):
         user = super().save(commit=False)
         user.set_password(self.cleaned_data["password1"])
-        user.is_active = False   # New users must verify email before activation
+        user.is_active = True   # User can log in but middleware will enforce email verification
+        phone = self.cleaned_data.get('phone_number')
+        user.phone_number = phone if phone else None
         if commit:
             user.save()
         return user
@@ -146,3 +160,34 @@ class CustomUserChangeForm(forms.ModelForm):
         if User.objects.filter(email=email).exclude(pk=self.instance.pk).exists():
             raise forms.ValidationError('This email is already registered.')
         return email
+
+
+class CustomAuthenticationForm(AuthenticationForm):
+    username = forms.CharField(
+        max_length=254,
+        widget=forms.TextInput(attrs={'autofocus': True, 'class': 'input-modern'}),
+        label=_('Email or Username')
+    )
+
+    def clean(self):
+        username = self.cleaned_data.get('username')
+        password = self.cleaned_data.get('password')
+        if username and password:
+            user_qs = User.objects.none()
+            if '@' in username:
+                user_qs = User.objects.filter(email__iexact=username)
+            if not user_qs.exists():
+                user_qs = User.objects.filter(username__iexact=username)
+
+            if user_qs.exists():
+                user_obj = user_qs.first()
+                user = authenticate(self.request, username=user_obj.username, password=password)
+            else:
+                user = authenticate(self.request, username=username, password=password)
+
+            if user is None:
+                raise forms.ValidationError(self.error_messages['invalid_login'], code='invalid_login')
+            else:
+                self.confirm_login_allowed(user)
+                self.user_cache = user
+        return self.cleaned_data

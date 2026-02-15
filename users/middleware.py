@@ -2,6 +2,7 @@
 import logging
 from django.shortcuts import redirect
 from django.contrib import messages
+from django.urls import reverse
 
 logger = logging.getLogger(__name__)
 
@@ -14,17 +15,12 @@ class SocialAuthExceptionMiddleware:
         return response
 
     def process_exception(self, request, exception):
-        # Handle social auth exceptions
         if 'allauth.socialaccount' in str(type(exception)):
             logger.error(f"Social auth error: {str(exception)}")
             messages.error(request, "Error during social authentication. Please try manual registration.")
             return redirect('register')
         return None
 
-# users/middleware.py
-from django.shortcuts import redirect
-from django.urls import reverse
-from django.conf import settings
 
 class EmailVerificationMiddleware:
     """
@@ -43,8 +39,9 @@ class EmailVerificationMiddleware:
             reverse('verification_required'),
             '/static/',
             '/media/',
+            '/users/profile/',   # allow profile pages (including edit) for unverified users
         ]
-        # Also exempt admin if you wish
+        # Also exempt admin
         if request.path.startswith('/admin/'):
             return self.get_response(request)
 
