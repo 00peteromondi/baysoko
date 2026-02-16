@@ -18,7 +18,7 @@ from django.db import models, transaction
 from django.db import IntegrityError
 from django.contrib.admin.views.decorators import staff_member_required
 from django.conf import settings
-from allauth.socialaccount.models import SocialApp
+from allauth.socialaccount.models import SocialApp, SocialAccount
 from django.contrib.sites.models import Site
 import os
 import logging
@@ -191,8 +191,9 @@ def verify_email(request):
 
 @csrf_exempt
 def resend_code(request):
-    if request.method == 'POST':
-        user_id = request.POST.get('user_id')
+    # Accept POST or GET to be resilient behind proxies or when requests are transformed
+    if request.method in ('POST', 'GET'):
+        user_id = request.POST.get('user_id') or request.GET.get('user_id')
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
@@ -278,6 +279,55 @@ def google_login(request):
         messages.error(request, "Unable to initiate Google login.")
         return redirect('register')
 
+
+def google_connect(request):
+    """Initiate Google OAuth to *connect* an existing account.
+    Sets session oauth_action='connect' so callback links the social account.
+    """
+    if not request.user.is_authenticated:
+        messages.error(request, 'You must be signed in to connect a Google account.')
+        return redirect('login')
+
+    try:
+        from django.contrib.sites.models import Site
+        current_site = Site.objects.get_current()
+
+        if settings.DEBUG:
+            redirect_uri = f"http://{request.get_host()}/accounts/google/callback/"
+        else:
+            redirect_uri = f"https://{current_site.domain}/accounts/google/callback/"
+
+        try:
+            app = SocialApp.objects.get(provider='google')
+            client_id = app.client_id
+        except SocialApp.DoesNotExist:
+            client_id = os.environ.get('GOOGLE_OAUTH_CLIENT_ID')
+            if not client_id:
+                messages.error(request, "Google OAuth is not configured.")
+                return redirect('profile-edit', pk=request.user.pk)
+
+        auth_url = "https://accounts.google.com/o/oauth2/v2/auth"
+        params = {
+            'client_id': client_id,
+            'redirect_uri': redirect_uri,
+            'response_type': 'code',
+            'scope': 'email profile',
+            'access_type': 'online',
+            'prompt': 'consent',
+        }
+        state = secrets.token_urlsafe(32)
+        request.session['oauth_state'] = state
+        request.session['oauth_action'] = 'connect'
+        params['state'] = state
+
+        url = f"{auth_url}?{urlencode(params)}"
+        return redirect(url)
+
+    except Exception as e:
+        logger.error(f"Google connect error: {str(e)}", exc_info=True)
+        messages.error(request, "Unable to initiate Google connect.")
+        return redirect('profile-edit', pk=request.user.pk)
+
 @csrf_exempt
 def google_callback(request):
     code = request.GET.get('code')
@@ -310,21 +360,45 @@ def google_callback(request):
             'redirect_uri': redirect_uri,
         }
 
-        response = requests.post(token_url, data=data)
+        response = requests.post(token_url, data=data, timeout=10)
+        if response.status_code != 200:
+            logger.error(f"Google token endpoint returned {response.status_code}: {response.text}")
+            messages.error(request, "Failed to get access token from Google")
+            return redirect('register')
         token_data = response.json()
 
         if 'access_token' not in token_data:
+            logger.error(f"No access_token in token response: {token_data}")
             messages.error(request, "Failed to get access token from Google")
             return redirect('register')
 
         userinfo_url = 'https://www.googleapis.com/oauth2/v2/userinfo'
-        headers = {'Authorization': f'Bearer {token_data["access_token"]}'}
-        userinfo = requests.get(userinfo_url, headers=headers).json()
+        headers = {'Authorization': f"Bearer {token_data.get('access_token')}"}
+        userinfo_resp = requests.get(userinfo_url, headers=headers, timeout=10)
+        if userinfo_resp.status_code != 200:
+            logger.error(f"Google userinfo returned {userinfo_resp.status_code}: {userinfo_resp.text}")
+            messages.error(request, "Failed to retrieve profile information from Google")
+            return redirect('register')
+        userinfo = userinfo_resp.json()
 
         email = userinfo.get('email')
         if not email:
             messages.error(request, "Email not provided by Google")
             return redirect('register')
+
+        # If action is 'connect' and user is authenticated, link the social account
+        action = request.session.get('oauth_action')
+        if action == 'connect' and request.user.is_authenticated:
+            # Ensure the returned email matches the logged-in user
+            if email.lower() != request.user.email.lower():
+                messages.error(request, 'Google account email does not match your account email.')
+                return redirect('profile-edit', pk=request.user.pk)
+            # create SocialAccount if missing
+            uid = userinfo.get('id')
+            if not SocialAccount.objects.filter(user=request.user, provider='google', uid=uid).exists():
+                SocialAccount.objects.create(user=request.user, provider='google', uid=uid, extra_data=userinfo)
+            messages.success(request, 'Google account connected successfully.')
+            return redirect('profile-edit', pk=request.user.pk)
 
         try:
             user = User.objects.get(email=email)
@@ -503,6 +577,17 @@ class ProfileDetailView(DetailView):
         context['rating_average'] = 4.5
         context['member_since'] = profile_user.date_joined.strftime("%B %Y")
 
+        # Indicate whether the profile owner can connect Google (has gmail and no google SocialAccount)
+        try:
+            can_connect = False
+            if profile_user.email and profile_user.email.lower().endswith('@gmail.com'):
+                # Only allow connect for accounts created via the form (have a usable password)
+                if profile_user.has_usable_password() and not SocialAccount.objects.filter(user=profile_user, provider='google').exists():
+                    can_connect = True
+        except Exception:
+            can_connect = False
+        context['can_connect_google'] = can_connect
+
         return context
 
 
@@ -541,6 +626,16 @@ class ProfileUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['form'] = self.get_form()
+        # For profile edit page, suggest connecting Google if user has gmail and not yet connected
+        try:
+            user = self.request.user
+            can_connect = False
+            if user.is_authenticated and user.email and user.email.lower().endswith('@gmail.com'):
+                if user.has_usable_password() and not SocialAccount.objects.filter(user=user, provider='google').exists():
+                    can_connect = True
+        except Exception:
+            can_connect = False
+        context['can_connect_google'] = can_connect
         return context
 
 

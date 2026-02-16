@@ -2,7 +2,7 @@
 from django.urls import path, include
 from django.contrib.auth import views as auth_views
 from .views import register, ProfileDetailView, ProfileUpdateView, CustomPasswordChangeView, CustomPasswordResetConfirmView, CustomPasswordResetView, CustomPasswordResetCompleteView, google_callback, facebook_callback, CustomLoginView, CustomLogoutView
-from .views import oauth_diagnostics, google_login, facebook_login
+from .views import oauth_diagnostics, google_login, facebook_login, google_connect
 from . import views
 from allauth.socialaccount.views import SignupView
 
@@ -13,6 +13,7 @@ urlpatterns = [
     
     # Social Authentication URLs
     path('accounts/google/login/', google_login, name='google_login'),
+    path('accounts/google/connect/', google_connect, name='google_connect'),
     path('accounts/google/callback/', google_callback, name='google_callback'),
     path('accounts/facebook/login/', facebook_login, name='facebook_login'),
     path('accounts/facebook/callback/', facebook_callback, name='facebook_callback'),
