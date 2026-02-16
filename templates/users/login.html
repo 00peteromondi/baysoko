@@ -564,7 +564,7 @@
         <!-- Social Login -->
         <div class="social-login-section">
             <div class="social-buttons">
-                <a href="{% url 'google_login' %}" class="social-btn-google" id="googleLoginBtn">
+                <a href="{% url 'google_login' %}" class="social-btn-google" id="googleLoginBtn" data-no-ajax>
                     Continue with Google
                 </a>
             </div>
@@ -572,7 +572,7 @@
         </div>
 
         <!-- Login Form (AJAX) -->
-        <form method="post" id="loginForm" novalidate>
+        <form method="post" id="loginForm" novalidate data-no-ajax>
             {% csrf_token %}
             <div class="form-group-modern">
                 <label class="form-label-modern">Email or Username *</label>
@@ -751,12 +751,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========== AJAX LOGIN ==========
     const loginForm = document.getElementById('loginForm');
     if (loginForm) {
-        loginForm.addEventListener('submit', function(e) {
+            loginForm.addEventListener('submit', function(e) {
+            // prevent duplicate submits
+            if (loginForm.dataset.ajaxSubmitting === '1') { e.preventDefault(); return; }
+            loginForm.dataset.ajaxSubmitting = '1';
             e.preventDefault();
             const formData = new FormData(loginForm);
             const submitBtn = document.getElementById('submitButton');
             const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Signing In...';
+            submitBtn.innerHTML = '<span class="custom-spinner" role="status" aria-hidden="true" style="width:1rem;height:1rem;"></span> Signing In...';
             submitBtn.disabled = true;
             document.querySelectorAll('.error-message').forEach(el => el.remove());
 
@@ -814,6 +817,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 submitBtn.innerHTML = originalText;
                 submitBtn.disabled = false;
                 showGlobalMessage('Network error. Please try again.', 'danger');
+            }).finally(() => {
+                try { delete loginForm.dataset.ajaxSubmitting; } catch(e) {}
             });
         });
     }

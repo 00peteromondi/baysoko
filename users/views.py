@@ -42,6 +42,7 @@ from django.http import JsonResponse, HttpResponse
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.messages import get_messages
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -145,14 +146,24 @@ def send_verification_email(user):
         'site_name': 'Baysoko',
     })
     plain_message = f'Your verification code is: {user.email_verification_code}'
-    send_mail(
-        subject,
-        plain_message,
-        settings.DEFAULT_FROM_EMAIL,
-        [user.email],
-        html_message=html_message,
-        fail_silently=False,
-    )
+
+    # Send email on a background thread to avoid blocking the web worker.
+    def _send():
+        try:
+            send_mail(
+                subject,
+                plain_message,
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
+                html_message=html_message,
+                fail_silently=False,
+            )
+            logger.info('Verification email sent for user id=%s', getattr(user, 'id', None))
+        except Exception as e:
+            logger.exception('Failed to send verification email for user id=%s: %s', getattr(user, 'id', None), e)
+
+    t = threading.Thread(target=_send, daemon=True)
+    t.start()
 
 # users/views.py (only the relevant change)
 
