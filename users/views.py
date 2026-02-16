@@ -6,7 +6,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.views import PasswordChangeView, LoginView, LogoutView
 from django.contrib.auth import views as auth_views
 from django.views.generic import DetailView, UpdateView
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.contrib import messages
 from django import forms
 from .models import User
@@ -14,7 +14,7 @@ from .forms import CustomUserCreationForm, CustomUserChangeForm, CustomAuthentic
 from listings.models import Listing
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404
-from django.db import models
+from django.db import models, transaction
 from django.db import IntegrityError
 from django.contrib.admin.views.decorators import staff_member_required
 from django.conf import settings
@@ -41,6 +41,7 @@ from django.core.mail import send_mail
 from django.http import JsonResponse, HttpResponse
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib.messages import get_messages
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,7 @@ def register(request):
                 user = form.save(commit=False)
                 if not user.location:
                     user.location = 'Homabay'
+                # ensure empty phone stored as NULL
                 if not getattr(user, 'phone_number', None):
                     user.phone_number = None
                 # Generate verification code
@@ -70,13 +72,19 @@ def register(request):
                 user.email_verification_sent_at = timezone.now()
                 user.verification_attempts_today = 0
                 user.last_verification_attempt_date = timezone.now().date()
+
+                # Attempt save inside a transaction and handle unique constraint gracefully
                 try:
-                    user.save()
+                    with transaction.atomic():
+                        user.save()
                 except IntegrityError as ie:
-                    logger.error(f"IntegrityError saving user: {ie}", exc_info=True)
+                    # Likely a race condition on unique phone/email. Add a user-friendly form error
+                    msg = 'A user with that phone number or email already exists.'
+                    logger.warning(f"IntegrityError saving user (likely duplicate): {ie}")
+                    form.add_error('phone_number', msg)
                     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                        return JsonResponse({'success': False, 'errors': {'__all__': 'A user with that phone number or email already exists.'}})
-                    messages.error(request, 'A user with that phone number or email already exists.')
+                        return JsonResponse({'success': False, 'errors': form.errors.get_json_data()})
+                    messages.error(request, msg)
                     return render(request, 'users/register.html', {'form': form})
 
                 # Send verification email
@@ -84,6 +92,9 @@ def register(request):
 
                 # Log the user in (user.is_active is True now)
                 login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+                # mark session so verification page shows one unified message
+                request.session['just_registered'] = True
+                request.session['just_registered_message'] = 'Registration successful. Please check your email for verification code.'
 
                 if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                     return JsonResponse({
@@ -91,7 +102,6 @@ def register(request):
                         'message': 'Registration successful. Please check your email for verification code.',
                         'user_id': user.id
                     })
-                messages.success(request, 'Registration successful. Please check your email for verification code.')
                 return redirect('verification_required')
 
             except Exception as e:
@@ -137,24 +147,46 @@ def verify_email(request):
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'User not found.'})
+        now = timezone.now()
+        today = now.date()
 
-        if user.email_verification_code == code and user.email_verification_sent_at:
-            # Expiry reduced to 10 minutes
-            if timezone.now() - user.email_verification_sent_at > timedelta(minutes=10):
-                return JsonResponse({'success': False, 'error': 'Code expired. Request a new one.'})
+        # Reset daily counters if needed
+        if user.last_verification_attempt_date != today:
+            user.verification_attempts_today = 0
+            user.last_verification_attempt_date = today
+            user.save()
+
+        # If locked due to too many failed attempts today
+        if user.verification_attempts_today >= 3:
+            return JsonResponse({'success': False, 'error': 'Maximum verification attempts reached. Try again tomorrow.', 'attempts_left': 0})
+
+        # Validate code and expiry (10 minutes)
+        if user.email_verification_code and user.email_verification_code == code and user.email_verification_sent_at:
+            if now - user.email_verification_sent_at > timedelta(minutes=10):
+                return JsonResponse({'success': False, 'error': 'Code expired. Request a new one.', 'attempts_left': max(0, 3 - user.verification_attempts_today)})
+            # Successful verification
             user.email_verified = True
+            user.is_active = True
             user.email_verification_code = None
+            user.verification_attempts_today = 0
             user.save()
             if not request.user.is_authenticated:
                 login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-                # If user has no phone number, send them to profile-edit to add one
-                if not user.phone_number:
-                    redirect_url = reverse('profile-edit', kwargs={'pk': user.pk})
-                else:
-                    redirect_url = reverse('home')
-                return JsonResponse({'success': True, 'redirect': redirect_url})
-        else:
-            return JsonResponse({'success': False, 'error': 'Invalid code.'})
+            # If user has no phone number, send them to profile-edit to add one
+            if not user.phone_number:
+                redirect_url = reverse('profile-edit', kwargs={'pk': user.pk})
+            else:
+                redirect_url = reverse('home')
+            return JsonResponse({'success': True, 'redirect': redirect_url})
+
+        # Invalid code -> increment attempts
+        user.verification_attempts_today += 1
+        user.last_verification_attempt_date = today
+        user.save()
+        attempts_left = max(0, 3 - user.verification_attempts_today)
+        if attempts_left <= 0:
+            return JsonResponse({'success': False, 'error': 'Maximum verification attempts reached. Try again tomorrow.', 'attempts_left': 0})
+        return JsonResponse({'success': False, 'error': f'Invalid code. {attempts_left} attempts remaining.', 'attempts_left': attempts_left})
     return JsonResponse({'success': False, 'error': 'Invalid request.'})
 
 @csrf_exempt
@@ -173,9 +205,6 @@ def resend_code(request):
             user.verification_attempts_today = 0
             user.last_verification_attempt_date = today
 
-        if user.verification_attempts_today >= 3:
-            return JsonResponse({'success': False, 'error': 'Maximum attempts reached. Try again tomorrow.'})
-
         if user.email_verification_sent_at and (now - user.email_verification_sent_at).seconds < 60:
             wait = 60 - (now - user.email_verification_sent_at).seconds
             return JsonResponse({'success': False, 'error': f'Please wait {wait} seconds.', 'wait': wait})
@@ -183,7 +212,7 @@ def resend_code(request):
         code = ''.join(random.choices(string.digits, k=7))
         user.email_verification_code = code
         user.email_verification_sent_at = now
-        user.verification_attempts_today += 1
+        # Do not increment verification_attempts here (used for failed attempts)
         user.save()
 
         send_verification_email(user)
@@ -193,8 +222,18 @@ def resend_code(request):
 
 @login_required
 def verification_required(request):
+    # If already verified, go home
     if request.user.email_verified:
         return redirect('home')
+
+    # Consume and clear existing messages to avoid duplicates or stale phone prompts
+    list(get_messages(request))  # iterate to clear storage
+
+    # If we just registered, show a single unified message
+    if request.session.pop('just_registered', False):
+        msg = request.session.pop('just_registered_message', 'Account created. Check your email to verify your account.')
+        messages.success(request, msg)
+
     return render(request, 'users/verify_email.html', {'user': request.user})
 
 def google_login(request):
@@ -291,7 +330,7 @@ def google_callback(request):
             user = User.objects.get(email=email)
             login(request, user)
             if not user.phone_number:
-                messages.info(request, 'Please add your phone number to continue.')
+                messages.info(request, 'Please verify your details and include phone number to continue.')
                 return redirect('profile-edit', pk=user.pk)
             messages.success(request, f"Welcome back, {user.first_name}!")
             return redirect('home')
@@ -320,7 +359,9 @@ def google_callback(request):
 
             send_verification_email(user)
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-            messages.success(request, "Account created with Google! Check your email to verify your account.")
+            # set session flag instead of immediate message to avoid duplicates
+            request.session['just_registered'] = True
+            request.session['just_registered_message'] = 'Account created with Google! Check your email to verify your account.'
             return redirect('verification_required')
 
     except Exception as e:
@@ -424,7 +465,9 @@ def facebook_callback(request):
 
             send_verification_email(user)
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-            messages.success(request, "Account created with Facebook! Check your email to verify your account.")
+            # set session flag instead of immediate message to avoid duplicates
+            request.session['just_registered'] = True
+            request.session['just_registered_message'] = 'Account created with Facebook! Check your email to verify your account.'
             return redirect('verification_required')
 
     except Exception as e:
@@ -580,41 +623,13 @@ def debug_send_email(request):
     subject = request.GET.get('subject', 'Baysoko SMTP Debug')
     body = request.GET.get('body', 'This is a test message from Baysoko SMTP debug endpoint.')
 
-    buf = io.StringIO()
-    status = 'unknown'
-
     try:
-        with contextlib.redirect_stdout(buf):
-            conn = smtplib.SMTP(settings.EMAIL_HOST, settings.EMAIL_PORT, timeout=15)
-            conn.set_debuglevel(1)
-            conn.ehlo()
-            if getattr(settings, 'EMAIL_USE_TLS', False):
-                conn.starttls()
-                conn.ehlo()
-            if getattr(settings, 'EMAIL_HOST_USER', ''):
-                conn.login(settings.EMAIL_HOST_USER, settings.EMAIL_HOST_PASSWORD)
-
-            msg = EmailMessage()
-            msg['Subject'] = subject
-            msg['From'] = settings.DEFAULT_FROM_EMAIL or settings.EMAIL_HOST_USER
-            msg['To'] = to_addr
-            msg.set_content(body)
-
-            conn.send_message(msg)
-            conn.quit()
-        status = 'sent'
+        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [to_addr], fail_silently=False)
+        logger.info(f"Debug email sent to {to_addr}")
+        return JsonResponse({'success': True, 'message': f'Debug email sent to {to_addr}'})
     except Exception as e:
-        status = 'error'
-        buf.write('\n=== EXCEPTION ===\n')
-        buf.write(str(e) + '\n')
-        buf.write(traceback.format_exc())
-
-    output = buf.getvalue()
-    content = f"status: {status}\nrecipient: {to_addr}\n\nSMTP log and server responses:\n\n{output}"
-    return HttpResponse(content, content_type='text/plain')
-
-
-@login_required
+        logger.error(f"Failed to send debug email: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': str(e)})
 def ajax_password_change(request):
     if request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
         form = PasswordChangeForm(request.user, request.POST)

@@ -853,9 +853,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         fetch("{% url 'register' %}", {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                'X-CSRFToken': getCookie('csrftoken') || ''
             },
             body: formData
         })
@@ -874,26 +875,44 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!data) return;
             console.log('Registration response:', data);
             if (data.success) {
-                userId = data.user_id;
-                userEmailSpan.textContent = formData.get('email');
-                modal.style.display = 'flex';
-                startResendTimer(60);
-                setTimeout(() => verificationCode.focus(), 300);
+                // For form-based registrations (non-social) redirect to the verification page
+                window.location.href = "{% url 'verification_required' %}";
+                return;
             } else {
                 if (data.errors) {
-                    if (data.errors.__all__) showGlobalMessage(data.errors.__all__.join(' '), 'danger');
+                    // handle __all__ which may be string or array
+                    if (data.errors.__all__) {
+                        const allErr = data.errors.__all__;
+                        if (typeof allErr === 'string') {
+                            showGlobalMessage(allErr, 'danger');
+                        } else if (Array.isArray(allErr)) {
+                            // array may contain message strings or error objects
+                            const msgs = allErr.map(e => (e && e.message) ? e.message : (typeof e === 'string' ? e : JSON.stringify(e)));
+                            showGlobalMessage(msgs.join(' '), 'danger');
+                        }
+                    }
                     for (let field in data.errors) {
+                        if (field === '__all__') continue;
                         const input = document.querySelector(`[name="${field}"]`);
+                        const fieldErr = data.errors[field];
+                        let message = '';
+                        if (typeof fieldErr === 'string') message = fieldErr;
+                        else if (Array.isArray(fieldErr)) {
+                            // django form errors from get_json_data give array of objects
+                            if (fieldErr.length && fieldErr[0].message) message = fieldErr[0].message;
+                            else message = fieldErr.map(e => (e && e.message) ? e.message : (typeof e === 'string' ? e : JSON.stringify(e))).join(' ');
+                        } else message = JSON.stringify(fieldErr);
+
                         if (input) {
                             input.classList.add('error');
                             const errorDiv = document.createElement('div');
                             errorDiv.className = 'error-message';
                             errorDiv.style.color = 'var(--danger)';
                             errorDiv.style.fontSize = '0.75rem';
-                            errorDiv.innerHTML = `<i class="bi bi-exclamation-circle"></i> ${data.errors[field][0].message || data.errors[field][0]}`;
+                            errorDiv.innerHTML = `<i class="bi bi-exclamation-circle"></i> ${message}`;
                             input.parentNode.insertAdjacentElement('afterend', errorDiv);
                         } else {
-                            showGlobalMessage(data.errors[field].join(' '), 'danger');
+                            showGlobalMessage(message, 'danger');
                         }
                     }
                 } else {
@@ -909,9 +928,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    let failedAttempts = 0;
+    const MAX_ATTEMPTS = 3;
     verificationCode.addEventListener('input', function() {
+        if (failedAttempts >= MAX_ATTEMPTS) return;
         if (this.value.length === 7) verifyCode(this.value);
     });
+
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
 
     function verifyCode(code) {
         const formData = new FormData();
@@ -919,32 +947,61 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('code', code);
         fetch("{% url 'verify_email' %}", {
             method: 'POST',
-            headers: { 'X-CSRFToken': '{{ csrf_token }}', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') || '', 'X-Requested-With': 'XMLHttpRequest' },
             body: formData
         })
-        .then(r => r.json())
+        .then(r => {
+            const ct = r.headers.get('content-type') || '';
+            if (ct.includes('application/json')) return r.json();
+            return r.text().then(txt => ({ success: false, error: 'Unexpected server response', _raw: txt }));
+        })
         .then(data => {
             if (data.success) {
                 showGlobalMessage('Email verified! Redirecting...', 'success');
                 setTimeout(() => window.location.href = data.redirect || '/', 2000);
             } else {
+                // show server error
                 document.getElementById('verificationMessage').innerHTML = `<span class="text-danger">${data.error}</span>`;
-                verificationCode.value = '';
-                verificationCode.focus();
+                // update attempts
+                failedAttempts = (data.attempts_left !== undefined) ? (MAX_ATTEMPTS - data.attempts_left) : (failedAttempts + 1);
+                if (failedAttempts >= MAX_ATTEMPTS) {
+                    document.getElementById('verificationMessage').innerHTML = `<span class="text-danger">Maximum verification attempts reached. Try again tomorrow.</span>`;
+                    verificationCode.disabled = true;
+                    resendBtn.disabled = true;
+                } else {
+                    verificationCode.value = '';
+                    verificationCode.focus();
+                }
             }
+        }).catch(err => {
+            console.error('verify fetch error', err);
+            document.getElementById('verificationMessage').innerHTML = `<span class="text-danger">Network error. Try again.</span>`;
         });
     }
 
     resendBtn.addEventListener('click', function() {
+        if (!userId) return;
+        const origHTML = resendBtn.innerHTML;
+        resendBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Sending...';
+        resendBtn.disabled = true;
+
         const formData = new FormData();
         formData.append('user_id', userId);
         fetch("{% url 'resend_code' %}", {
             method: 'POST',
-            headers: { 'X-CSRFToken': '{{ csrf_token }}', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') || '', 'X-Requested-With': 'XMLHttpRequest' },
             body: formData
         })
-        .then(r => r.json())
+        .then(r => {
+            const ct = r.headers.get('content-type') || '';
+            if (ct.includes('application/json')) return r.json();
+            return r.text().then(txt => ({ success: false, error: 'Unexpected server response', _raw: txt }));
+        })
         .then(data => {
+            // restore button text will be controlled by startResendTimer; but clear spinner state first
+            resendBtn.innerHTML = origHTML;
             if (data.success) {
                 document.getElementById('verificationMessage').innerHTML = '<span class="text-success">Code resent.</span>';
                 startResendTimer(60);
@@ -952,8 +1009,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 startResendTimer(data.wait);
                 document.getElementById('verificationMessage').innerHTML = `<span class="text-warning">Please wait ${data.wait}s.</span>`;
             } else {
+                resendBtn.disabled = false;
                 document.getElementById('verificationMessage').innerHTML = `<span class="text-danger">${data.error}</span>`;
             }
+        })
+        .catch(err => {
+            resendBtn.innerHTML = origHTML;
+            resendBtn.disabled = false;
+            document.getElementById('verificationMessage').innerHTML = `<span class="text-danger">Network error. Try again.</span>`;
         });
     });
 

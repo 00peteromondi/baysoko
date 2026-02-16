@@ -146,28 +146,42 @@ document.addEventListener('DOMContentLoaded', function() {
     const resendBtn = document.getElementById('resendBtn');
     const timerDisplay = document.getElementById('timerDisplay');
     let timerInterval = null;
+    let failedAttempts = 0;
+    const MAX_ATTEMPTS = 3;
 
     // Auto-submit on 7 digits
     verificationCode.addEventListener('input', function() {
+        // if we've reached max attempts, do not allow further automatic validation
+        if (failedAttempts >= MAX_ATTEMPTS) return;
         if (this.value.length === 7) {
             verifyCode(this.value);
         }
     });
 
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+
     function verifyCode(code) {
         const formData = new FormData();
         formData.append('user_id', userId);
         formData.append('code', code);
-
         fetch("{% url 'verify_email' %}", {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
-                'X-CSRFToken': '{{ csrf_token }}',
+                'X-CSRFToken': getCookie('csrftoken') || '',
                 'X-Requested-With': 'XMLHttpRequest'
             },
             body: formData
         })
-        .then(response => response.json())
+        .then(response => {
+            const ct = response.headers.get('content-type') || '';
+            if (ct.includes('application/json')) return response.json();
+            return response.text().then(txt => ({ success: false, error: 'Unexpected server response', _raw: txt }));
+        })
         .then(data => {
             // elements
             const icon = document.getElementById('verificationIcon');
@@ -187,33 +201,53 @@ document.addEventListener('DOMContentLoaded', function() {
                 // error visual
                 verificationCode.classList.add('error');
                 icon.innerHTML = '<i class="bi bi-x-lg" aria-hidden="true"></i>';
+                // show server error
                 document.getElementById('verificationMessage').innerHTML = `<span class="text-danger">${data.error}</span>`;
-                // brief shake then clear
-                verificationCode.classList.add('shake');
-                setTimeout(() => {
-                    verificationCode.classList.remove('shake');
-                    verificationCode.value = '';
-                    verificationCode.focus();
-                }, 550);
+                // increment failed attempts and disable if reached max
+                failedAttempts = (data.attempts_left !== undefined) ? (MAX_ATTEMPTS - data.attempts_left) : (failedAttempts + 1);
+                if (failedAttempts >= MAX_ATTEMPTS) {
+                    document.getElementById('verificationMessage').innerHTML = `<span class="text-danger">Maximum verification attempts reached. Try again tomorrow.</span>`;
+                    verificationCode.disabled = true;
+                    resendBtn.disabled = true;
+                } else {
+                    // brief shake then clear to allow another attempt
+                    verificationCode.classList.add('shake');
+                    setTimeout(() => {
+                        verificationCode.classList.remove('shake');
+                        verificationCode.value = '';
+                        verificationCode.focus();
+                    }, 550);
+                }
             }
         });
     }
 
-    // Resend code
+    // Resend code (show spinner while in-flight)
     resendBtn.addEventListener('click', function() {
+        const origHTML = resendBtn.innerHTML;
+        resendBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Sending...';
+        resendBtn.disabled = true;
+
         const formData = new FormData();
         formData.append('user_id', userId);
 
         fetch("{% url 'resend_code' %}", {
             method: 'POST',
+            credentials: 'same-origin',
             headers: {
-                'X-CSRFToken': '{{ csrf_token }}',
+                'X-CSRFToken': getCookie('csrftoken') || '',
                 'X-Requested-With': 'XMLHttpRequest'
             },
             body: formData
         })
-        .then(response => response.json())
+        .then(response => {
+            const ct = response.headers.get('content-type') || '';
+            if (ct.includes('application/json')) return response.json();
+            return response.text().then(txt => ({ success: false, error: 'Unexpected server response', _raw: txt }));
+        })
         .then(data => {
+            // restore button text; timer will manage enable/disable
+            resendBtn.innerHTML = origHTML;
             if (data.success) {
                 document.getElementById('verificationMessage').innerHTML = '<span class="text-success">Code resent. Check your email.</span>';
                 startResendTimer(60);
@@ -222,9 +256,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     startResendTimer(data.wait);
                     document.getElementById('verificationMessage').innerHTML = `<span class="text-warning">Please wait ${data.wait} seconds.</span>`;
                 } else {
+                    resendBtn.disabled = false;
                     document.getElementById('verificationMessage').innerHTML = `<span class="text-danger">${data.error}</span>`;
                 }
             }
+        })
+        .catch(err => {
+            resendBtn.innerHTML = origHTML;
+            resendBtn.disabled = false;
+            console.error('Resend fetch error', err);
+            document.getElementById('verificationMessage').innerHTML = `<span class="text-danger">Network error. Try again.</span>`;
         });
     });
 

@@ -31,23 +31,33 @@ class EmailVerificationMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        # List of paths that are exempt from verification check
+        # List of paths that are exempt from verification/phone checks
         exempt_paths = [
             reverse('verify_email'),
             reverse('resend_code'),
             reverse('logout'),
             reverse('verification_required'),
-            '/static/',
-            '/media/',
-            '/users/profile/',   # allow profile pages (including edit) for unverified users
+            reverse('login'),
+            reverse('register'),
         ]
         # Also exempt admin
         if request.path.startswith('/admin/'):
             return self.get_response(request)
 
-        if request.user.is_authenticated and not request.user.email_verified:
-            # Check if current path is exempt
-            if not any(request.path.startswith(path) for path in exempt_paths):
-                return redirect('verification_required')
-        
+        if request.user.is_authenticated:
+            # Always allow admin/static/media
+            if request.path.startswith('/admin/') or request.path.startswith('/static/') or request.path.startswith('/media/'):
+                return self.get_response(request)
+
+            # If user not verified, force verification_required except on exempt paths
+            if not request.user.email_verified:
+                if not any(request.path.startswith(path) for path in exempt_paths):
+                    return redirect('verification_required')
+
+            # If user verified but has no phone_number, force profile-edit
+            elif request.user.email_verified and not request.user.phone_number:
+                # allow profile-edit and logout and verify endpoints
+                allowed_for_phone = [reverse('profile-edit', kwargs={'pk': request.user.pk}), reverse('logout'), reverse('verification_required')]
+                if not any(request.path.startswith(path) for path in allowed_for_phone):
+                    return redirect('profile-edit', pk=request.user.pk)
         return self.get_response(request)

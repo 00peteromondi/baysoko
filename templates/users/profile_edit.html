@@ -793,12 +793,62 @@
                 fileInput.click();
             });
             
-            // Upload button click
-            const uploadBtn = document.querySelector('.upload-btn-modern');
+            // Upload button click (profile picture)
+            const uploadBtn = document.querySelector('label[for="id_profile_picture"]');
             if (uploadBtn) {
                 uploadBtn.addEventListener('click', function(e) {
                     e.preventDefault();
                     fileInput.click();
+                });
+            }
+        }
+
+        // Cover photo preview (mirror profile picture behavior)
+        const coverInput = document.getElementById('id_cover_photo');
+        const coverPreview = document.getElementById('cover-photo-preview');
+
+        if (coverInput && coverPreview) {
+            coverInput.addEventListener('change', function(event) {
+                const [file] = event.target.files;
+                if (file) {
+                    // Validate file size (5MB limit)
+                    if (file.size > 5 * 1024 * 1024) {
+                        showNotification('Please select an image smaller than 5MB', 'error');
+                        coverInput.value = '';
+                        return;
+                    }
+
+                    // Validate file type
+                    if (!file.type.startsWith('image/')) {
+                        showNotification('Please select a valid image file', 'error');
+                        coverInput.value = '';
+                        return;
+                    }
+
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        coverPreview.src = e.target.result;
+                        // Subtle animation
+                        coverPreview.style.transform = 'scale(1.02)';
+                        setTimeout(() => {
+                            coverPreview.style.transform = 'scale(1)';
+                        }, 300);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            // Click cover image to open file picker
+            coverPreview.addEventListener('click', function() {
+                coverInput.click();
+            });
+
+            // Upload button click (cover photo)
+            const coverUploadBtn = document.querySelector('label[for="id_cover_photo"]');
+            if (coverUploadBtn) {
+                coverUploadBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    coverInput.click();
                 });
             }
         }
