@@ -54,13 +54,27 @@ def send_email_brevo(subject, plain_message, html_message, to_emails):
                     timeout=10
                 )
                 if 200 <= resp.status_code < 300:
-                    logger.info('Email sent via Brevo API to %s (attempt %s)', to_emails, attempt)
+                    # Log Brevo response body (contains messageId) for delivery tracing
+                    try:
+                        j = resp.json()
+                    except Exception:
+                        j = getattr(resp, 'text', None)
+                    logger.info('Email sent via Brevo API to %s (attempt %s) response=%s', to_emails, attempt, j)
                     return
                 # For 4xx, don't retry; for 5xx, try again
                 if 400 <= resp.status_code < 500:
-                    logger.warning('Brevo API returned client error %s: %s', resp.status_code, resp.text)
+                    # Client errors often include a JSON body with details
+                    try:
+                        err = resp.json()
+                    except Exception:
+                        err = resp.text
+                    logger.warning('Brevo API returned client error %s: %s', resp.status_code, err)
                     break
-                logger.warning('Brevo API returned server error %s (attempt %s): %s', resp.status_code, attempt, resp.text)
+                try:
+                    err = resp.json()
+                except Exception:
+                    err = resp.text
+                logger.warning('Brevo API returned server error %s (attempt %s): %s', resp.status_code, attempt, err)
             except requests.exceptions.SSLError as e:
                 logger.warning('Brevo API SSL error (attempt %s), will not retry: %s', attempt, e)
                 break

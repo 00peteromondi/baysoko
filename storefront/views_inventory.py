@@ -878,15 +878,25 @@ def send_stock_alert_email(alert_id):
         
         html_message = render_to_string('storefront/emails/stock_alert.html', context)
         text_message = render_to_string('storefront/emails/stock_alert.txt', context)
-        
-        send_mail(
-            subject=subject,
-            message=text_message,
-            from_email='noreply@baysoko.com',
-            recipient_list=[store.owner.email],
-            html_message=html_message,
-            fail_silently=True,
-        )
+
+        try:
+            from baysoko.utils.email_helpers import render_and_send
+            recipients = [e for e in [getattr(store.owner, 'email', None)] if e]
+            if recipients:
+                render_and_send('storefront/emails/stock_alert.html', 'storefront/emails/stock_alert.txt', context, subject, recipients)
+        except Exception:
+            # Fallback to direct send_mail if helper unavailable
+            try:
+                send_mail(
+                    subject=subject,
+                    message=text_message,
+                    from_email='noreply@baysoko.com',
+                    recipient_list=[getattr(store.owner, 'email', None)],
+                    html_message=html_message,
+                    fail_silently=True,
+                )
+            except Exception:
+                print(f"Error sending stock alert email via fallback for alert {alert_id}")
         
     except Exception as e:
         print(f"Error sending stock alert email: {e}")

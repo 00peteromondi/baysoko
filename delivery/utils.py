@@ -81,15 +81,18 @@ def send_delivery_notification(delivery, notification_type, recipient=None, cont
             subject = f"Delivery Update: {delivery.tracking_number}"
             html_message = render_to_string('delivery/email/notification.html', context)
             plain_message = render_to_string('delivery/email/notification.txt', context)
-            
-            send_mail(
-                subject=subject,
-                message=plain_message,
-                html_message=html_message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[recipient.email],
-                fail_silently=True,
-            )
+
+            try:
+                from baysoko.utils.email_helpers import render_and_send
+                recipients = [e for e in [getattr(recipient, 'email', None)] if e]
+                if recipients:
+                    render_and_send('delivery/email/notification.html', 'delivery/email/notification.txt', context, subject, recipients)
+            except Exception:
+                try:
+                    from django.core.mail import send_mail
+                    send_mail(subject=subject, message=plain_message, html_message=html_message, from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[recipient.email], fail_silently=True)
+                except Exception:
+                    logger.exception('Failed to send delivery notification email via fallback')
             
             # Create notification record
             from .models import DeliveryNotification

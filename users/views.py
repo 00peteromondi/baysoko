@@ -1033,9 +1033,17 @@ def debug_send_email(request):
     body = request.GET.get('body', 'This is a test message from Baysoko SMTP debug endpoint.')
 
     try:
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [to_addr], fail_silently=False)
-        logger.info(f"Debug email sent to {to_addr}")
-        return JsonResponse({'success': True, 'message': f'Debug email sent to {to_addr}'})
+        # Use centralized threaded sender to ensure provider-first and SMTP fallback
+        try:
+            from baysoko.utils.email_helpers import _send_email_threaded
+            _send_email_threaded(subject, body, None, [to_addr])
+            logger.info(f"Debug email queued to {to_addr} via centralized sender")
+            return JsonResponse({'success': True, 'message': f'Debug email queued to {to_addr}'})
+        except Exception:
+            # Fallback to Django send_mail if centralized helper unavailable
+            send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [to_addr], fail_silently=False)
+            logger.info(f"Debug email sent to {to_addr} via fallback send_mail")
+            return JsonResponse({'success': True, 'message': f'Debug email sent to {to_addr}'})
     except Exception as e:
         logger.error(f"Failed to send debug email: {e}", exc_info=True)
         return JsonResponse({'success': False, 'error': str(e)})

@@ -21,12 +21,16 @@ def process_scheduled_withdrawals():
 # storefront/tasks.py
 from celery import shared_task
 from django.utils import timezone
-from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from datetime import timedelta
 import logging
 
 logger = logging.getLogger(__name__)
+
+try:
+    from baysoko.utils.email_helpers import render_and_send
+except Exception:
+    render_and_send = None
 
 @shared_task
 def check_trial_expirations():
@@ -96,25 +100,30 @@ def send_trial_expired_notification(subscription_id):
         )
         
         subject = f"Your {subscription.get_plan_display()} Trial Has Ended - {store.name}"
-        
+
         context = {
             'store': store,
             'subscription': subscription,
             'plan_name': subscription.get_plan_display(),
             'user': user,
         }
-        
-        html_message = render_to_string('storefront/emails/trial_expired.html', context)
-        text_message = render_to_string('storefront/emails/trial_expired.txt', context)
-        
-        send_mail(
-            subject=subject,
-            message=text_message,
-            from_email='noreply@baysoko.com',
-            recipient_list=[user.email],
-            html_message=html_message,
-            fail_silently=True,
-        )
+
+        # Prefer centralized sender
+        recipients = [e for e in [getattr(user, 'email', None)] if e]
+        if render_and_send and recipients:
+            try:
+                render_and_send('storefront/emails/trial_expired.html', 'storefront/emails/trial_expired.txt', context, subject, recipients)
+            except Exception:
+                logger.exception('Failed to send trial expired email via centralized sender')
+        else:
+            # Fallback to simple rendering + send_mail if necessary
+            try:
+                html_message = render_to_string('storefront/emails/trial_expired.html', context)
+                text_message = render_to_string('storefront/emails/trial_expired.txt', context)
+                from django.core.mail import send_mail
+                send_mail(subject=subject, message=text_message, from_email='noreply@baysoko.com', recipient_list=[user.email], html_message=html_message, fail_silently=True)
+            except Exception:
+                logger.exception('Fallback trial expired email send failed')
         
     except Exception as e:
         logger.error(f"Error sending trial expired notification: {str(e)}")
@@ -154,17 +163,20 @@ def send_trial_expiration_reminder(subscription_id):
             'user': user,
         }
         
-        html_message = render_to_string('storefront/emails/trial_reminder.html', context)
-        text_message = render_to_string('storefront/emails/trial_reminder.txt', context)
-        
-        send_mail(
-            subject=subject,
-            message=text_message,
-            from_email='noreply@baysoko.com',
-            recipient_list=[user.email],
-            html_message=html_message,
-            fail_silently=True,
-        )
+        recipients = [e for e in [getattr(user, 'email', None)] if e]
+        if render_and_send and recipients:
+            try:
+                render_and_send('storefront/emails/trial_reminder.html', 'storefront/emails/trial_reminder.txt', context, subject, recipients)
+            except Exception:
+                logger.exception('Failed to send trial reminder via centralized sender')
+        else:
+            try:
+                html_message = render_to_string('storefront/emails/trial_reminder.html', context)
+                text_message = render_to_string('storefront/emails/trial_reminder.txt', context)
+                from django.core.mail import send_mail
+                send_mail(subject=subject, message=text_message, from_email='noreply@baysoko.com', recipient_list=[user.email], html_message=html_message, fail_silently=True)
+            except Exception:
+                logger.exception('Fallback trial reminder email send failed')
         
     except Exception as e:
         logger.error(f"Error sending trial expiration reminder: {str(e)}")
