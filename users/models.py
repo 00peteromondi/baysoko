@@ -42,6 +42,11 @@ class User(AbstractUser):
     email_verification_sent_at = models.DateTimeField(blank=True, null=True)
     verification_attempts_today = models.IntegerField(default=0)
     last_verification_attempt_date = models.DateField(blank=True, null=True)
+
+    password_reset_code = models.CharField(max_length=7, blank=True, null=True)
+    password_reset_sent_at = models.DateTimeField(blank=True, null=True)
+    password_reset_attempts = models.IntegerField(default=0)
+    password_reset_last_attempt_date = models.DateField(blank=True, null=True)
     
     is_verified = models.BooleanField(default=False)   # seller verification
     show_contact_info = models.BooleanField(default=True, help_text="Show my contact information to other users")

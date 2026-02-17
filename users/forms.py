@@ -5,6 +5,15 @@ from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
 import re
 from .models import User
+import os
+import logging
+import threading
+import requests
+from django.template.loader import render_to_string
+from django.core.mail import send_mail, get_connection, EmailMessage as DjangoEmailMessage
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth import authenticate
@@ -191,3 +200,72 @@ class CustomAuthenticationForm(AuthenticationForm):
                 self.confirm_login_allowed(user)
                 self.user_cache = user
         return self.cleaned_data
+
+
+from django.contrib.auth.forms import PasswordResetForm
+
+
+class CustomPasswordResetForm(PasswordResetForm):
+    """Override PasswordResetForm.send_mail to route through Brevo API first
+    and fall back to SMTP/Django backends. Sending happens on a background
+    thread to avoid blocking request handling.
+    """
+    def send_mail(self, subject_template_name, email_template_name,
+                  context, from_email, to_email, html_email_template_name=None):
+        subject = render_to_string(subject_template_name, context)
+        # Subject may contain newlines — collapse to single line
+        subject = ''.join(subject.splitlines())
+        plain_message = render_to_string(email_template_name, context)
+        html_message = None
+        if html_email_template_name:
+            html_message = render_to_string(html_email_template_name, context)
+
+        def _send():
+            try:
+                brevo_key = (
+                    os.environ.get('BREVO_API_KEY') or os.environ.get('SENDINBLUE_API_KEY') or os.environ.get('SIB_API_KEY')
+                )
+                if not brevo_key:
+                    email_host_val = getattr(settings, 'EMAIL_HOST', os.environ.get('EMAIL_HOST', '')).lower()
+                    if 'brevo' in email_host_val or 'sendinblue' in email_host_val:
+                        brevo_key = os.environ.get('EMAIL_HOST_PASSWORD') or getattr(settings, 'EMAIL_HOST_PASSWORD', None)
+
+                if brevo_key:
+                    try:
+                        headers = {'accept': 'application/json', 'api-key': brevo_key, 'content-type': 'application/json'}
+                        sender = {'name': os.environ.get('EMAIL_FROM_NAME', 'Baysoko'), 'email': settings.DEFAULT_FROM_EMAIL}
+                        to_list = [{'email': e, 'name': ''} for e in to_email]
+                        payload = {'sender': sender, 'to': to_list, 'subject': subject, 'textContent': plain_message, 'htmlContent': html_message or plain_message}
+                        resp = requests.post('https://api.brevo.com/v3/smtp/email', json=payload, headers=headers, timeout=10)
+                        if 200 <= getattr(resp, 'status_code', 0) < 300:
+                            logger.info('Password reset email sent via Brevo API to %s; status=%s', to_email, resp.status_code)
+                            return
+                        logger.warning('Brevo API password reset send failed status=%s body=%s', getattr(resp, 'status_code', None), getattr(resp, 'text', None))
+                    except Exception:
+                        logger.exception('Brevo API password reset attempt failed; will fallback to SMTP/Django backend')
+
+                envelope_from = os.environ.get('SMTP_ENVELOPE_FROM') or settings.DEFAULT_FROM_EMAIL
+                try:
+                    connection = get_connection()
+                    msg = DjangoEmailMessage(subject=subject, body=plain_message, from_email=envelope_from, to=to_email, connection=connection, headers={'From': settings.DEFAULT_FROM_EMAIL})
+                    if html_message:
+                        try:
+                            msg.attach_alternative(html_message, 'text/html')
+                        except Exception:
+                            pass
+                    msg.send(fail_silently=False)
+                    logger.info('Password reset email sent for %s via SMTP connection using envelope=%s', to_email, envelope_from)
+                    return
+                except Exception:
+                    logger.exception('Direct send via Django connection failed; falling back to send_mail')
+
+                # Final fallback: use Django send_mail
+                try:
+                    send_mail(subject, plain_message, settings.DEFAULT_FROM_EMAIL, to_email, html_message=html_message, fail_silently=False)
+                    logger.info('Password reset email sent for %s via configured EMAIL_BACKEND', to_email)
+                except Exception:
+                    logger.exception('Final fallback send_mail failed for password reset to %s', to_email)
+            except Exception:
+                logger.exception('Unexpected error while sending password reset email to %s', to_email)
+
+        threading.Thread(target=_send, daemon=True).start()

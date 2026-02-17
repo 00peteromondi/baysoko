@@ -1,50 +1,194 @@
-# users/views.py - Fixed with auth_views import
-from django.shortcuts import render, redirect
-from django.contrib.auth import login
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.contrib.auth.views import PasswordChangeView, LoginView, LogoutView
-from django.contrib.auth import views as auth_views
-from django.views.generic import DetailView, UpdateView
-from django.urls import reverse_lazy, reverse
-from django.contrib import messages
-from django import forms
-from .models import User
-from .forms import CustomUserCreationForm, CustomUserChangeForm, CustomAuthenticationForm
-from listings.models import Listing
-from django.core.paginator import Paginator
-from django.shortcuts import get_object_or_404
-from django.db import models, transaction
-from django.db import IntegrityError
-from django.contrib.admin.views.decorators import staff_member_required
-from django.conf import settings
-from allauth.socialaccount.models import SocialApp, SocialAccount
-from django.contrib.sites.models import Site
+# users/views.py - Refactored with password reset modal and unified email sending
+
 import os
-import logging
-from urllib.parse import urlencode
+import re
+import json
+import random
+import string
 import secrets
-import requests
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
-import io
+import logging
+import threading
 import contextlib
 import smtplib
 import traceback
-from email.message import EmailMessage
-import random
-import string
 from datetime import timedelta
-from django.utils import timezone
-from django.template.loader import render_to_string
-from django.core.mail import send_mail, get_connection, EmailMessage as DjangoEmailMessage
-from django.http import JsonResponse, HttpResponse
-from django.contrib.auth import update_session_auth_hash
+from email.message import EmailMessage
+from urllib.parse import urlencode
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth import login, update_session_auth_hash, authenticate
+from django.contrib.auth import views as auth_views
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.views import PasswordChangeView, LoginView, LogoutView
 from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib import messages
 from django.contrib.messages import get_messages
-import threading
+from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.sites.models import Site
+from django.views.generic import DetailView, UpdateView
+from django.urls import reverse_lazy, reverse
+from django.http import JsonResponse, HttpResponse
+from django.core.paginator import Paginator
+from django.core.mail import send_mail, get_connection, EmailMessage as DjangoEmailMessage
+from django.core.exceptions import ValidationError
+from django.db import models, transaction, IntegrityError
+from django.conf import settings
+from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.template.loader import render_to_string
+
+import requests
+from allauth.socialaccount.models import SocialApp, SocialAccount
+
+from .models import User
+from .forms import (
+    CustomUserCreationForm,
+    CustomUserChangeForm,
+    CustomAuthenticationForm,
+)
+
+from listings.models import Listing
 
 logger = logging.getLogger(__name__)
+
+# ----------------------------------------------------------------------
+#  Email sending helper (Brevo first, SMTP fallback)
+# ----------------------------------------------------------------------
+
+def send_email_brevo(subject, plain_message, html_message, to_emails):
+    """
+    Send an email using Brevo API if available, otherwise fall back to Django SMTP.
+    Runs synchronously – intended to be called from a background thread.
+    """
+    brevo_key = (
+        os.environ.get('BREVO_API_KEY') or
+        os.environ.get('SENDINBLUE_API_KEY') or
+        os.environ.get('SIB_API_KEY')
+    )
+    if not brevo_key:
+        email_host = getattr(settings, 'EMAIL_HOST', '').lower()
+        if 'brevo' in email_host or 'sendinblue' in email_host:
+            brevo_key = os.environ.get('EMAIL_HOST_PASSWORD') or getattr(settings, 'EMAIL_HOST_PASSWORD', None)
+
+    if brevo_key:
+        try:
+            headers = {
+                'accept': 'application/json',
+                'api-key': brevo_key,
+                'content-type': 'application/json',
+            }
+            sender = {
+                'name': os.environ.get('EMAIL_FROM_NAME', 'Baysoko'),
+                'email': settings.DEFAULT_FROM_EMAIL
+            }
+            to = [{'email': email} for email in to_emails]
+            payload = {
+                'sender': sender,
+                'to': to,
+                'subject': subject,
+                'textContent': plain_message,
+                'htmlContent': html_message,
+            }
+            resp = requests.post(
+                'https://api.brevo.com/v3/smtp/email',
+                json=payload,
+                headers=headers,
+                timeout=10
+            )
+            if 200 <= resp.status_code < 300:
+                logger.info('Email sent via Brevo API to %s', to_emails)
+                return
+            logger.warning('Brevo API failed: %s %s', resp.status_code, resp.text)
+        except Exception:
+            logger.exception('Brevo API exception, falling back to SMTP')
+
+    # Fallback to SMTP
+    envelope_from = os.environ.get('SMTP_ENVELOPE_FROM') or settings.DEFAULT_FROM_EMAIL
+    try:
+        connection = get_connection()
+        msg = DjangoEmailMessage(
+            subject=subject,
+            body=plain_message,
+            from_email=envelope_from,
+            to=to_emails,
+            connection=connection,
+            headers={'From': settings.DEFAULT_FROM_EMAIL}
+        )
+        msg.attach_alternative(html_message, 'text/html')
+        msg.send(fail_silently=False)
+        logger.info('Email sent via SMTP to %s', to_emails)
+    except Exception:
+        logger.exception('SMTP sending failed, trying send_mail as last resort')
+        send_mail(
+            subject,
+            plain_message,
+            settings.DEFAULT_FROM_EMAIL,
+            to_emails,
+            html_message=html_message,
+            fail_silently=False
+        )
+
+# ----------------------------------------------------------------------
+#  Threaded email senders (non‑blocking)
+# ----------------------------------------------------------------------
+
+def _send_email_threaded(subject, plain_message, html_message, to_emails):
+    """Wrapper to run send_email_brevo in a background thread."""
+    def _send():
+        try:
+            send_email_brevo(subject, plain_message, html_message, to_emails)
+        except Exception:
+            logger.exception('Background email send failed')
+    t = threading.Thread(target=_send, daemon=True)
+    t.start()
+
+def send_verification_email(user):
+    subject = 'Verify your email for Baysoko'
+    html_message = render_to_string('users/verification_email.html', {
+        'user': user,
+        'code': user.email_verification_code,
+        'site_name': 'Baysoko',
+    })
+    plain_message = f'Your verification code is: {user.email_verification_code}'
+    _send_email_threaded(subject, plain_message, html_message, [user.email])
+
+def send_welcome_email(user):
+    subject = 'Welcome to Baysoko'
+    html_message = render_to_string('users/welcome_email.html', {
+        'user': user,
+        'site_name': 'Baysoko',
+        'site_url': getattr(settings, 'SITE_URL', '/'),
+    })
+    plain_message = render_to_string('users/welcome_email.txt', {
+        'user': user,
+        'site_url': getattr(settings, 'SITE_URL', '/')
+    })
+    _send_email_threaded(subject, plain_message, html_message, [user.email])
+
+def send_password_reset_code(user):
+    """Generate and send a 7‑digit code for password reset."""
+    code = ''.join(random.choices(string.digits, k=7))
+    user.password_reset_code = code
+    user.password_reset_sent_at = timezone.now()
+    user.password_reset_attempts = 0
+    user.password_reset_last_attempt_date = timezone.now().date()
+    user.save()
+
+    subject = 'Your Baysoko Password Reset Code'
+    html_message = render_to_string('users/password_reset_code_email.html', {
+        'user': user,
+        'code': code,
+        'site_name': 'Baysoko',
+    })
+    plain_message = f'Your password reset code is: {code}'
+    _send_email_threaded(subject, plain_message, html_message, [user.email])
+
+# ----------------------------------------------------------------------
+#  Registration
+# ----------------------------------------------------------------------
 
 def register(request):
     if request.user.is_authenticated:
@@ -74,26 +218,14 @@ def register(request):
                 user.verification_attempts_today = 0
                 user.last_verification_attempt_date = timezone.now().date()
 
-                # Attempt save inside a transaction and handle unique constraint gracefully
                 try:
                     with transaction.atomic():
                         user.save()
                 except IntegrityError as ie:
-                    # Likely a race condition on unique phone/email. Inspect message and attach field-specific errors.
+                    # Handle race condition on unique phone/email
                     msg = 'A user with that phone number or email already exists.'
                     ie_msg = str(ie).lower() if ie else ''
-                    logger.warning(f"IntegrityError saving user (likely duplicate): {ie}")
-                    # Log any existing users with the same phone/email to aid debugging
-                    try:
-                        if phone:
-                            qs = User.objects.filter(phone_number=phone).values_list('id', 'phone_number')
-                            logger.info('Existing users with same phone: %s', list(qs))
-                        if user.email:
-                            qs2 = User.objects.filter(email__iexact=user.email).values_list('id', 'email')
-                            logger.info('Existing users with same email: %s', list(qs2))
-                    except Exception:
-                        logger.exception('Failed to log existing duplicates')
-                    # Decide which field to attach the error to
+                    logger.warning(f"IntegrityError saving user: {ie}")
                     if 'phone_number' in ie_msg or 'phone' in ie_msg:
                         form.add_error('phone_number', 'A user with that phone number already exists.')
                     elif 'email' in ie_msg:
@@ -109,11 +241,18 @@ def register(request):
                 # Send verification email
                 send_verification_email(user)
 
-                # Log the user in (user.is_active is True now)
+                # Log the user in
                 login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-                # mark session so verification page shows one unified message
                 request.session['just_registered'] = True
-                request.session['just_registered_message'] = 'Registration successful. Please check your email for verification code.'
+                request.session['just_registered_message'] = (
+                    'Registration successful. Please check your email for verification code.'
+                )
+
+                # Send welcome email (non‑blocking)
+                try:
+                    send_welcome_email(user)
+                except Exception:
+                    logger.exception('Failed to queue welcome email')
 
                 if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                     return JsonResponse({
@@ -138,78 +277,9 @@ def register(request):
 
     return render(request, 'users/register.html', {'form': form})
 
-def send_verification_email(user):
-    subject = 'Verify your email for Baysoko'
-    html_message = render_to_string('users/verification_email.html', {
-        'user': user,
-        'code': user.email_verification_code,
-        'site_name': 'Baysoko',
-    })
-    plain_message = f'Your verification code is: {user.email_verification_code}'
-
-    # Send email on a background thread to avoid blocking the web worker.
-    def _send():
-        try:
-            # Prefer Brevo transactional API when a Brevo API key is available.
-            brevo_key = (
-                os.environ.get('BREVO_API_KEY')
-                or os.environ.get('SENDINBLUE_API_KEY')
-                or os.environ.get('SIB_API_KEY')
-            )
-
-            # If the environment uses Brevo SMTP and no explicit API key, the
-            # SMTP password may actually be the API key; allow that as a fallback.
-            if not brevo_key:
-                email_host_val = getattr(settings, 'EMAIL_HOST', os.environ.get('EMAIL_HOST', '')).lower()
-                if 'brevo' in email_host_val or 'sendinblue' in email_host_val:
-                    brevo_key = os.environ.get('EMAIL_HOST_PASSWORD') or getattr(settings, 'EMAIL_HOST_PASSWORD', None)
-
-            if brevo_key:
-                try:
-                    headers = {
-                        'accept': 'application/json',
-                        'api-key': brevo_key,
-                        'content-type': 'application/json',
-                    }
-                    sender = {'name': os.environ.get('EMAIL_FROM_NAME', 'Baysoko'), 'email': settings.DEFAULT_FROM_EMAIL}
-                    to = [{'email': user.email, 'name': (user.get_full_name() or '').strip()}]
-                    payload = {'sender': sender, 'to': to, 'subject': subject, 'textContent': plain_message, 'htmlContent': html_message}
-                    resp = requests.post('https://api.brevo.com/v3/smtp/email', json=payload, headers=headers, timeout=10)
-                    if 200 <= getattr(resp, 'status_code', 0) < 300:
-                        logger.info('Verification email sent via Brevo API for user id=%s; status=%s', getattr(user, 'id', None), resp.status_code)
-                        return
-                    logger.warning('Brevo API send failed status=%s body=%s', getattr(resp, 'status_code', None), getattr(resp, 'text', None))
-                except Exception:
-                    logger.exception('Brevo API send attempt failed; will fallback to SMTP/Django backend')
-
-            # SMTP fallback: use explicit envelope override if provided, otherwise
-            # use DEFAULT_FROM_EMAIL. Do not attempt to use non-email SMTP usernames
-            # (like 'api') as the envelope-from.
-            envelope_from = os.environ.get('SMTP_ENVELOPE_FROM') or os.environ.get('MAIL_ENVELOPE_FROM') or settings.DEFAULT_FROM_EMAIL
-
-            try:
-                connection = get_connection()
-                msg = DjangoEmailMessage(subject=subject, body=plain_message, from_email=envelope_from, to=[user.email], connection=connection, headers={'From': settings.DEFAULT_FROM_EMAIL})
-                try:
-                    msg.attach_alternative(html_message, 'text/html')
-                except Exception:
-                    pass
-                msg.send(fail_silently=False)
-                logger.info('Verification email sent for user id=%s via SMTP connection using envelope=%s', getattr(user, 'id', None), envelope_from)
-                return
-            except Exception:
-                logger.exception('Direct send via Django connection failed; falling back to send_mail')
-
-            # Final fallback: Django's send_mail
-            send_mail(subject, plain_message, settings.DEFAULT_FROM_EMAIL, [user.email], html_message=html_message, fail_silently=False)
-            logger.info('Verification email sent for user id=%s via configured EMAIL_BACKEND', getattr(user, 'id', None))
-        except Exception as e:
-            logger.exception('Failed to send verification email for user id=%s: %s', getattr(user, 'id', None), e)
-
-    t = threading.Thread(target=_send, daemon=True)
-    t.start()
-
-# users/views.py (only the relevant change)
+# ----------------------------------------------------------------------
+#  Email verification
+# ----------------------------------------------------------------------
 
 @csrf_exempt
 def verify_email(request):
@@ -229,14 +299,17 @@ def verify_email(request):
             user.last_verification_attempt_date = today
             user.save()
 
-        # If locked due to too many failed attempts today
         if user.verification_attempts_today >= 3:
-            return JsonResponse({'success': False, 'error': 'Maximum verification attempts reached. Try again tomorrow.', 'attempts_left': 0})
+            return JsonResponse({
+                'success': False,
+                'error': 'Maximum verification attempts reached. Try again tomorrow.',
+                'attempts_left': 0
+            })
 
         # Validate code and expiry (10 minutes)
-        if user.email_verification_code and user.email_verification_code == code and user.email_verification_sent_at:
-            if now - user.email_verification_sent_at > timedelta(minutes=10):
-                return JsonResponse({'success': False, 'error': 'Code expired. Request a new one.', 'attempts_left': max(0, 3 - user.verification_attempts_today)})
+        if (user.email_verification_code and user.email_verification_code == code and
+                user.email_verification_sent_at and
+                now - user.email_verification_sent_at <= timedelta(minutes=10)):
             # Successful verification
             user.email_verified = True
             user.is_active = True
@@ -245,37 +318,33 @@ def verify_email(request):
             user.save()
             if not request.user.is_authenticated:
                 login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-            # If user has no phone number, send them to profile-edit to add one
-            if not user.phone_number:
-                redirect_url = reverse('profile-edit', kwargs={'pk': user.pk})
-            else:
-                redirect_url = reverse('home')
+            redirect_url = reverse('profile-edit', kwargs={'pk': user.pk}) if not user.phone_number else reverse('home')
             return JsonResponse({'success': True, 'redirect': redirect_url})
 
-        # Invalid code -> increment attempts
+        # Invalid code
         user.verification_attempts_today += 1
         user.last_verification_attempt_date = today
         user.save()
         attempts_left = max(0, 3 - user.verification_attempts_today)
         if attempts_left <= 0:
-            return JsonResponse({'success': False, 'error': 'Maximum verification attempts reached. Try again tomorrow.', 'attempts_left': 0})
-        return JsonResponse({'success': False, 'error': f'Invalid code. {attempts_left} attempts remaining.', 'attempts_left': attempts_left})
+            return JsonResponse({
+                'success': False,
+                'error': 'Maximum verification attempts reached. Try again tomorrow.',
+                'attempts_left': 0
+            })
+        return JsonResponse({
+            'success': False,
+            'error': f'Invalid code. {attempts_left} attempts remaining.',
+            'attempts_left': attempts_left
+        })
     return JsonResponse({'success': False, 'error': 'Invalid request.'})
-
-
 
 @csrf_exempt
 def resend_code(request):
     try:
-        # Diagnostic logging to help debug 502s on Render (capture headers and sizes)
-        try:
-            content_type = request.META.get('CONTENT_TYPE') or request.headers.get('content-type')
-        except Exception:
-            content_type = None
-        try:
-            content_length = int(request.META.get('CONTENT_LENGTH') or 0)
-        except Exception:
-            content_length = 0
+        # Diagnostic logging
+        content_type = request.META.get('CONTENT_TYPE') or request.headers.get('content-type')
+        content_length = int(request.META.get('CONTENT_LENGTH') or 0)
         logger.info(
             "resend_code called: method=%s content_type=%s content_length=%s remote_addr=%s",
             request.method,
@@ -284,11 +353,9 @@ def resend_code(request):
             request.META.get('REMOTE_ADDR') or request.META.get('HTTP_X_FORWARDED_FOR')
         )
 
-        # Accept POST or GET to be resilient behind proxies or when requests are transformed
         if request.method not in ('POST', 'GET'):
             return JsonResponse({'success': False, 'error': 'Invalid request method.'})
 
-        # Try common places for user_id: POST form, GET query, or raw JSON body
         user_id = None
         try:
             user_id = request.POST.get('user_id') or request.GET.get('user_id')
@@ -296,20 +363,16 @@ def resend_code(request):
             logger.warning('Could not read request.POST: %s', e)
 
         if not user_id:
-            # Attempt to parse JSON body as fallback
             try:
-                import json
                 body = request.body.decode('utf-8') if getattr(request, 'body', None) else ''
                 if body:
                     data = json.loads(body)
                     user_id = data.get('user_id')
-                    logger.info('resend_code parsed JSON body; keys=%s', list(data.keys()))
             except Exception:
-                # ignore parse errors; will validate below
                 pass
 
         if not user_id:
-            logger.info('resend_code missing user_id; content_type=%s content_length=%s', content_type, content_length)
+            logger.info('resend_code missing user_id')
             return JsonResponse({'success': False, 'error': 'Missing user_id.'})
 
         try:
@@ -332,7 +395,6 @@ def resend_code(request):
         code = ''.join(random.choices(string.digits, k=7))
         user.email_verification_code = code
         user.email_verification_sent_at = now
-        # Do not increment verification_attempts here (used for failed attempts)
         user.save()
 
         send_verification_email(user)
@@ -343,29 +405,32 @@ def resend_code(request):
 
 @login_required
 def verification_required(request):
-    # If already verified, go home
     if request.user.email_verified:
         return redirect('home')
 
-    # Consume and clear existing messages to avoid duplicates or stale phone prompts
-    list(get_messages(request))  # iterate to clear storage
+    list(get_messages(request))  # clear existing messages
 
-    # If we just registered, show a single unified message
     if request.session.pop('just_registered', False):
-        msg = request.session.pop('just_registered_message', 'Account created. Check your email to verify your account.')
+        msg = request.session.pop(
+            'just_registered_message',
+            'Account created. Check your email to verify your account.'
+        )
         messages.success(request, msg)
 
     return render(request, 'users/verify_email.html', {'user': request.user})
 
+# ----------------------------------------------------------------------
+#  Social authentication (Google, Facebook)
+# ----------------------------------------------------------------------
+
 def google_login(request):
     try:
-        from django.contrib.sites.models import Site
         current_site = Site.objects.get_current()
-
-        if settings.DEBUG:
-            redirect_uri = f"http://{request.get_host()}/accounts/google/callback/"
-        else:
-            redirect_uri = f"https://{current_site.domain}/accounts/google/callback/"
+        redirect_uri = (
+            f"http://{request.get_host()}/accounts/google/callback/"
+            if settings.DEBUG
+            else f"https://{current_site.domain}/accounts/google/callback/"
+        )
 
         try:
             app = SocialApp.objects.get(provider='google')
@@ -399,23 +464,18 @@ def google_login(request):
         messages.error(request, "Unable to initiate Google login.")
         return redirect('register')
 
-
 def google_connect(request):
-    """Initiate Google OAuth to *connect* an existing account.
-    Sets session oauth_action='connect' so callback links the social account.
-    """
     if not request.user.is_authenticated:
         messages.error(request, 'You must be signed in to connect a Google account.')
         return redirect('login')
 
     try:
-        from django.contrib.sites.models import Site
         current_site = Site.objects.get_current()
-
-        if settings.DEBUG:
-            redirect_uri = f"http://{request.get_host()}/accounts/google/callback/"
-        else:
-            redirect_uri = f"https://{current_site.domain}/accounts/google/callback/"
+        redirect_uri = (
+            f"http://{request.get_host()}/accounts/google/callback/"
+            if settings.DEBUG
+            else f"https://{current_site.domain}/accounts/google/callback/"
+        )
 
         try:
             app = SocialApp.objects.get(provider='google')
@@ -456,20 +516,18 @@ def google_callback(request):
     if error:
         messages.error(request, f"Google authorization error: {error}")
         return redirect('register')
-
     if not code:
         messages.error(request, "Authorization code not received")
         return redirect('register')
 
     try:
         app = SocialApp.objects.get(provider='google')
-        from django.contrib.sites.models import Site
         current_site = Site.objects.get_current()
-
-        if settings.DEBUG:
-            redirect_uri = f"http://{request.get_host()}/accounts/google/callback/"
-        else:
-            redirect_uri = f"https://{current_site.domain}/accounts/google/callback/"
+        redirect_uri = (
+            f"http://{request.get_host()}/accounts/google/callback/"
+            if settings.DEBUG
+            else f"https://{current_site.domain}/accounts/google/callback/"
+        )
 
         token_url = 'https://oauth2.googleapis.com/token'
         data = {
@@ -479,7 +537,6 @@ def google_callback(request):
             'grant_type': 'authorization_code',
             'redirect_uri': redirect_uri,
         }
-
         response = requests.post(token_url, data=data, timeout=10)
         if response.status_code != 200:
             logger.error(f"Google token endpoint returned {response.status_code}: {response.text}")
@@ -493,7 +550,7 @@ def google_callback(request):
             return redirect('register')
 
         userinfo_url = 'https://www.googleapis.com/oauth2/v2/userinfo'
-        headers = {'Authorization': f"Bearer {token_data.get('access_token')}"}
+        headers = {'Authorization': f"Bearer {token_data['access_token']}"}
         userinfo_resp = requests.get(userinfo_url, headers=headers, timeout=10)
         if userinfo_resp.status_code != 200:
             logger.error(f"Google userinfo returned {userinfo_resp.status_code}: {userinfo_resp.text}")
@@ -506,14 +563,11 @@ def google_callback(request):
             messages.error(request, "Email not provided by Google")
             return redirect('register')
 
-        # If action is 'connect' and user is authenticated, link the social account
         action = request.session.get('oauth_action')
         if action == 'connect' and request.user.is_authenticated:
-            # Ensure the returned email matches the logged-in user
             if email.lower() != request.user.email.lower():
                 messages.error(request, 'Google account email does not match your account email.')
                 return redirect('profile-edit', pk=request.user.pk)
-            # create SocialAccount if missing
             uid = userinfo.get('id')
             if not SocialAccount.objects.filter(user=request.user, provider='google', uid=uid).exists():
                 SocialAccount.objects.create(user=request.user, provider='google', uid=uid, extra_data=userinfo)
@@ -530,20 +584,20 @@ def google_callback(request):
             return redirect('home')
         except User.DoesNotExist:
             username = email.split('@')[0]
+            original = username
             counter = 1
-            original_username = username
             while User.objects.filter(username=username).exists():
-                username = f"{original_username}{counter}"
+                username = f"{original}{counter}"
                 counter += 1
 
             user = User.objects.create(
-                email=(email or '').lower(),
+                email=email.lower(),
                 username=username,
                 first_name=userinfo.get('given_name', ''),
                 last_name=userinfo.get('family_name', ''),
                 location='Homabay',
                 phone_number=None,
-                is_active=True   # <-- changed to True
+                is_active=True
             )
             user.set_unusable_password()
             code = ''.join(random.choices(string.digits, k=7))
@@ -553,8 +607,12 @@ def google_callback(request):
             user.save()
 
             send_verification_email(user)
+            try:
+                send_welcome_email(user)
+            except Exception:
+                logger.exception('Failed to queue welcome email for social signup')
+
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-            # set session flag instead of immediate message to avoid duplicates
             request.session['just_registered'] = True
             request.session['just_registered_message'] = 'Account created with Google! Check your email to verify your account.'
             return redirect('verification_required')
@@ -593,7 +651,6 @@ def facebook_callback(request):
     if error:
         messages.error(request, f"Facebook authorization error: {error}")
         return redirect('register')
-
     if not code:
         messages.error(request, "Authorization code not received")
         return redirect('register')
@@ -608,7 +665,6 @@ def facebook_callback(request):
             'code': code,
             'redirect_uri': request.build_absolute_uri('/accounts/facebook/callback/'),
         }
-
         response = requests.get(token_url, params=params)
         token_data = response.json()
 
@@ -637,20 +693,20 @@ def facebook_callback(request):
             return redirect('home')
         except User.DoesNotExist:
             username = email.split('@')[0] if '@' in email else userinfo.get('id')
+            original = username
             counter = 1
-            original_username = username
             while User.objects.filter(username=username).exists():
-                username = f"{original_username}{counter}"
+                username = f"{original}{counter}"
                 counter += 1
 
             user = User.objects.create(
-                email=(email or '').lower(),
+                email=email.lower(),
                 username=username,
                 first_name=userinfo.get('first_name', ''),
                 last_name=userinfo.get('last_name', ''),
                 location='Homabay',
                 phone_number=None,
-                is_active=True   # <-- changed to True
+                is_active=True
             )
             user.set_unusable_password()
             code = ''.join(random.choices(string.digits, k=7))
@@ -660,8 +716,12 @@ def facebook_callback(request):
             user.save()
 
             send_verification_email(user)
+            try:
+                send_welcome_email(user)
+            except Exception:
+                logger.exception('Failed to queue welcome email for social signup')
+
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-            # set session flag instead of immediate message to avoid duplicates
             request.session['just_registered'] = True
             request.session['just_registered_message'] = 'Account created with Facebook! Check your email to verify your account.'
             return redirect('verification_required')
@@ -671,6 +731,9 @@ def facebook_callback(request):
         messages.error(request, "Error during Facebook login. Please try again.")
         return redirect('register')
 
+# ----------------------------------------------------------------------
+#  Profile views
+# ----------------------------------------------------------------------
 
 class ProfileDetailView(DetailView):
     model = User
@@ -699,19 +762,19 @@ class ProfileDetailView(DetailView):
         context['rating_average'] = 4.5
         context['member_since'] = profile_user.date_joined.strftime("%B %Y")
 
-        # Indicate whether the profile owner can connect Google (has gmail and no google SocialAccount)
+        # Check if profile owner can connect Google
         try:
-            can_connect = False
-            if profile_user.email and profile_user.email.lower().endswith('@gmail.com'):
-                # Only allow connect for accounts created via the form (have a usable password)
-                if profile_user.has_usable_password() and not SocialAccount.objects.filter(user=profile_user, provider='google').exists():
-                    can_connect = True
+            can_connect = (
+                profile_user.email and
+                profile_user.email.lower().endswith('@gmail.com') and
+                profile_user.has_usable_password() and
+                not SocialAccount.objects.filter(user=profile_user, provider='google').exists()
+            )
         except Exception:
             can_connect = False
         context['can_connect_google'] = can_connect
 
         return context
-
 
 class ProfileUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = User
@@ -748,18 +811,22 @@ class ProfileUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['form'] = self.get_form()
-        # For profile edit page, suggest connecting Google if user has gmail and not yet connected
+        user = self.request.user
         try:
-            user = self.request.user
-            can_connect = False
-            if user.is_authenticated and user.email and user.email.lower().endswith('@gmail.com'):
-                if user.has_usable_password() and not SocialAccount.objects.filter(user=user, provider='google').exists():
-                    can_connect = True
+            can_connect = (
+                user.email and
+                user.email.lower().endswith('@gmail.com') and
+                user.has_usable_password() and
+                not SocialAccount.objects.filter(user=user, provider='google').exists()
+            )
         except Exception:
             can_connect = False
         context['can_connect_google'] = can_connect
         return context
 
+# ----------------------------------------------------------------------
+#  Password change (AJAX and regular)
+# ----------------------------------------------------------------------
 
 class CustomPasswordChangeView(LoginRequiredMixin, PasswordChangeView):
     template_name = 'users/password_change.html'
@@ -769,84 +836,6 @@ class CustomPasswordChangeView(LoginRequiredMixin, PasswordChangeView):
         messages.success(self.request, 'Your password has been changed successfully!')
         return super().form_valid(form)
 
-
-class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
-    template_name = 'users/password_reset_confirm.html'
-    success_url = '/password-reset-complete/'
-
-    def form_valid(self, form):
-        messages.success(self.request, 'Your password has been reset successfully!')
-        return super().form_valid(form)
-
-
-class CustomPasswordResetView(auth_views.PasswordResetView):
-    template_name = 'users/password_reset.html'
-    email_template_name = 'users/password_reset_email.html'
-    subject_template_name = 'users/password_reset_subject.txt'
-    success_url = '/password-reset/done/'
-
-    def form_valid(self, form):
-        email = form.cleaned_data['email']
-        logger.info(f"Password reset requested for email: {email}")
-        try:
-            from django.core.mail import get_connection
-            connection = get_connection()
-            logger.info(f"Email backend: {connection.__class__.__name__}")
-            response = super().form_valid(form)
-            if connection.__class__.__name__ == 'ConsoleBackend':
-                logger.info(f"Password reset email would be sent to: {email} (printed to console)")
-                messages.success(self.request, f'Password reset email has been printed to console for {email}.')
-            else:
-                logger.info(f"Password reset email sent successfully to: {email}")
-                messages.success(self.request, f'Password reset email has been sent to {email}.')
-            return response
-        except Exception as e:
-            logger.error(f"Password reset email failed for {email}: {str(e)}")
-            messages.error(self.request, f'Error sending email to {email}. Try again later.')
-            return self.form_invalid(form)
-
-
-class CustomPasswordResetCompleteView(auth_views.PasswordResetCompleteView):
-    template_name = 'users/password_reset_complete.html'
-
-    def get(self, request, *args, **kwargs):
-        messages.success(self.request, 'Your password has been successfully reset. You can now log in.')
-        return super().get(request, *args, **kwargs)
-
-
-@staff_member_required
-def oauth_diagnostics(request):
-    site = Site.objects.get_current()
-    apps = SocialApp.objects.all()
-    env_vars = {
-        'GOOGLE_OAUTH_CLIENT_ID': os.environ.get('GOOGLE_OAUTH_CLIENT_ID'),
-        'GOOGLE_OAUTH_CLIENT_SECRET': os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET'),
-        'FACEBOOK_OAUTH_CLIENT_ID': os.environ.get('FACEBOOK_OAUTH_CLIENT_ID'),
-        'FACEBOOK_OAUTH_CLIENT_SECRET': os.environ.get('FACEBOOK_OAUTH_CLIENT_SECRET'),
-        'SITE_DOMAIN': os.environ.get('SITE_DOMAIN') or os.environ.get('RENDER_EXTERNAL_HOSTNAME'),
-    }
-    provider_apps = {app.provider: app for app in apps}
-    return render(request, 'users/oauth_diagnostics.html', {
-        'site': site,
-        'provider_apps': provider_apps,
-        'env_vars': env_vars,
-        'social_providers': settings.SOCIALACCOUNT_PROVIDERS if hasattr(settings, 'SOCIALACCOUNT_PROVIDERS') else {},
-    })
-
-
-@staff_member_required
-def debug_send_email(request):
-    to_addr = request.GET.get('to') or request.user.email or settings.DEFAULT_FROM_EMAIL
-    subject = request.GET.get('subject', 'Baysoko SMTP Debug')
-    body = request.GET.get('body', 'This is a test message from Baysoko SMTP debug endpoint.')
-
-    try:
-        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [to_addr], fail_silently=False)
-        logger.info(f"Debug email sent to {to_addr}")
-        return JsonResponse({'success': True, 'message': f'Debug email sent to {to_addr}'})
-    except Exception as e:
-        logger.error(f"Failed to send debug email: {e}", exc_info=True)
-        return JsonResponse({'success': False, 'error': str(e)})
 def ajax_password_change(request):
     if request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
         form = PasswordChangeForm(request.user, request.POST)
@@ -867,6 +856,229 @@ def ajax_password_change(request):
         'errors': {'__all__': ['Invalid request']}
     })
 
+# ----------------------------------------------------------------------
+#  Password reset (modal with AJAX)
+# ----------------------------------------------------------------------
+
+def password_reset_modal(request):
+    """Render the single‑page password reset modal."""
+    return render(request, 'users/password_reset_modal.html')
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def password_reset_send_code(request):
+    """Step 1: Accept email, send code."""
+    try:
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+    except Exception:
+        return JsonResponse({'success': False, 'error': 'Invalid request.'})
+
+    if not email:
+        return JsonResponse({'success': False, 'error': 'Email is required.'})
+
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        # Security: don't reveal non‑existence
+        return JsonResponse({'success': True, 'message': 'If an account exists, a code has been sent.'})
+
+    # Rate limit: one request per 60 seconds
+    if user.password_reset_sent_at and (timezone.now() - user.password_reset_sent_at).seconds < 60:
+        wait = 60 - (timezone.now() - user.password_reset_sent_at).seconds
+        return JsonResponse({'success': False, 'error': f'Please wait {wait} seconds.', 'wait': wait})
+
+    send_password_reset_code(user)
+
+    return JsonResponse({
+        'success': True,
+        'message': 'Code sent. Please check your email.',
+        'email': email,
+    })
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def password_reset_verify_code(request):
+    """Step 2: Verify the code, allow setting new password."""
+    try:
+        data = json.loads(request.body)
+        email = data.get('email', '').strip().lower()
+        code = data.get('code', '').strip()
+    except Exception:
+        return JsonResponse({'success': False, 'error': 'Invalid request.'})
+
+    if not email or not code:
+        return JsonResponse({'success': False, 'error': 'Email and code are required.'})
+
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Invalid request.'})
+
+    now = timezone.now()
+    today = now.date()
+
+    # Reset daily attempts if needed
+    if user.password_reset_last_attempt_date != today:
+        user.password_reset_attempts = 0
+        user.password_reset_last_attempt_date = today
+        user.save()
+
+    if user.password_reset_attempts >= 3:
+        return JsonResponse({'success': False, 'error': 'Too many failed attempts. Try again tomorrow.'})
+
+    # Validate code and expiry (10 minutes)
+    if (user.password_reset_code == code and
+            user.password_reset_sent_at and
+            now - user.password_reset_sent_at <= timedelta(minutes=10)):
+        # Success – store verified email in session
+        request.session['password_reset_verified_email'] = email
+        request.session['password_reset_verified_at'] = now.isoformat()
+        return JsonResponse({'success': True})
+    else:
+        # Failed attempt
+        user.password_reset_attempts += 1
+        user.save()
+        attempts_left = max(0, 3 - user.password_reset_attempts)
+        return JsonResponse({
+            'success': False,
+            'error': f'Invalid code. {attempts_left} attempts remaining.',
+            'attempts_left': attempts_left
+        })
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def password_reset_set_password(request):
+    """Step 3: Set new password (after code verification)."""
+    try:
+        data = json.loads(request.body)
+        password = data.get('password')
+        confirm = data.get('confirm_password')
+    except Exception:
+        return JsonResponse({'success': False, 'error': 'Invalid request.'})
+
+    email = request.session.get('password_reset_verified_email')
+    verified_at = request.session.get('password_reset_verified_at')
+    if not email or not verified_at:
+        return JsonResponse({'success': False, 'error': 'Verification required.'})
+
+    # Check verification timeout (15 minutes)
+    try:
+        verified_dt = timezone.datetime.fromisoformat(verified_at)
+        if timezone.now() - verified_dt > timedelta(minutes=15):
+            del request.session['password_reset_verified_email']
+            del request.session['password_reset_verified_at']
+            return JsonResponse({'success': False, 'error': 'Verification expired. Please restart.'})
+    except Exception:
+        pass
+
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'User not found.'})
+
+    # Validate password
+    errors = []
+    if len(password) < 8:
+        errors.append('Password must be at least 8 characters.')
+    if not re.search(r'\d', password):
+        errors.append('Password must contain at least one digit.')
+    if not re.search(r'[a-zA-Z]', password):
+        errors.append('Password must contain at least one letter.')
+    if password != confirm:
+        errors.append('Passwords do not match.')
+
+    if errors:
+        return JsonResponse({'success': False, 'errors': errors})
+
+    user.set_password(password)
+    user.password_reset_code = None
+    user.password_reset_attempts = 0
+    user.save()
+
+    # Clear session
+    del request.session['password_reset_verified_email']
+    del request.session['password_reset_verified_at']
+
+    return JsonResponse({'success': True, 'message': 'Password changed successfully.'})
+
+# ----------------------------------------------------------------------
+#  Django built‑in password reset overrides (keep for compatibility)
+# ----------------------------------------------------------------------
+
+class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
+    template_name = 'users/password_reset_confirm.html'
+    success_url = '/password-reset-complete/'
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Your password has been reset successfully!')
+        return super().form_valid(form)
+
+class CustomPasswordResetView(auth_views.PasswordResetView):
+    template_name = 'users/password_reset.html'
+    email_template_name = 'users/password_reset_email.html'
+    subject_template_name = 'users/password_reset_subject.txt'
+    success_url = '/password-reset/done/'
+
+    def form_valid(self, form):
+        email = form.cleaned_data['email']
+        logger.info(f"Password reset requested for email: {email}")
+        try:
+            response = super().form_valid(form)
+            messages.success(self.request, f'Password reset email has been sent to {email}.')
+            return response
+        except Exception as e:
+            logger.error(f"Password reset email failed for {email}: {str(e)}")
+            messages.error(self.request, f'Error sending email to {email}. Try again later.')
+            return self.form_invalid(form)
+
+class CustomPasswordResetCompleteView(auth_views.PasswordResetCompleteView):
+    template_name = 'users/password_reset_complete.html'
+
+    def get(self, request, *args, **kwargs):
+        messages.success(self.request, 'Your password has been successfully reset. You can now log in.')
+        return super().get(request, *args, **kwargs)
+
+# ----------------------------------------------------------------------
+#  OAuth diagnostics and debug email (staff only)
+# ----------------------------------------------------------------------
+
+@staff_member_required
+def oauth_diagnostics(request):
+    site = Site.objects.get_current()
+    apps = SocialApp.objects.all()
+    env_vars = {
+        'GOOGLE_OAUTH_CLIENT_ID': os.environ.get('GOOGLE_OAUTH_CLIENT_ID'),
+        'GOOGLE_OAUTH_CLIENT_SECRET': os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET'),
+        'FACEBOOK_OAUTH_CLIENT_ID': os.environ.get('FACEBOOK_OAUTH_CLIENT_ID'),
+        'FACEBOOK_OAUTH_CLIENT_SECRET': os.environ.get('FACEBOOK_OAUTH_CLIENT_SECRET'),
+        'SITE_DOMAIN': os.environ.get('SITE_DOMAIN') or os.environ.get('RENDER_EXTERNAL_HOSTNAME'),
+    }
+    provider_apps = {app.provider: app for app in apps}
+    return render(request, 'users/oauth_diagnostics.html', {
+        'site': site,
+        'provider_apps': provider_apps,
+        'env_vars': env_vars,
+        'social_providers': getattr(settings, 'SOCIALACCOUNT_PROVIDERS', {}),
+    })
+
+@staff_member_required
+def debug_send_email(request):
+    to_addr = request.GET.get('to') or request.user.email or settings.DEFAULT_FROM_EMAIL
+    subject = request.GET.get('subject', 'Baysoko SMTP Debug')
+    body = request.GET.get('body', 'This is a test message from Baysoko SMTP debug endpoint.')
+
+    try:
+        send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [to_addr], fail_silently=False)
+        logger.info(f"Debug email sent to {to_addr}")
+        return JsonResponse({'success': True, 'message': f'Debug email sent to {to_addr}'})
+    except Exception as e:
+        logger.error(f"Failed to send debug email: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': str(e)})
+
+# ----------------------------------------------------------------------
+#  Login / Logout
+# ----------------------------------------------------------------------
 
 class CustomLoginView(LoginView):
     template_name = 'users/login.html'
@@ -898,7 +1110,6 @@ class CustomLoginView(LoginView):
                 'errors': form.errors.get_json_data()
             })
         return super().form_invalid(form)
-
 
 class CustomLogoutView(LogoutView):
     template_name = 'users/logout.html'

@@ -1,10 +1,11 @@
 # users/urls.py
 from django.urls import path, include
 from django.contrib.auth import views as auth_views
-from .views import register, ProfileDetailView, ProfileUpdateView, CustomPasswordChangeView, CustomPasswordResetConfirmView, CustomPasswordResetView, CustomPasswordResetCompleteView, google_callback, facebook_callback, CustomLoginView, CustomLogoutView
-from .views import oauth_diagnostics, google_login, facebook_login, google_connect
+from .views import register, ProfileDetailView, ProfileUpdateView, google_callback, facebook_callback, CustomLoginView, CustomLogoutView
+from .views import oauth_diagnostics, google_login, facebook_login, google_connect, password_reset_send_code, password_reset_verify_code, password_reset_set_password, verification_required
 from . import views
 from allauth.socialaccount.views import SignupView
+from django.urls import reverse_lazy
 
 urlpatterns = [
     path('register/', register, name='register'),
@@ -19,13 +20,7 @@ urlpatterns = [
     path('accounts/facebook/callback/', facebook_callback, name='facebook_callback'),
     
     # Password reset URLs
-    path('password-reset/', 
-         CustomPasswordResetView.as_view(
-             template_name='users/password_reset.html',
-             email_template_name='users/password_reset_email.html',
-             subject_template_name='users/password_reset_subject.txt'
-         ), 
-         name='password_reset'),
+    
     
     path('password-reset/done/', 
          auth_views.PasswordResetDoneView.as_view(
@@ -33,26 +28,14 @@ urlpatterns = [
          ), 
          name='password_reset_done'),
     
-    path('password-reset-confirm/<uidb64>/<token>/', 
-         CustomPasswordResetConfirmView.as_view(
-             template_name='users/password_reset_confirm.html'
-         ), 
-         name='password_reset_confirm'),
-    
-    path('password-reset-complete/', 
-         CustomPasswordResetCompleteView.as_view(
-             template_name='users/password_reset_complete.html'
-         ), 
-         name='password_reset_complete'),
-
     # Debug endpoint for SMTP testing (staff only)
     path('debug-email-send/', views.debug_send_email, name='debug_email_send'),
     
     # Password Change URLs (for logged-in users)
     path('password-change/', 
-         CustomPasswordChangeView.as_view(
-             template_name='users/password_change.html',
-             success_url='/users/password-change/done/'
+         auth_views.PasswordChangeView.as_view(
+             template_name='users/password_change_form.html',
+             success_url=reverse_lazy('password_change_done')
          ), 
          name='password_change'),
     
@@ -69,4 +52,8 @@ urlpatterns = [
     path('verify-email/', views.verify_email, name='verify_email'),
     path('resend-code/', views.resend_code, name='resend_code'),
     path('verify/', views.verification_required, name='verification_required'),
+    path('password-reset-modal/', views.password_reset_modal, name='password_reset_modal'),
+    path('password-reset-ajax/send-code/', password_reset_send_code, name='password_reset_send_code'),
+    path('password-reset-ajax/verify-code/', password_reset_verify_code, name='password_reset_verify_code'),
+    path('password-reset-ajax/set-password/', password_reset_set_password, name='password_reset_set_password'),
 ]
