@@ -35,8 +35,8 @@
         overflow: hidden;
     }
 
-    /* Galaxy – fixed, behind everything */
-    .galaxy {
+    /* ===== RAINING ICONS BACKGROUND (replaces galaxy) ===== */
+    .rain-container {
         position: fixed;
         top: 0;
         left: 0;
@@ -46,12 +46,34 @@
         pointer-events: none;
         z-index: 1;
     }
-    .bubble {
+
+    .rain-icon {
         position: absolute;
-        background: rgba(255, 255, 255, 0.3);
-        border-radius: 50%;
-        animation: float 20s infinite ease-in-out;
-        box-shadow: 0 0 30px rgba(255,255,255,0.2);
+        color: rgba(255, 255, 255, 0.25);
+        font-size: 2rem;
+        opacity: 0;
+        animation: bounce-rain linear infinite;
+        will-change: transform;
+        user-select: none;
+    }
+
+    @keyframes bounce-rain {
+        0% {
+            transform: translateY(-20vh) translateX(0) rotate(0deg);
+            opacity: 0.3;
+        }
+        60% {
+            transform: translateY(70vh) translateX(10px) rotate(180deg);
+            opacity: 0.7;
+        }
+        80% {
+            transform: translateY(60vh) translateX(5px) rotate(240deg);
+            opacity: 0.7;
+        }
+        100% {
+            transform: translateY(100vh) translateX(20px) rotate(360deg);
+            opacity: 0;
+        }
     }
 
     /* LEFT: Registration Form */
@@ -67,6 +89,7 @@
         border-right: 1px solid var(--border-color);
         height: 100vh;
         overflow-y: auto;
+        backdrop-filter: blur(4px);
     }
     .form-section::-webkit-scrollbar {
         width: 0;
@@ -333,14 +356,12 @@
         font-weight: 600;
     }
 
-    /* ===== RIGHT COLUMN: VERTICAL CAROUSEL ===== */
+    /* ===== RIGHT COLUMN: VERTICAL CAROUSEL (transparent background) ===== */
     .creative-section {
         flex: 1;
         position: relative;
         overflow: hidden;
-        background: radial-gradient(ellipse at 30% 40%, rgba(6,214,160,0.2) 0%, transparent 50%),
-                    radial-gradient(ellipse at 70% 60%, rgba(255,107,53,0.2) 0%, transparent 50%),
-                    var(--bg-secondary);
+        background: transparent;
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -364,12 +385,14 @@
         -webkit-text-fill-color: transparent;
         margin: 0;
         line-height: 1.2;
+        text-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
     .marketplace-heading p {
         color: var(--text-secondary);
         font-size: 1rem;
         margin-top: 0.2rem;
         letter-spacing: 1px;
+        text-shadow: 0 1px 4px rgba(0,0,0,0.3);
     }
 
     /* Vertical Carousel */
@@ -418,6 +441,7 @@
         text-align: center;
         animation: glowPulse 4s infinite alternate;
         overflow: hidden;
+        backdrop-filter: blur(8px);
     }
     @keyframes glowPulse {
         0% { box-shadow: 0 15px 30px rgba(0,0,0,0.2); }
@@ -487,10 +511,6 @@
         from { opacity: 0; transform: translateY(-20px); }
         to { opacity: 1; transform: translateY(0); }
     }
-    @keyframes float {
-        0%, 100% { transform: translateY(0) translateX(0) scale(1); opacity: 0.3; }
-        50% { transform: translateY(-30px) translateX(15px) scale(1.1); opacity: 0.6; }
-    }
 
     /* ===== RESPONSIVE ===== */
     @media (max-width: 1024px) {
@@ -540,7 +560,7 @@
     @media (max-width: 480px) {
         .form-section { padding: 0.8rem; }
         .form-title { font-size: 1.4rem; }
-        .form-grid { grid-template-columns: 1fr 1fr; } /* keep side by side */
+        .form-grid { grid-template-columns: 1fr 1fr; }
         .card-floating { padding: 1rem; }
         .card-floating h3 { font-size: 1.4rem; }
     }
@@ -558,7 +578,8 @@
 
 {% block content %}
 <div class="register-container">
-    <div class="galaxy" id="galaxy"></div>
+    <!-- RAINING ICONS BACKGROUND (replaces galaxy) -->
+    <div class="rain-container" id="rainContainer"></div>
 
     <!-- LEFT: Registration Form -->
     <div class="form-section">
@@ -734,21 +755,48 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // ========== BUBBLES ==========
-    const galaxy = document.getElementById('galaxy');
-    for (let i = 0; i < 70; i++) {
-        const bubble = document.createElement('div');
-        bubble.className = 'bubble';
-        const size = Math.random() * 120 + 30;
-        bubble.style.width = size + 'px';
-        bubble.style.height = size + 'px';
-        bubble.style.left = Math.random() * 100 + '%';
-        bubble.style.top = Math.random() * 100 + '%';
-        bubble.style.animationDelay = Math.random() * 10 + 's';
-        bubble.style.animationDuration = (Math.random() * 15 + 10) + 's';
-        bubble.style.background = `rgba(${Math.random()*100+155}, ${Math.random()*100+155}, ${Math.random()*100+155}, 0.35)`;
-        galaxy.appendChild(bubble);
+    // ========== RAINING ICONS (ENHANCED) ==========
+    const rainContainer = document.getElementById('rainContainer');
+    const icons = [
+        'bi-house', 'bi-house-door', 'bi-fridge', 'bi-tv', 'bi-phone',
+        'bi-laptop', 'bi-cup', 'bi-cup-straw', 'bi-egg-fried', 'bi-basket',
+        'bi-cart', 'bi-clock', 'bi-lamp', 'bi-lightbulb', 'bi-battery-charging',
+        'bi-wifi', 'bi-radio', 'bi-speaker', 'bi-headphones', 'bi-camera',
+        'bi-printer', 'bi-scissors', 'bi-droplet', 'bi-thermometer', 'bi-umbrella',
+        'bi-key', 'bi-lock', 'bi-unlock', 'bi-wallet', 'bi-cash-coin',
+        'bi-bag', 'bi-gift', 'bi-book', 'bi-journal', 'bi-pencil',
+        'bi-paint-bucket', 'bi-brush', 'bi-cone-striped', 'bi-bandaid', 'bi-eyedropper',
+        'bi-stove', 'bi-fan', 'bi-plug', 'bi-smartwatch', 'bi-robot',
+        'bi-camera-reels', 'bi-mic', 'bi-mouse', 'bi-pc-display', 'bi-phone-flip',
+        'bi-printer', 'bi-scanner', 'bi-speaker', 'bi-tablet', 'bi-tv'
+    ];
+
+    function createRainIcon() {
+        const icon = document.createElement('i');
+        const randomIcon = icons[Math.floor(Math.random() * icons.length)];
+        icon.className = `bi ${randomIcon} rain-icon`;
+        const size = Math.random() * 2.5 + 1.5; // 1.5rem to 4rem
+        icon.style.fontSize = size + 'rem';
+        icon.style.left = Math.random() * 100 + '%';
+        icon.style.animationDuration = (Math.random() * 7 + 8) + 's'; // 8-15s
+        icon.style.animationDelay = Math.random() * 10 + 's';
+        icon.style.opacity = '0';
+        const r = Math.floor(Math.random() * 200 + 55);
+        const g = Math.floor(Math.random() * 200 + 55);
+        const b = Math.floor(Math.random() * 200 + 55);
+        icon.style.color = `rgba(${r}, ${g}, ${b}, 0.3)`;
+        rainContainer.appendChild(icon);
+
+        const duration = parseFloat(icon.style.animationDuration) * 1000;
+        setTimeout(() => {
+            if (icon.parentNode) icon.remove();
+        }, duration + 2000);
     }
+
+    for (let i = 0; i < 180; i++) {
+        createRainIcon();
+    }
+    setInterval(createRainIcon, 200);
 
     // ========== CAROUSEL ==========
     const track = document.getElementById('carouselTrack');
@@ -843,7 +891,6 @@ document.addEventListener('DOMContentLoaded', function() {
     let timerInterval = null;
 
     registerForm.addEventListener('submit', function(e) {
-        // Prevent duplicate submits from other handlers/global interceptors
         if (registerForm.dataset.ajaxSubmitting === '1') {
             e.preventDefault();
             return;
@@ -853,7 +900,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const formData = new FormData(registerForm);
         const submitBtn = document.getElementById('submitButton');
         const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<span class="custom-spinner" role="status" aria-hidden="true" style="width:1rem;height:1rem;"></span> Creating Account...';
+        submitBtn.innerHTML = '<span class="custom-spinner" role="status" aria-hidden="true" style="width:1rem;height:1rem;"></span> Creating Account...';
         submitBtn.disabled = true;
         document.querySelectorAll('.error-message').forEach(el => el.remove());
 
@@ -881,18 +928,15 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!data) return;
             console.log('Registration response:', data);
             if (data.success) {
-                // For form-based registrations (non-social) redirect to the verification page
                 window.location.href = "{% url 'verification_required' %}";
                 return;
             } else {
                 if (data.errors) {
-                    // handle __all__ which may be string or array
                     if (data.errors.__all__) {
                         const allErr = data.errors.__all__;
                         if (typeof allErr === 'string') {
                             showGlobalMessage(allErr, 'danger');
                         } else if (Array.isArray(allErr)) {
-                            // array may contain message strings or error objects
                             const msgs = allErr.map(e => (e && e.message) ? e.message : (typeof e === 'string' ? e : JSON.stringify(e)));
                             showGlobalMessage(msgs.join(' '), 'danger');
                         }
@@ -904,7 +948,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         let message = '';
                         if (typeof fieldErr === 'string') message = fieldErr;
                         else if (Array.isArray(fieldErr)) {
-                            // django form errors from get_json_data give array of objects
                             if (fieldErr.length && fieldErr[0].message) message = fieldErr[0].message;
                             else message = fieldErr.map(e => (e && e.message) ? e.message : (typeof e === 'string' ? e : JSON.stringify(e))).join(' ');
                         } else message = JSON.stringify(fieldErr);
@@ -969,9 +1012,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 showGlobalMessage('Email verified! Redirecting...', 'success');
                 setTimeout(() => window.location.href = data.redirect || '/', 2000);
             } else {
-                // show server error
                 document.getElementById('verificationMessage').innerHTML = `<span class="text-danger">${data.error}</span>`;
-                // update attempts
                 failedAttempts = (data.attempts_left !== undefined) ? (MAX_ATTEMPTS - data.attempts_left) : (failedAttempts + 1);
                 if (failedAttempts >= MAX_ATTEMPTS) {
                     document.getElementById('verificationMessage').innerHTML = `<span class="text-danger">Maximum verification attempts reached. Try again tomorrow.</span>`;
@@ -1008,7 +1049,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return r.text().then(txt => ({ success: false, error: 'Unexpected server response', _raw: txt }));
         })
         .then(data => {
-            // restore button text will be controlled by startResendTimer; but clear spinner state first
             resendBtn.innerHTML = origHTML;
             if (data.success) {
                 document.getElementById('verificationMessage').innerHTML = '<span class="text-success">Code resent.</span>';
@@ -1045,7 +1085,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 1000);
     }
 
-    // ========== GLOBAL MESSAGE FUNCTION ==========
     function showGlobalMessage(message, type) {
         const container = document.getElementById('globalMessageContainer');
         if (!container) return;
@@ -1059,7 +1098,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 4000);
     }
 
-    // Remove inline errors on input
     document.querySelectorAll('.input-modern').forEach(input => {
         input.addEventListener('input', function() {
             this.classList.remove('error');

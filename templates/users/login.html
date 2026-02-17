@@ -36,8 +36,8 @@
         overflow: hidden;
     }
 
-    /* Galaxy – fixed, behind everything */
-    .galaxy {
+    /* ===== RAINING ICONS BACKGROUND (replaces galaxy) ===== */
+    .rain-container {
         position: fixed;
         top: 0;
         left: 0;
@@ -47,12 +47,34 @@
         pointer-events: none;
         z-index: 1;
     }
-    .bubble {
+
+    .rain-icon {
         position: absolute;
-        background: rgba(255, 255, 255, 0.3);
-        border-radius: 50%;
-        animation: float 20s infinite ease-in-out;
-        box-shadow: 0 0 30px rgba(255,255,255,0.2);
+        color: rgba(255, 255, 255, 0.25);
+        font-size: 2rem; /* base size, will be overridden inline */
+        opacity: 0;
+        animation: bounce-rain linear infinite;
+        will-change: transform;
+        user-select: none;
+    }
+
+    @keyframes bounce-rain {
+        0% {
+            transform: translateY(-20vh) translateX(0) rotate(0deg);
+            opacity: 0.3;
+        }
+        60% {
+            transform: translateY(70vh) translateX(10px) rotate(180deg);
+            opacity: 0.7;
+        }
+        80% {
+            transform: translateY(60vh) translateX(5px) rotate(240deg); /* bounce up */
+            opacity: 0.7;
+        }
+        100% {
+            transform: translateY(100vh) translateX(20px) rotate(360deg);
+            opacity: 0;
+        }
     }
 
     /* LEFT: Login Form */
@@ -68,6 +90,7 @@
         border-right: 1px solid var(--border-color);
         height: 100vh;
         overflow-y: auto;
+        backdrop-filter: blur(4px); /* slight blur to make text pop over icons */
     }
     .form-section::-webkit-scrollbar {
         width: 0;
@@ -309,14 +332,12 @@
         font-weight: 600;
     }
 
-    /* ===== RIGHT COLUMN: VERTICAL CAROUSEL ===== */
+    /* ===== RIGHT COLUMN: VERTICAL CAROUSEL (transparent background) ===== */
     .creative-section {
         flex: 1;
         position: relative;
         overflow: hidden;
-        background: radial-gradient(ellipse at 30% 40%, rgba(255,107,53,0.2) 0%, transparent 50%),
-                    radial-gradient(ellipse at 70% 60%, rgba(6,214,160,0.2) 0%, transparent 50%),
-                    var(--bg-secondary);
+        background: transparent; /* let rain icons show through */
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -340,15 +361,17 @@
         -webkit-text-fill-color: transparent;
         margin: 0;
         line-height: 1.2;
+        text-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
     .marketplace-heading p {
         color: var(--text-secondary);
         font-size: 1rem;
         margin-top: 0.2rem;
         letter-spacing: 1px;
+        text-shadow: 0 1px 4px rgba(0,0,0,0.3);
     }
 
-    /* Vertical Carousel */
+    /* Vertical Carousel (cards remain semi‑transparent) */
     .carousel-vertical {
         position: relative;
         z-index: 2;
@@ -395,6 +418,7 @@
         text-align: center;
         animation: glowPulse 4s infinite alternate;
         overflow: hidden;
+        backdrop-filter: blur(8px);
     }
     @keyframes glowPulse {
         0% { box-shadow: 0 15px 30px rgba(0,0,0,0.2); }
@@ -468,10 +492,6 @@
         from { opacity: 0; transform: translateY(-20px); }
         to { opacity: 1; transform: translateY(0); }
     }
-    @keyframes float {
-        0%, 100% { transform: translateY(0) translateX(0) scale(1); opacity: 0.3; }
-        50% { transform: translateY(-30px) translateX(15px) scale(1.1); opacity: 0.6; }
-    }
 
     /* ===== RESPONSIVE ===== */
     @media (max-width: 1024px) {
@@ -540,7 +560,8 @@
 
 {% block content %}
 <div class="login-container">
-    <div class="galaxy" id="galaxy"></div>
+    <!-- RAINING ICONS BACKGROUND (replaces galaxy) -->
+    <div class="rain-container" id="rainContainer"></div>
 
     <!-- LEFT: Login Form -->
     <div class="form-section">
@@ -673,21 +694,56 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // ========== BUBBLES ==========
-    const galaxy = document.getElementById('galaxy');
-    for (let i = 0; i < 70; i++) {
-        const bubble = document.createElement('div');
-        bubble.className = 'bubble';
-        const size = Math.random() * 120 + 30;
-        bubble.style.width = size + 'px';
-        bubble.style.height = size + 'px';
-        bubble.style.left = Math.random() * 100 + '%';
-        bubble.style.top = Math.random() * 100 + '%';
-        bubble.style.animationDelay = Math.random() * 10 + 's';
-        bubble.style.animationDuration = (Math.random() * 15 + 10) + 's';
-        bubble.style.background = `rgba(${Math.random()*100+155}, ${Math.random()*100+155}, ${Math.random()*100+155}, 0.35)`;
-        galaxy.appendChild(bubble);
+    // ========== RAINING ICONS (ENHANCED) ==========
+    const rainContainer = document.getElementById('rainContainer');
+    // Expanded list of household item Bootstrap Icon classes
+    const icons = [
+        'bi-house', 'bi-house-door', 'bi-fridge', 'bi-tv', 'bi-phone',
+        'bi-laptop', 'bi-cup', 'bi-cup-straw', 'bi-egg-fried', 'bi-basket',
+        'bi-cart', 'bi-clock', 'bi-lamp', 'bi-lightbulb', 'bi-battery-charging',
+        'bi-wifi', 'bi-radio', 'bi-speaker', 'bi-headphones', 'bi-camera',
+        'bi-printer', 'bi-scissors', 'bi-droplet', 'bi-thermometer', 'bi-umbrella',
+        'bi-key', 'bi-lock', 'bi-unlock', 'bi-wallet', 'bi-cash-coin',
+        'bi-bag', 'bi-gift', 'bi-book', 'bi-journal', 'bi-pencil',
+        'bi-paint-bucket', 'bi-brush', 'bi-cone-striped', 'bi-bandaid', 'bi-eyedropper',
+        'bi-stove', 'bi-fan', 'bi-plug', 'bi-smartwatch', 'bi-robot',
+        'bi-camera-reels', 'bi-mic', 'bi-mouse', 'bi-pc-display', 'bi-phone-flip',
+        'bi-printer', 'bi-scanner', 'bi-speaker', 'bi-tablet', 'bi-tv'
+    ];
+
+    function createRainIcon() {
+        const icon = document.createElement('i');
+        const randomIcon = icons[Math.floor(Math.random() * icons.length)];
+        icon.className = `bi ${randomIcon} rain-icon`;
+        // Random size between 1.5rem and 4rem
+        const size = Math.random() * 2.5 + 1.5; // 1.5rem to 4rem
+        icon.style.fontSize = size + 'rem';
+        icon.style.left = Math.random() * 100 + '%';
+        // Slower animation: 8s to 15s
+        icon.style.animationDuration = (Math.random() * 7 + 8) + 's'; // 8-15s
+        icon.style.animationDelay = Math.random() * 10 + 's';
+        icon.style.opacity = '0';
+        // Random pastel color with low opacity
+        const r = Math.floor(Math.random() * 200 + 55);
+        const g = Math.floor(Math.random() * 200 + 55);
+        const b = Math.floor(Math.random() * 200 + 55);
+        icon.style.color = `rgba(${r}, ${g}, ${b}, 0.3)`;
+        rainContainer.appendChild(icon);
+
+        // Remove after animation ends to avoid DOM bloat
+        const duration = parseFloat(icon.style.animationDuration) * 1000;
+        setTimeout(() => {
+            if (icon.parentNode) icon.remove();
+        }, duration + 2000); // extra buffer
     }
+
+    // Generate initial batch (more icons)
+    for (let i = 0; i < 180; i++) {
+        createRainIcon();
+    }
+
+    // Continuously add new icons at a higher frequency
+    setInterval(createRainIcon, 200);
 
     // ========== CAROUSEL ==========
     const track = document.getElementById('carouselTrack');
@@ -751,8 +807,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========== AJAX LOGIN ==========
     const loginForm = document.getElementById('loginForm');
     if (loginForm) {
-            loginForm.addEventListener('submit', function(e) {
-            // prevent duplicate submits
+        loginForm.addEventListener('submit', function(e) {
             if (loginForm.dataset.ajaxSubmitting === '1') { e.preventDefault(); return; }
             loginForm.dataset.ajaxSubmitting = '1';
             e.preventDefault();

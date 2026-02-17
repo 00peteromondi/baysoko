@@ -8,35 +8,88 @@
 
 {% block extra_css %}
 <style>
-    /* Hide navbar completely */
-    .main-nav, .bottom-nav, .side-nav {
+    /* ===== GLOBAL RESET ===== */
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+    .main-nav, .bottom-nav, .side-nav, footer.footer, .site-footer, .footer {
         display: none !important;
     }
     .main-content {
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
+        padding: 0 !important;
+        min-height: 100vh;
+        overflow: hidden;
+        position: relative;
+        background: transparent; /* let rain icons show through */
+    }
+
+    /* ===== RAINING ICONS BACKGROUND ===== */
+    .rain-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    .rain-icon {
+        position: absolute;
+        color: rgba(255, 255, 255, 0.25);
+        font-size: 2rem;
+        opacity: 0;
+        animation: bounce-rain linear infinite;
+        will-change: transform;
+        user-select: none;
+    }
+
+    @keyframes bounce-rain {
+        0% {
+            transform: translateY(-20vh) translateX(0) rotate(0deg);
+            opacity: 0.3;
+        }
+        60% {
+            transform: translateY(70vh) translateX(10px) rotate(180deg);
+            opacity: 0.7;
+        }
+        80% {
+            transform: translateY(60vh) translateX(5px) rotate(240deg);
+            opacity: 0.7;
+        }
+        100% {
+            transform: translateY(100vh) translateX(20px) rotate(360deg);
+            opacity: 0;
+        }
+    }
+
+    /* ===== VERIFICATION CARD (unchanged but with backdrop blur for readability) ===== */
+    .verification-container {
+        position: relative;
+        z-index: 2;
+        max-width: 450px;
+        width: 90%;
+        margin: 0 auto;
+        padding: 2rem 0;
         min-height: 100vh;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: linear-gradient(135deg, 
-            rgba(6, 214, 160, 0.1) 0%, 
-            rgba(255, 209, 102, 0.1) 50%, 
-            rgba(255, 107, 53, 0.1) 100%);
-    }
-    .verification-container {
-        max-width: 450px;
-        width: 90%;
-        margin: 0 auto;
     }
     .modal-card {
-        background: var(--card-bg);
+        background: rgba(var(--bg-primary-rgb), 0.7);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
         border-radius: 30px;
         padding: 2rem;
         text-align: center;
         box-shadow: 0 30px 60px rgba(0,0,0,0.2);
-        border: 1px solid var(--border-color);
+        border: 1px solid rgba(255,255,255,0.12);
         animation: slideInUp 0.5s ease-out;
+        width: 100%;
     }
     .modal-icon {
         font-size: 3rem;
@@ -61,7 +114,10 @@
         border-color: var(--accent);
         box-shadow: 0 0 0 4px rgba(6,214,160,0.2);
     }
-    .verification-input-wrap { display:flex; align-items:center; justify-content:center; }
+    .verification-input-wrap {
+        position: relative;
+        margin-top: 0.8rem;
+    }
     .verification-icon {
         position: absolute;
         right: 18px;
@@ -110,10 +166,37 @@
         from { opacity: 0; transform: translateY(20px); }
         to { opacity: 1; transform: translateY(0); }
     }
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        20% { transform: translateX(-5px); }
+        40% { transform: translateX(5px); }
+        60% { transform: translateX(-3px); }
+        80% { transform: translateX(3px); }
+    }
+
+    /* Dark/Light variables */
+    :root {
+        --bg-primary-rgb: 255,255,255;
+        --accent: #06D6A0;
+        --border-color: #ddd;
+        --input-bg: #fff;
+        --text-primary: #333;
+        --text-secondary: #666;
+    }
+    [data-theme="dark"] {
+        --bg-primary-rgb: 18,18,18;
+        --border-color: #444;
+        --input-bg: #222;
+        --text-primary: #eee;
+        --text-secondary: #aaa;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
+<!-- RAINING ICONS BACKGROUND -->
+<div class="rain-container" id="rainContainer"></div>
+
 <div class="verification-container">
     <div class="modal-card">
         <div class="modal-icon">
@@ -121,7 +204,7 @@
         </div>
         <h3>Verify Your Email</h3>
         <p>We've sent a 7‑digit code to <strong>{{ user.email }}</strong>. Enter it below to activate your account.</p>
-        <div class="verification-input-wrap" style="position:relative; margin-top:0.8rem;">
+        <div class="verification-input-wrap">
             <input type="text" class="verification-input" id="verificationCode" maxlength="7" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
             <span class="verification-icon" id="verificationIcon" aria-hidden="true"></span>
         </div>
@@ -141,6 +224,52 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // ========== RAINING ICONS (ENHANCED) ==========
+    const rainContainer = document.getElementById('rainContainer');
+    const icons = [
+        'bi-house', 'bi-house-door', 'bi-fridge', 'bi-tv', 'bi-phone',
+        'bi-laptop', 'bi-cup', 'bi-cup-straw', 'bi-egg-fried', 'bi-basket',
+        'bi-cart', 'bi-clock', 'bi-lamp', 'bi-lightbulb', 'bi-battery-charging',
+        'bi-wifi', 'bi-radio', 'bi-speaker', 'bi-headphones', 'bi-camera',
+        'bi-printer', 'bi-scissors', 'bi-droplet', 'bi-thermometer', 'bi-umbrella',
+        'bi-key', 'bi-lock', 'bi-unlock', 'bi-wallet', 'bi-cash-coin',
+        'bi-bag', 'bi-gift', 'bi-book', 'bi-journal', 'bi-pencil',
+        'bi-paint-bucket', 'bi-brush', 'bi-cone-striped', 'bi-bandaid', 'bi-eyedropper',
+        'bi-stove', 'bi-fan', 'bi-plug', 'bi-smartwatch', 'bi-robot',
+        'bi-camera-reels', 'bi-mic', 'bi-mouse', 'bi-pc-display', 'bi-phone-flip',
+        'bi-printer', 'bi-scanner', 'bi-speaker', 'bi-tablet', 'bi-tv'
+    ];
+
+    function createRainIcon() {
+        const icon = document.createElement('i');
+        const randomIcon = icons[Math.floor(Math.random() * icons.length)];
+        icon.className = `bi ${randomIcon} rain-icon`;
+        const size = Math.random() * 2.5 + 1.5; // 1.5rem to 4rem
+        icon.style.fontSize = size + 'rem';
+        icon.style.left = Math.random() * 100 + '%';
+        icon.style.animationDuration = (Math.random() * 7 + 8) + 's'; // 8-15s
+        icon.style.animationDelay = Math.random() * 10 + 's';
+        icon.style.opacity = '0';
+        const r = Math.floor(Math.random() * 200 + 55);
+        const g = Math.floor(Math.random() * 200 + 55);
+        const b = Math.floor(Math.random() * 200 + 55);
+        icon.style.color = `rgba(${r}, ${g}, ${b}, 0.3)`;
+        rainContainer.appendChild(icon);
+
+        const duration = parseFloat(icon.style.animationDuration) * 1000;
+        setTimeout(() => {
+            if (icon.parentNode) icon.remove();
+        }, duration + 2000);
+    }
+
+    // Initial batch (more icons)
+    for (let i = 0; i < 180; i++) {
+        createRainIcon();
+    }
+    // Continuously add new icons
+    setInterval(createRainIcon, 200);
+
+    // ========== EXISTING VERIFICATION CODE (preserved) ==========
     const userId = {{ user.id }};
     const verificationCode = document.getElementById('verificationCode');
     const resendBtn = document.getElementById('resendBtn');
@@ -149,9 +278,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let failedAttempts = 0;
     const MAX_ATTEMPTS = 3;
 
-    // Auto-submit on 7 digits
     verificationCode.addEventListener('input', function() {
-        // if we've reached max attempts, do not allow further automatic validation
         if (failedAttempts >= MAX_ATTEMPTS) return;
         if (this.value.length === 7) {
             verifyCode(this.value);
@@ -183,14 +310,11 @@ document.addEventListener('DOMContentLoaded', function() {
             return response.text().then(txt => ({ success: false, error: 'Unexpected server response', _raw: txt }));
         })
         .then(data => {
-            // elements
             const icon = document.getElementById('verificationIcon');
-            // reset classes
             verificationCode.classList.remove('success', 'error');
             icon.innerHTML = '';
 
             if (data.success) {
-                // success visual
                 verificationCode.classList.add('success');
                 icon.innerHTML = '<i class="bi bi-check-lg" aria-hidden="true"></i>';
                 showGlobalCartMessage('Email verified! Redirecting...', 'success');
@@ -198,19 +322,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     window.location.href = data.redirect || '/';
                 }, 900);
             } else {
-                // error visual
                 verificationCode.classList.add('error');
                 icon.innerHTML = '<i class="bi bi-x-lg" aria-hidden="true"></i>';
-                // show server error
                 document.getElementById('verificationMessage').innerHTML = `<span class="text-danger">${data.error}</span>`;
-                // increment failed attempts and disable if reached max
                 failedAttempts = (data.attempts_left !== undefined) ? (MAX_ATTEMPTS - data.attempts_left) : (failedAttempts + 1);
                 if (failedAttempts >= MAX_ATTEMPTS) {
                     document.getElementById('verificationMessage').innerHTML = `<span class="text-danger">Maximum verification attempts reached. Try again tomorrow.</span>`;
                     verificationCode.disabled = true;
                     resendBtn.disabled = true;
                 } else {
-                    // brief shake then clear to allow another attempt
                     verificationCode.classList.add('shake');
                     setTimeout(() => {
                         verificationCode.classList.remove('shake');
@@ -222,7 +342,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Resend code (show spinner while in-flight)
     resendBtn.addEventListener('click', function() {
         const origHTML = resendBtn.innerHTML;
         resendBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Sending...';
@@ -246,7 +365,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return response.text().then(txt => ({ success: false, error: 'Unexpected server response', _raw: txt }));
         })
         .then(data => {
-            // restore button text; timer will manage enable/disable
             resendBtn.innerHTML = origHTML;
             if (data.success) {
                 document.getElementById('verificationMessage').innerHTML = '<span class="text-success">Code resent. Check your email.</span>';
@@ -286,28 +404,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 1000);
     }
 
-    // Start a timer on page load if needed (based on last sent)
     (function() {
         const sentAtIso = "{% if user.email_verification_sent_at %}{{ user.email_verification_sent_at|date:'c' }}{% else %}{% endif %}";
         if (sentAtIso) {
             const sent = new Date(sentAtIso);
             const now = new Date();
-            const diff = Math.floor((now - sent) / 1000); // seconds
+            const diff = Math.floor((now - sent) / 1000);
             const wait = 60 - diff;
             if (wait > 0) {
                 startResendTimer(wait);
             } else {
-                // enable immediately
                 resendBtn.disabled = false;
                 timerDisplay.textContent = '';
             }
         } else {
-            // No record of a sent code — allow resend
             resendBtn.disabled = false;
         }
     })();
 
-    // Global message function (same as in register)
     window.showGlobalCartMessage = function(message, type) {
         const msgDiv = document.createElement('div');
         msgDiv.className = `global-cart-message ${type}`;
@@ -334,7 +448,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 5000);
     };
 
-    // Add slideOutRight animation
     const style = document.createElement('style');
     style.textContent = `
         @keyframes slideOutRight {
