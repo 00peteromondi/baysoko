@@ -157,6 +157,15 @@
                 case 'heartbeat_ack':
                     // Keep-alive confirmed
                     break;
+                case 'listing_created':
+                    handleListingCreated(message);
+                    break;
+                case 'listing_liked':
+                    handleListingLiked(message);
+                    break;
+                case 'cart_updated':
+                    handleCartUpdated(message);
+                    break;
                 case 'error':
                     console.error('[Notifications] Server error:', message.message);
                     break;
@@ -269,6 +278,65 @@
     function handleMarkReadResponse(message) {
         if (message.success) {
             updateBadgeCount(message.unread_count);
+        }
+    }
+
+    function handleListingCreated(message) {
+        try {
+            console.log('[Notifications] Listing created:', message.listing && message.listing.id);
+            // Dispatch a global event that pages (like all_listings) can listen to
+            document.dispatchEvent(new CustomEvent('listingCreated', { detail: message.listing }));
+            // If page exposes applyFilters (listings page), refresh current filters to pick up new listing
+            if (typeof window.applyFilters === 'function') {
+                // Debounce slightly to avoid rapid repeated refreshes
+                setTimeout(() => { window.applyFilters(); }, 300);
+            }
+        } catch (e) {
+            console.warn('[Notifications] Failed to handle listing_created', e);
+        }
+    }
+
+    function handleListingLiked(message) {
+        try {
+            const listing = message.listing;
+            console.log('[Notifications] Listing liked event:', listing && listing.id);
+            // Dispatch a global event pages can listen to
+            document.dispatchEvent(new CustomEvent('listingLiked', { detail: listing }));
+            // Update any inline favorite counters if present
+            if (listing && listing.id) {
+                // update elements with data-listing-id
+                document.querySelectorAll(`[data-listing-id="${listing.id}"] .listing-favorite-stats, [data-listing-id="${listing.id}"] .listing-favorite-count`).forEach(el => {
+                    // Prefer total_favorites field
+                    const count = listing.total_favorites || listing.favorite_count || 0;
+                    el.textContent = `${count} Like${count === 1 ? '' : 's'}`;
+                });
+            }
+        } catch (e) {
+            console.warn('[Notifications] Failed to handle listing_liked', e);
+        }
+    }
+
+    function handleCartUpdated(message) {
+        try {
+            const cart = message.cart || {};
+            console.log('[Notifications] Cart updated:', cart);
+            // Dispatch event for pages to react
+            document.dispatchEvent(new CustomEvent('cartUpdated', { detail: cart }));
+
+            // Update site-wide cart indicators if present
+            const cartBadge = document.getElementById('cartItemCountBadge');
+            if (cartBadge) {
+                const count = cart.cart_item_count || cart.cart_item_count === 0 ? cart.cart_item_count : (cart.item_count || 0);
+                cartBadge.textContent = count > 0 ? count : '';
+                cartBadge.style.display = count > 0 ? 'inline-block' : 'none';
+            }
+
+            const cartTotalEl = document.getElementById('cartTotalAmount');
+            if (cartTotalEl && typeof cart.cart_total !== 'undefined') {
+                cartTotalEl.textContent = typeof cart.cart_total === 'number' ? cart.cart_total.toFixed(2) : cart.cart_total;
+            }
+        } catch (e) {
+            console.warn('[Notifications] Failed to handle cart_updated', e);
         }
     }
 

@@ -20,10 +20,46 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.user_group_name, self.channel_name)
         await self.accept()
         logger.info(f"WebSocket connected for user {self.user.id}")
+        # Notify other participants that this user is now online
+        try:
+            participant_ids = await self.get_all_conversation_participants()
+            for pid in participant_ids:
+                if pid == self.user.id:
+                    continue
+                await self.channel_layer.group_send(
+                    f'user_{pid}',
+                    {
+                        'type': 'presence_notification',
+                        'user_id': self.user.id,
+                        'user_name': self.user.get_full_name() or self.user.username,
+                        'online': True,
+                    }
+                )
+        except Exception:
+            logger.exception('Failed to broadcast presence on connect')
 
     async def disconnect(self, close_code):
         if hasattr(self, 'user_group_name'):
             await self.channel_layer.group_discard(self.user_group_name, self.channel_name)
+        # Notify others that this user went offline
+        try:
+            from django.utils import timezone
+            last_seen = timezone.now().isoformat()
+            participant_ids = await self.get_all_conversation_participants()
+            for pid in participant_ids:
+                if pid == self.user.id:
+                    continue
+                await self.channel_layer.group_send(
+                    f'user_{pid}',
+                    {
+                        'type': 'presence_notification',
+                        'user_id': self.user.id,
+                        'online': False,
+                        'last_seen': last_seen,
+                    }
+                )
+        except Exception:
+            logger.exception('Failed to broadcast presence on disconnect')
 
     async def receive(self, text_data):
         try:
@@ -119,6 +155,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'message': event['message']
         }))
 
+    async def presence_notification(self, event):
+        """Notify clients about another user's presence change."""
+        payload = {
+            'type': 'presence',
+            'user_id': event.get('user_id'),
+            'user_name': event.get('user_name'),
+            'online': event.get('online', False),
+        }
+        if event.get('last_seen'):
+            payload['last_seen'] = event.get('last_seen')
+        await self.send(text_data=json.dumps(payload))
+
     async def typing_notification(self, event):
         """Send typing indicator update."""
         await self.send(text_data=json.dumps({
@@ -155,6 +203,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
             conv = Conversation.objects.get(id=conversation_id)
             return list(conv.participants.values_list('id', flat=True))
         except Conversation.DoesNotExist:
+            return []
+
+    @database_sync_to_async
+    def get_all_conversation_participants(self):
+        try:
+            convs = Conversation.objects.filter(participants=self.user).prefetch_related('participants')
+            ids = set()
+            for c in convs:
+                ids.update(list(c.participants.values_list('id', flat=True)))
+            return list(ids)
+        except Exception:
             return []
 
     @database_sync_to_async

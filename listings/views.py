@@ -740,6 +740,35 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
             logger.exception('Failed to create in-app notification for listing creation')
 
         messages.success(self.request, "Listing created successfully!")
+        # Broadcast new listing to connected users so clients can refresh live
+        try:
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+            channel_layer = get_channel_layer()
+            # Minimal listing payload
+            listing_data = {
+                'id': form.instance.id,
+                'title': form.instance.title,
+                'price': str(form.instance.price),
+                'image_url': form.instance.get_image_url if hasattr(form.instance, 'get_image_url') else '',
+                'seller_name': form.instance.seller.get_full_name() or form.instance.seller.username,
+                'total_favorites': getattr(form.instance, 'total_favorites', 0),
+                'url': form.instance.get_absolute_url() if hasattr(form.instance, 'get_absolute_url') else '',
+            }
+            # Send to all users' notification groups (graceful fallback for small scale)
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            user_ids = list(User.objects.filter(is_active=True).values_list('id', flat=True))
+            for uid in user_ids:
+                async_to_sync(channel_layer.group_send)(
+                    f'notifications_user_{uid}',
+                    {
+                        'type': 'listing_created',
+                        'listing': listing_data,
+                    }
+                )
+        except Exception:
+            logger.exception('Failed to broadcast listing_created')
         return response
 
     def post(self, request, *args, **kwargs):
@@ -1404,6 +1433,32 @@ def toggle_favorite(request, listing_id):
     # Get updated counts
     listing_favorite_count = Favorite.objects.filter(listing=listing).count()
     user_favorite_count = Favorite.objects.filter(user=request.user).count()
+
+    # Broadcast favorite change so clients can update live
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        channel_layer = get_channel_layer()
+        listing_data = {
+            'id': listing.id,
+            'total_favorites': listing_favorite_count,
+            'is_favorited': is_favorited,
+            'by_user_id': request.user.id,
+        }
+        # Send to all users' notification groups (small scale/fallback)
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        user_ids = list(User.objects.filter(is_active=True).values_list('id', flat=True))
+        for uid in user_ids:
+            async_to_sync(channel_layer.group_send)(
+                f'notifications_user_{uid}',
+                {
+                    'type': 'listing_liked',
+                    'listing': listing_data,
+                }
+            )
+    except Exception:
+        logger.exception('Failed to broadcast listing_liked')
     
     return JsonResponse({
         'success': True,
@@ -1548,7 +1603,27 @@ def update_cart_item(request, item_id):
             'stock': item.listing.stock,
             'item_id': item.id
         }
-    
+
+    # Broadcast cart update to the current user's notification group (so other sessions update)
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        channel_layer = get_channel_layer()
+        cart_payload = {
+            'cart_item_count': item_count,
+            'cart_total': float(cart_total),
+            'item_totals': item_totals,
+        }
+        async_to_sync(channel_layer.group_send)(
+            f'notifications_user_{request.user.id}',
+            {
+                'type': 'cart_updated',
+                'cart': cart_payload,
+            }
+        )
+    except Exception:
+        logger.exception('Failed to broadcast cart_updated from update_cart_item')
+
     return JsonResponse({
         'success': True,
         'message': 'Cart updated successfully',
@@ -1557,6 +1632,8 @@ def update_cart_item(request, item_id):
         'item_count': item_count,
         'item_totals': item_totals
     })
+
+    # NOTE: we return above; broadcasting is handled in add/update/remove functions where appropriate
 
 @login_required
 @require_POST
@@ -1577,6 +1654,26 @@ def remove_from_cart(request, item_id):
     item_count = cart.items.count()
     cart_total = cart.get_total_price()
     
+    # Broadcast cart update to current user's notification group
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        channel_layer = get_channel_layer()
+        cart_payload = {
+            'cart_item_count': item_count,
+            'cart_total': float(cart_total),
+            'removed_item_id': item_id,
+        }
+        async_to_sync(channel_layer.group_send)(
+            f'notifications_user_{request.user.id}',
+            {
+                'type': 'cart_updated',
+                'cart': cart_payload,
+            }
+        )
+    except Exception:
+        logger.exception('Failed to broadcast cart_updated from remove_from_cart')
+
     return JsonResponse({
         'success': True,
         'message': f'{listing_title} removed from cart',
@@ -1597,6 +1694,26 @@ def clear_cart(request):
     # Clear all items
     cart.items.all().delete()
     
+    # Broadcast cart cleared to current user's notification group
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        channel_layer = get_channel_layer()
+        cart_payload = {
+            'cart_item_count': 0,
+            'cart_total': 0,
+            'item_count': 0,
+        }
+        async_to_sync(channel_layer.group_send)(
+            f'notifications_user_{request.user.id}',
+            {
+                'type': 'cart_updated',
+                'cart': cart_payload,
+            }
+        )
+    except Exception:
+        logger.exception('Failed to broadcast cart_updated from clear_cart')
+
     return JsonResponse({
         'success': True,
         'message': f'Cart cleared ({cart_items_count} items removed)',
@@ -1704,6 +1821,28 @@ def add_to_cart(request, listing_id):
         'redirect_url': reverse('view_cart')
     }
     
+    # Broadcast cart update to current user's notification group so other sessions update live
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        channel_layer = get_channel_layer()
+        cart_payload = {
+            'cart_item_count': cart_item_count,
+            'cart_total': float(cart_total),
+            'action': action,
+            'listing_id': listing.id,
+            'listing_title': listing.title,
+        }
+        async_to_sync(channel_layer.group_send)(
+            f'notifications_user_{request.user.id}',
+            {
+                'type': 'cart_updated',
+                'cart': cart_payload,
+            }
+        )
+    except Exception:
+        logger.exception('Failed to broadcast cart_updated from add_to_cart')
+
     if is_ajax:
         return JsonResponse(response_data)
     else:

@@ -193,6 +193,42 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             })
         except Exception as e:
             logger.error(f"Error sending notification_deleted: {str(e)}")
+
+    async def listing_created(self, event):
+        """Broadcast handler for new listing events."""
+        try:
+            listing = event.get('listing')
+            await self.send_json({
+                'type': 'listing_created',
+                'listing': listing,
+                'timestamp': await self.get_current_timestamp()
+            })
+        except Exception as e:
+            logger.error(f"Error sending listing_created: {str(e)}")
+
+    async def listing_liked(self, event):
+        """Broadcast handler for listing favorite/like updates."""
+        try:
+            listing = event.get('listing')
+            await self.send_json({
+                'type': 'listing_liked',
+                'listing': listing,
+                'timestamp': await self.get_current_timestamp()
+            })
+        except Exception as e:
+            logger.error(f"Error sending listing_liked: {str(e)}")
+
+    async def cart_updated(self, event):
+        """Broadcast handler for cart updates for the connected user."""
+        try:
+            cart = event.get('cart')
+            await self.send_json({
+                'type': 'cart_updated',
+                'cart': cart,
+                'timestamp': await self.get_current_timestamp()
+            })
+        except Exception as e:
+            logger.error(f"Error sending cart_updated: {str(e)}")
     
     # ==================== Database Sync Methods ====================
     

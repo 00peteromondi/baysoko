@@ -2190,6 +2190,7 @@ function renderOnlineUsers() {
     }
     let html = '';
     onlineUsersList.forEach(u => {
+        const statusText = u.is_online ? 'Online' : (u.last_seen ? formatHeaderTime(u.last_seen, false) : 'Offline');
         html += `
         <div class="online-user-item" data-user-id="${u.id}">
             <div class="online-user-avatar">
@@ -2197,7 +2198,7 @@ function renderOnlineUsers() {
             </div>
             <div class="online-user-info">
                 <div class="online-user-name">${escapeHtml(u.name)}</div>
-                <div class="online-user-status">Online</div>
+                <div class="online-user-status">${escapeHtml(statusText)}</div>
             </div>
             <button class="online-user-message" onclick="startChatWithUser(${u.id}, '${escapeHtml(u.name)}', '${u.avatar}')">
                 <i class="bi bi-chat"></i>
@@ -3709,6 +3710,9 @@ function handleWebSocketMessage(data) {
         case 'new_message':
             handleNewMessage(data.message);
             break;
+        case 'presence':
+            handlePresence(data);
+            break;
         case 'typing':
             handleTypingIndicator(data);
             break;
@@ -3720,6 +3724,55 @@ function handleWebSocketMessage(data) {
             break;
         default:
             console.log('Unknown WebSocket message type:', data.type);
+    }
+}
+
+function handlePresence(data) {
+    const userId = parseInt(data.user_id);
+    const online = !!data.online;
+    const lastSeen = data.last_seen || null;
+    const userName = data.user_name || null;
+    updateUserPresence(userId, online, lastSeen, userName);
+}
+
+function updateUserPresence(userId, online, lastSeen, userName) {
+    // Update conversation list dots
+    try {
+        const convEl = document.querySelector(`.conversation-item[data-participant-id="${userId}"]`);
+        if (convEl) {
+            const dot = convEl.querySelector('.online-status');
+            if (dot) dot.classList.toggle('online', online);
+        }
+
+        // Update online users panel data
+        let found = false;
+        for (let u of onlineUsersList) {
+            if (u.id === userId) {
+                found = true;
+                u.is_online = online;
+                u.last_seen = lastSeen || u.last_seen;
+                if (userName) u.name = userName;
+                break;
+            }
+        }
+        // If we don't have the user in list and they are online, add a lightweight entry
+        if (!found && online) {
+            onlineUsersList.unshift({ id: userId, name: userName || 'User', avatar: '/static/images/default_profile_pic.svg', is_online: true, last_seen: null });
+        }
+        renderOnlineUsers();
+
+        // Update modal info if open for this participant
+        if (currentParticipantId === userId) {
+            currentParticipantIsOnline = online;
+            currentParticipantLastSeen = lastSeen || null;
+            updateParticipantStatus();
+            const infoStatus = document.getElementById('infoParticipantStatus');
+            if (infoStatus) {
+                infoStatus.innerText = online ? 'Online' : (lastSeen ? formatHeaderTime(lastSeen, false) : 'Offline');
+            }
+        }
+    } catch (e) {
+        console.warn('Failed to update presence UI', e);
     }
 }
 
