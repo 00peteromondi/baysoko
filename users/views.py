@@ -39,6 +39,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 from django.template.loader import render_to_string
+from django.http import JsonResponse
 from django.core.cache import cache
 from .ws_token_store import get_token as ws_get_token, delete_token as ws_delete_token
 from django.conf import settings
@@ -62,6 +63,7 @@ logger = logging.getLogger(__name__)
 
 from baysoko.utils.email_helpers import _send_email_threaded, send_email_brevo, render_and_send
 from notifications.utils import notify_system_message
+from notifications.utils import create_and_broadcast_notification
 
 def send_verification_email(user):
     subject = 'Verify your email for Baysoko'
@@ -182,6 +184,15 @@ def ws_login_complete(request):
 
     return response
 
+
+@require_http_methods(['POST'])
+def clear_welcome_toast(request):
+    try:
+        request.session.pop('welcome_toast', None)
+    except Exception:
+        pass
+    return JsonResponse({'ok': True})
+
 # ----------------------------------------------------------------------
 #  Registration
 # ----------------------------------------------------------------------
@@ -244,6 +255,29 @@ def register(request):
                 request.session['just_registered_message'] = (
                     'Registration successful. Please check your email for verification code.'
                 )
+                # Create and broadcast welcome notification
+                try:
+                    create_and_broadcast_notification(
+                        recipient=user,
+                        notification_type='system',
+                        title='Welcome to Baysoko',
+                        message='Welcome to Baysoko! Your account was created successfully. Start exploring now.',
+                        action_url='/',
+                        action_text='Start Exploring'
+                    )
+                except Exception:
+                    logger.exception('Failed to create/broadcast welcome notification')
+
+                # Request-level toast so client shows immediate welcome message
+                try:
+                    request.session['welcome_toast'] = {
+                        'title': 'Welcome to Baysoko',
+                        'message': 'Registration successful. Please check your email for verification code.',
+                        'variant': 'success',
+                        'duration': 8000
+                    }
+                except Exception:
+                    pass
 
                 # Send welcome email (non‑blocking)
                 try:
@@ -323,6 +357,27 @@ def verify_email(request):
         # Log the user in if not already authenticated (for POST/JSON case)
         if not request.user.is_authenticated:
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+            try:
+                # Create and broadcast welcome notification on verification login
+                create_and_broadcast_notification(
+                    recipient=user,
+                    notification_type='system',
+                    title='Welcome to Baysoko',
+                    message='Your email has been verified. Welcome to Baysoko!',
+                    action_url='/',
+                    action_text='Start Exploring'
+                )
+            except Exception:
+                logger.exception('Failed to create/broadcast welcome notification on verify')
+            try:
+                request.session['welcome_toast'] = {
+                    'title': 'Welcome to Baysoko',
+                    'message': 'Your email has been verified. Welcome!',
+                    'variant': 'success',
+                    'duration': 8000
+                }
+            except Exception:
+                pass
 
         if redirect_after:
             messages.success(request, 'Email verified! Redirecting...')

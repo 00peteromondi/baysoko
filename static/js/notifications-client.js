@@ -148,6 +148,9 @@
                 case 'notification_deleted':
                     handleNotificationDeleted(message);
                     break;
+                case 'chat_unread':
+                    handleChatUnread(message);
+                    break;
                 case 'mark_read_response':
                     handleMarkReadResponse(message);
                     break;
@@ -255,6 +258,12 @@
 
     function handleNotificationDeleted(message) {
         console.log('[Notifications] Notification deleted:', message.notification_id);
+    }
+
+    function handleChatUnread(message) {
+        // Message expected to be { type: 'chat_unread', unread_count: N }
+        const count = parseInt(message.unread_count || 0, 10) || 0;
+        updateMessagesBadge(count);
     }
 
     function handleMarkReadResponse(message) {
@@ -438,6 +447,22 @@
 
         // Update mobile notification badge  
         const mobileBadge = document.getElementById('mobileNotificationsBadge');
+        if (mobileBadge) {
+            mobileBadge.textContent = count > 0 ? count : '';
+            mobileBadge.style.display = count > 0 ? 'inline-block' : 'none';
+        }
+    }
+
+    function updateMessagesBadge(count) {
+        // Desktop messages badge
+        const desktopBadge = document.getElementById('dropdownMessagesBadge') || document.getElementById('dropdownMessagesBadge');
+        if (desktopBadge) {
+            desktopBadge.textContent = count > 0 ? count : '';
+            desktopBadge.style.display = count > 0 ? 'inline-block' : 'none';
+        }
+
+        // Mobile messages badge
+        const mobileBadge = document.getElementById('mobileMessagesBadge') || document.getElementById('mobileMessagesBadge');
         if (mobileBadge) {
             mobileBadge.textContent = count > 0 ? count : '';
             mobileBadge.style.display = count > 0 ? 'inline-block' : 'none';

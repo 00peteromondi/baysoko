@@ -60,4 +60,5 @@ urlpatterns = [
     path('delete-account-ajax/', views.delete_account_ajax, name='delete_account_ajax'),
     # WebSocket login completion (sets session cookie via HTTP)
     path('ws-login-complete/', views.ws_login_complete, name='ws_login_complete'),
+    path('clear-welcome-toast/', views.clear_welcome_toast, name='clear_welcome_toast'),
 ]

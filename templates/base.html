@@ -3456,12 +3456,16 @@
     <script>
         // Remove empty/zero-count unified badges from the DOM to avoid
         // leaving inert elements that pollers or CSS may still target.
+        // NOTE: preserve badges that have an `id` so centralized JS can
+        // update them later (e.g. mobile/desktop header badges).
         document.addEventListener('DOMContentLoaded', function() {
             try {
                 document.querySelectorAll('.unified-count-badge').forEach(function(b) {
+                    // If badge has an id, keep it so runtime scripts can target it
+                    if (b.id) return;
                     var count = b.getAttribute('data-count');
                     var text = (b.textContent || '').trim();
-                    if (count === '0' || count === null && text === '') {
+                    if (count === '0' || (count === null && text === '')) {
                         // Remove the node entirely
                         b.remove();
                     }
@@ -3471,5 +3475,26 @@
             }
         });
     </script>
+        {% if request.session.welcome_toast %}
+        {{ request.session.welcome_toast|json_script:"welcome_toast" }}
+        <script>
+            document.addEventListener('DOMContentLoaded', function(){
+                try {
+                    var toast = JSON.parse(document.getElementById('welcome_toast').textContent);
+                    if (typeof showImmediateToast === 'function') {
+                        showImmediateToast(toast);
+                    } else if (window.NotificationsClient && window.NotificationsClient.start) {
+                        // try after a short delay to allow client to register
+                        setTimeout(function(){ if (typeof showImmediateToast === 'function') showImmediateToast(toast); }, 600);
+                    }
+
+                    // Clear server-side session welcome_toast via POST
+                    fetch('{% url "clear_welcome_toast" %}', { method: 'POST', headers: { 'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || '' } }).catch(function(e){/*best-effort*/});
+                } catch (e) {
+                    console.warn('Could not display welcome toast', e);
+                }
+            });
+        </script>
+        {% endif %}
 </body>
 </html>

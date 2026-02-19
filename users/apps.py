@@ -62,6 +62,11 @@ class UsersConfig(AppConfig):
                     return
 
             post_migrate.connect(_ensure_social_apps, dispatch_uid='users.ensure_social_apps')
+            # Register signal handlers (e.g., social signup welcome notification)
+            try:
+                import users.signals  # noqa: F401
+            except Exception:
+                pass
         except Exception:
             # If signals can't be imported for any reason (very unlikely),
             # just skip the initialization; it's non-critical.

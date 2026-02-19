@@ -16,13 +16,65 @@ from django.utils import timezone
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+from django.utils import timezone
 
 from .models import Conversation, Message, MessageAttachment, UserOnlineStatus
 from .forms import MessageForm
+from .utils import broadcast_unread_sync
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
+# WebSocket broadcast helpers
+def broadcast_to_user(user_id, event_type, data):
+    """Send an event to a specific user's WebSocket group."""
+    try:
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"user_{user_id}",
+            {
+                'type': event_type,
+                **data
+            }
+        )
+    except Exception as e:
+        logger.error(f"Failed to broadcast to user {user_id}: {e}")
+
+def broadcast_message_created(message, participants):
+    """Broadcast a new message to all participants."""
+    
+    message_data = {
+        'id': message.id,
+        'conversation_id': message.conversation_id,
+        'sender_id': message.sender_id,
+        'sender_name': message.sender.get_full_name() or message.sender.username,
+        'sender_avatar': get_avatar_url_for(message.sender, None),  # you'll need request for full URL, consider passing request or use absolute URI later
+        'content': message.content,
+        'timestamp': message.timestamp.isoformat(),
+        'is_read': message.is_read,
+        'delivered': message.delivered,
+        'attachments': [],  # fill with actual attachments if any
+        'is_own': False,    # will be set client-side
+        'reply_to_id': message.reply_to_id,
+        'is_pinned': message.is_pinned,
+    }
+    for user_id in participants:
+        broadcast_to_user(user_id, 'chat_message', {'message': message_data})
+
+
+def broadcast_to_conversation_participants(conversation, event_type, data, exclude_user_ids=None):
+    """Broadcast an event to all participants of a conversation."""
+    try:
+        exclude_user_ids = set(exclude_user_ids or [])
+        participant_ids = [p.id for p in conversation.participants.all()]
+        for uid in participant_ids:
+            if uid in exclude_user_ids:
+                continue
+            broadcast_to_user(uid, event_type, data)
+    except Exception as e:
+        logger.exception(f"Failed to broadcast {event_type} to conversation {getattr(conversation, 'id', None)}: {e}")
 
 # ----------------------------------------------------------------------
 # Helper functions
@@ -602,6 +654,16 @@ class UnifiedConversationView(LoginRequiredMixin, View):
         if not last_id:
             unread_msgs = messages_qs.filter(is_read=False).exclude(sender=user)
             unread_msgs.update(is_read=True, read_at=timezone.now())
+            # Notify other participant
+            broadcast_to_user(
+                other.id,
+                'read_receipt',
+                {
+                    'conversation_id': convos.first().id,
+                    'message_ids': list(unread_msgs.values_list('id', flat=True)),
+                    'read_by': user.id
+                }
+            )
 
         messages_data = [self._serialize_message(msg, user, request) for msg in messages_qs]
 
@@ -699,6 +761,30 @@ class SendUnifiedMessageView(LoginRequiredMixin, View):
             content=content or '[Attachment]',
             reply_to_id=reply_to_id if reply_to_id else None,
         )
+        # Broadcast new message via WebSocket
+        participants = [request.user.id, other.id]
+        broadcast_message_created(message, participants)
+
+        # Update unread counts for recipients (excluding sender)
+        for uid in participants:
+            if uid != request.user.id:
+                try:
+                    broadcast_unread_sync(uid)
+                except Exception:
+                    logger.exception(f"Failed to broadcast unread for {uid}")
+
+        # Also broadcast conversation-level unread counts/deltas for conversation list UI
+        try:
+            for uid in participants:
+                if uid == request.user.id:
+                    continue
+                conv_unread = conversation.messages.filter(is_read=False).exclude(sender_id=uid).count()
+                broadcast_to_user(uid, 'conversation_unread', {
+                    'conversation_id': conversation.id,
+                    'unread_count': conv_unread,
+                })
+        except Exception:
+            logger.exception('Failed to broadcast conversation-level unread counts')
 
         attachments_data = []
         for f in files:
@@ -724,6 +810,7 @@ class SendUnifiedMessageView(LoginRequiredMixin, View):
         conversation.messages.filter(~Q(sender=user), delivered=False).update(delivered=True)
         conversation.updated_at = timezone.now()
         conversation.save(update_fields=['updated_at'])
+        
 
         return JsonResponse({
             'success': True,
@@ -743,6 +830,20 @@ class SendUnifiedMessageView(LoginRequiredMixin, View):
                     'type': att.content_type,
                     'size': att.size,
                 })
+        # attach reply_to snapshot if available so sender sees replied content immediately
+        reply_snapshot = None
+        if getattr(msg, 'reply_to_id', None):
+            try:
+                replied = Message.objects.select_related('sender').get(id=msg.reply_to_id)
+                reply_snapshot = {
+                    'id': replied.id,
+                    'content': replied.content,
+                    'sender_id': replied.sender_id,
+                    'sender_name': replied.sender.get_full_name() or replied.sender.username,
+                }
+            except Message.DoesNotExist:
+                reply_snapshot = None
+
         return {
             'id': msg.id,
             'sender_id': msg.sender_id,
@@ -753,6 +854,7 @@ class SendUnifiedMessageView(LoginRequiredMixin, View):
             'is_read': msg.is_read,
             'delivered': msg.delivered,
             'reply_to_id': msg.reply_to_id,
+            'reply_to': reply_snapshot,
             'is_pinned': msg.is_pinned,
             'attachments': attachments,
             'is_own': msg.sender_id == current_user.id,
@@ -795,6 +897,18 @@ class EditMessageView(LoginRequiredMixin, View):
     def post(self, request, message_id):
         try:
             msg = Message.objects.get(id=message_id, sender=request.user)
+            # notify all participants in the conversation about the edit
+            conversation = msg.conversation
+            broadcast_to_conversation_participants(
+                conversation,
+                'message_updated',
+                {
+                    'conversation_id': msg.conversation_id,
+                    'message_id': msg.id,
+                    'action': 'edit',
+                    'data': {'content': msg.content}
+                }
+            )
         except Message.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Message not found'}, status=404)
 
@@ -858,6 +972,17 @@ class PinMessageView(LoginRequiredMixin, View):
 
         msg.is_pinned = not msg.is_pinned
         msg.save()
+        # notify all participants in the conversation about the pin change
+        broadcast_to_conversation_participants(
+            msg.conversation,
+            'message_updated',
+            {
+                'conversation_id': msg.conversation_id,
+                'message_id': msg.id,
+                'action': 'pin',
+                'data': {'content': msg.content, 'is_pinned': msg.is_pinned}
+            }
+        )
         return JsonResponse({'success': True, 'is_pinned': msg.is_pinned})
 
 
@@ -869,6 +994,22 @@ class DeleteMessagesView(LoginRequiredMixin, View):
             return JsonResponse({'success': False, 'error': 'No message IDs'}, status=400)
 
         deleted = Message.objects.filter(id__in=msg_ids, sender=request.user).delete()
+        # Broadcast delete to relevant conversations' participants
+        try:
+            # find affected conversations and notify their participants
+            convs = Conversation.objects.filter(messages__id__in=msg_ids).distinct()
+            for conv in convs:
+                broadcast_to_conversation_participants(
+                    conv,
+                    'message_updated',
+                    {
+                        'conversation_id': conv.id,
+                        'message_ids': msg_ids,
+                        'action': 'delete',
+                    }
+                )
+        except Exception:
+            logger.exception('Failed to broadcast message deletions')
         return JsonResponse({'success': True, 'deleted_count': deleted[0]})
 
 

@@ -3632,5 +3632,245 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function showAttachmentViewer(att) { window.showAttachmentViewer(att); }
+// ========== WEBSOCKET INTEGRATION (FIXED) ==========
+// Store references to original functions to avoid breaking existing behavior
+const _originalSendTypingIndicator = sendTypingIndicator;
+const _originalCheckTyping = checkTyping;
+const _originalStartPolling = startPolling;
+const _originalStopPolling = stopPolling;
+const _originalFetchUnifiedMessages = fetchUnifiedMessages;
+
+let chatSocket = null;
+let wsReconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
+const WS_RECONNECT_DELAY = 3000;
+let wsConnectionActive = false;
+
+function initWebSocket() {
+    if (!window.currentUserId) {
+        console.warn('WebSocket: currentUserId not set, retrying in 1s');
+        setTimeout(initWebSocket, 1000);
+        return;
+    }
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/chat/`;
+    chatSocket = new WebSocket(wsUrl);
+
+    chatSocket.onopen = function() {
+        console.log('WebSocket connected');
+        wsReconnectAttempts = 0;
+        wsConnectionActive = true;
+        // Stop polling for messages and typing; rely on WebSocket
+        if (messagePollInterval) clearInterval(messagePollInterval);
+        if (typingPollInterval) clearInterval(typingPollInterval);
+        // Reduce conversation list polling frequency (fallback)
+        if (conversationListPollInterval) clearInterval(conversationListPollInterval);
+        conversationListPollInterval = setInterval(loadGroupedConversations, 30000); // 30 sec
+        // Immediately load conversations to ensure list is visible
+        loadGroupedConversations();
+    };
+
+    chatSocket.onclose = function() {
+        console.log('WebSocket disconnected');
+        wsConnectionActive = false;
+        if (wsReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            wsReconnectAttempts++;
+            setTimeout(initWebSocket, WS_RECONNECT_DELAY);
+        } else {
+            // Fallback to polling
+            if (!messagePollInterval && currentParticipantId) {
+                messagePollInterval = setInterval(() => {
+                    if (currentParticipantId) fetchUnifiedMessages(currentParticipantId);
+                }, 3000);
+            }
+            if (!typingPollInterval && currentParticipantId) {
+                typingPollInterval = setInterval(checkTyping, 2000);
+            }
+            if (conversationListPollInterval) clearInterval(conversationListPollInterval);
+            conversationListPollInterval = setInterval(loadGroupedConversations, 5000);
+            showToast('Real-time connection lost. Using fallback mode.', 'warning');
+            // Load conversations now
+            loadGroupedConversations();
+        }
+    };
+
+    chatSocket.onerror = function(error) {
+        console.error('WebSocket error:', error);
+    };
+
+    chatSocket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        handleWebSocketMessage(data);
+    };
+}
+
+function handleWebSocketMessage(data) {
+    switch (data.type) {
+        case 'new_message':
+            handleNewMessage(data.message);
+            break;
+        case 'typing':
+            handleTypingIndicator(data);
+            break;
+        case 'messages_read':
+            handleReadReceipt(data);
+            break;
+        case 'message_update':
+            handleMessageUpdate(data);
+            break;
+        default:
+            console.log('Unknown WebSocket message type:', data.type);
+    }
+}
+
+function handleNewMessage(message) {
+    if (message.sender_id === window.currentUserId) return; // ignore own messages
+
+    if (currentParticipantId && message.sender_id === currentParticipantId) {
+        if (!allMessages.some(m => m.id === message.id)) {
+            allMessages.push(message);
+            lastMessageId = Math.max(lastMessageId, message.id);
+            renderMessages();
+            if (wsConnectionActive && chatSocket?.readyState === WebSocket.OPEN) {
+                chatSocket.send(JSON.stringify({
+                    type: 'mark_read',
+                    conversation_id: message.conversation_id,
+                    message_ids: [message.id]
+                }));
+            }
+            updateParticipantUnreadInSidebar(currentParticipantId, 0);
+        }
+    } else {
+        const sidebarItem = document.querySelector(`.conversation-item[data-participant-id="${message.sender_id}"]`);
+        if (sidebarItem) {
+            let unreadSpan = sidebarItem.querySelector('.conversation-unread');
+            let currentCount = unreadSpan ? parseInt(unreadSpan.innerText) : 0;
+            currentCount++;
+            if (unreadSpan) {
+                unreadSpan.innerText = currentCount;
+            } else {
+                const preview = sidebarItem.querySelector('.conversation-preview');
+                const badge = document.createElement('span');
+                badge.className = 'conversation-unread';
+                badge.innerText = currentCount;
+                preview.appendChild(badge);
+            }
+        } else {
+            loadGroupedConversations(); // refresh if conversation not yet in list
+        }
+        updateTotalUnreadCount();
+    }
+    loadGroupedConversations(); // keep list up to date
+}
+
+function handleTypingIndicator(data) {
+    if (data.conversation_id && conversationIds.includes(data.conversation_id)) {
+        otherIsTyping = data.typing;
+        if (data.typing) otherTypingName = data.user_name || currentParticipantName;
+        renderMessages();
+        updateHeaderTypingStatus();
+    }
+}
+
+function handleReadReceipt(data) {
+    if (data.conversation_id && conversationIds.includes(data.conversation_id)) {
+        let updated = false;
+        allMessages.forEach(msg => {
+            if (data.message_ids.includes(msg.id) && !msg.is_read) {
+                msg.is_read = true;
+                updated = true;
+            }
+        });
+        if (updated) renderMessages();
+    }
+}
+
+function handleMessageUpdate(data) {
+    if (data.conversation_id && conversationIds.includes(data.conversation_id)) {
+        const msg = allMessages.find(m => m.id === data.message_id);
+        if (!msg) return;
+        switch (data.action) {
+            case 'edit': msg.content = data.data.content; break;
+            case 'delete': allMessages = allMessages.filter(m => m.id !== data.message_id); break;
+            case 'pin': msg.is_pinned = data.data.is_pinned; break;
+        }
+        renderMessages();
+    }
+}
+
+// ===== Override functions with WebSocket awareness =====
+sendTypingIndicator = async function() {
+    if (!currentParticipantId || isTyping || !conversationIds.length) return;
+    isTyping = true;
+    if (wsConnectionActive && chatSocket?.readyState === WebSocket.OPEN) {
+        chatSocket.send(JSON.stringify({
+            type: 'typing.start',
+            conversation_id: conversationIds[0]
+        }));
+    } else {
+        await _originalSendTypingIndicator();
+    }
+    setTimeout(() => { isTyping = false; }, 3000);
+};
+
+checkTyping = async function() {
+    if (wsConnectionActive && chatSocket?.readyState === WebSocket.OPEN) {
+        // typing events are pushed, no need to poll
+        return;
+    } else {
+        await _originalCheckTyping();
+    }
+};
+
+startPolling = function() {
+    _originalStopPolling(); // clear any existing intervals
+    if (wsConnectionActive) {
+        statusPollInterval = setInterval(pollReadStatus, 5000);
+        conversationListPollInterval = setInterval(loadGroupedConversations, 30000);
+        // message and typing polling are disabled
+    } else {
+        _originalStartPolling();
+    }
+};
+
+stopPolling = function() {
+    _originalStopPolling(); // already clears everything
+};
+
+fetchUnifiedMessages = async function(participantId) {
+    await _originalFetchUnifiedMessages(participantId);
+    if (wsConnectionActive && chatSocket?.readyState === WebSocket.OPEN && conversationIds.length) {
+        const unreadIds = allMessages
+            .filter(m => !m.is_read && m.sender_id !== window.currentUserId)
+            .map(m => m.id);
+        if (unreadIds.length) {
+            chatSocket.send(JSON.stringify({
+                type: 'mark_read',
+                conversation_id: conversationIds[0],
+                message_ids: unreadIds
+            }));
+        }
+    }
+};
+
+// ===== Ensure conversation list loads after WebSocket init =====
+document.addEventListener('DOMContentLoaded', function() {
+    // Wait a moment for the original DOMContentLoaded to finish
+    setTimeout(() => {
+        initWebSocket();
+        // If after 2 seconds the conversation list is still empty, force a refresh
+        setTimeout(() => {
+            const container = document.getElementById('conversationsList');
+            if (container && container.children.length === 0) {
+                console.log('Conversation list empty, forcing refresh');
+                loadGroupedConversations();
+            }
+        }, 2000);
+    }, 100);
+});
+
+window.addEventListener('beforeunload', function() {
+    if (chatSocket) chatSocket.close();
+});
 </script>
 {% endblock %}
