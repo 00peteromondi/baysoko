@@ -1,8 +1,6 @@
-
 # baysoko/asgi.py
 import os
 from django.core.asgi import get_asgi_application
-
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'baysoko.settings')
 
@@ -10,30 +8,26 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'baysoko.settings')
 # is populated before importing code that may import ORM models.
 django_asgi_app = get_asgi_application()
 
-from users.consumers import AuthConsumer
-
-from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.auth import AuthMiddlewareStack
-
-from django.urls import path
+# Import routing modules after Django is ready
 import delivery.routing
 import storefront.routing
+import notifications.routing
+from users.consumers import AuthConsumer
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.auth import AuthMiddlewareStack
+from django.urls import path
 
-def get_websocket_application():
-    # Import consumers inside this function so models are imported after Django is ready
-    
-    return AuthConsumer.as_asgi()
-
+# Combine all WebSocket URL patterns
+websocket_urlpatterns = (
+    delivery.routing.websocket_urlpatterns
+    + storefront.routing.websocket_urlpatterns
+    + notifications.routing.websocket_urlpatterns
+    + [path("ws/auth/", AuthConsumer.as_asgi())]
+)
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
     "websocket": AuthMiddlewareStack(
-        URLRouter(
-			delivery.routing.websocket_urlpatterns
-			+ storefront.routing.websocket_urlpatterns
-			+ [
-				path("ws/auth/", AuthConsumer.as_asgi()),
-			]
-		)
+        URLRouter(websocket_urlpatterns)
     ),
 })

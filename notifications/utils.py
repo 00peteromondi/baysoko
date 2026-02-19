@@ -383,3 +383,137 @@ def notify_order_status_update(buyer, order, status):
         action_url=reverse('order_detail', kwargs={'order_id': order.id}),
         action_text='View Details'
     )
+
+
+# ===================== WebSocket Broadcast Functions =====================
+
+async def broadcast_notification_via_websocket(notification):
+    """
+    Broadcast a notification to the user's WebSocket connection.
+    
+    This function sends the notification in real-time via WebSocket instead of
+    relying on polling. If WebSocket is not connected, the notification is still
+    stored in the database for fallback polling.
+    
+    Args:
+        notification: Notification model instance
+    """
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        
+        channel_layer = get_channel_layer()
+        group_name = f"notifications_user_{notification.recipient_id}"
+        
+        notification_data = {
+            'id': notification.id,
+            'title': notification.title,
+            'message': notification.message,
+            'type': notification.notification_type,
+            'is_read': notification.is_read,
+            'time_since': notification.time_since,
+            'action_url': notification.action_url,
+            'action_text': notification.action_text,
+            'created_at': notification.created_at.isoformat(),
+            'sender': notification.sender.username if notification.sender else None,
+        }
+        
+        await channel_layer.group_send(
+            group_name,
+            {
+                'type': 'notification.created',
+                'notification': notification_data
+            }
+        )
+        
+        logger.info(f"Notification {notification.id} broadcasted via WebSocket to group {group_name}")
+    
+    except Exception as e:
+        # Silently fail - notification is already in DB for polling fallback
+        logger.warning(f"Failed to broadcast notification via WebSocket: {str(e)}")
+
+
+def broadcast_notification_read_status(notification):
+    """
+    Broadcast notification read status change via WebSocket.
+    
+    Args:
+        notification: Notification model instance
+    """
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        
+        channel_layer = get_channel_layer()
+        group_name = f"notifications_user_{notification.recipient_id}"
+        
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                'type': 'notification.marked_read',
+                'notification_id': notification.id
+            }
+        )
+    except Exception as e:
+        logger.warning(f"Failed to broadcast notification read status: {str(e)}")
+
+
+def broadcast_bulk_read():
+    """
+    Broadcast bulk read action via WebSocket.
+    This is called with user context, so we need the user ID passed in.
+    
+    Args:
+        user_id: ID of the user
+    """
+    # This will be handled in signals with proper context
+    pass
+
+
+# ===================== Helper to Create & Broadcast Notification =====================
+
+def create_and_broadcast_notification(recipient, notification_type, title, message,
+                                     sender=None, related_object_id=None,
+                                     related_content_type='', action_url='', action_text=''):
+    """
+    Creates a notification and immediately broadcasts it via WebSocket.
+    
+    This is a convenience function that combines creation with WebSocket broadcast.
+    Falls back gracefully if WebSocket is unavailable.
+    
+    Args:
+        recipient: User receiving the notification
+        notification_type: Type of notification
+        title: Notification title
+        message: Notification message
+        sender: User sending the notification (optional)
+        related_object_id: ID of related object (optional)
+        related_content_type: Type of related object (optional)
+        action_url: URL for action button (optional)
+        action_text: Text for action button (optional)
+    
+    Returns:
+        Notification instance or None
+    """
+    notification = create_notification(
+        recipient=recipient,
+        notification_type=notification_type,
+        title=title,
+        message=message,
+        sender=sender,
+        related_object_id=related_object_id,
+        related_content_type=related_content_type,
+        action_url=action_url,
+        action_text=action_text
+    )
+    
+    if notification:
+        # Try to broadcast via WebSocket (async operation)
+        try:
+            from asgiref.sync import async_to_sync
+            async_to_sync(broadcast_notification_via_websocket)(notification)
+        except Exception as e:
+            logger.warning(f"Could not broadcast notification via WebSocket: {str(e)}")
+            # Notification is still in DB, will be picked up by polling fallback
+    
+    return notification

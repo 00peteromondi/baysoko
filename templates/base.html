@@ -48,8 +48,29 @@
         }
     </style>
     <script>
-        // Poll notifications endpoint and show new ones as toasts.
+        /**
+         * LEGACY POLLING CODE - KEPT FOR BACKWARD COMPATIBILITY
+         * 
+         * The new WebSocket-based notifications system (notifications-client.js) 
+         * is now the primary method. This polling fallback is retained for:
+         * - Browsers that don't support WebSocket
+         * - When WebSocket connection fails
+         * - Graceful degradation
+         * 
+         * The new system automatically handles the fallback to polling.
+         */
         (function() {
+            // This legacy code is now disabled by default
+            // The new WebSocket client in notifications-client.js handles everything
+            
+            const LEGACY_POLLING_ENABLED = false; // Set to true if you need to force polling
+            
+            if (!LEGACY_POLLING_ENABLED) {
+                console.log('[Notifications] Using new WebSocket-based system (polling disabled)');
+                return;
+            }
+
+            // Original polling code (kept for reference, but disabled)
             const endpoint = '{% url "notifications" %}';
             const shownKey = 'baysoko_shown_notifications_v1';
             const pollInterval = 30000; // 30s
@@ -103,6 +124,7 @@
             setInterval(poll, pollInterval);
         })();
     </script>
+
     <!-- Global spinner used by AJAX buttons -->
     <style>
         .custom-spinner {
@@ -3427,6 +3449,10 @@
 
     <!-- Include global AJAX handler -->
     <script src="{% static 'js/global-ajax-handler.js' %}"></script>
+
+    <!-- Include WebSocket-based notifications client (primary system) -->
+    <!-- Handles real-time push via WebSocket with automatic fallback to polling -->
+    <script src="{% static 'js/notifications-client.js' %}"></script>
     <script>
         // Remove empty/zero-count unified badges from the DOM to avoid
         // leaving inert elements that pollers or CSS may still target.

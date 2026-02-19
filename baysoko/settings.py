@@ -226,6 +226,7 @@ CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'baysoko.csrf_middleware.CSRFRefererBypassMiddleware',  # Add before CSRF middleware
     'baysoko.middleware_async_stream.StreamingContentFixMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -373,25 +374,36 @@ SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=31536000, cast=int)
 SECURE_HSTS_INCLUDE_SUBDOMAINS = config('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=True, cast=bool)
 SECURE_HSTS_PRELOAD = config('SECURE_HSTS_PRELOAD', default=True, cast=bool)
 
+# Determine what command is being run
+RUNNING_TESTS = len(sys.argv) > 1 and sys.argv[1] == 'test'
+RUNNING_RUNSERVER = len(sys.argv) > 1 and sys.argv[1] in ('runserver', 'daphne')
+RUNNING_MIGRATE = 'migrate' in sys.argv
+
 # SSL / cookie settings (default to secure values; tests and localhost can
 # still override them later)
 SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
 # Add this after the security settings (around line where SECURE_SSL_REDIRECT is defined)
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# CSRF Cookie Configuration
+# These settings control how Django's CSRF protection works
 SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=True, cast=bool)
 CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=True, cast=bool)
+CSRF_COOKIE_HTTPONLY = False  # Must be False for JavaScript to access CSRF token in forms
+
+# When running tests or local dev, disable secure cookie requirements
+if RUNNING_TESTS or RUNNING_RUNSERVER or DEBUG:
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+
+# IMPORTANT: Do NOT set CSRF_COOKIE_HTTPONLY = True if you need JavaScript to read the token
+# In production HTTPS, the cookie is still protected by:
+# 1. CSRF_COOKIE_SECURE (HTTPS only)
+# 2. SameSite=Strict attribute
+# 3. CSRF token validation on server
 
 SECURE_BROWSER_XSS_FILTER = config('SECURE_BROWSER_XSS_FILTER', default=True, cast=bool)
 SECURE_CONTENT_TYPE_NOSNIFF = config('SECURE_CONTENT_TYPE_NOSNIFF', default=True, cast=bool)
-
-# When running tests, avoid enforcing HTTPS redirects which cause 301 responses
-RUNNING_TESTS = len(sys.argv) > 1 and sys.argv[1] == 'test'
-RUNNING_RUNSERVER = len(sys.argv) > 1 and sys.argv[1] == 'runserver'
-
-if RUNNING_TESTS or RUNNING_RUNSERVER:
-    SESSION_COOKIE_SECURE = False
-    CSRF_COOKIE_SECURE = False
 
 if RUNNING_TESTS:
     SECURE_SSL_REDIRECT = False
@@ -428,6 +440,30 @@ else:
 # Site ID
 SITE_ID = 1
 SITE_URL = config('SITE_URL', default='http://localhost:8000')
+
+# CSRF and Cross-Origin Configuration
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'http://127.0.0.1',
+    'http://localhost',
+    'https://bay-soko.onrender.com',
+    'https://*.onrender.com',
+]
+
+# Add custom allowed origins from environment if specified
+CUSTOM_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=str)
+if CUSTOM_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.extend([origin.strip() for origin in CUSTOM_ORIGINS.split(',') if origin.strip()])
+
+# CSRF Configuration for Form Submissions
+# In production, Django validates both the CSRF token AND the Referer header
+# In development, we bypass referer checks via CSRFRefererBypassMiddleware to avoid
+# false-positive rejections when browsers don't send Referer headers
+# The CSRF token itself is always validated
+
+
+
 
 # OpenAI Configuration for AI Listing Assistant
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
@@ -776,10 +812,7 @@ except Exception:
 
 CHANNEL_LAYERS = {
     "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": channels_hosts,
-        },
+        "BACKEND": "channels.layers.InMemoryChannelLayer"
     },
 }
 

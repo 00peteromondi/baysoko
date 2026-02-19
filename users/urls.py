@@ -58,4 +58,6 @@ urlpatterns = [
     path('password-reset-ajax/set-password/', password_reset_set_password, name='password_reset_set_password'),
     path('change-password-ajax/', views.change_password_ajax, name='change_password_ajax'),
     path('delete-account-ajax/', views.delete_account_ajax, name='delete_account_ajax'),
+    # WebSocket login completion (sets session cookie via HTTP)
+    path('ws-login-complete/', views.ws_login_complete, name='ws_login_complete'),
 ]

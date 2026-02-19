@@ -36,9 +36,15 @@ from django.db import models, transaction, IntegrityError
 from django.conf import settings
 from django.utils import timezone
 from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 from django.template.loader import render_to_string
+from django.core.cache import cache
+from .ws_token_store import get_token as ws_get_token, delete_token as ws_delete_token
+from django.conf import settings
+from django.middleware.csrf import get_token
+from django.utils.http import url_has_allowed_host_and_scheme
+from urllib.parse import unquote
 
 import requests
 from allauth.socialaccount.models import SocialApp, SocialAccount
@@ -116,10 +122,71 @@ def send_password_reset_code(user):
     plain_message = f'Your password reset code is: {code}'
     _send_email_threaded(subject, plain_message, html_message, [user.email])
 
+
+def ws_login_complete(request):
+    """Complete a WebSocket-initiated login by setting the session cookie.
+
+    The WebSocket consumer generates a one-time token mapping to the
+    server-side session key and returns a URL to this view. When the
+    browser visits this URL, the view sets the `sessionid` cookie so
+    subsequent HTTP requests carry the authenticated session.
+    """
+    token = request.GET.get('token')
+    next_url = request.GET.get('next') or reverse('home')
+    try:
+        next_url = unquote(next_url)
+    except Exception:
+        next_url = reverse('home')
+
+    if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+        next_url = reverse('home')
+
+    if not token:
+        return redirect(next_url)
+
+    cache_key = f"ws_login_{token}"
+    # try cache first, then fallback to in-process store
+    try:
+        session_key = cache.get(cache_key)
+    except Exception:
+        session_key = None
+
+    if session_key is None:
+        session_key = ws_get_token(cache_key)
+
+    if not session_key:
+        # token missing or expired
+        return redirect(reverse('login'))
+
+    response = redirect(next_url)
+    response.set_cookie(
+        settings.SESSION_COOKIE_NAME,
+        session_key,
+        max_age=settings.SESSION_COOKIE_AGE,
+        httponly=settings.SESSION_COOKIE_HTTPONLY,
+        secure=settings.SESSION_COOKIE_SECURE,
+        samesite=getattr(settings, 'SESSION_COOKIE_SAMESITE', 'Lax')
+    )
+
+    # Ensure CSRF cookie exists
+    get_token(request)
+
+    try:
+        cache.delete(cache_key)
+    except Exception:
+        pass
+    try:
+        ws_delete_token(cache_key)
+    except Exception:
+        pass
+
+    return response
+
 # ----------------------------------------------------------------------
 #  Registration
 # ----------------------------------------------------------------------
 
+@ensure_csrf_cookie
 def register(request):
     if request.user.is_authenticated:
         return redirect('home')
@@ -1040,7 +1107,7 @@ def debug_send_email(request):
 # ----------------------------------------------------------------------
 #  Login / Logout
 # ----------------------------------------------------------------------
-
+@method_decorator(ensure_csrf_cookie, name='dispatch')
 class CustomLoginView(LoginView):
     template_name = 'users/login.html'
     authentication_form = CustomAuthenticationForm

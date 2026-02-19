@@ -1,37 +1,257 @@
-<!doctype html>
-<html>
+<!-- users/templates/users/verify_result.html -->
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Verification</title>
-  <style>
-    body{font-family:Arial,Helvetica,sans-serif;background:#f4f6f8;margin:0;padding:0}
-    .card{max-width:680px;margin:48px auto;background:#fff;border-radius:8px;box-shadow:0 8px 24px rgba(11,22,37,0.06);overflow:hidden}
-    .body{padding:24px}
-    .title{font-size:20px;margin:0 0 8px}
-    .muted{color:#6b7280}
-    .btn{display:inline-block;padding:10px 14px;background:#0b74ff;color:#fff;border-radius:6px;text-decoration:none}
-    .count{font-weight:700}
-    @media(max-width:480px){.card{margin:12px}}
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verification - Baysoko</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        /* ===== GLOBAL RESET ===== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* ===== RAINING ICONS BACKGROUND ===== */
+        .rain-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .rain-icon {
+            position: absolute;
+            color: rgba(255, 255, 255, 0.25);
+            font-size: 2rem;
+            opacity: 0;
+            animation: bounce-rain linear infinite;
+            will-change: transform;
+            user-select: none;
+        }
+
+        @keyframes bounce-rain {
+            0% {
+                transform: translateY(-20vh) translateX(0) rotate(0deg);
+                opacity: 0.3;
+            }
+            60% {
+                transform: translateY(70vh) translateX(10px) rotate(180deg);
+                opacity: 0.7;
+            }
+            80% {
+                transform: translateY(60vh) translateX(5px) rotate(240deg);
+                opacity: 0.7;
+            }
+            100% {
+                transform: translateY(100vh) translateX(20px) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        /* ===== VERIFICATION CARD ===== */
+        .verification-container {
+            position: relative;
+            z-index: 2;
+            max-width: 500px;
+            width: 90%;
+            margin: 0 auto;
+            padding: 2rem 0;
+        }
+        .modal-card {
+            background: rgba(var(--bg-primary-rgb), 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 30px;
+            padding: 2rem;
+            text-align: center;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.12);
+            animation: slideInUp 0.5s ease-out;
+            width: 100%;
+        }
+        .modal-icon {
+            font-size: 3rem;
+            color: var(--accent);
+            margin-bottom: 1rem;
+        }
+        h2 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        p {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+        .message {
+            font-size: 1.2rem;
+            font-weight: 500;
+            margin: 1.5rem 0;
+            padding: 1rem;
+            background: rgba(var(--accent-rgb), 0.1);
+            border-radius: var(--radius-lg);
+            border-left: 4px solid var(--accent);
+            color: var(--text-primary);
+        }
+        .countdown {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--accent);
+            margin: 1rem 0;
+        }
+        .btn-modern {
+            display: inline-block;
+            padding: 0.8rem 1.8rem;
+            border-radius: var(--radius-md);
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            text-decoration: none;
+            box-shadow: 0 4px 12px rgba(255,107,53,0.4);
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-top: 0.5rem;
+        }
+        .btn-modern:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255,107,53,0.5);
+        }
+
+        /* ===== ANIMATIONS ===== */
+        @keyframes slideInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ===== CSS VARIABLES ===== */
+        :root {
+            --bg-primary-rgb: 255,255,255;
+            --primary: #FF6B35;
+            --primary-dark: #E04E2E;
+            --accent: #06D6A0;
+            --accent-rgb: 6,214,160;
+            --text-primary: #333;
+            --text-secondary: #666;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+        }
+        [data-theme="dark"] {
+            --bg-primary-rgb: 18,18,18;
+            --text-primary: #eee;
+            --text-secondary: #aaa;
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .modal-card { padding: 1.5rem; }
+            h2 { font-size: 1.5rem; }
+            .message { font-size: 1rem; }
+        }
+    </style>
 </head>
 <body>
-  <div class="card">
-    <div class="body">
-      <h1 class="title">Verification status</h1>
-      <p id="message">{{ message }}</p>
-      <p class="muted">You will be redirected in <span id="count">{{ countdown|default:6 }}</span>s — or click the button below to continue now.</p>
-      <p><a id="continueBtn" class="btn" href="{{ redirect_to }}">Continue</a></p>
+    <!-- RAINING ICONS BACKGROUND -->
+    <div class="rain-container" id="rainContainer"></div>
+
+    <div class="verification-container">
+        <div class="modal-card">
+            <div class="modal-icon">
+                <i class="bi bi-envelope-check"></i>
+            </div>
+            <h2>Verification Status</h2>
+            <div class="message" id="message">{{ message }}</div>
+            <p class="countdown">
+                Redirecting in <span id="count">{{ countdown|default:6 }}</span>s
+            </p>
+            <a href="{{ redirect_to }}" class="btn-modern" id="continueBtn">
+                Continue Now <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
     </div>
-  </div>
-  <script>
-    (function(){
-      var s = parseInt(document.getElementById('count').textContent||'6',10);
-      var btn = document.getElementById('continueBtn');
-      var tid = setInterval(function(){
-        s--; if(s<=0){ clearInterval(tid); window.location = btn.href; } else { document.getElementById('count').textContent = s; }
-      },1000);
-    })();
-  </script>
+
+    <script>
+        (function() {
+            // Rain icons generator (same as verify_email.html)
+            const rainContainer = document.getElementById('rainContainer');
+            const icons = [
+                'bi-house', 'bi-house-door', 'bi-fridge', 'bi-tv', 'bi-phone',
+                'bi-laptop', 'bi-cup', 'bi-cup-straw', 'bi-egg-fried', 'bi-basket',
+                'bi-cart', 'bi-clock', 'bi-lamp', 'bi-lightbulb', 'bi-battery-charging',
+                'bi-wifi', 'bi-radio', 'bi-speaker', 'bi-headphones', 'bi-camera',
+                'bi-printer', 'bi-scissors', 'bi-droplet', 'bi-thermometer', 'bi-umbrella',
+                'bi-key', 'bi-lock', 'bi-unlock', 'bi-wallet', 'bi-cash-coin',
+                'bi-bag', 'bi-gift', 'bi-book', 'bi-journal', 'bi-pencil',
+                'bi-paint-bucket', 'bi-brush', 'bi-cone-striped', 'bi-bandaid', 'bi-eyedropper',
+                'bi-stove', 'bi-fan', 'bi-plug', 'bi-smartwatch', 'bi-robot',
+                'bi-camera-reels', 'bi-mic', 'bi-mouse', 'bi-pc-display', 'bi-phone-flip'
+            ];
+
+            function createRainIcon() {
+                const icon = document.createElement('i');
+                const randomIcon = icons[Math.floor(Math.random() * icons.length)];
+                icon.className = `bi ${randomIcon} rain-icon`;
+                const size = Math.random() * 2.5 + 1.5;
+                icon.style.fontSize = size + 'rem';
+                icon.style.left = Math.random() * 100 + '%';
+                icon.style.animationDuration = (Math.random() * 7 + 8) + 's';
+                icon.style.animationDelay = Math.random() * 10 + 's';
+                icon.style.opacity = '0';
+                const r = Math.floor(Math.random() * 200 + 55);
+                const g = Math.floor(Math.random() * 200 + 55);
+                const b = Math.floor(Math.random() * 200 + 55);
+                icon.style.color = `rgba(${r}, ${g}, ${b}, 0.3)`;
+                rainContainer.appendChild(icon);
+
+                const duration = parseFloat(icon.style.animationDuration) * 1000;
+                setTimeout(() => {
+                    if (icon.parentNode) icon.remove();
+                }, duration + 2000);
+            }
+
+            // Initial batch
+            for (let i = 0; i < 120; i++) {
+                createRainIcon();
+            }
+            setInterval(createRainIcon, 250);
+
+            // Countdown
+            let seconds = parseInt(document.getElementById('count').textContent || '6', 10);
+            const countSpan = document.getElementById('count');
+            const continueBtn = document.getElementById('continueBtn');
+
+            const timer = setInterval(function() {
+                seconds--;
+                if (seconds <= 0) {
+                    clearInterval(timer);
+                    window.location.href = continueBtn.href;
+                } else {
+                    countSpan.textContent = seconds;
+                }
+            }, 1000);
+        })();
+    </script>
 </body>
 </html>
