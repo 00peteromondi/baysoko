@@ -10,15 +10,18 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'baysoko.settings')
 # is populated before importing code that may import ORM models.
 django_asgi_app = get_asgi_application()
 
+from users.consumers import AuthConsumer
+
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
+
 from django.urls import path
 import delivery.routing
 import storefront.routing
 
 def get_websocket_application():
     # Import consumers inside this function so models are imported after Django is ready
-    from users.consumers import AuthConsumer
+    
     return AuthConsumer.as_asgi()
 
 
