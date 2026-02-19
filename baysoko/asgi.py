@@ -2,8 +2,7 @@
 # baysoko/asgi.py
 import os
 from django.core.asgi import get_asgi_application
-import delivery.routing
-import storefront.routing
+
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'baysoko.settings')
 
@@ -14,7 +13,8 @@ django_asgi_app = get_asgi_application()
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
 from django.urls import path
-
+import delivery.routing
+import storefront.routing
 
 def get_websocket_application():
     # Import consumers inside this function so models are imported after Django is ready

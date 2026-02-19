@@ -2,7 +2,7 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth import get_user_model
 
-User = get_user_model()
+
 
 class DeliveryConsumer(AsyncJsonWebsocketConsumer):
     """WebSocket consumer for order-level delivery updates.
@@ -11,6 +11,7 @@ class DeliveryConsumer(AsyncJsonWebsocketConsumer):
     We add them to a group named `order_<identifier>`.
     """
     async def connect(self):
+        User = get_user_model()
         self.order_id = self.scope['url_route']['kwargs'].get('order_id')
         self.group_name = f"order_{self.order_id}"
         await self.channel_layer.group_add(self.group_name, self.channel_name)
@@ -38,6 +39,7 @@ class UserDeliveryConsumer(AsyncJsonWebsocketConsumer):
     related to any of their orders.
     """
     async def connect(self):
+        User = get_user_model()
         self.user_id = self.scope['url_route']['kwargs'].get('user_id')
         self.group_name = f"user_{self.user_id}"
         await self.channel_layer.group_add(self.group_name, self.channel_name)
