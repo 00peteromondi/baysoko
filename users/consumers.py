@@ -409,6 +409,125 @@ class AuthConsumer(JsonWebsocketConsumer):
             "message": "Code resent."
         })
 
+    def handle_change_password(self, content):
+        """Handle password change over the auth WebSocket.
+
+        Expects: csrfmiddlewaretoken, old_password, new_password1, new_password2
+        Responds with type `change_password_response`.
+        """
+        # Basic auth / csrf checks
+        if not self.scope.get('user') or not self.scope['user'].is_authenticated:
+            self.send_json({"type": "change_password_response", "success": False, "error": "Authentication required."})
+            return
+
+        csrf_token = content.get('csrfmiddlewaretoken')
+        if not self.validate_csrf(csrf_token):
+            self.send_json({"type": "change_password_response", "success": False, "error": "Invalid CSRF token."})
+            return
+
+        old_password = content.get('old_password')
+        new_password1 = content.get('new_password1')
+        new_password2 = content.get('new_password2')
+
+        if not old_password or not new_password1 or not new_password2:
+            self.send_json({"type": "change_password_response", "success": False, "error": "All fields are required."})
+            return
+
+        user = self.scope['user']
+
+        # Verify old password
+        try:
+            if not user.check_password(old_password):
+                self.send_json({"type": "change_password_response", "success": False, "error": "Your old password was entered incorrectly."})
+                return
+        except Exception:
+            self.send_json({"type": "change_password_response", "success": False, "error": "Unable to verify password."})
+            return
+
+        if new_password1 != new_password2:
+            self.send_json({"type": "change_password_response", "success": False, "error": "The two new password fields didn’t match."})
+            return
+
+        # Validate new password
+        try:
+            from django.contrib.auth.password_validation import validate_password
+            from django.core.exceptions import ValidationError
+
+            validate_password(new_password1, user=user)
+        except ValidationError as e:
+            self.send_json({"type": "change_password_response", "success": False, "errors": {'new_password1': list(e.messages)}})
+            return
+        except Exception:
+            # fallback failure
+            self.send_json({"type": "change_password_response", "success": False, "error": "Password validation failed."})
+            return
+
+        # All good: set password and keep session
+        try:
+            user.set_password(new_password1)
+            user.save()
+
+            # Robustly update the session so the current HTTP session remains valid.
+            # Ensure the backend key and auth hash are present, mark session modified
+            # and persist. This handles a variety of session backends and keeps the
+            # user authenticated after a WS-initiated password change.
+            try:
+                from django.contrib.auth import HASH_SESSION_KEY, BACKEND_SESSION_KEY
+                session = self.scope.get('session')
+                if session is not None:
+                    try:
+                        # Ensure backend key exists (login() normally sets this)
+                        if BACKEND_SESSION_KEY not in session:
+                            session[BACKEND_SESSION_KEY] = 'django.contrib.auth.backends.ModelBackend'
+
+                        session[HASH_SESSION_KEY] = user.get_session_auth_hash()
+                        # Some backends rely on the modified flag to persist changes
+                        try:
+                            session.modified = True
+                        except Exception:
+                            pass
+                        try:
+                            session.save()
+                        except Exception:
+                            # Some session backends may not require explicit save
+                            pass
+                    except Exception:
+                        logger.exception('Failed to set session auth hash or backend on session')
+            except Exception:
+                logger.exception('Failed to update session auth hash')
+
+            # Ensure scope user references updated user object
+            try:
+                self.scope['user'] = user
+            except Exception:
+                pass
+
+            # Send password-changed notification + optional email
+            try:
+                from notifications.utils import create_and_broadcast_notification
+                create_and_broadcast_notification(recipient=user, notification_type='system', title='Password Changed', message='Your account password was successfully changed.')
+            except Exception:
+                logger.exception('Failed to send in-app notification for password change')
+
+            try:
+                # Attempt to send email via existing helper if available
+                from .views import render_and_send
+                from django.conf import settings
+                ctx = {'user': user, 'site_url': getattr(settings, 'SITE_URL', '')}
+                subject = 'Your Baysoko password was changed'
+                try:
+                    render_and_send('emails/password_changed.html', 'emails/password_changed.txt', ctx, subject, [user.email])
+                except Exception:
+                    logger.exception('Failed to queue password-changed email')
+            except Exception:
+                # ignore if helper unavailable
+                pass
+
+            self.send_json({"type": "change_password_response", "success": True, "message": "Password changed successfully."})
+        except Exception as e:
+            logger.exception('Error changing password via WebSocket')
+            self.send_json({"type": "change_password_response", "success": False, "error": "Internal server error."})
+
     # users/consumers.py – CSRF validation for WebSocket
     
     def validate_csrf(self, token):

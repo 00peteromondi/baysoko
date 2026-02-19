@@ -2590,13 +2590,14 @@
             window.showToast = function(message, type = 'info', duration = 5000) {
                 const toastContainer = document.getElementById('toastContainer');
                 if (!toastContainer) return;
-                
+
                 const toast = document.createElement('div');
-                toast.className = `custom-toast toast-${type}`;
+                // Include the Bootstrap 'toast' class so the Toast plugin recognizes the element
+                toast.className = `toast custom-toast toast-${type}`;
                 toast.setAttribute('role', 'alert');
                 toast.setAttribute('aria-live', 'assertive');
                 toast.setAttribute('aria-atomic', 'true');
-                
+
                 const iconMap = {
                     'success': 'check-circle-fill',
                     'error': 'exclamation-circle-fill',
@@ -2604,33 +2605,42 @@
                     'info': 'info-circle-fill',
                     'primary': 'info-circle-fill'
                 };
-                
+
                 toast.innerHTML = `
                     <div class="d-flex align-items-center p-3">
                         <i class="bi bi-${iconMap[type] || 'info-circle-fill'} fs-4 me-3"></i>
                         <div class="flex-grow-1">
                             <div class="fw-medium">${message}</div>
                         </div>
-                        <button type="button" class="btn-close btn-close-white ms-3" data-bs-dismiss="toast" aria-label="Close"></button>
+                        <button type="button" class="btn-close btn-close-white ms-3" aria-label="Close"></button>
                     </div>
                     <div class="toast-progress-bar" style="animation-duration: ${duration}ms;"></div>
                 `;
-                
+
                 toastContainer.appendChild(toast);
-                
+
                 // Initialize Bootstrap toast
                 const bsToast = new bootstrap.Toast(toast, {
                     autohide: true,
                     delay: duration
                 });
-                
+
+                // Wire up close button to hide the toast reliably
+                const closeBtn = toast.querySelector('.btn-close');
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', (ev) => {
+                        try { bsToast.hide(); } catch (err) { /* swallow */ }
+                    });
+                }
+
                 bsToast.show();
-                
+
                 // Remove from DOM after hidden
                 toast.addEventListener('hidden.bs.toast', () => {
-                    toast.remove();
+                    try { toast.remove(); } catch (err) { /* swallow */ }
                 });
-                
+
+                // Return instance so callers can hide() if they want
                 return bsToast;
             };
             

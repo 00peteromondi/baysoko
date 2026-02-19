@@ -221,7 +221,7 @@ class ListingListView(ListView):
         context['total_stores'] = Store.objects.filter(is_active=True).count()
         
         # Categories data - UPDATED
-        context['categories'] = Category.objects.filter(is_active=True)[:8]
+        context['categories'] = Category.objects.filter(is_active=True)[:34]
 
         stores = Store.objects.filter(is_active=True)
 
@@ -716,7 +716,41 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
         images = self.request.FILES.getlist('images')
         for image in images:
             # Validate file type and size
-            if image.content_type.startswith('image/') and image.size <= 10 * 1024 * 1024:  # 10MB limit
+            try:
+                is_image = getattr(image, 'content_type', '').startswith('image/')
+                size_ok = getattr(image, 'size', 0) <= 10 * 1024 * 1024
+            except Exception:
+                is_image = False
+                size_ok = False
+            if is_image and size_ok:
+                # Defensive de-duplication: avoid creating duplicate gallery images
+                try:
+                    duplicate = False
+                    # Compare by filename and size where possible
+                    incoming_name = getattr(image, 'name', '')
+                    incoming_size = getattr(image, 'size', None)
+                    for existing in form.instance.images.all():
+                        try:
+                            existing_name = getattr(existing.image, 'name', '') or ''
+                            existing_size = None
+                            try:
+                                existing_size = existing.image.size
+                            except Exception:
+                                existing_size = None
+                            if incoming_name and existing_name and incoming_name in existing_name:
+                                duplicate = True
+                                break
+                            if incoming_size is not None and existing_size is not None and incoming_size == existing_size:
+                                duplicate = True
+                                break
+                        except Exception:
+                            continue
+                    if duplicate:
+                        continue
+                except Exception:
+                    # On any error, fall back to attempting to create the image
+                    pass
+
                 ListingImage.objects.create(
                     listing=form.instance,
                     image=image
@@ -879,7 +913,39 @@ class ListingUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
         # Handle multiple image uploads
         images = self.request.FILES.getlist('images')
         for image in images:
-            if image.content_type.startswith('image/') and image.size <= 10 * 1024 * 1024:
+            try:
+                is_image = getattr(image, 'content_type', '').startswith('image/')
+                size_ok = getattr(image, 'size', 0) <= 10 * 1024 * 1024
+            except Exception:
+                is_image = False
+                size_ok = False
+            if is_image and size_ok:
+                # Defensive de-duplication to prevent double uploads
+                try:
+                    duplicate = False
+                    incoming_name = getattr(image, 'name', '')
+                    incoming_size = getattr(image, 'size', None)
+                    for existing in form.instance.images.all():
+                        try:
+                            existing_name = getattr(existing.image, 'name', '') or ''
+                            existing_size = None
+                            try:
+                                existing_size = existing.image.size
+                            except Exception:
+                                existing_size = None
+                            if incoming_name and existing_name and incoming_name in existing_name:
+                                duplicate = True
+                                break
+                            if incoming_size is not None and existing_size is not None and incoming_size == existing_size:
+                                duplicate = True
+                                break
+                        except Exception:
+                            continue
+                    if duplicate:
+                        continue
+                except Exception:
+                    pass
+
                 ListingImage.objects.create(
                     listing=form.instance,
                     image=image
@@ -2497,6 +2563,98 @@ def order_detail(request, order_id):
         context['delivery_request'] = None
     
     return render(request, 'listings/order_detail.html', context) # Seller views
+
+
+@login_required
+@require_POST
+def ajax_edit_listing(request, listing_id):
+    """AJAX endpoint to allow listing owners to edit simple fields (price, stock, title)."""
+    try:
+        listing = get_object_or_404(Listing, id=listing_id)
+        if listing.seller != request.user:
+            return JsonResponse({'success': False, 'error': 'Forbidden'}, status=403)
+
+        # Parse JSON body or form
+        try:
+            data = json.loads(request.body)
+        except Exception:
+            data = request.POST
+
+        updated = False
+        # Allow editing price, stock, title
+        if 'price' in data and data['price'] is not None:
+            try:
+                new_price = float(data.get('price'))
+                if float(listing.price) != new_price:
+                    listing.price = new_price
+                    updated = True
+            except Exception:
+                pass
+
+        if 'stock' in data and data['stock'] is not None:
+            try:
+                new_stock = int(data.get('stock'))
+                if int(listing.stock) != new_stock:
+                    listing.stock = new_stock
+                    updated = True
+            except Exception:
+                pass
+
+        if 'title' in data and data['title'] is not None:
+            new_title = data.get('title').strip()
+            if new_title and new_title != listing.title:
+                listing.title = new_title
+                updated = True
+
+        if updated:
+            listing.save()
+
+        return JsonResponse({'success': True, 'updated': updated, 'listing': {'id': listing.id, 'price': float(listing.price), 'stock': int(listing.stock), 'title': listing.title}})
+    except Exception as e:
+        logger.exception('ajax_edit_listing error: %s', e)
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def ajax_delete_listing(request, listing_id):
+    """AJAX endpoint to allow owners to delete a listing and broadcast deletion."""
+    try:
+        listing = get_object_or_404(Listing, id=listing_id)
+        if listing.seller != request.user:
+            return JsonResponse({'success': False, 'error': 'Forbidden'}, status=403)
+
+        listing_id = listing.id
+        listing_title = listing.title
+        listing.delete()
+
+        # Broadcast deletion to all users' notification groups
+        try:
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+            channel_layer = get_channel_layer()
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            user_ids = list(User.objects.filter(is_active=True).values_list('id', flat=True))
+            payload = {'id': listing_id}
+            for uid in user_ids:
+                try:
+                    async_to_sync(channel_layer.group_send)(
+                        f'notifications_user_{uid}',
+                        {
+                            'type': 'listing_deleted',
+                            'listing': payload,
+                        }
+                    )
+                except Exception:
+                    logger.exception('Failed to send listing_deleted to user %s', uid)
+        except Exception:
+            logger.exception('Failed to broadcast listing_deleted')
+
+        return JsonResponse({'success': True, 'deleted_id': listing_id, 'message': f'Listing "{listing_title}" deleted'})
+    except Exception as e:
+        logger.exception('ajax_delete_listing error: %s', e)
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 @login_required
 def seller_orders(request):

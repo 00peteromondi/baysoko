@@ -7,6 +7,8 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from .models import Notification, NotificationPreference
 from .forms import NotificationPreferenceForm
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 @login_required
 def notification_list(request):
@@ -71,6 +73,19 @@ def mark_notification_read(request, notification_id):
     notification = get_object_or_404(Notification, id=notification_id, recipient=request.user)
     notification.mark_as_read()
     notification.is_read = True
+    # Broadcast to other sessions/devices for this user
+    try:
+        channel_layer = get_channel_layer()
+        group_name = f"notifications_user_{request.user.id}"
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                'type': 'notification_marked_read',
+                'notification_id': notification.id,
+            }
+        )
+    except Exception:
+        pass
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return JsonResponse({'success': True})
@@ -82,6 +97,20 @@ def mark_notification_read(request, notification_id):
 def mark_all_read(request):
     """Mark all notifications as read"""
     Notification.objects.filter(recipient=request.user, is_read=False).update(is_read=True)
+    # Notify any active WebSocket connections for this user so UIs update in real-time
+    try:
+        channel_layer = get_channel_layer()
+        group_name = f"notifications_user_{request.user.id}"
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                'type': 'bulk_marked_read',
+                'unread_count': 0,
+            }
+        )
+    except Exception:
+        # If channel layer isn't available or send fails, continue silently
+        pass
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return JsonResponse({'success': True})
@@ -93,7 +122,21 @@ def mark_all_read(request):
 def delete_notification(request, notification_id):
     """Delete a notification"""
     notification = get_object_or_404(Notification, id=notification_id, recipient=request.user)
+    notification_id_val = notification.id
     notification.delete()
+    # Broadcast deletion so other clients can remove it
+    try:
+        channel_layer = get_channel_layer()
+        group_name = f"notifications_user_{request.user.id}"
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                'type': 'notification_deleted',
+                'notification_id': notification_id_val,
+            }
+        )
+    except Exception:
+        pass
     
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return JsonResponse({'success': True})

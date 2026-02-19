@@ -166,6 +166,12 @@
                 case 'cart_updated':
                     handleCartUpdated(message);
                     break;
+                case 'listing_changed':
+                    handleListingChanged(message);
+                    break;
+                case 'listing_deleted':
+                    handleListingDeleted(message);
+                    break;
                 case 'error':
                     console.error('[Notifications] Server error:', message.message);
                     break;
@@ -262,7 +268,47 @@
     }
 
     function handleBulkMarkedRead(message) {
-        updateBadgeCount(0);
+        // Update badges
+        updateBadgeCount(message.unread_count || 0);
+
+        // Update notification list UI if present: mark all as read
+        try {
+            document.querySelectorAll('.notification-item.unread').forEach(item => {
+                item.classList.remove('unread');
+                item.classList.add('read');
+                const dot = item.querySelector('.status-dot');
+                if (dot) dot.classList.remove('unread');
+
+                const statusText = item.querySelector('.notification-status span:last-child');
+                if (statusText) statusText.textContent = 'Read';
+
+                const markReadBtn = item.querySelector('.notification-action-btn.read');
+                const btnMarkRead = item.querySelector('.btn-mark-read');
+                if (markReadBtn) {
+                    markReadBtn.style.transition = 'all 0.2s ease';
+                    markReadBtn.style.opacity = '0';
+                    markReadBtn.style.transform = 'scale(0.8)';
+                    setTimeout(() => markReadBtn.remove(), 200);
+                }
+                if (btnMarkRead) {
+                    btnMarkRead.style.transition = 'all 0.2s ease';
+                    btnMarkRead.style.opacity = '0';
+                    btnMarkRead.style.transform = 'scale(0.8)';
+                    setTimeout(() => btnMarkRead.remove(), 200);
+                }
+            });
+
+            // Update large unread badge in the notifications page if present
+            const largeBadge = document.querySelector('.unread-count-badge-large');
+            if (largeBadge) largeBadge.innerHTML = '<i class="bi bi-bell"></i> 0 Unread';
+
+            // Also update central BadgeManager if present
+            if (window.BadgeManager && typeof window.BadgeManager.update === 'function') {
+                try { window.BadgeManager.update('notifications', 0); } catch (e) { /* swallow */ }
+            }
+        } catch (e) {
+            console.warn('[Notifications] Could not update notification list UI for bulk_marked_read', e);
+        }
     }
 
     function handleNotificationDeleted(message) {
@@ -313,6 +359,74 @@
             }
         } catch (e) {
             console.warn('[Notifications] Failed to handle listing_liked', e);
+        }
+    }
+
+    function handleListingChanged(message) {
+        try {
+            const listing = message.listing;
+            if (!listing || !listing.id) return;
+            console.log('[Notifications] Listing changed event:', listing.id);
+
+            // Dispatch DOM event
+            document.dispatchEvent(new CustomEvent('listingChanged', { detail: listing }));
+
+            // Update price elements
+            document.querySelectorAll(`[data-listing-id="${listing.id}"] .listing-price, [data-listing-id="${listing.id}"] .listing-price-amount`).forEach(el => {
+                if (typeof listing.price !== 'undefined' && listing.price !== null) {
+                    // Use simple formatting; pages can listen to event for custom rendering
+                    el.textContent = typeof listing.price === 'number' ? listing.price.toFixed(2) : listing.price;
+                }
+            });
+
+            // Update stock elements
+            document.querySelectorAll(`[data-listing-id="${listing.id}"] .listing-stock, [data-listing-id="${listing.id}"] .stock-count`).forEach(el => {
+                if (typeof listing.stock !== 'undefined' && listing.stock !== null) {
+                    el.textContent = listing.stock;
+                    // Add out-of-stock visual cue
+                    if (parseInt(listing.stock, 10) <= 0) {
+                        el.classList.add('out-of-stock');
+                    } else {
+                        el.classList.remove('out-of-stock');
+                    }
+                }
+            });
+
+            // Optionally show a small toast about the change
+            if (window.Toast && listing.old_price != null && listing.old_price !== listing.price) {
+                showImmediateToast({
+                    title: 'Price changed',
+                    message: `Price updated: ${listing.old_price} → ${listing.price}`,
+                    variant: 'info',
+                    duration: 5000
+                });
+            }
+        } catch (e) {
+            console.warn('[Notifications] Failed to handle listing_changed', e);
+        }
+    }
+
+    function handleListingDeleted(message) {
+        try {
+            const listing = message.listing;
+            if (!listing || !listing.id) return;
+            console.log('[Notifications] Listing deleted:', listing.id);
+
+            // Remove listing cards from DOM
+            document.querySelectorAll(`[data-listing-id="${listing.id}"]`).forEach(el => el.remove());
+
+            // Dispatch event for other scripts
+            document.dispatchEvent(new CustomEvent('listingDeleted', { detail: listing }));
+
+            // Optionally show a toast
+            showImmediateToast({
+                title: 'Listing removed',
+                message: 'A listing was removed from the marketplace.',
+                variant: 'warning',
+                duration: 3500
+            });
+        } catch (e) {
+            console.warn('[Notifications] Failed to handle listing_deleted', e);
         }
     }
 

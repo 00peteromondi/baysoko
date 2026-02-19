@@ -3,6 +3,14 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from typing import TYPE_CHECKING
 from django.conf import settings
+from django.core.files.base import ContentFile
+
+try:
+    from cloudinary.models import CloudinaryField
+    _HAS_CLOUDINARY = True
+except Exception:
+    CloudinaryField = None
+    _HAS_CLOUDINARY = False
 
 User = get_user_model()
 
@@ -81,10 +89,66 @@ class Message(models.Model):
 
 class MessageAttachment(models.Model):
     message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='attachments')
-    file = models.FileField(upload_to='chat_attachments/')
-    filename = models.CharField(max_length=255)
-    content_type = models.CharField(max_length=100)
-    size = models.IntegerField()
+    # Use Cloudinary when available; otherwise fall back to FileField (local storage)
+    if _HAS_CLOUDINARY:
+        file = CloudinaryField(
+            resource_type='auto',
+            folder='chat_attachments',
+            blank=True,
+            null=True,
+        )
+    else:
+        file = models.FileField(upload_to='chat_attachments/', blank=True, null=True)
+
+    filename = models.CharField(max_length=255, blank=True)
+    content_type = models.CharField(max_length=100, blank=True)
+    size = models.IntegerField(null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        # Ensure metadata fields are populated from the uploaded file
+        try:
+            f = self.file
+            # CloudinaryField may store a str reference or a File-like object
+            if not f:
+                pass
+            else:
+                # Determine filename
+                try:
+                    name = getattr(f, 'name', None) or str(f)
+                    self.filename = name
+                except Exception:
+                    pass
+
+                # Size: some storages provide size attribute
+                try:
+                    size = getattr(f, 'size', None)
+                    if size is None and hasattr(f, 'file') and hasattr(f.file, 'size'):
+                        size = f.file.size
+                    self.size = int(size) if size is not None else None
+                except Exception:
+                    self.size = None
+
+                # Content type: try to infer from file or filename
+                try:
+                    ct = getattr(f, 'content_type', '') or getattr(f, 'mime_type', '')
+                    if not ct and self.filename:
+                        # very light heuristic based on extension
+                        if self.filename.lower().endswith(('.jpg', '.jpeg')):
+                            ct = 'image/jpeg'
+                        elif self.filename.lower().endswith('.png'):
+                            ct = 'image/png'
+                        elif self.filename.lower().endswith('.gif'):
+                            ct = 'image/gif'
+                        else:
+                            ct = ''
+                    self.content_type = ct or ''
+                except Exception:
+                    self.content_type = ''
+        except Exception:
+            # keep save best-effort; don't block on metadata extraction
+            pass
+
+        super().save(*args, **kwargs)
 
 
 class UserOnlineStatus(models.Model):

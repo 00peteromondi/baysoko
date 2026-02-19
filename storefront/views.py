@@ -83,6 +83,8 @@ def product_detail(request, store_slug, slug):
     store = get_object_or_404(Store, slug=store_slug) 
     # Only show products associated with this specific store
     product = get_object_or_404(Listing, store=store, slug=slug, is_active=True) 
+    # Ensure `user_favorites` is defined for anonymous users as well
+    user_favorites = []
     if request.user.is_authenticated:
         user_favorites = Favorite.objects.filter(
             user=request.user,

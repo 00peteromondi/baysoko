@@ -57,5 +57,8 @@ urlpatterns = [
     path('listing/ai-quick/', ai_views.ai_quick_listing, name='ai_quick_listing'),
     path('order/<int:order_id>/review/', views.create_order_review, name='create_review'),
     path('ajax/get-unread-messages-count/', views.get_unread_messages_count, name='get_unread_messages_count'),
+    # AJAX endpoints for inline edit/delete with WebSocket broadcasts
+    path('ajax/listing/<int:listing_id>/edit/', views.ajax_edit_listing, name='ajax_edit_listing'),
+    path('ajax/listing/<int:listing_id>/delete/', views.ajax_delete_listing, name='ajax_delete_listing'),
     
 ]

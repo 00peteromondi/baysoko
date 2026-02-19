@@ -1010,6 +1010,30 @@
     // Initialize
     setupEventListeners();
     
+    // Initialize cart summary on page load using server-provided state if available
+    (function initCartSummary() {
+        try {
+            const itemTotals = {};
+            document.querySelectorAll('.cart-item').forEach(item => {
+                const id = item.dataset.itemId;
+                const quantity = parseInt(item.querySelector('.quantity-input')?.value || 1);
+                const itemTotal = calculateItemTotal(id);
+                itemTotals[id] = { item_total: itemTotal.toFixed(2), quantity: quantity, stock: parseInt(item.querySelector('.quantity-input')?.max || 999) };
+            });
+
+            if (window.cartState && (typeof window.cartState.total !== 'undefined')) {
+                updateCartSummary({ cart_total: parseFloat(window.cartState.total || 0), cart_item_count: parseInt(window.cartState.itemCount || 0), item_totals: itemTotals });
+            } else {
+                // Fallback: recalculate from DOM
+                const subtotal = recalculateCartTotals();
+                updateCartSummary({ cart_total: subtotal, cart_item_count: document.querySelectorAll('.cart-item').length, item_totals: itemTotals });
+            }
+        } catch (e) {
+            console.warn('Failed to initialize cart summary:', e);
+            recalculateCartTotals();
+        }
+    })();
+    
     // Export functions to window for global access
     window.cartFunctions = {
         updateCartItem,

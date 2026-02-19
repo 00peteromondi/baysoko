@@ -55,17 +55,25 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             
             logger.info(f"Notification WebSocket connected for user {self.user_id}")
             
-            # Send initial unread count
-            unread_count = await self.get_unread_count()
-            await self.send_json({
-                'type': 'connection_established',
-                'unread_count': unread_count,
-                'timestamp': await self.get_current_timestamp()
-            })
+            # Send initial unread count (guarded against disconnected clients)
+            try:
+                unread_count = await self.get_unread_count()
+                try:
+                    await self.send_json({
+                        'type': 'connection_established',
+                        'unread_count': unread_count,
+                        'timestamp': await self.get_current_timestamp()
+                    })
+                except Exception as e:
+                    # Client may have disconnected between accept() and send; log and continue
+                    logger.debug(f"Client disconnected before initial send: {e}")
+            except Exception as e:
+                logger.error(f"Failed to prepare initial unread count: {e}")
             
         except Exception as e:
             logger.error(f"Error in notification consumer connect: {str(e)}")
-            await self.close(code=4000)
+            # Do not attempt to send a close frame here; client may already be disconnected
+            return
     
     async def disconnect(self, close_code):
         """Handle WebSocket disconnection."""
@@ -137,10 +145,14 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         
         except Exception as e:
             logger.error(f"Error processing WebSocket message: {str(e)}")
-            await self.send_json({
-                'type': 'error',
-                'message': 'Error processing request'
-            })
+            try:
+                await self.send_json({
+                    'type': 'error',
+                    'message': 'Error processing request'
+                })
+            except Exception:
+                # Ignore send errors (client likely disconnected)
+                logger.debug('Could not send error response to client; client disconnected')
     
     # ==================== Broadcast Handlers ====================
     # These methods are called when group messages are sent to this consumer
@@ -176,8 +188,17 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
     async def bulk_marked_read(self, event):
         """Broadcast handler for bulk read status updates."""
         try:
+            # Include unread_count when provided by the sender, otherwise compute fresh
+            unread_count = event.get('unread_count')
+            if unread_count is None:
+                try:
+                    unread_count = await self.get_unread_count()
+                except Exception:
+                    unread_count = 0
+
             await self.send_json({
                 'type': 'bulk_marked_read',
+                'unread_count': unread_count,
                 'timestamp': await self.get_current_timestamp()
             })
         except Exception as e:
@@ -229,6 +250,30 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             })
         except Exception as e:
             logger.error(f"Error sending cart_updated: {str(e)}")
+
+    async def listing_changed(self, event):
+        """Broadcast handler for listing price/stock changes."""
+        try:
+            listing = event.get('listing')
+            await self.send_json({
+                'type': 'listing_changed',
+                'listing': listing,
+                'timestamp': await self.get_current_timestamp()
+            })
+        except Exception as e:
+            logger.error(f"Error sending listing_changed: {str(e)}")
+
+    async def listing_deleted(self, event):
+        """Forward listing deletion events to the client."""
+        try:
+            listing = event.get('listing')
+            await self.send_json({
+                'type': 'listing_deleted',
+                'listing': listing,
+                'timestamp': await self.get_current_timestamp()
+            })
+        except Exception as e:
+            logger.error(f"Error sending listing_deleted: {str(e)}")
     
     # ==================== Database Sync Methods ====================
     

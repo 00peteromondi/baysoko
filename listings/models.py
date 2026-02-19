@@ -12,6 +12,11 @@ from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 from django.template.loader import render_to_string
+from django.db.models.signals import pre_save, post_save
+from django.dispatch import receiver
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Import the shared email helper lazily-friendly
 try:
@@ -297,6 +302,78 @@ class Listing(models.Model):
                 counter += 1
         
         super().save(*args, **kwargs)
+
+
+# Signals to broadcast stock/price changes so clients can update live
+@receiver(pre_save, sender=Listing)
+def _listing_pre_save(sender, instance, **kwargs):
+    """Store previous price/stock on the instance before save."""
+    if instance.pk:
+        try:
+            prev = Listing.objects.filter(pk=instance.pk).values('price', 'stock').first()
+            if prev:
+                instance._previous_price = prev.get('price')
+                instance._previous_stock = prev.get('stock')
+        except Exception as e:
+            logger.exception('Error fetching previous listing values: %s', e)
+
+
+@receiver(post_save, sender=Listing)
+def _listing_post_save(sender, instance, created, **kwargs):
+    """After a listing is saved, broadcast price/stock deltas if they changed."""
+    try:
+        prev_price = getattr(instance, '_previous_price', None)
+        prev_stock = getattr(instance, '_previous_stock', None)
+
+        price_changed = False
+        stock_changed = False
+
+        # For newly created listings, broadcast as created elsewhere; skip here
+        if not created:
+            try:
+                # Compare Decimal/ints safely
+                if prev_price is not None and float(prev_price) != float(instance.price):
+                    price_changed = True
+            except Exception:
+                price_changed = False
+
+            try:
+                if prev_stock is not None and int(prev_stock) != int(instance.stock):
+                    stock_changed = True
+            except Exception:
+                stock_changed = False
+
+        if price_changed or stock_changed:
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+            channel_layer = get_channel_layer()
+
+            payload = {
+                'id': instance.id,
+                'price': float(instance.price) if instance.price is not None else None,
+                'stock': int(instance.stock) if instance.stock is not None else None,
+                'old_price': float(prev_price) if prev_price is not None else None,
+                'old_stock': int(prev_stock) if prev_stock is not None else None,
+            }
+
+            # Broadcast to all users' notification groups (small-scale fallback)
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            user_ids = list(User.objects.filter(is_active=True).values_list('id', flat=True))
+            for uid in user_ids:
+                try:
+                    async_to_sync(channel_layer.group_send)(
+                        f'notifications_user_{uid}',
+                        {
+                            'type': 'listing_changed',
+                            'listing': payload,
+                        }
+                    )
+                except Exception:
+                    logger.exception('Failed to send listing_changed to user %s', uid)
+
+    except Exception:
+        logger.exception('Error in listing post_save signal')
 
 class PriceHistory(models.Model):
     listing = models.ForeignKey(Listing, on_delete=models.CASCADE, related_name='price_history')
