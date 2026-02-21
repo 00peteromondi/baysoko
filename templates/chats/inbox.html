@@ -2073,6 +2073,17 @@ function getCSRFToken() {
     return csrfInput ? csrfInput.value : '';
 }
 
+/**
+ * Convert HTTP URLs to HTTPS if the page is loaded over HTTPS.
+ */
+function ensureHttps(url) {
+    if (!url) return url;
+    if (window.location.protocol === 'https:' && url.startsWith('http://')) {
+        return url.replace(/^http:\/\//i, 'https://');
+    }
+    return url;
+}
+
 async function fetchJSON(url, options = {}) {
     try {
         const response = await fetch(url, {
@@ -2224,19 +2235,6 @@ function mapTempToPerm(tempId, permId, attachmentsMeta) {
     if (ids.length) permToTempFiles.set(permId, ids);
 }
 
-function clearPermTempMappingIfResolved(permId, permAttachments) {
-    if (!permAttachments || !permAttachments.length) return false;
-    const allHaveUrls = permAttachments.every(a => a.url || a.file_url);
-    if (allHaveUrls && permToTempFiles.has(permId)) {
-        const ids = permToTempFiles.get(permId);
-        ids.forEach(id => { try { URL.revokeObjectURL(tempFileMap.get(id)); } catch (e) {} });
-        ids.forEach(id => tempFileMap.delete(id));
-        permToTempFiles.delete(permId);
-        return true;
-    }
-    return false;
-}
-
 function isImageAttachment(att) {
     return att && (
         (att.type && att.type.startsWith('image/')) ||
@@ -2247,7 +2245,8 @@ function isImageAttachment(att) {
 
 /**
  * Convert a Cloudinary URL to a local media URL.
- * Strips the version prefix (e.g., v1/) and ensures no double slashes.
+ * Strips version (e.g., v1/) and removes the leading 'media/' if present.
+ * Ensures HTTPS if original was HTTP.
  */
 function cloudinaryToLocalUrl(cloudinaryUrl) {
     if (!cloudinaryUrl) return null;
@@ -2255,14 +2254,16 @@ function cloudinaryToLocalUrl(cloudinaryUrl) {
         const url = new URL(cloudinaryUrl);
         const uploadIndex = url.pathname.indexOf('/upload/');
         if (uploadIndex !== -1) {
-            // Take everything after '/upload/'
+            // Get everything after '/upload/'
             let localPath = url.pathname.substring(uploadIndex + 7); // 7 = length of '/upload/'
-            // Remove any version segment like 'v1/' or 'v123/' at the beginning
+            // Remove version like v1/ or v123/
             localPath = localPath.replace(/^v\d+\//, '');
-            // Remove any leading slash
-            localPath = localPath.replace(/^\//, '');
+            // If the path starts with 'media/', remove it (since LOCAL_MEDIA_URL already includes /media/)
+            localPath = localPath.replace(/^media\//, '');
+            // Ensure we don't have double slashes
             const base = LOCAL_MEDIA_URL.endsWith('/') ? LOCAL_MEDIA_URL.slice(0, -1) : LOCAL_MEDIA_URL;
-            return base + '/' + localPath;
+            const path = localPath.startsWith('/') ? localPath.slice(1) : localPath;
+            return ensureHttps(base + '/' + path);
         }
     } catch (e) {
         console.warn('Failed to convert Cloudinary URL to local:', e);
@@ -2606,9 +2607,9 @@ async function openUnifiedConversation(dataset) {
     const infoParticipantNameEl = document.getElementById('infoParticipantName');
     const infoParticipantAvatarEl = document.getElementById('infoParticipantAvatar');
     if (participantNameEl) participantNameEl.innerText = currentParticipantName;
-    if (participantAvatarEl) participantAvatarEl.src = currentParticipantAvatar;
+    if (participantAvatarEl) participantAvatarEl.src = ensureHttps(currentParticipantAvatar);
     if (infoParticipantNameEl) infoParticipantNameEl.innerText = currentParticipantName;
-    if (infoParticipantAvatarEl) infoParticipantAvatarEl.src = currentParticipantAvatar;
+    if (infoParticipantAvatarEl) infoParticipantAvatarEl.src = ensureHttps(currentParticipantAvatar);
     updateParticipantStatus();
 
     const messageInputAreaEl = document.getElementById('messageInputArea');
@@ -2795,7 +2796,8 @@ function renderMessageBubble(msg) {
     if (msg.attachments && msg.attachments.length) {
         attachmentsHtml = '<div class="message-attachments">';
         msg.attachments.forEach((att, attIdx) => {
-            const fileUrl = att.url || att.file_url;
+            // Ensure HTTPS for all URLs
+            const fileUrl = ensureHttps(att.url || att.file_url);
             const fileName = att.name || att.filename || 'Attachment';
             const encoded = encodeURIComponent(JSON.stringify(att));
 
@@ -2806,30 +2808,34 @@ function renderMessageBubble(msg) {
 
             if (isImage) {
                 // Determine the image source
-                let imgSrc = att.url || att.file_url || null;
-                // If this is a temporary message and we have a tempFileId, use that
-                if (msg.tempId && att.tempFileId && tempFileMap.has(att.tempFileId)) {
-                    imgSrc = tempFileMap.get(att.tempFileId);
-                }
-                // If this is a permanent message but we still have a temp mapping, use it as fallback
-                if (!imgSrc && !msg.tempId && msg.id && permToTempFiles.has(msg.id)) {
+                let imgSrc = ensureHttps(att.url || att.file_url || null);
+
+                // If this is a permanent message, try to get the temporary blob URL from mapping
+                let tempBlobUrl = null;
+                if (!msg.tempId && msg.id && permToTempFiles.has(msg.id)) {
                     const tempIds = permToTempFiles.get(msg.id) || [];
                     const tempId = tempIds[attIdx];
                     if (tempId && tempFileMap.has(tempId)) {
-                        imgSrc = tempFileMap.get(tempId);
+                        tempBlobUrl = tempFileMap.get(tempId);
                     }
                 }
 
-                // If still no source, maybe it's a permanent message that hasn't loaded yet; show a placeholder
+                // If it's a temporary message, use its blob URL
+                if (msg.tempId && att.tempFileId && tempFileMap.has(att.tempFileId)) {
+                    imgSrc = tempFileMap.get(att.tempFileId);
+                }
+
+                // If still no source, show a placeholder
                 const loadingOverlay = !imgSrc && !msg.tempId ? `<div class="attachment-overlay"><div class="spinner-border text-light" role="status" aria-hidden="true"></div></div>` : '';
 
                 // Safely escape values for the onerror attribute
                 const safeFileUrl = fileUrl ? fileUrl.replace(/'/g, "\\'") : '';
                 const safeFileName = fileName ? fileName.replace(/'/g, "\\'") : '';
-                const onErrorHandler = `this.onerror=null; tryLoadLocalImage(this, '${safeFileUrl}', '${safeFileName}', ${attIdx})`;
+                const safeTempBlobUrl = tempBlobUrl ? tempBlobUrl.replace(/'/g, "\\'") : '';
+                const onErrorHandler = `this.onerror=null; tryLoadLocalImage(this, '${safeFileUrl}', '${safeFileName}', ${attIdx}, '${safeTempBlobUrl}')`;
 
                 attachmentsHtml += `<div class="attachment-item" data-attachment="${encoded}" onclick="showAttachmentViewerInline(this)">
-                    <div class="attachment-preview">${imgSrc ? `<img src="${imgSrc}" alt="${escapeHtml(fileName)}" onerror="${onErrorHandler}">` : `<img src="" alt="${escapeHtml(fileName)}" class="loading">`}</div>
+                    <div class="attachment-preview">${imgSrc ? `<img src="${ensureHttps(imgSrc)}" alt="${escapeHtml(fileName)}" onerror="${onErrorHandler}">` : `<img src="" alt="${escapeHtml(fileName)}" class="loading">`}</div>
                     ${loadingOverlay}
                     <div class="attachment-info">${escapeHtml(fileName)}</div>
                 </div>`;
@@ -2838,7 +2844,7 @@ function renderMessageBubble(msg) {
                     <div class="file-icon-wrapper"><i class="bi ${getFileIcon(fileName)}"></i></div>
                     <div class="file-info">
                         <div>${escapeHtml(fileName)}</div>
-                        <a href="${fileUrl}" download>Download</a>
+                        <a href="${ensureHttps(fileUrl)}" download>Download</a>
                     </div>
                 </div>`;
             }
@@ -2899,15 +2905,16 @@ function renderMessageBubble(msg) {
 }
 
 /**
- * Global error handler for images: tries to load a local version if the Cloudinary URL fails.
- * If that also fails, shows a placeholder with a retry button.
+ * Global error handler for images: tries to load a local version from Cloudinary URL,
+ * then falls back to the temporary blob URL if available.
  */
-window.tryLoadLocalImage = function(imgElement, originalUrl, fileName, attIdx) {
+window.tryLoadLocalImage = function(imgElement, originalUrl, fileName, attIdx, tempBlobUrl) {
     originalUrl = originalUrl || '';
     fileName = fileName || 'Attachment';
-    // If we already attempted local fallback, don't loop
+    tempBlobUrl = tempBlobUrl || '';
+
+    // If we already attempted fallback, show placeholder with retry
     if (imgElement.dataset.fallbackAttempted === 'true') {
-        // Show a placeholder
         const container = imgElement.closest('.attachment-item');
         if (container) {
             container.innerHTML = `
@@ -2915,41 +2922,50 @@ window.tryLoadLocalImage = function(imgElement, originalUrl, fileName, attIdx) {
                     <i class="bi bi-image" style="font-size: 2rem; color: var(--text-tertiary);"></i>
                 </div>
                 <div class="attachment-info">${escapeHtml(fileName)} (failed to load)</div>
-                <button class="btn btn-sm btn-outline-primary mt-1" onclick="retryLoadImage(this, '${originalUrl.replace(/'/g, "\\'")}', '${fileName.replace(/'/g, "\\'")}', ${attIdx})">Retry</button>
+                <button class="btn btn-sm btn-outline-primary mt-1" onclick="retryLoadImage(this, '${originalUrl.replace(/'/g, "\\'")}', '${fileName.replace(/'/g, "\\'")}', ${attIdx}, '${tempBlobUrl.replace(/'/g, "\\'")}')">Retry</button>
             `;
         }
         return;
     }
 
-    // Try to construct a local URL from the Cloudinary URL
+    // First try: local conversion from Cloudinary URL
     const localUrl = cloudinaryToLocalUrl(originalUrl);
     if (localUrl) {
         imgElement.dataset.fallbackAttempted = 'true';
         imgElement.src = localUrl;
-    } else {
-        // No local conversion possible, show placeholder immediately
+        return;
+    }
+
+    // Second try: temporary blob URL (if we have it)
+    if (tempBlobUrl) {
         imgElement.dataset.fallbackAttempted = 'true';
-        const container = imgElement.closest('.attachment-item');
-        if (container) {
-            container.innerHTML = `
-                <div class="attachment-preview" style="background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; padding: 20px;">
-                    <i class="bi bi-image" style="font-size: 2rem; color: var(--text-tertiary);"></i>
-                </div>
-                <div class="attachment-info">${escapeHtml(fileName)} (failed to load)</div>
-                <button class="btn btn-sm btn-outline-primary mt-1" onclick="retryLoadImage(this, '${originalUrl.replace(/'/g, "\\'")}', '${fileName.replace(/'/g, "\\'")}', ${attIdx})">Retry</button>
-            `;
-        }
+        imgElement.src = tempBlobUrl;
+        return;
+    }
+
+    // No fallback possible, show placeholder immediately
+    imgElement.dataset.fallbackAttempted = 'true';
+    const container = imgElement.closest('.attachment-item');
+    if (container) {
+        container.innerHTML = `
+            <div class="attachment-preview" style="background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; padding: 20px;">
+                <i class="bi bi-image" style="font-size: 2rem; color: var(--text-tertiary);"></i>
+            </div>
+            <div class="attachment-info">${escapeHtml(fileName)} (failed to load)</div>
+            <button class="btn btn-sm btn-outline-primary mt-1" onclick="retryLoadImage(this, '${originalUrl.replace(/'/g, "\\'")}', '${fileName.replace(/'/g, "\\'")}', ${attIdx}, '${tempBlobUrl.replace(/'/g, "\\'")}')">Retry</button>
+        `;
     }
 };
 
-window.retryLoadImage = function(button, originalUrl, fileName, attIdx) {
+window.retryLoadImage = function(button, originalUrl, fileName, attIdx, tempBlobUrl) {
     originalUrl = originalUrl || '';
     fileName = fileName || 'Attachment';
+    tempBlobUrl = tempBlobUrl || '';
     const container = button.closest('.attachment-item');
     if (!container) return;
     // Replace with original image attempt
     container.innerHTML = `
-        <div class="attachment-preview"><img src="${originalUrl}" alt="${escapeHtml(fileName)}" onerror="this.onerror=null; tryLoadLocalImage(this, '${originalUrl.replace(/'/g, "\\'")}', '${fileName.replace(/'/g, "\\'")}', ${attIdx})"></div>
+        <div class="attachment-preview"><img src="${ensureHttps(originalUrl)}" alt="${escapeHtml(fileName)}" onerror="this.onerror=null; tryLoadLocalImage(this, '${originalUrl.replace(/'/g, "\\'")}', '${fileName.replace(/'/g, "\\'")}', ${attIdx}, '${tempBlobUrl.replace(/'/g, "\\'")}')"></div>
         <div class="attachment-info">${escapeHtml(fileName)}</div>
     `;
 };
@@ -2998,7 +3014,7 @@ async function sendMessage() {
     formData.append('content', content);
     if (replyingTo) formData.append('reply_to_id', replyingTo);
 
-    // Append all attachments (they will be saved locally or via Cloudinary on the server)
+    // Append all attachments
     attachments.forEach(file => formData.append('attachment', file));
 
     try {
@@ -3009,9 +3025,9 @@ async function sendMessage() {
         });
         const data = await response.json();
         if (data.success) {
-            // Remove temporary message
-            temporaryMessages.delete(tempId);
-            revokeTempFiles(tempId); // Clean up object URLs
+            // Keep temporary message until we know the permanent image loads
+            // Map temp attachments to permanent message id for fallback
+            mapTempToPerm(tempId, data.message.id, attachmentsMeta);
 
             // Add permanent message
             const newMsg = data.message;
@@ -3019,6 +3035,8 @@ async function sendMessage() {
                 allMessages.push(newMsg);
                 lastMessageId = Math.max(lastMessageId, newMsg.id);
             }
+            // Remove temporary message from display
+            temporaryMessages.delete(tempId);
             renderMessages();
             loadGroupedConversations();
         } else {
@@ -3371,7 +3389,7 @@ function renderUserSearchResults(users) {
         const avatar = u.avatar || 'https://placehold.co/200x200/c2c2c2/1f1f1f?text=User';
         html += `
         <div class="user-result-item" data-user-id="${u.id}" data-user-name="${u.name}" data-user-avatar="${avatar}">
-            <div class="user-result-avatar"><img src="${avatar}"></div>
+            <div class="user-result-avatar"><img src="${ensureHttps(avatar)}"></div>
             <div class="user-result-info"><h4>${escapeHtml(u.name)}</h4><p>@${u.username}</p></div>
         </div>`;
     });
@@ -3463,7 +3481,7 @@ window.showAttachmentViewer = (attachment) => {
         if (!m.attachments) return;
         m.attachments.forEach(att => {
             if (isImageAttachment(att)) {
-                const url = att.url || att.file_url;
+                const url = ensureHttps(att.url || att.file_url);
                 if (url) {
                     galleryImages.push({ url: url, name: att.name || att.filename || ('image_' + (att.id || Math.random()).toString()), raw: att });
                 }
@@ -3471,7 +3489,7 @@ window.showAttachmentViewer = (attachment) => {
         });
     });
 
-    const matchUrl = attachment.url || attachment.file_url;
+    const matchUrl = ensureHttps(attachment.url || attachment.file_url);
     galleryIndex = galleryImages.findIndex(g => g.url === matchUrl);
     if (galleryIndex === -1) {
         galleryImages = [{ url: matchUrl, name: attachment.name || attachment.filename || 'Attachment', raw: attachment }];
@@ -3482,8 +3500,8 @@ window.showAttachmentViewer = (attachment) => {
         const item = galleryImages[i];
         if (!item) return;
         title.innerText = item.name || `Attachment ${i+1} of ${galleryImages.length}`;
-        downloadLink.href = item.url;
-        content.innerHTML = `<img src="${item.url}" style="max-width:100%;max-height:70vh;">`;
+        downloadLink.href = ensureHttps(item.url);
+        content.innerHTML = `<img src="${ensureHttps(item.url)}" style="max-width:100%;max-height:70vh;">`;
         const prev = document.getElementById('prevAttachment');
         const next = document.getElementById('nextAttachment');
         if (prev) prev.disabled = (i <= 0);
@@ -3520,7 +3538,7 @@ window.showAttachmentViewer = (attachment) => {
             downloadAllBtn.disabled = true;
             for (let j = 0; j < galleryImages.length; j++) {
                 try {
-                    const res = await fetch(galleryImages[j].url);
+                    const res = await fetch(ensureHttps(galleryImages[j].url));
                     const blob = await res.blob();
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
