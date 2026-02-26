@@ -276,12 +276,14 @@
     }
 
     /* ===== NOTIFICATION ITEM ===== */
+    /* Compact notification card: reduced padding/margins/font-sizes to save vertical space
+       while keeping content readable and avoiding a cramped appearance. */
     .notification-item {
         background: var(--bg-primary);
         border: 1px solid var(--border-color);
-        border-radius: var(--radius-lg);
-        padding: var(--spacing-lg);
-        margin-bottom: var(--spacing-md);
+        border-radius: 12px;
+        padding: 0.9rem; /* ~50% smaller than large spacing */
+        margin-bottom: 0.6rem;
         transition: var(--transition);
         position: relative;
         overflow: hidden;
@@ -340,15 +342,15 @@
     }
 
     .notification-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 12px;
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
         background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
         color: white;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.3rem;
+        font-size: 1.05rem;
         flex-shrink: 0;
     }
 
@@ -367,16 +369,16 @@
     .notification-title {
         font-weight: 700;
         color: var(--text-primary);
-        font-size: 1.05rem;
-        margin: 0 0 4px 0;
-        line-height: 1.4;
+        font-size: 0.98rem; /* slightly smaller to conserve height */
+        margin: 0 0 2px 0;
+        line-height: 1.25;
         word-wrap: break-word;
     }
 
     .notification-meta {
         display: flex;
         align-items: center;
-        gap: var(--spacing-md);
+        gap: 8px; /* tighter spacing */
         flex-wrap: wrap;
     }
 
@@ -441,13 +443,13 @@
     }
 
     .notification-message {
-        font-size: 0.95rem;
-        line-height: 1.5;
+        font-size: 0. ninerem;
+        line-height: 1.35;
         color: var(--text-secondary);
-        margin: var(--spacing-md) 0;
-        padding: var(--spacing-md);
+        margin: 6px 0;
+        padding: 8px;
         background: var(--bg-secondary);
-        border-radius: var(--radius-md);
+        border-radius: 8px;
         border: 1px solid var(--border-color);
         word-wrap: break-word;
     }
@@ -456,11 +458,11 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-top: var(--spacing-md);
-        padding-top: var(--spacing-md);
+        margin-top: 8px;
+        padding-top: 8px;
         border-top: 1px solid var(--border-color);
         flex-wrap: wrap;
-        gap: var(--spacing-sm);
+        gap: 6px;
     }
 
     .notification-status {
@@ -1024,6 +1026,13 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Simple cookie reader to fetch CSRF token (avoids relying on nested form inputs)
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return null;
+        }
         // Toggle filters sidebar on mobile
         const toggleFiltersBtn = document.getElementById('toggleFiltersBtn');
         const filtersSidebar = document.getElementById('filtersSidebar');
@@ -1080,12 +1089,17 @@
                 
                 fetch(form.action, {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: {
-                        'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'X-CSRFToken': getCookie('csrftoken') || '',
                         'X-Requested-With': 'XMLHttpRequest'
                     }
                 })
-                .then(response => response.json())
+                .then(response => {
+                    const ct = response.headers.get('content-type') || '';
+                    if (!ct.includes('application/json')) { window.location.reload(); return Promise.reject('non-json'); }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
                         // Update UI with proper styling transition
@@ -1153,12 +1167,17 @@
                 
                 fetch(form.action, {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: {
-                        'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'X-CSRFToken': getCookie('csrftoken') || '',
                         'X-Requested-With': 'XMLHttpRequest'
                     }
                 })
-                .then(response => response.json())
+                .then(response => {
+                    const ct = response.headers.get('content-type') || '';
+                    if (!ct.includes('application/json')) { window.location.reload(); return Promise.reject('non-json'); }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
                         // Animate removal
@@ -1214,12 +1233,17 @@
                 if (confirm('Mark all notifications as read?')) {
                     fetch(form.action, {
                         method: 'POST',
+                        credentials: 'same-origin',
                         headers: {
-                            'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value,
+                            'X-CSRFToken': getCookie('csrftoken') || '',
                             'X-Requested-With': 'XMLHttpRequest'
                         }
                     })
-                    .then(response => response.json())
+                    .then(response => {
+                        const ct = response.headers.get('content-type') || '';
+                        if (!ct.includes('application/json')) { window.location.reload(); return Promise.reject('non-json'); }
+                        return response.json();
+                    })
                     .then(data => {
                         if (data.success) {
                             // Update all notifications with smooth transitions

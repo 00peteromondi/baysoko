@@ -14,6 +14,7 @@ class UsersConfig(AppConfig):
         try:
             from django.db.models.signals import post_migrate
             import os
+            import users.signals
 
             def _ensure_social_apps(sender, **kwargs):
                 try:

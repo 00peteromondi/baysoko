@@ -46,16 +46,23 @@ class NotificationService:
     def send_sms(phone_number, message):
         """Send SMS notification using Africa's Talking or similar service"""
         try:
-            if settings.SMS_ENABLED:
+            # Prefer Brevo if enabled
+            if getattr(settings, 'BREVO_SMS_ENABLED', False) and getattr(settings, 'BREVO_API_KEY', None):
+                try:
+                    from baysoko.utils.sms import send_sms_brevo
+                    res = send_sms_brevo(phone_number, message)
+                    return res.get('success', False)
+                except Exception:
+                    logger.exception('Brevo SMS send failed, falling back')
+
+            if getattr(settings, 'SMS_ENABLED', False):
                 # Example with Africa's Talking
                 import africastalking
-                
                 africastalking.initialize(
                     settings.AFRICASTALKING_USERNAME,
                     settings.AFRICASTALKING_API_KEY
                 )
                 sms = africastalking.SMS
-                
                 response = sms.send(message, [phone_number])
                 logger.info(f"SMS sent to {phone_number}: {response}")
                 return True

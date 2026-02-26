@@ -160,6 +160,9 @@
         margin-bottom: 0.1rem;
         color: var(--text-primary);
     }
+    .form-label i {
+        color: var(--primary-dark);
+    }
     .required-field::after {
         content: ' *';
         color: var(--danger);
@@ -392,14 +395,14 @@
             </div>
             <div class="form-grid">
                 <div class="form-group full-width">
-                    <label for="{{ form.title.id_for_label }}" class="form-label required-field">Title</label>
+                    <label for="{{ form.title.id_for_label }}" class="form-label required-field"><i class="bi bi-card-text me-1"></i>Title</label>
                     <input type="text" name="{{ form.title.name }}" id="{{ form.title.id_for_label }}"
                            class="form-control" value="{{ form.title.value|default:'' }}"
                            placeholder="e.g., iPhone 13 Pro Max" maxlength="200" required>
                     <div class="char-count" id="title-counter">0/200</div>
                 </div>
                 <div class="form-group">
-                    <label for="{{ form.category.id_for_label }}" class="form-label required-field">Category</label>
+                    <label for="{{ form.category.id_for_label }}" class="form-label required-field"><i class="bi bi-list me-1"></i>Category</label>
                     <select name="{{ form.category.name }}" id="{{ form.category.id_for_label }}" class="form-select" required>
                         <option value="">Choose</option>
                         {% for cat in categories %}
@@ -416,8 +419,26 @@
 
                 {# Embed category schemas as JSON for client-side rendering using json_script to ensure valid JSON #}
                 {{ category_schemas|default:"{}"|json_script:"category-schemas" }}
+                {# Server-side support: attempt to render dynamic fields for the currently selected category (if any) so icons appear immediately. Requires the dict_utils.get_item filter. #}
+                {% load dict_utils %}
+                {% with selected_cat=form.category.value|default:form.instance.category_id %}
+                    {% if selected_cat %}
+                        {% with schema=category_schemas|get_item:selected_cat %}
+                            {% if schema and schema.fields %}
+                                {% comment %}Render server-side dynamic fields into step 2 and step 3 containers.{% endcomment %}
+                                {% for field in schema.fields %}
+                                    {% if field.section == 'pricing' %}
+                                        {% comment %}Rendered into pricing dynamic container (step 3). Placeholder div present below.{% endcomment %}
+                                    {% else %}
+                                        {% comment %}Rendered into details dynamic container (step 2).{% endcomment %}
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+                    {% endif %}
+                {% endwith %}
                 <div class="form-group">
-                    <label for="{{ form.condition.id_for_label }}" class="form-label required-field">Condition</label>
+                    <label for="{{ form.condition.id_for_label }}" class="form-label required-field"><i class="bi bi-sliders me-1"></i>Condition</label>
                     <select name="{{ form.condition.name }}" id="{{ form.condition.id_for_label }}" class="form-select" required>
                         <option value="">Select</option>
                         {% for val, text in form.condition.field.choices %}{% if val %}
@@ -425,43 +446,10 @@
                         {% endif %}{% endfor %}
                     </select>
                 </div>
-                <!-- Store field (same logic) -->
-                <div class="form-group">
-                    <label for="id_store" class="form-label {% if not form.instance.pk %}required-field{% endif %}">Store</label>
-                    {% if form.instance.pk %}
-                        {% if stores %}
-                            <select name="store" id="id_store" class="form-select">
-                                <option value="">{% if form.instance.store %}Keep: {{ form.instance.store.name }}{% else %}Select{% endif %}</option>
-                                {% for store in stores %}
-                                    <option value="{{ store.id }}" {% if form.store.value == store.id or form.instance.store_id == store.id %}selected{% endif %}>{{ store.name }}</option>
-                                {% endfor %}
-                            </select>
-                        {% elif form.instance.store %}
-                            <div class="form-control bg-light p-1">{{ form.instance.store.name }} (current)</div>
-                            <input type="hidden" name="store" value="{{ form.instance.store.id }}">
-                        {% else %}
-                            <div class="alert alert-warning py-1 small">No store. <a href="{% url 'storefront:store_create' %}?from=listing">Create one</a>.</div>
-                        {% endif %}
-                    {% else %}
-                        {% if stores %}
-                            {% if stores|length == 1 %}
-                                <div class="form-control bg-light p-1">{{ stores.0.name }} (auto)</div>
-                                <input type="hidden" name="store" value="{{ stores.0.id }}" id="id_store">
-                            {% else %}
-                                <select name="store" id="id_store" class="form-select" required>
-                                    <option value="">Select store</option>
-                                    {% for store in stores %}
-                                        <option value="{{ store.id }}" {% if form.store.value == store.id %}selected{% endif %}>{{ store.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            {% endif %}
-                        {% else %}
-                            <div class="alert alert-warning py-1 small">Need a store first. <a href="{% url 'storefront:store_create' %}?from=listing">Create one</a>.</div>
-                        {% endif %}
-                    {% endif %}
-                </div>
+                <!-- Store field (shared partial) -->
+                {% include 'listings/_store_field.html' %}
                 <div class="form-group full-width">
-                    <label for="{{ form.description.id_for_label }}" class="form-label required-field">Description</label>
+                    <label for="{{ form.description.id_for_label }}" class="form-label required-field"><i class="bi bi-card-text me-1"></i>Description</label>
                     <textarea name="{{ form.description.name }}" id="{{ form.description.id_for_label }}"
                               class="form-control" rows="3" maxlength="2000" required
                               placeholder="Describe your item...">{{ form.description.value|default:form.instance.description|default:'' }}</textarea>
@@ -489,34 +477,112 @@
                                 <p class="section-description">Additional information for this category</p>
                             </div>
                         </div>
-                        <div id="dynamic-fields"></div>
+                        <div id="dynamic-fields">
+                            {# Server-side render: non-pricing fields for the selected category so icons show immediately #}
+                            {% with selected_cat=form.category.value|default:form.instance.category_id %}
+                                {% if selected_cat %}
+                                    {% with schema=category_schemas|get_item:selected_cat %}
+                                        {% if schema and schema.fields %}
+                                            <div class="form-grid" data-server-rendered="true">
+                                            {% for field in schema.fields %}
+                                                {% if field.section != 'pricing' %}
+                                                    <div class="form-group">
+                                                        <label for="dynamic_{{ field.name }}" class="form-label {% if field.required %}required-field{% endif %}">
+                                                            {% comment %}Icon mapping server-side{% endcomment %}
+                                                            {% if field.name == 'brand' %}
+                                                                <i class="bi bi-building me-1"></i>
+                                                            {% elif field.name == 'model' %}
+                                                                <i class="bi bi-hash me-1"></i>
+                                                            {% elif field.name == 'color' %}
+                                                                <i class="bi bi-droplet me-1"></i>
+                                                            {% elif field.name == 'material' %}
+                                                                <i class="bi bi-box2-heart me-1"></i>
+                                                            {% elif field.name == 'dimensions' %}
+                                                                <i class="bi bi-arrows-collapse me-1"></i>
+                                                            {% elif field.name == 'weight' %}
+                                                                <i class="bi bi-weight me-1"></i>
+                                                            {% else %}
+                                                                <i class="bi bi-card-text me-1"></i>
+                                                            {% endif %}
+                                                            {{ field.label|default:field.name }}
+                                                        </label>
+                                                        {% if field.type == 'textarea' %}
+                                                            <textarea name="dynamic_{{ field.name }}" id="dynamic_{{ field.name }}" class="form-control" {% if field.required %}required{% endif %}>{{ initial_dynamic_fields|get_item:field.name|default:'' }}</textarea>
+                                                        {% elif field.type == 'select' %}
+                                                            <select name="dynamic_{{ field.name }}" id="dynamic_{{ field.name }}" class="form-select" {% if field.required %}required{% endif %}>
+                                                                <option value="">Select</option>
+                                                                {% for choice in field.choices %}
+                                                                    <option value="{{ choice }}" {% if initial_dynamic_fields|get_item:field.name|stringformat:'s' == choice|stringformat:'s' %}selected{% endif %}>{{ choice }}</option>
+                                                                {% endfor %}
+                                                            </select>
+                                                        {% elif field.type == 'boolean' %}
+                                                            <div class="form-check">
+                                                                <input type="checkbox" id="dynamic_{{ field.name }}" name="dynamic_{{ field.name }}" class="form-check-input" value="true" {% if initial_dynamic_fields|get_item:field.name %}checked{% endif %}>
+                                                                <label class="form-check-label" for="dynamic_{{ field.name }}">Yes</label>
+                                                            </div>
+                                                        {% else %}
+                                                            <input type="{% if field.type == 'number' %}number{% else %}text{% endif %}" name="dynamic_{{ field.name }}" id="dynamic_{{ field.name }}" class="form-control" value="{{ initial_dynamic_fields|get_item:field.name|default:'' }}" {% if field.min %}min="{{ field.min }}"{% endif %} {% if field.max %}max="{{ field.max }}"{% endif %} {% if field.required %}required{% endif %}>
+                                                        {% endif %}
+                                                    </div>
+                                                {% endif %}
+                                            {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                    {% endwith %}
+                                {% endif %}
+                            {% endwith %}
+                        </div>
                     </div>
                    
                     <div class="standard-field-container" data-field="brand">
-                        {{ form.brand|as_crispy_field }}
+                        <div class="form-group">
+                            <label for="{{ form.brand.id_for_label }}" class="form-label"><i class="bi bi-building me-1"></i>Brand</label>
+                            {{ form.brand }}
+                            {% if form.brand.errors %}<div class="char-count text-danger">{{ form.brand.errors }}</div>{% endif %}
+                        </div>
                     </div>
 
                     <div class="standard-field-container" data-field="model">
-                        {{ form.model|as_crispy_field }}
+                        <div class="form-group">
+                            <label for="{{ form.model.id_for_label }}" class="form-label"><i class="bi bi-hash me-1"></i>Model</label>
+                            {{ form.model }}
+                            {% if form.model.errors %}<div class="char-count text-danger">{{ form.model.errors }}</div>{% endif %}
+                        </div>
                     </div>
 
                     <div class="standard-field-container" data-field="color">
-                        {{ form.color|as_crispy_field }}
+                        <div class="form-group">
+                            <label for="{{ form.color.id_for_label }}" class="form-label"><i class="bi bi-droplet me-1"></i>Color</label>
+                            {{ form.color }}
+                            {% if form.color.errors %}<div class="char-count text-danger">{{ form.color.errors }}</div>{% endif %}
+                        </div>
                     </div>
 
                     <div class="standard-field-container" data-field="material">
-                        {{ form.material|as_crispy_field }}
+                        <div class="form-group">
+                            <label for="{{ form.material.id_for_label }}" class="form-label"><i class="bi bi-box2-heart me-1"></i>Material</label>
+                            {{ form.material }}
+                            {% if form.material.errors %}<div class="char-count text-danger">{{ form.material.errors }}</div>{% endif %}
+                        </div>
                     </div>
 
                     <div class="standard-field-container" data-field="dimensions">
-                        {{ form.dimensions|as_crispy_field }}
+                        <div class="form-group">
+                            <label for="{{ form.dimensions.id_for_label }}" class="form-label"><i class="bi bi-arrows-collapse me-1"></i>Dimensions</label>
+                            {{ form.dimensions }}
+                            {% if form.dimensions.errors %}<div class="char-count text-danger">{{ form.dimensions.errors }}</div>{% endif %}
+                        </div>
                     </div>
 
                     <div class="standard-field-container" data-field="weight">
-                        {{ form.weight|as_crispy_field }}
+                        <div class="form-group">
+                            <label for="{{ form.weight.id_for_label }}" class="form-label"><i class="bi bi-weight me-1"></i>Weight</label>
+                            {{ form.weight }}
+                            {% if form.weight.errors %}<div class="char-count text-danger">{{ form.weight.errors }}</div>{% endif %}
+                        </div>
                     </div>
                 <div class="form-group full-width">
-                    <label for="{{ form.meta_description.id_for_label }}" class="form-label">Meta Description (SEO)</label>
+                    <label for="{{ form.meta_description.id_for_label }}" class="form-label"><i class="bi bi-search me-1"></i>Meta Description (SEO)</label>
                     <textarea name="{{ form.meta_description.name }}" id="{{ form.meta_description.id_for_label }}"
                               class="form-control" rows="2" maxlength="160"
                               placeholder="Brief description for search engines">{{ form.meta_description.value|default:form.instance.meta_description|default:'' }}</textarea>
@@ -536,7 +602,7 @@
             </div>
             <div class="form-grid">
                 <div class="form-group">
-                    <label for="{{ form.price.id_for_label }}" class="form-label required-field">Price (KSh)</label>
+                    <label for="{{ form.price.id_for_label }}" class="form-label required-field"><i class="bi bi-currency-dollar me-1"></i>Price (KSh)</label>
                     <div class="price-input-wrapper">
                         <span class="price-prefix">KSh</span>
                         <input type="number" name="{{ form.price.name }}" id="{{ form.price.id_for_label }}"
@@ -544,14 +610,58 @@
                                placeholder="0.00" min="0" step="0.01" required>
                     </div>
                 </div>
+                <!-- Pricing dynamic fields (server-side rendered if present) -->
+                <div class="form-group full-width" id="pricing-dynamic-fields" style="display:none;">
+                {% with selected_cat=form.category.value|default:form.instance.category_id %}
+                    {% if selected_cat %}
+                        {% with schema=category_schemas|get_item:selected_cat %}
+                            {% if schema and schema.fields %}
+                                <div class="form-grid" data-server-rendered="true">
+                                {% for field in schema.fields %}
+                                    {% if field.section == 'pricing' %}
+                                        <div class="form-group">
+                                            <label for="dynamic_{{ field.name }}" class="form-label {% if field.required %}required-field{% endif %}">
+                                                {% if field.name == 'price' %}
+                                                    <i class="bi bi-currency-dollar me-1"></i>
+                                                {% else %}
+                                                    <i class="bi bi-card-text me-1"></i>
+                                                {% endif %}
+                                                {{ field.label|default:field.name }}
+                                            </label>
+                                            {% if field.type == 'textarea' %}
+                                                <textarea name="dynamic_{{ field.name }}" id="dynamic_{{ field.name }}" class="form-control" {% if field.required %}required{% endif %}>{{ initial_dynamic_fields|get_item:field.name|default:'' }}</textarea>
+                                            {% elif field.type == 'select' %}
+                                                <select name="dynamic_{{ field.name }}" id="dynamic_{{ field.name }}" class="form-select" {% if field.required %}required{% endif %}>
+                                                    <option value="">Select</option>
+                                                    {% for choice in field.choices %}
+                                                        <option value="{{ choice }}" {% if initial_dynamic_fields|get_item:field.name|stringformat:'s' == choice|stringformat:'s' %}selected{% endif %}>{{ choice }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            {% elif field.type == 'boolean' %}
+                                                <div class="form-check">
+                                                    <input type="checkbox" id="dynamic_{{ field.name }}" name="dynamic_{{ field.name }}" class="form-check-input" value="true" {% if initial_dynamic_fields|get_item:field.name %}checked{% endif %}>
+                                                    <label class="form-check-label" for="dynamic_{{ field.name }}">Yes</label>
+                                                </div>
+                                            {% else %}
+                                                <input type="{% if field.type == 'number' %}number{% else %}text{% endif %}" name="dynamic_{{ field.name }}" id="dynamic_{{ field.name }}" class="form-control" value="{{ initial_dynamic_fields|get_item:field.name|default:'' }}" {% if field.min %}min="{{ field.min }}"{% endif %} {% if field.max %}max="{{ field.max }}"{% endif %} {% if field.required %}required{% endif %}>
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                                </div>
+                            {% endif %}
+                        {% endwith %}
+                    {% endif %}
+                {% endwith %}
+                </div>
                 <div class="form-group">
-                    <label for="{{ form.stock.id_for_label }}" class="form-label required-field">Stock</label>
+                    <label for="{{ form.stock.id_for_label }}" class="form-label required-field"><i class="bi bi-box-seam me-1"></i>Stock</label>
                     <input type="number" name="{{ form.stock.name }}" id="{{ form.stock.id_for_label }}"
                            class="form-control" value="{{ form.stock.value|default:form.instance.stock|default:'1' }}"
                            min="1" required>
                 </div>
                 <div class="form-group">
-                    <label for="{{ form.location.id_for_label }}" class="form-label required-field">Location</label>
+                    <label for="{{ form.location.id_for_label }}" class="form-label required-field"><i class="bi bi-geo-alt me-1"></i>Location</label>
                     <select name="{{ form.location.name }}" id="{{ form.location.id_for_label }}" class="form-select" required>
                         <option value="">Select</option>
                         {% for val, text in form.location.field.choices %}{% if val %}
@@ -560,7 +670,7 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="{{ form.delivery_option.id_for_label }}" class="form-label required-field">Delivery</label>
+                    <label for="{{ form.delivery_option.id_for_label }}" class="form-label required-field"><i class="bi bi-truck me-1"></i>Delivery</label>
                     <select name="{{ form.delivery_option.name }}" id="{{ form.delivery_option.id_for_label }}" class="form-select" required>
                         <option value="">Choose</option>
                         {% for val, text in form.delivery_option.field.choices %}{% if val %}
@@ -583,7 +693,7 @@
 
             <!-- Main image -->
             <div class="mb-2">
-                <h5 class="form-label {% if not form.instance.pk %}required-field{% endif %}">Main Photo</h5>
+                <h5 class="form-label {% if not form.instance.pk %}required-field{% endif %}"><i class="bi bi-camera me-1"></i>Main Photo</h5>
                 {% if form.instance.pk and form.instance.image %}
                 <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
                     <img src="{{ form.instance.get_image_url }}" alt="Current" style="width:60px; height:60px; object-fit:cover; border-radius:6px;">
@@ -607,7 +717,7 @@
 
             <!-- Additional images -->
             <div>
-                <h5 class="form-label">Additional Photos (up to 9)</h5>
+                <h5 class="form-label"><i class="bi bi-images me-1"></i>Additional Photos (up to 9)</h5>
                 <div class="upload-card" id="additional-images-upload-area">
                     <div class="upload-icon"><i class="bi bi-images"></i></div>
                     <div class="upload-title">Add More Photos</div>
@@ -683,8 +793,17 @@ document.addEventListener('DOMContentLoaded', function() {
             existingDynamic = {};
         }
 
-        function renderDynamicFields(categoryId){
+        function renderDynamicFields(categoryId, force=false){
             const schema = categorySchemas[String(categoryId)];
+            // If server rendered fields are present, avoid overwriting them unless forced
+            try{
+                const serverMarker = dynamicFieldsDiv && dynamicFieldsDiv.querySelector && dynamicFieldsDiv.querySelector('[data-server-rendered]');
+                if(serverMarker && !force){
+                    // ensure the container is visible
+                    document.getElementById('dynamic-fields-container').style.display = 'block';
+                    return;
+                }
+            }catch(e){/* ignore and continue rendering */}
             if(!schema || !schema.fields || !schema.fields.length){
                 dynamicContainer.style.display = 'none';
                 dynamicFieldsDiv.innerHTML = '';
@@ -750,7 +869,7 @@ document.addEventListener('DOMContentLoaded', function() {
             categorySelect.addEventListener('change', function(){
                 // reset existingDynamic when category changes
                 existingDynamic = {};
-                renderDynamicFields(this.value);
+                renderDynamicFields(this.value, true);
             });
         }
 

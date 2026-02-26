@@ -5,6 +5,10 @@ from django.core.mail import get_connection, EmailMultiAlternatives, send_mail
 from django.conf import settings
 from django.template.loader import render_to_string
 import requests
+from django.utils.html import strip_tags
+from django.contrib.auth import get_user_model
+from django.conf import settings
+from baysoko.utils.sms import send_sms_brevo
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +132,23 @@ def _send_email_threaded(subject, plain_message, html_message, to_emails):
     def _send():
         try:
             send_email_brevo(subject, plain_message, html_message, to_emails)
+            # Also attempt to send an SMS to users who have phone numbers configured
+            try:
+                User = get_user_model()
+                # Short SMS-friendly message
+                sms_body = strip_tags(html_message or plain_message or subject)
+                if sms_body and len(sms_body) > 320:
+                    sms_body = sms_body[:317] + '...'
+                for email in (to_emails or []):
+                    try:
+                        user = User.objects.filter(email__iexact=email).first()
+                        if user and getattr(settings, 'BREVO_SMS_ENABLED', False) and getattr(user, 'phone_number', None):
+                            # Only send SMS when phone is present; do not require phone_verified for backward compatibility
+                            send_sms_brevo(user.phone_number, f"{subject}: {sms_body}")
+                    except Exception:
+                        logger.exception('Failed sending SMS notification for %s', email)
+            except Exception:
+                logger.exception('Unexpected error when attempting SMS sends after email')
         except Exception:
             logger.exception('Background email send failed')
     t = threading.Thread(target=_send, daemon=True)

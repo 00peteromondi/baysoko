@@ -758,7 +758,24 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
         # Attach store to the listing instance
         form.instance.seller = self.request.user
         form.instance.store = user_store
-        response = super().form_valid(form)
+        # Attempt to save form and handle Cloudinary upload time-skew errors gracefully
+        try:
+            response = super().form_valid(form)
+        except Exception as e:
+            # If Cloudinary reports a stale request (timestamp skew), show a friendly error
+            try:
+                from cloudinary import exceptions as cloud_ex
+                if isinstance(e, cloud_ex.BadRequest) or ('Stale request' in str(e)):
+                    logger.exception('Cloudinary BadRequest during listing create: %s', e)
+                    messages.error(self.request, 'Image upload failed due to a timestamp mismatch with the image service. Please check your server clock or retry. If the problem persists, contact support.')
+                    context = self.get_context_data(form=form)
+                    return render(self.request, 'listings/listing_form.html', context)
+            except Exception:
+                # fall through to generic error handling
+                pass
+            # For any other exception, re-raise after logging so it surfaces in debug
+            logger.exception('Unhandled exception during form_valid: %s', e)
+            raise
 
         # Handle main image
         if 'image' in self.request.FILES:

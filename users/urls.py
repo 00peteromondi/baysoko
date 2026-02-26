@@ -51,6 +51,8 @@ urlpatterns = [
     path('ajax/password-change/', views.ajax_password_change, name='ajax_password_change'),
     path('verify-email/', views.verify_email, name='verify_email'),
     path('resend-code/', views.resend_code, name='resend_code'),
+    path('verify-phone/', views.verify_phone, name='verify_phone'),
+    path('resend-phone-code/', views.resend_phone_code, name='resend_phone_code'),
     path('verify/', views.verification_required, name='verification_required'),
     path('password-reset-modal/', views.password_reset_modal, name='password_reset_modal'),
     path('password-reset-ajax/send-code/', password_reset_send_code, name='password_reset_send_code'),
@@ -61,4 +63,7 @@ urlpatterns = [
     # WebSocket login completion (sets session cookie via HTTP)
     path('ws-login-complete/', views.ws_login_complete, name='ws_login_complete'),
     path('clear-welcome-toast/', views.clear_welcome_toast, name='clear_welcome_toast'),
+    path('settings/toggle-contact-info/', views.toggle_show_contact_info, name='toggle_contact_info'),
+    path('settings/get/', views.get_user_settings, name='get_user_settings'),
+    path('settings/update-notifications/', views.update_notification_settings, name='update_notifications'),
 ]

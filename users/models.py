@@ -40,6 +40,10 @@ class User(AbstractUser):
     email_verified = models.BooleanField(default=False)
     email_verification_code = models.CharField(max_length=7, blank=True, null=True)
     email_verification_sent_at = models.DateTimeField(blank=True, null=True)
+    # Phone verification fields
+    phone_verified = models.BooleanField(default=False)
+    phone_verification_code = models.CharField(max_length=7, blank=True, null=True)
+    phone_verification_sent_at = models.DateTimeField(blank=True, null=True)
     verification_attempts_today = models.IntegerField(default=0)
     last_verification_attempt_date = models.DateField(blank=True, null=True)
 
@@ -163,3 +167,31 @@ class AccountDeletionLog(models.Model):
 
     def __str__(self):
         return f"{self.username} - {self.deleted_at}"
+
+# users/models.py (add at the end, before any existing classes)
+
+class UserSettings(models.Model):
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name='settings'
+    )
+    # Notification preferences
+    email_notifications = models.BooleanField(
+        default=True,
+        help_text="Receive email notifications for messages, orders, etc."
+    )
+    sms_notifications = models.BooleanField(
+        default=True,
+        help_text="Receive SMS notifications for important updates."
+    )
+    marketing_emails = models.BooleanField(
+        default=False,
+        help_text="Receive promotional emails and offers."
+    )
+    # Additional settings can be added here
+
+    class Meta:
+        verbose_name = "User Settings"
+        verbose_name_plural = "User Settings"
+
+    def __str__(self):
+        return f"Settings for {self.user.username}"

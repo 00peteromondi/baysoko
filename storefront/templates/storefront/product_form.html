@@ -1066,92 +1066,8 @@
                         {% endif %}
                     </div>
 
-                    <!-- Store Field -->
-                    <div class="form-group full-width">
-                        <label for="id_store" class="form-label {% if not product %}required-field{% endif %}">
-                            <i class="bi bi-shop me-2"></i>Store
-                        </label>
-                        
-                        {% if product %}
-                            <!-- Edit Mode: Store optional -->
-                            {% if stores %}
-                                <select name="store" id="id_store" class="form-select {% if form.store.errors %}error{% endif %}">
-                                    <option value="">{% if product.store %}Keep current store: {{ product.store.name }}{% else %}Select a store{% endif %}</option>
-                                    {% for store in stores %}
-                                        <option value="{{ store.id }}" 
-                                                {% if form.store.value == store.id or product.store_id == store.id %}selected{% endif %}>
-                                            {{ store.name }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                                <small class="form-text text-muted">
-                                    {% if product.store %}
-                                        Leave blank to keep the product in "{{ product.store.name }}"
-                                    {% else %}
-                                        Select a store for this product (optional)
-                                    {% endif %}
-                                </small>
-                            {% elif product.store %}
-                                <!-- No stores available but product has a store -->
-                                <div class="form-control bg-light">
-                                    <i class="bi bi-shop me-2"></i>{{ product.store.name }}
-                                    <small class="text-muted ms-2">(Current store - cannot be changed)</small>
-                                </div>
-                                <input type="hidden" name="store" value="{{ product.store.id }}">
-                            {% else %}
-                                <!-- No stores and no current store -->
-                                <div class="alert alert-warning">
-                                    <i class="bi bi-exclamation-triangle me-2"></i>
-                                    <strong>No store available!</strong> This product has no store assigned.
-                                    <a href="{% url 'storefront:store_create' %}?from=product" class="alert-link">Create a store</a> to manage it properly.
-                                </div>
-                            {% endif %}
-                        {% else %}
-                            <!-- Create Mode: Store required -->
-                            {% if stores and stores|length > 0 %}
-                                {% if stores|length == 1 %}
-                                    <!-- Only one store - auto-select it -->
-                                    <div class="store-option-wrapper selected">
-                                        <div class="store-icon">
-                                            <i class="bi bi-shop"></i>
-                                        </div>
-                                        <div class="store-info">
-                                            <div class="store-name">{{ stores.0.name }}</div>
-                                            <div class="store-description">Your store</div>
-                                        </div>
-                                    </div>
-                                    <input type="hidden" name="store" value="{{ stores.0.id }}" id="id_store">
-                                    <small class="form-text text-muted">This product will be added to your store</small>
-                                {% else %}
-                                    <!-- Multiple stores - let user choose -->
-                                    <select name="store" id="id_store" class="form-select {% if form.store.errors %}error{% endif %}" required>
-                                        <option value="">Select a store for this product</option>
-                                        {% for store in stores %}
-                                            <option value="{{ store.id }}" 
-                                                    {% if form.store.value == store.id %}selected{% endif %}>
-                                                {{ store.name }}
-                                            </option>
-                                        {% endfor %}
-                                    </select>
-                                    <small class="form-text text-muted">Select which store this product should belong to</small>
-                                {% endif %}
-                            {% else %}
-                                <!-- No stores - show warning -->
-                                <div class="alert alert-warning">
-                                    <i class="bi bi-exclamation-triangle me-2"></i>
-                                    <strong>No store found!</strong> You need to create a store before you can add products. 
-                                    <a href="{% url 'storefront:store_create' %}?from=product" class="alert-link">Create a store now</a>.
-                                </div>
-                            {% endif %}
-                        {% endif %}
-                        
-                        {% if form.store.errors %}
-                            <div class="error-message">
-                                <i class="bi bi-exclamation-circle"></i>
-                                {{ form.store.errors.0 }}
-                            </div>
-                        {% endif %}
-                    </div>
+                    <!-- Store Field (shared partial) -->
+                    {% include 'listings/_store_field.html' %}
 
                     <!-- Description Field -->
                     <div class="form-group full-width">
@@ -1893,6 +1809,34 @@ document.addEventListener('DOMContentLoaded', function() {
     initCharacterCounters();
     initImageUpload();
     initFormSubmission();
+    // Decorate dynamic field labels (if any are injected client-side)
+    function decorateDynamicLabels() {
+        const mapping = {
+            'brand': 'building',
+            'model': 'hash',
+            'color': 'droplet',
+            'material': 'box2-heart',
+            'dimensions': 'arrows-collapse',
+            'weight': 'weight'
+        };
+        // look for labels inside common dynamic container ids/classes
+        const containers = [document.getElementById('dynamic-fields'), document.querySelector('.dynamic-fields'), document.querySelector('#dynamic-fields-container')];
+        containers.forEach(c => {
+            if (!c) return;
+            c.querySelectorAll('label').forEach(label => {
+                if (label.querySelector('i')) return; // already has icon
+                const text = (label.textContent || '').toLowerCase();
+                let chosen = 'card-text';
+                Object.keys(mapping).forEach(k => { if (text.includes(k)) chosen = mapping[k]; });
+                const icon = document.createElement('i');
+                icon.className = `bi bi-${chosen} me-2`;
+                icon.style.color = getComputedStyle(document.documentElement).getPropertyValue('--primary-dark') || '';
+                label.insertBefore(icon, label.firstChild);
+            });
+        });
+    }
+    // run once on load; if your dynamic renderer triggers later, call decorateDynamicLabels() there as well
+    decorateDynamicLabels();
     
     // Toast notification function
     function showToast(message, type = 'info', duration = 5000) {

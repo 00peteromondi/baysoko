@@ -64,6 +64,7 @@ logger = logging.getLogger(__name__)
 from baysoko.utils.email_helpers import _send_email_threaded, send_email_brevo, render_and_send
 from notifications.utils import notify_system_message
 from notifications.utils import create_and_broadcast_notification
+from baysoko.utils.sms import send_sms_brevo
 
 def send_verification_email(user):
     subject = 'Verify your email for Baysoko'
@@ -379,6 +380,15 @@ def verify_email(request):
             except Exception:
                 pass
 
+        # If the user has a phone number and it's not yet phone_verified, redirect to phone verification flow
+        if getattr(user, 'phone_number', None) and not getattr(user, 'phone_verified', False):
+            # build verify phone URL
+            phone_verify_url = reverse('verify_phone') + f'?user_id={user.id}'
+            if redirect_after:
+                messages.success(request, 'Email verified! Redirecting to phone verification...')
+                return redirect(phone_verify_url)
+            return JsonResponse({'success': True, 'redirect': phone_verify_url})
+
         if redirect_after:
             messages.success(request, 'Email verified! Redirecting...')
             return redirect(redirect_url)
@@ -463,6 +473,135 @@ def resend_code(request):
     except Exception as e:
         logger.exception('Error in resend_code')
         return JsonResponse({'success': False, 'error': 'Server error while resending code.'})
+
+@csrf_exempt
+def verify_phone(request):
+    # Handles both GET (render + send) and POST (verify)
+    if request.method == 'GET':
+        user_id = request.GET.get('user_id') or request.user.id if request.user.is_authenticated else None
+    elif request.method == 'POST':
+        user_id = request.POST.get('user_id')
+    else:
+        return JsonResponse({'success': False, 'error': 'Invalid request method.'})
+
+    if not user_id:
+        return JsonResponse({'success': False, 'error': 'Missing user_id.'})
+
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'User not found.'})
+
+    # POST: verify code
+    if request.method == 'POST':
+        code = request.POST.get('code')
+        if not code:
+            return JsonResponse({'success': False, 'error': 'Missing code.'})
+
+        session_key = f'phone_verification_{user.id}'
+        stored = request.session.get(session_key)
+        if not stored:
+            return JsonResponse({'success': False, 'error': 'No verification code found. Please resend.'})
+
+        # Rate limiting and attempts
+        attempts = stored.get('attempts', 0)
+        if attempts >= 5:
+            return JsonResponse({'success': False, 'error': 'Maximum attempts reached.'})
+
+        if stored.get('code') == code:
+            # success
+            user.phone_verified = True
+            user.phone_verification_code = None
+            user.phone_verification_sent_at = None
+            user.save(update_fields=['phone_verified', 'phone_verification_code', 'phone_verification_sent_at'])
+            try:
+                request.session.pop(session_key, None)
+            except Exception:
+                pass
+            return JsonResponse({'success': True, 'redirect': reverse('home')})
+        else:
+            stored['attempts'] = attempts + 1
+            request.session[session_key] = stored
+            return JsonResponse({'success': False, 'error': 'Invalid code.'})
+
+    # GET: render and send code via SMS
+    # generate 6-digit code
+    import random
+    code = ''.join(random.choices('0123456789', k=6))
+    # persist in session and on user model for traceability
+    session_key = f'phone_verification_{user.id}'
+    request.session[session_key] = {
+        'code': code,
+        'sent_at': timezone.now().isoformat(),
+        'attempts': 0,
+        'phone': user.phone_number
+    }
+    try:
+        # save some info on user model too (optional persistence)
+        user.phone_verification_code = code
+        user.phone_verification_sent_at = timezone.now()
+        user.save(update_fields=['phone_verification_code', 'phone_verification_sent_at'])
+    except Exception:
+        logger.exception('Failed to save phone verification code on user')
+
+    # send SMS (non-blocking would be better but keep simple for now)
+    try:
+        phone = user.phone_number
+        if phone:
+            msg = f"Your Baysoko verification code is: {code}"
+            send_sms_brevo(phone, msg)
+    except Exception:
+        logger.exception('Failed to send phone verification SMS')
+
+    # Render page like verify_email
+    phone_display = user.phone_number or 'your phone'
+    context = {'user': user, 'phone_display': phone_display}
+    return render(request, 'users/verify_phone.html', context)
+
+
+@csrf_exempt
+def resend_phone_code(request):
+    try:
+        if request.method != 'POST':
+            return JsonResponse({'success': False, 'error': 'Invalid method.'})
+        user_id = request.POST.get('user_id')
+        if not user_id:
+            return JsonResponse({'success': False, 'error': 'Missing user_id.'})
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'User not found.'})
+        session_key = f'phone_verification_{user.id}'
+        stored = request.session.get(session_key)
+        now = timezone.now()
+        # throttle: allow resend every 60 seconds
+        if stored and stored.get('sent_at'):
+            try:
+                last = timezone.datetime.fromisoformat(stored.get('sent_at'))
+                delta = (now - last).total_seconds()
+                if delta < 60:
+                    return JsonResponse({'success': False, 'wait': int(60 - delta)})
+            except Exception:
+                pass
+
+        import random
+        code = ''.join(random.choices('0123456789', k=6))
+        request.session[session_key] = {'code': code, 'sent_at': now.isoformat(), 'attempts': 0, 'phone': user.phone_number}
+        try:
+            user.phone_verification_code = code
+            user.phone_verification_sent_at = now
+            user.save(update_fields=['phone_verification_code', 'phone_verification_sent_at'])
+        except Exception:
+            logger.exception('Failed to save phone verification on resend')
+
+        # send SMS
+        if user.phone_number:
+            send_sms_brevo(user.phone_number, f"Your Baysoko verification code is: {code}")
+
+        return JsonResponse({'success': True})
+    except Exception:
+        logger.exception('resend_phone_code exception')
+        return JsonResponse({'success': False, 'error': 'Server error.'})
 
 @login_required
 def verification_required(request):
@@ -806,37 +945,53 @@ class ProfileDetailView(DetailView):
         profile_user = self.object
         user = self.request.user
 
+        # Get all stores owned by the profile user
         stores = profile_user.stores.all()
+        context['stores'] = stores
+
+        # Get all unsold listings from those stores, ordered newest first
         listings_qs = Listing.objects.filter(store__in=stores, is_sold=False).order_by('-date_created')
-        paginator = Paginator(listings_qs, 8)
+        paginator = Paginator(listings_qs, 8)  # 8 listings per page
         page_number = self.request.GET.get('page')
         page_obj = paginator.get_page(page_number)
         context['page_obj'] = page_obj
-        context['stores'] = stores
+        context['listing_count'] = listings_qs.count()
 
+        # Saved listings (only for the profile owner)
         saved_listings = None
         if user.is_authenticated and user == profile_user:
             saved_listings = Listing.objects.filter(favorites__user=user).order_by('-date_created')
         context['saved_listings'] = saved_listings
-        context['listing_count'] = listings_qs.count()
         context['saved_count'] = saved_listings.count() if saved_listings is not None else 0
+
+        # Viewer's favorites (for heart icon)
+        if user.is_authenticated:
+            # Use the user's favorite_listings related manager (assuming a ManyToMany field named 'favorites')
+            # Adjust if your relation is different; typical pattern: user.favorite_listings.all()
+            context['viewer_favorites'] = set(Listing.objects.filter(favorites__user=user).order_by('-date_created').values_list('id', flat=True))
+        else:
+            context['viewer_favorites'] = set()
+
+        # Dummy rating – replace with real average rating if available
         context['rating_average'] = 4.5
         context['member_since'] = profile_user.date_joined.strftime("%B %Y")
 
-        # Check if profile owner can connect Google
-        try:
-            can_connect = (
-                profile_user.email and
-                profile_user.email.lower().endswith('@gmail.com') and
-                profile_user.has_usable_password() and
-                not SocialAccount.objects.filter(user=profile_user, provider='google').exists()
-            )
-        except Exception:
-            can_connect = False
-        context['can_connect_google'] = can_connect
+        # Google connect availability (for profile owner)
+        if user == profile_user:
+            try:
+                from allauth.socialaccount.models import SocialAccount
+                can_connect = (
+                    profile_user.email and
+                    profile_user.email.lower().endswith('@gmail.com') and
+                    profile_user.has_usable_password() and
+                    not SocialAccount.objects.filter(user=profile_user, provider='google').exists()
+                )
+            except Exception:
+                can_connect = False
+            context['can_connect_google'] = can_connect
 
         return context
-
+    
 class ProfileUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = User
     form_class = CustomUserChangeForm
@@ -860,10 +1015,68 @@ class ProfileUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
         return form
 
     def form_valid(self, form):
+        # Detect previous phone to determine if verification is needed after save
+        try:
+            prev_obj = self.get_object()
+            prev_phone = getattr(prev_obj, 'phone_number', None)
+        except Exception:
+            prev_phone = None
+
         if 'profile_picture' in self.request.FILES:
             form.instance.profile_picture = self.request.FILES['profile_picture']
+
         messages.success(self.request, 'Profile updated successfully!')
-        return super().form_valid(form)
+
+        # Save the form and update the instance
+        response = super().form_valid(form)
+
+        # After saving, if a phone number was added/changed or phone is unverified, send verification SMS
+        try:
+            new_phone = getattr(self.object, 'phone_number', None)
+            phone_verified = getattr(self.object, 'phone_verified', False)
+            need_send = False
+            if new_phone:
+                if prev_phone != new_phone:
+                    need_send = True
+                elif not phone_verified:
+                    need_send = True
+
+            if need_send:
+                import random
+                code = ''.join(random.choices('0123456789', k=6))
+                session_key = f'phone_verification_{self.object.id}'
+                try:
+                    self.request.session[session_key] = {
+                        'code': code,
+                        'sent_at': timezone.now().isoformat(),
+                        'attempts': 0,
+                        'phone': new_phone
+                    }
+                except Exception:
+                    pass
+                try:
+                    self.object.phone_verification_code = code
+                    self.object.phone_verification_sent_at = timezone.now()
+                    self.object.save(update_fields=['phone_verification_code', 'phone_verification_sent_at'])
+                except Exception:
+                    logger.exception('Failed to persist phone verification code on profile update')
+
+                # send SMS via Brevo util (best-effort)
+                try:
+                    if new_phone:
+                        send_sms_brevo(new_phone, f"Your Baysoko verification code is: {code}")
+                except Exception:
+                    logger.exception('Failed to send SMS on profile update')
+
+                # redirect to phone verification page
+                try:
+                    return redirect(reverse('verify_phone') + f'?user_id={self.object.id}')
+                except Exception:
+                    pass
+        except Exception:
+            logger.exception('Error handling phone verification after profile update')
+
+        return response
 
     def form_invalid(self, form):
         messages.error(self.request, 'Please correct the errors below.')
@@ -1358,3 +1571,50 @@ def delete_account_ajax(request):
     })
 
 
+# users/views.py (add at the end)
+
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from django.contrib.auth.decorators import login_required
+from .models import UserSettings
+
+@login_required
+@require_POST
+def toggle_show_contact_info(request):
+    """AJAX endpoint to toggle the show_contact_info field."""
+    user = request.user
+    user.show_contact_info = not user.show_contact_info
+    user.save(update_fields=['show_contact_info'])
+    return JsonResponse({'success': True, 'show_contact_info': user.show_contact_info})
+
+@login_required
+def get_user_settings(request):
+    """Return current settings as JSON."""
+    settings, _ = UserSettings.objects.get_or_create(user=request.user)
+    return JsonResponse({
+        'email_notifications': settings.email_notifications,
+        'sms_notifications': settings.sms_notifications,
+        'marketing_emails': settings.marketing_emails,
+        'show_contact_info': request.user.show_contact_info,
+    })
+
+@login_required
+@require_POST
+def update_notification_settings(request):
+    """Update one or more notification preferences."""
+    try:
+        import json
+        data = json.loads(request.body)
+    except:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+
+    settings, _ = UserSettings.objects.get_or_create(user=request.user)
+    if 'email_notifications' in data:
+        settings.email_notifications = bool(data['email_notifications'])
+    if 'sms_notifications' in data:
+        settings.sms_notifications = bool(data['sms_notifications'])
+    if 'marketing_emails' in data:
+        settings.marketing_emails = bool(data['marketing_emails'])
+    settings.save()
+
+    return JsonResponse({'success': True})

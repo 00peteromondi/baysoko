@@ -133,6 +133,11 @@ CLOUDINARY_API_SECRET = config('CLOUDINARY_API_SECRET', default='')
 # Optional: allow full CLOUDINARY_URL (cloudinary://key:secret@name)
 CLOUDINARY_URL = os.environ.get('CLOUDINARY_URL', '')
 
+# Brevo (SMS) configuration - credentials provided via environment/.env
+BREVO_API_KEY = config('BREVO_API_KEY', default='')
+BREVO_SMS_SENDER = config('BREVO_SMS_SENDER', default='Baysoko')
+BREVO_SMS_ENABLED = config('BREVO_SMS_ENABLED', default=False, cast=bool)
+
 # Only configure Cloudinary if credentials are provided
 if CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET:
     CLOUDINARY_STORAGE = {
