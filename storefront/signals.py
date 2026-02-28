@@ -10,6 +10,13 @@ try:
     from notifications.utils import notify_system_message, create_notification
 except Exception:
     render_and_send = None
+    notify_system_message = None
+    create_notification = None
+
+try:
+    from notifications.utils import NotificationService
+except Exception:
+    NotificationService = None
 
 from .models import Store, StoreReview
 from .models import Subscription, MpesaPayment
@@ -126,6 +133,14 @@ def subscription_changed(sender, instance, created, **kwargs):
                         notify_system_message(instance.store.owner, 'Trial Started', f'Your trial for {instance.store.name} has started.')
                 except Exception:
                     logger.exception('Failed to create in-app notification for subscription trial start')
+                # Send SMS for trial start
+                try:
+                    if NotificationService and instance.store and getattr(instance.store, 'owner', None):
+                        phone = getattr(instance.store.owner, 'phone_number', None)
+                        if phone:
+                            NotificationService().send_sms(phone, f"Your trial for {instance.store.name} has started. Enjoy premium features until {instance.trial_ends_at}.")
+                except Exception:
+                    logger.exception('Failed to send trial start SMS')
             elif instance.status == 'active':
                 subject = f'Your subscription for {instance.store.name} is active'
                 if recipients:
@@ -134,6 +149,14 @@ def subscription_changed(sender, instance, created, **kwargs):
                     notify_system_message(instance.store.owner, 'Subscription Active', f'Your subscription for {instance.store.name} is active.')
                 except Exception:
                     logger.exception('Failed to create in-app notification for subscription activated')
+                # Send SMS for activation
+                try:
+                    if NotificationService and instance.store and getattr(instance.store, 'owner', None):
+                        phone = getattr(instance.store.owner, 'phone_number', None)
+                        if phone:
+                            NotificationService().send_sms(phone, f"Your subscription for {instance.store.name} is now active.")
+                except Exception:
+                    logger.exception('Failed to send subscription activation SMS')
             return
 
         prev = getattr(instance, '_previous_status', None)
@@ -160,6 +183,14 @@ def subscription_changed(sender, instance, created, **kwargs):
                     notify_system_message(instance.store.owner, 'Subscription Past Due', f'Payment for {instance.store.name} is past due.')
                 except Exception:
                     logger.exception('Failed to create in-app notification for subscription past due')
+                # SMS for past due
+                try:
+                    if NotificationService and instance.store and getattr(instance.store, 'owner', None):
+                        phone = getattr(instance.store.owner, 'phone_number', None)
+                        if phone:
+                            NotificationService().send_sms(phone, f"Payment for your subscription to {instance.store.name} is past due. Please update your payment method.")
+                except Exception:
+                    logger.exception('Failed to send past due SMS')
 
             if instance.status == 'canceled':
                 recipients = [e for e in [owner_email] if e]
@@ -170,6 +201,14 @@ def subscription_changed(sender, instance, created, **kwargs):
                     notify_system_message(instance.store.owner, 'Subscription Cancelled', f'Your subscription for {instance.store.name} was cancelled.')
                 except Exception:
                     logger.exception('Failed to create in-app notification for subscription cancelled')
+                # SMS for cancellation
+                try:
+                    if NotificationService and instance.store and getattr(instance.store, 'owner', None):
+                        phone = getattr(instance.store.owner, 'phone_number', None)
+                        if phone:
+                            NotificationService().send_sms(phone, f"Your subscription for {instance.store.name} has been cancelled. Reactivate to regain premium features.")
+                except Exception:
+                    logger.exception('Failed to send subscription cancelled SMS')
 
         # Almost due reminder: if current_period_end exists and within 3 days, and not previously notified
         try:

@@ -82,6 +82,14 @@ class SubscriptionService:
             'max_stores': None,    # Unlimited
         }
     }
+
+    @classmethod
+    def get_display_plans(cls, exclude_free=True):
+        """Return plan details for display to users. By default exclude the 'free' plan."""
+        plans = dict(cls.PLAN_DETAILS)
+        if exclude_free and 'free' in plans:
+            plans.pop('free')
+        return plans
     
     @classmethod
     def get_user_eligibility(cls, user, store=None):

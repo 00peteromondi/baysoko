@@ -62,6 +62,18 @@ try:
             'schedule': crontab(minute=0, hour=3),
             'options': {'queue': 'periodic'},
         }
+        ,
+        'check-trial-expirations-daily': {
+            'task': 'storefront.tasks.check_trial_expirations',
+            'schedule': crontab(minute=10, hour=3),
+            'options': {'queue': 'periodic'},
+        },
+        'send-weekly-reactivation-reminders': {
+            'task': 'storefront.tasks.send_weekly_reactivation_reminders',
+            # Every Monday at 04:00 UTC
+            'schedule': crontab(minute=0, hour=4, day_of_week=1),
+            'options': {'queue': 'periodic'},
+        }
     })
 except Exception:
     # If celery.schedules isn't available at import time, skip schedule setup

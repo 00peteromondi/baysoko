@@ -17,7 +17,7 @@ def populate_category_schemas(apps, schema_editor):
                 {'name': 'edition', 'label': 'Edition', 'type': 'text'},
                 {'name': 'framed', 'label': 'Framed', 'type': 'boolean'},
             ],
-            'hide_standard_fields': ['brand', 'model', 'dimensions', 'weight', 'color', 'material','condition'],
+            'hide_standard_fields': ['brand', 'model', 'dimensions', 'weight', 'color', 'material'],
         },
         # 2. Baby & Kids Items
         'baby & kids items': {
@@ -28,7 +28,7 @@ def populate_category_schemas(apps, schema_editor):
                 {'name': 'assembly_required', 'label': 'Assembly Required', 'type': 'boolean'},
                 {'name': 'batteries_included', 'label': 'Batteries Included', 'type': 'boolean'},
             ],
-            'hide_standard_fields': [],  # keep brand, model, dimensions, weight, color (material already custom)
+            'hide_standard_fields': ['material'],  # keep brand, model, dimensions, weight, color (material already custom)
         },
         # 3. Beauty & Personal Care
         'beauty & personal care': {
@@ -112,7 +112,7 @@ def populate_category_schemas(apps, schema_editor):
             'hide_standard_fields': [],
         },
         # 10. Construction
-        'construction': {
+        'construction equipment': {
             'fields': [
                 {'name': 'tool_type', 'label': 'Tool Type', 'type': 'text'},
                 {'name': 'power_source', 'label': 'Power Source', 'type': 'select', 'choices': ['Manual', 'Electric', 'Battery', 'Petrol']},

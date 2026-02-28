@@ -127,7 +127,8 @@ def subscription_plan_select(request, slug):
     context_data.update({
         'plan_form': plan_form,
         'phone_form': upgrade_form,
-        'plan_details': SubscriptionService.PLAN_DETAILS,
+        'plan_details': SubscriptionService.get_display_plans(),
+        'all_plan_details': SubscriptionService.PLAN_DETAILS,
     })
     
     return render(request, 'storefront/subscription_plan_select.html', context_data)
@@ -415,7 +416,8 @@ def subscription_manage(request, slug):
         'free_limit': limit_info['free_limit'],
         'remaining_slots': limit_info['remaining_slots'],
         'percentage_used': limit_info['percentage_used'],
-        'plan_details': SubscriptionService.PLAN_DETAILS,
+        'plan_details': SubscriptionService.get_display_plans(),
+        'all_plan_details': SubscriptionService.PLAN_DETAILS,
         'is_active': getattr(current_subscription, 'is_active', lambda: False)(),
         'is_trialing': is_trialing,
         'is_trial_expired': is_trial_expired,
@@ -487,7 +489,8 @@ def subscription_change_plan(request, slug):
     context = {
         'store': store,
         'subscription': subscription,
-        'plan_details': SubscriptionService.PLAN_DETAILS,
+        'plan_details': SubscriptionService.get_display_plans(),
+        'all_plan_details': SubscriptionService.PLAN_DETAILS,
         'current_plan': subscription.plan,
         'requires_payment': subscription.status in ['canceled', 'past_due'],
     }

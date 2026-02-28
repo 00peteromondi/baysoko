@@ -9,7 +9,8 @@ services:
       python manage.py migrate --noinput
       python manage.py collectstatic --noinput
       python manage.py setup_oauth
-    startCommand: gunicorn baysoko.wsgi:application
+    # Use Daphne to serve ASGI (required for Channels/WebSockets)
+    startCommand: daphne -b 0.0.0.0 -p $PORT baysoko.asgi:application
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -32,4 +33,47 @@ services:
       - key: CLOUDINARY_API_KEY
         sync: false
       - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+
+  - type: worker
+    name: baysoko-celery-worker
+    env: python
+    buildCommand: |
+      pip install -r requirements.txt
+      python manage.py migrate --noinput
+    startCommand: celery -A baysoko worker -l info -Q celery,periodic
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: baysoko2
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+
+  - type: worker
+    name: baysoko-celery-beat
+    env: python
+    buildCommand: |
+      pip install -r requirements.txt
+      python manage.py migrate --noinput
+    # Run celery beat using django-celery-beat scheduler so periodic tasks stored in DB work
+    startCommand: celery -A baysoko beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: baysoko2
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
         sync: false
