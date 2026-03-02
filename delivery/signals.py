@@ -1,3 +1,37 @@
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.conf import settings
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+@receiver(post_save)
+def delivery_request_post_save(sender, instance, created, **kwargs):
+    """When a DeliveryRequest is created, optionally enqueue a sync to external systems.
+
+    This is intentionally conservative: it only acts when `GLOVO_ENABLED` is True.
+    """
+    try:
+        from .models import DeliveryRequest
+        from . import tasks as delivery_tasks
+    except Exception:
+        return
+
+    if sender is not DeliveryRequest:
+        return
+
+    if not getattr(settings, 'GLOVO_ENABLED', False):
+        return
+
+    try:
+        # Enqueue a sync task to let integration decide what to do
+        try:
+            delivery_tasks.sync_with_external_system.delay(instance.id)
+        except Exception:
+            delivery_tasks.sync_with_external_system(instance.id)
+    except Exception:
+        logger.exception('Failed to enqueue external sync for delivery %s', getattr(instance, 'id', None))
 """
 Signals for delivery automation
 """

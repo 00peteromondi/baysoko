@@ -380,18 +380,25 @@ class DeliveryConfirmation(models.Model):
             if not order:
                 return False
 
-            # Release escrow if present and held
+            # Schedule escrow release after a short review window (24 hours)
             escrow = getattr(order, 'escrow', None)
             if escrow and escrow.status == 'held':
-                escrow.release_funds()
+                try:
+                    # Set auto_release_date to now + 24 hours (admins can override)
+                    from django.utils import timezone
+                    from datetime import timedelta
+                    escrow.auto_release_date = timezone.now() + timedelta(hours=24)
+                    escrow.save()
+                except Exception:
+                    pass
 
-            # Mark associated payment as released from escrow
+            # Mark associated payment with scheduled release date (do not immediately clear escrow flag)
             payment = getattr(order, 'payment', None)
             if payment and getattr(payment, 'is_held_in_escrow', False):
                 try:
                     from django.utils import timezone
-                    payment.is_held_in_escrow = False
-                    payment.actual_release_date = timezone.now()
+                    from datetime import timedelta
+                    payment.actual_release_date = timezone.now() + timedelta(hours=24)
                     if not payment.seller_payout_reference:
                         payment.seller_payout_reference = f"PAYOUT-{order.id}-{int(timezone.now().timestamp())}"
                     payment.save()
@@ -427,6 +434,50 @@ class DeliveryProof(models.Model):
     
     def __str__(self):
         return f"Proof for {self.delivery_request.tracking_number}"
+
+
+class DeliveryOTP(models.Model):
+    """OTP codes generated for driver verification at delivery time."""
+    delivery_request = models.ForeignKey(DeliveryRequest, on_delete=models.CASCADE, related_name='otps')
+    hashed_code = models.CharField(max_length=255)
+    created_by = models.ForeignKey(DeliveryPerson, on_delete=models.SET_NULL, null=True, blank=True)
+    used = models.BooleanField(default=False)
+    attempts = models.PositiveIntegerField(default=0)
+    request_ip = models.CharField(max_length=45, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def is_valid(self, code):
+        from django.utils import timezone
+        from django.contrib.auth.hashers import check_password
+        if self.used:
+            return False
+        if timezone.now() > self.expires_at:
+            return False
+        try:
+            return check_password(str(code), self.hashed_code)
+        except Exception:
+            return False
+
+    def mark_used(self):
+        self.used = True
+        self.save(update_fields=['used'])
+
+
+class DeliveryAuditLog(models.Model):
+    """Simple audit log for delivery events and OTP operations."""
+    delivery_request = models.ForeignKey(DeliveryRequest, on_delete=models.CASCADE, related_name='audit_logs')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    event_type = models.CharField(max_length=100)
+    message = models.TextField(blank=True)
+    meta = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
 
 
 class DeliveryRoute(models.Model):

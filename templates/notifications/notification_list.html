@@ -837,7 +837,7 @@
                     <div class="filter-actions">
                         <form method="post" action="{% url 'mark-all-read' %}" class="d-grid">
                             {% csrf_token %}
-                            <button type="submit" class="btn-custom btn-success" id="markAllReadBtn">
+                            <button type="button" class="btn-custom btn-success" id="markAllReadBtn" data-url="{% url 'mark-all-read' %}">
                                 <i class="bi bi-check-all me-2"></i> Mark All as Read
                             </button>
                         </form>
@@ -1228,10 +1228,12 @@
         if (markAllReadBtn) {
             markAllReadBtn.addEventListener('click', function(e) {
                 e.preventDefault();
-                const form = this.closest('form');
-                
+                // Use data-url to avoid nested-form ambiguity; fallback to nearest form action
+                const url = this.dataset.url || (this.closest('form') && this.closest('form').action) || window.location.pathname;
+                if (!url) return;
+
                 if (confirm('Mark all notifications as read?')) {
-                    fetch(form.action, {
+                    fetch(url, {
                         method: 'POST',
                         credentials: 'same-origin',
                         headers: {
@@ -1250,7 +1252,8 @@
                             document.querySelectorAll('.notification-item.unread').forEach(item => {
                                 item.classList.remove('unread');
                                 item.classList.add('read');
-                                item.querySelector('.status-dot').classList.remove('unread');
+                                const dot = item.querySelector('.status-dot');
+                                if (dot) dot.classList.remove('unread');
                                 
                                 // Update status text
                                 const statusText = item.querySelector('.notification-status span:last-child');
@@ -1290,6 +1293,8 @@
                             
                             showToast('All notifications marked as read', 'success');
                         }
+                    }).catch(err => {
+                        console.warn('Mark all read failed', err);
                     });
                 }
             });

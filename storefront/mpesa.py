@@ -4,6 +4,9 @@ import base64
 from datetime import datetime
 import json
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class MpesaGateway:
@@ -30,9 +33,19 @@ class MpesaGateway:
 
         try:
             response = requests.get(api_url, headers=headers)
-            response.raise_for_status()  # Raises an HTTPError for bad responses
-            return response.json()["access_token"]
+            if response.status_code != 200:
+                # Log response for debugging (do not log secret values)
+                try:
+                    body = response.json()
+                except Exception:
+                    body = response.text
+                logger.error("MPESA token request failed: status=%s body=%s", response.status_code, body)
+                raise Exception(f"Failed to get access token: status={response.status_code} body={body}")
+
+            data = response.json()
+            return data.get("access_token")
         except Exception as e:
+            logger.exception("Error obtaining MPESA access token")
             raise Exception(f"Failed to get access token: {str(e)}")
 
     def initiate_stk_push(self, phone, amount, account_reference):

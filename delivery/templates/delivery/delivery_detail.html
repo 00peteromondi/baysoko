@@ -568,6 +568,75 @@
                 </div>
             </div>
             
+            <!-- Order Summary (if linked) -->
+            {% if order %}
+            <div class="card mt-4 animate-fade-in" style="animation-delay: 0.1s">
+                <div class="card-header bg-transparent border-bottom">
+                    <h5 class="fw-bold mb-0">
+                        <i class="bi bi-card-list me-2 text-primary"></i>
+                        Linked Order
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <small class="text-muted">Order ID</small>
+                        <div class="fw-medium">#{{ order.id }}</div>
+                    </div>
+                    {% if order.buyer %}
+                    <div class="mb-3">
+                        <small class="text-muted">Buyer</small>
+                        <div class="fw-medium">{{ order.buyer.get_full_name|default:order.buyer.username }}</div>
+                    </div>
+                    {% endif %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Item</th>
+                                    <th class="text-end">Qty</th>
+                                    <th class="text-end">Unit</th>
+                                    <th class="text-end">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in order.items %}
+                                <tr>
+                                    <td>
+                                        <div class="fw-medium">{{ item.title }}</div>
+                                        {% if item.attributes %}
+                                        <small class="text-muted">{{ item.attributes }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">{{ item.quantity }}</td>
+                                    <td class="text-end">{% if item.unit_price %}KSh {{ item.unit_price|floatformat:2 }}{% else %}-{% endif %}</td>
+                                    <td class="text-end">{% if item.total_price %}KSh {{ item.total_price|floatformat:2 }}{% else %}-{% endif %}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-muted">No items available</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="border-top">
+                                    <td class="text-muted">Order Total</td>
+                                    <td></td>
+                                    <td></td>
+                                    <td class="text-end fw-bold">{% if order.total_amount %}KSh {{ order.total_amount|floatformat:2 }}{% else %}-{% endif %}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    {% if order.metadata %}
+                    <div class="mt-2">
+                        <small class="text-muted">Order Metadata</small>
+                        <pre class="small bg-light p-2 rounded">{{ order.metadata|default:"{}" }}</pre>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Status Timeline -->
             <div class="card mt-4 animate-fade-in" style="animation-delay: 0.1s">
                 <div class="card-header bg-transparent border-bottom">
@@ -850,8 +919,18 @@
                         <!-- Verification Code -->
                         <div class="col-12 d-none" id="codeSection">
                             <label class="form-label">Verification Code</label>
-                            <input type="text" name="verification_code" class="form-control" placeholder="Enter verification code">
+                            <input type="text" name="verification_code" id="verification_code_input" class="form-control" placeholder="Enter verification code">
                         </div>
+
+                        {% if active_otp %}
+                        <div class="col-12 mt-2" id="otpVerifyBox">
+                            <div class="input-group">
+                                <input type="text" id="otp_code" class="form-control" placeholder="Enter OTP sent to recipient">
+                                <button class="btn btn-primary" id="otp_verify_btn" type="button">Verify Code</button>
+                            </div>
+                            <div class="form-text mt-1">Code expires at: {{ otp_expires_at }}</div>
+                        </div>
+                        {% endif %}
                         
                         <!-- ID Verification -->
                         <div class="col-12 d-none" id="idSection">
@@ -907,6 +986,40 @@
         </div>
     </div>
 </div>
+
+{% if active_otp %}
+<script>
+document.getElementById('otp_verify_btn')?.addEventListener('click', function(){
+    const code = document.getElementById('otp_code').value.trim();
+    if(!code){
+        alert('Enter the OTP code');
+        return;
+    }
+    const url = '{{ verify_otp_url }}';
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': (function(){
+                const name = 'csrftoken=';
+                const cookies = document.cookie.split(';');
+                for(let c of cookies){ c = c.trim(); if(c.startsWith('csrftoken=')) return c.substring(name.length); }
+                return '';
+            })()
+        },
+        body: new URLSearchParams({code: code})
+    }).then(r=>r.json()).then(data=>{
+        if(data.success){
+            showToast('Delivery marked as delivered', 'success');
+            // Reload to update status
+            setTimeout(()=>location.reload(), 800);
+        } else {
+            showToast(data.error || 'Verification failed', 'danger');
+        }
+    }).catch(e=>{ console.error(e); showToast('Verification error', 'danger'); });
+});
+</script>
+{% endif %}
 
 <!-- Cancel Delivery Modal -->
 <div class="modal fade" id="cancelModal" tabindex="-1">

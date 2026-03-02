@@ -1,3 +1,81 @@
+import logging
+from django.conf import settings
+from . import glovo_client
+
+logger = logging.getLogger(__name__)
+
+
+def send_to_glovo(delivery):
+    """Attempt to create a Glovo order for the given DeliveryRequest.
+
+    This is guarded by the `GLOVO_ENABLED` setting. Returns (success, data_or_error).
+    """
+    try:
+        if not getattr(settings, 'GLOVO_ENABLED', False):
+            return False, 'Glovo integration disabled'
+
+        chain_id = getattr(settings, 'GLOVO_CHAIN_ID', None)
+        vendor_id = getattr(settings, 'GLOVO_VENDOR_ID', None)
+        if not chain_id or not vendor_id:
+            return False, 'Glovo chain/vendor not configured'
+
+        # Build minimal Glovo order payload from delivery
+        payload = {
+            'order_id': str(delivery.order_id) if delivery.order_id else str(delivery.tracking_number),
+            'store_name': getattr(delivery, 'pickup_name', '') or 'Baysoko Store',
+            'store_address': getattr(delivery, 'pickup_address', '') or '',
+            'recipient': {
+                'name': getattr(delivery, 'recipient_name', ''),
+                'address': getattr(delivery, 'recipient_address', ''),
+                'phone': getattr(delivery, 'recipient_phone', ''),
+                'email': getattr(delivery, 'recipient_email', '')
+            },
+            'items': [],
+            'weight': float(delivery.package_weight or 0),
+            'delivery_fee': float(delivery.delivery_fee or 0),
+            'total_value': float(delivery.total_amount or 0)
+        }
+
+        # Try to include items if metadata contains order items
+        try:
+            if isinstance(delivery.metadata, dict) and delivery.metadata.get('items'):
+                payload['items'] = delivery.metadata.get('items')
+        except Exception:
+            pass
+
+        success, resp = glovo_client.create_glovo_order(chain_id, vendor_id, payload)
+        if success:
+            # store Glovo order id in metadata for reference
+            try:
+                if isinstance(delivery.metadata, dict):
+                    delivery.metadata['glovo_order'] = resp
+                else:
+                    delivery.metadata = {'glovo_order': resp}
+                delivery.save(update_fields=['metadata'])
+            except Exception:
+                logger.exception('Failed to save glovo metadata')
+            return True, resp
+        else:
+            return False, resp
+
+    except Exception as e:
+        logger.exception('Error sending delivery to Glovo: %s', e)
+        return False, str(e)
+
+
+def sync_delivery_with_external_system(delivery):
+    """Compatibility shim used by tasks.sync_with_external_system.
+
+    Currently this will attempt to send the delivery to Glovo when enabled.
+    """
+    try:
+        if not getattr(__import__('django.conf').conf.settings, 'GLOVO_ENABLED', False):
+            return {'skipped': 'glovo_disabled'}
+        ok, data = send_to_glovo(delivery)
+        return {'ok': ok, 'result': data}
+    except Exception as e:
+        logger.exception('sync_delivery_with_external_system error: %s', e)
+        return {'error': str(e)}
 """
 Integration with Baysoko e-commerce platform
 """

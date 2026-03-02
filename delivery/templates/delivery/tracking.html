@@ -344,6 +344,18 @@
             </div>
         </div>
     </div>
+
+    <!-- CONFIRM DELIVERY BUTTON -->
+    {% if can_confirm and delivery.status == 'delivered' %}
+    <div class="text-center my-4 animate-fade-in">
+        <button class="confirm-btn btn btn-success" id="confirmDeliveryBtn">
+            <i class="bi bi-check-circle me-2"></i>Confirm Delivery & Release Payment
+        </button>
+        <p class="text-muted small mt-2">
+            By confirming, you acknowledge that you have received the items. Funds will be released to the seller.
+        </p>
+    </div>
+    {% endif %}
     
     <!-- Package Details -->
     <div class="card mt-4 animate-fade-in" style="animation-delay: 0.3s">
@@ -456,7 +468,7 @@
                 button.innerHTML = '<i class="bi bi-check"></i> Copied!';
                 button.classList.remove('btn-outline-primary');
                 button.classList.add('btn-success');
-                
+
                 setTimeout(() => {
                     button.innerHTML = originalHTML;
                     button.classList.remove('btn-success');
@@ -467,7 +479,7 @@
                 showToast('Failed to copy tracking number', 'error');
             });
     }
-    
+
     // Track another package
     function trackAnother() {
         const trackingNumber = prompt('Enter tracking number:');
@@ -475,7 +487,7 @@
             window.location.href = `/delivery/track/${trackingNumber}/`;
         }
     }
-    
+
     function trackAnotherForm(event) {
         event.preventDefault();
         const trackingNumber = document.getElementById('anotherTracking').value.trim();
@@ -483,19 +495,19 @@
             window.location.href = `/delivery/track/${trackingNumber}/`;
         }
     }
-    
+
     // Refresh tracking
     function refreshTracking() {
         location.reload();
     }
-    
+
     // Auto-refresh if not delivered
     {% if delivery.status != 'delivered' and delivery.status != 'cancelled' %}
     setTimeout(() => {
         refreshTracking();
     }, 30000); // Refresh every 30 seconds
     {% endif %}
-    
+
     // Utility functions
     function showToast(message, type = 'success') {
         // Create toast container if it doesn't exist
@@ -505,14 +517,14 @@
             container.className = 'toast-container';
             document.querySelector('.tracking-container').prepend(container);
         }
-        
+
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
-        
+
         const icon = type === 'success' ? 'check-circle' : 
                     type === 'error' ? 'exclamation-circle' : 
                     type === 'warning' ? 'exclamation-triangle' : 'info-circle';
-        
+
         toast.innerHTML = `
             <i class="bi bi-${icon} text-${type} fs-5"></i>
             <div class="flex-grow-1">
@@ -521,9 +533,9 @@
             </div>
             <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
         `;
-        
+
         container.appendChild(toast);
-        
+
         // Auto remove after 5 seconds
         setTimeout(() => {
             if (toast.parentElement) {
@@ -531,6 +543,49 @@
             }
         }, 5000);
     }
+
+    // Confirm delivery AJAX
+    document.addEventListener('DOMContentLoaded', function() {
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return null;
+        }
+
+        const btn = document.getElementById('confirmDeliveryBtn');
+        if (!btn) return;
+
+        btn.addEventListener('click', async function() {
+            if (!confirm('Confirm you have received this delivery and release funds?')) return;
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-arrow-repeat spin me-2"></i>Confirming...';
+            btn.disabled = true;
+
+            try {
+                const resp = await fetch('{% url "delivery:confirm_delivery" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': getCookie('csrftoken') || ''
+                    },
+                    body: `tracking_number={{ delivery.tracking_number }}`
+                });
+
+                const data = await resp.json();
+                if (resp.ok && data.success) {
+                    showToast('Delivery confirmed! Payment released.', 'success');
+                    setTimeout(() => location.reload(), 1200);
+                } else {
+                    throw new Error(data.error || 'Confirmation failed');
+                }
+            } catch (err) {
+                console.warn('Confirm delivery error', err);
+                showToast(err.message || 'Confirmation failed', 'error');
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        });
+    });
 </script>
-{% endblock %}
 {% endblock %}

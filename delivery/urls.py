@@ -19,10 +19,12 @@ urlpatterns = [
     path('deliveries/<int:pk>/', views.DeliveryDetailView.as_view(), name='delivery_detail'),
     path('deliveries/<int:pk>/update-status/', views.UpdateDeliveryStatusView.as_view(), name='update_status'),
     path('deliveries/<int:pk>/submit-proof/', views.submit_proof, name='submit_proof'),
+    path('deliveries/<int:pk>/verify-otp/', views.verify_delivery_otp, name='verify_delivery_otp'),
     path('deliveries/bulk-update/', views.bulk_update_status, name='bulk_update_status'),
     
     # Driver Management
     path('driver/dashboard/', views.DriverDashboardView.as_view(), name='driver_dashboard'),
+    path('driver/register/', views.become_driver, name='driver_register'),
     path('driver/assignments/', views.driver_assignments, name='driver_assignments'),
     path('driver/updates/', views.driver_updates, name='driver_updates'),
     path('driver/update-location/', views.update_driver_location, name='update_driver_location'),
@@ -36,6 +38,7 @@ urlpatterns = [
     # Tracking
     path('track/<str:tracking_number>/', views.track_delivery, name='track_delivery'),
     path('confirm-delivery/', views.confirm_delivery, name='confirm_delivery'),
+    path('glovo/webhook/', views.glovo_webhook, name='glovo_webhook'),
     
     # Reports & Analytics
     path('reports/', views.delivery_reports, name='reports'),
@@ -50,10 +53,8 @@ urlpatterns = [
     path('api/', include(api_urls)),
     
     # Authentication
-    path('login/', auth_views.LoginView.as_view(
-        template_name='delivery/login.html',
-        redirect_authenticated_user=True
-    ), name='login'),
+    path('register/', views.delivery_register, name='register'),
+    path('login/', views.DeliveryLoginView.as_view(), name='login'),
     path('logout/', auth_views.LogoutView.as_view(
         next_page='delivery:login'
     ), name='logout'),
