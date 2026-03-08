@@ -332,6 +332,14 @@ os.makedirs(MEDIA_ROOT, exist_ok=True)
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Google Gemini configuration
+# Prefer explicit env var `GEMINI_API_KEY` but fall back to `GOOGLE_API_KEY` if present
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY') or config('GEMINI_API_KEY', default='')
+# Pin a stable model to avoid runtime probing. Set via env `GEMINI_MODEL` to override.
+GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-3')
+# When pinned, candidate probing will use only the pinned model to avoid extra requests
+GEMINI_CANDIDATE_MODELS = [GEMINI_MODEL]
+
 # Channels (WebSocket) configuration - in-memory layer for development
 ASGI_APPLICATION = 'baysoko.asgi.application'
 
@@ -852,3 +860,9 @@ TRIAL_SETTINGS = {
     'TRIAL_CONVERSION_TARGET': 0.3,  # 30% conversion target
 }
 TRIAL_LIMIT_PER_USER = 1
+
+ASSISTANT_FAVORITES_LIMIT = 3
+ASSISTANT_RECENTLY_VIEWED_LIMIT = 3
+ASSISTANT_CART_LIMIT = 5
+ASSISTANT_RECENT_ORDERS_LIMIT = 2
+ASSISTANT_PROMPT_MAX_ITEMS = 8

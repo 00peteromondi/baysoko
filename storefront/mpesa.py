@@ -5,6 +5,7 @@ from datetime import datetime
 import json
 import re
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -65,11 +66,7 @@ class MpesaGateway:
             f"{self.business_shortcode}{self.passkey}{timestamp}".encode()
         ).decode()
 
-        headers = {
-            "Authorization": f"Bearer {self.get_token()}",
-            "Content-Type": "application/json",
-        }
-
+        # Prepare payload
         payload = {
             "BusinessShortCode": self.business_shortcode,
             "Password": password,
@@ -84,24 +81,88 @@ class MpesaGateway:
             "TransactionDesc": "Store Premium Subscription"
         }
 
+        # Build headers lazily to avoid failing token retrieval from stopping retry logic
         try:
-            response = requests.post(api_url, json=payload, headers=headers)
-            if response.status_code != 200:
-                # Try to include useful details from the response body
-                error_msg = f"STK push failed with status {response.status_code}"
-                try:
-                    error_detail = response.json()
-                    # Safely extract known fields
-                    err = error_detail.get('errorMessage') or error_detail.get('error') or json.dumps(error_detail)
-                    error_msg += f": {err}"
-                except Exception:
-                    error_msg += f": {response.text}"
-                raise Exception(error_msg)
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            raise Exception(f"STK push failed: {str(e)}")
+            token = self.get_token()
         except Exception as e:
-            raise Exception(f"STK push failed: {str(e)}")
+            logger.exception('Failed to obtain MPESA token before STK push')
+            raise
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+
+        # Retry policy: respect configured env vars if present
+        max_retries = getattr(__import__('django.conf').conf.settings, 'MPESA_MAX_RETRIES', None) or getattr(__import__('os'), 'environ', {}).get('MPESA_MAX_RETRIES')
+        try:
+            max_retries = int(max_retries) if max_retries is not None else 3
+        except Exception:
+            max_retries = 3
+
+        retry_interval = getattr(__import__('django.conf').conf.settings, 'MPESA_RETRY_INTERVAL', None) or getattr(__import__('os'), 'environ', {}).get('MPESA_RETRY_INTERVAL')
+        try:
+            retry_interval = int(retry_interval) if retry_interval is not None else 2
+        except Exception:
+            retry_interval = 2
+
+        timeout = getattr(__import__('django.conf').conf.settings, 'MPESA_REQUEST_TIMEOUT', None) or 10
+        attempt = 0
+        last_exc = None
+        while attempt <= max_retries:
+            attempt += 1
+            try:
+                logger.debug('Initiating STK push attempt %s to %s for phone=%s amount=%s', attempt, api_url, phone_normalized, amount)
+                resp = requests.post(api_url, json=payload, headers=headers, timeout=timeout)
+                logger.debug('STK push response status=%s', getattr(resp, 'status_code', None))
+                if 200 <= resp.status_code < 300:
+                    try:
+                        return resp.json()
+                    except Exception:
+                        return {'status_code': resp.status_code, 'text': resp.text}
+
+                # For client errors, do not retry
+                if 400 <= resp.status_code < 500:
+                    try:
+                        err = resp.json()
+                    except Exception:
+                        err = resp.text
+                    error_msg = f"STK push failed with status {resp.status_code}: {err}"
+                    logger.warning(error_msg)
+                    raise Exception(error_msg)
+
+                # For server errors (5xx), raise and retry
+                try:
+                    err = resp.json()
+                except Exception:
+                    err = resp.text
+                logger.warning('STK push server error (attempt %s): status=%s body=%s', attempt, resp.status_code, err)
+                last_exc = Exception(f"STK push failed with status {resp.status_code}: {err}")
+
+            except requests.exceptions.Timeout as e:
+                logger.warning('STK push attempt %s timed out: %s', attempt, e)
+                last_exc = e
+            except requests.exceptions.SSLError as e:
+                logger.exception('STK push SSL error on attempt %s', attempt)
+                last_exc = e
+                break
+            except requests.exceptions.RequestException as e:
+                logger.warning('STK push request exception on attempt %s: %s', attempt, e)
+                last_exc = e
+
+            # If we have exhausted attempts, break
+            if attempt > max_retries:
+                break
+
+            # Backoff before next retry
+            sleep_for = retry_interval * attempt
+            logger.debug('Waiting %s seconds before next STK push attempt', sleep_for)
+            time.sleep(sleep_for)
+
+        # After retries exhausted
+        if last_exc:
+            raise Exception(f"STK push failed after {attempt} attempts: {str(last_exc)}")
+        raise Exception('STK push failed: unknown error')
 
     def _normalize_phone(self, phone):
         """Normalize and validate phone numbers into the format required by M-Pesa.

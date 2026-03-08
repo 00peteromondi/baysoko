@@ -2468,8 +2468,21 @@ function renderGroupedConversations(groups) {
         const isOnline = onlineUsers.has(g.participant_id);
         const lastTime = g.last_message_time ? formatCompactTime(g.last_message_time) : '';
         const isOwn = g.last_message_sender_id === window.currentUserId;
-        const preview = g.last_message_content || 'Start conversation';
+        let preview = g.last_message_content || 'Start conversation';
+        // If preview is structured JSON from assistant, prefer the text/description
+        try {
+            if (preview && (preview.trim().startsWith('{') || preview.trim().startsWith('['))) {
+                const p = JSON.parse(preview);
+                if (p) preview = p.text || p.description || (Array.isArray(p.platform_items) && p.platform_items.length ? (p.platform_items[0].title || p.platform_items[0].name || '') : preview);
+            }
+        } catch (e) { /* ignore */ }
         const avatar = g.participant_avatar || 'https://placehold.co/200x200/c2c2c2/1f1f1f?text=User';
+        // Detect assistant/system participant – show only if there is actual content or unread messages
+        const isAssistantParticipant = (g.is_assistant === true) || (/assistant/i.test(String(g.participant_name || ''))) || (g.participant_role === 'assistant');
+        if (isAssistantParticipant && !preview && !(g.total_unread && g.total_unread > 0)) {
+            // Skip showing assistant-only conversations with no interaction
+            return;
+        }
         let statusIcon = '';
         if (isOwn && g.last_message_status) {
             let iconClass = 'bi-check2 status-sent';
@@ -2883,11 +2896,31 @@ function renderMessageBubble(msg) {
         }
     }
 
+    // If message content is structured JSON (from assistant), render a rich block
+    let contentHtml = '';
+    try {
+        // If the message content is already an object (newer API), render it directly
+        if (msg.content && typeof msg.content === 'object') {
+            contentHtml = formatStructuredMessage(msg.content);
+        } else if (msg.content && (String(msg.content).trim().startsWith('{') || String(msg.content).trim().startsWith('['))) {
+            const parsed = JSON.parse(String(msg.content));
+            if (parsed && typeof parsed === 'object') {
+                contentHtml = formatStructuredMessage(parsed);
+            } else {
+                contentHtml = '<div>' + escapeHtml(String(msg.content || '')) + '</div>';
+            }
+        } else {
+            contentHtml = '<div>' + escapeHtml(String(msg.content || '')) + '</div>';
+        }
+    } catch (e) {
+        contentHtml = '<div>' + escapeHtml(String(msg.content || '')) + '</div>';
+    }
+
     return `
     <div class="message-group ${isOwn ? 'sent' : 'received'}" data-message-id="${msg.id || msg.tempId}">
         <div class="message-bubble ${isOwn ? 'sent' : 'received'} ${selectedClass} ${statusClass}">
             ${replyHtml}
-            <div class="message-content">${escapeHtml(msg.content || '')} ${extraContent}</div>
+            <div class="message-content">${contentHtml} ${extraContent}</div>
             ${attachmentsHtml}
             <div class="message-time">
                 ${time} ${pinStar}
@@ -2902,6 +2935,61 @@ function renderMessageBubble(msg) {
             </div>` : ''}
         </div>
     </div>`;
+}
+
+// Render structured assistant messages similarly to agent widget
+function formatStructuredMessage(d) {
+    let html = '';
+    if (d.text) html += '<div class="agent-desc">' + escapeHtml(d.text) + '</div>';
+    else if (d.description) html += '<div class="agent-desc">' + escapeHtml(d.description) + '</div>';
+    if (d.key_features && Array.isArray(d.key_features)) {
+        html += '<ul class="agent-features">' + d.key_features.map(f => '<li>' + escapeHtml(f) + '</li>').join('') + '</ul>';
+    }
+    if (d.category) html += '<div class="agent-meta"><strong>Category:</strong> ' + escapeHtml(d.category) + '</div>';
+    const items = d.platform_items || d.items || [];
+    if (items.length) {
+        html += '<div class="agent-suggestions"><strong>Suggestions:</strong><ul>';
+        items.forEach(it => {
+            let imgUrl = it.image || it.image_url || it.avatar || null;
+            if (imgUrl) {
+                imgUrl = ensureHttps(imgUrl);
+                const localUrl = cloudinaryToLocalUrl(imgUrl);
+                if (localUrl) imgUrl = localUrl;
+            } else {
+                imgUrl = '/static/images/placeholder.png';
+            }
+            let metaHtml = '';
+            let actionsHtml = '';
+            if (it.type === 'listing' || it.type === 'cart_item') {
+                if (it.price) metaHtml += `<span class="agent-suggestion-price">${escapeHtml(it.price)}</span>`;
+                if (it.location) metaHtml += `<span class="agent-suggestion-location"><i class="bi bi-geo-alt"></i> ${escapeHtml(it.location)}</span>`;
+                if (it.seller) metaHtml += `<span><i class="bi bi-person"></i> ${escapeHtml(it.seller)}</span>`;
+                if (it.quantity) metaHtml += `<span><i class="bi bi-box"></i> Qty: ${escapeHtml(String(it.quantity))}</span>`;
+                actionsHtml = ` <a href="${it.url || '#'}" class="agent-action-link" target="_blank">View</a> ${it.id ? '<button class="agent-action-add" onclick="window.agentAddToCart(' + it.id + ')">Add to cart</button>' : ''}`;
+            } else if (it.type === 'store') {
+                metaHtml += `<span><i class="bi bi-shop"></i> ${escapeHtml(it.owner || '')}</span>`;
+                if (it.is_premium) metaHtml += `<span class="badge premium">Premium</span>`;
+                if (it.subscription_status) metaHtml += `<span>${escapeHtml(it.subscription_status)}</span>`;
+                actionsHtml = `<a href="${it.url || '#'}" class="agent-action-link" target="_blank">Visit store</a>`;
+            } else if (it.type === 'order') {
+                metaHtml += `<span><i class="bi bi-truck"></i> Status: ${escapeHtml(it.status)}</span>`;
+                metaHtml += `<span><i class="bi bi-currency-dollar"></i> Total: ${escapeHtml(it.total)}</span>`;
+                if (it.items_preview) metaHtml += `<span>${escapeHtml(it.items_preview)}</span>`;
+                actionsHtml = it.url ? `<a href="${it.url}" class="agent-action-link" target="_blank">View order</a>` : '';
+            }
+            html += `
+            <li data-item-id="${escapeHtml(String(it.id || ''))}" data-item-type="${escapeHtml(it.type || '')}">
+              <img src="${escapeHtml(imgUrl)}" class="agent-suggestion-image" alt="" onerror="this.onerror=null; this.src='/static/images/placeholder.png';">
+              <div class="agent-suggestion-info">
+                <div class="agent-suggestion-title">${escapeHtml(it.name || it.title || '')}</div>
+                <div class="agent-suggestion-meta">${metaHtml}</div>
+              </div>
+              <div class="agent-suggestion-actions">${actionsHtml}</div>
+            </li>`;
+        });
+        html += '</ul></div>';
+    }
+    return html;
 }
 
 /**

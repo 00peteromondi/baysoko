@@ -1056,4 +1056,135 @@ document.addEventListener('DOMContentLoaded', function() {
     showStep(1);
 });
 </script>
+<script>
+// Auto-suggest integration with ws/agent/ for creative listing suggestions
+(function(){
+    const titleEl = document.getElementById('{{ form.title.id_for_label }}');
+    if(!titleEl) return;
+    let ws;
+    try{
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        ws = new WebSocket(proto + '://' + location.host + '/ws/agent/');
+    }catch(e){ console.warn('Agent WS init failed', e); ws = null; }
+
+    const debounce = (fn, wait)=>{ let t; return (...args)=>{ clearTimeout(t); t = setTimeout(()=>fn(...args), wait); }; };
+
+    function sendGenerate(title){
+        if(!ws || ws.readyState !== WebSocket.OPEN){
+            // try to reconnect
+            try{ const proto = location.protocol === 'https:' ? 'wss' : 'ws'; ws = new WebSocket(proto + '://' + location.host + '/ws/agent/'); }catch(e){}
+            setTimeout(()=>sendGenerate(title), 500);
+            return;
+        }
+        ws.send(JSON.stringify({ type: 'generate', title }));
+    }
+
+    function applySuggestion(data){
+        try{
+            // description
+            if(data.description){
+                const desc = document.getElementById('{{ form.description.id_for_label }}');
+                if(desc && (!desc.value || desc.value.length < 20)) desc.value = data.description;
+            }
+            // meta_description
+            if(data.description){
+                const meta = document.getElementById('{{ form.meta_description.id_for_label }}');
+                if(meta && (!meta.value || meta.value.length < 20)) meta.value = data.description.slice(0,160);
+            }
+            // category: if exact id provided use it, otherwise fuzzy-match by option text
+            const cat = document.getElementById('{{ form.category.id_for_label }}');
+            if(cat && data.category_id){
+                try{ cat.value = String(data.category_id); cat.dispatchEvent(new Event('change')); }
+                catch(e){}
+            } else if(cat && data.category){
+                const target = String(data.category).toLowerCase();
+                for(const opt of Array.from(cat.options)){
+                    if(opt.text && opt.text.toLowerCase().includes(target.split('>').slice(-1)[0].trim())){ opt.selected = true; break; }
+                }
+                cat.dispatchEvent(new Event('change'));
+            }
+            // key_features: show creative suggestions UI near description
+            if(data.key_features && Array.isArray(data.key_features)){
+                let container = document.getElementById('ai-features-suggestions');
+                if(!container){
+                    container = document.createElement('div');
+                    container.id = 'ai-features-suggestions';
+                    container.style.marginTop = '.5rem';
+                    container.innerHTML = '<label class="form-label">AI Suggestions</label><div style="display:flex;flex-wrap:wrap;gap:.5rem" id="ai-features-list"></div>';
+                    const descField = document.getElementById('{{ form.description.id_for_label }}');
+                    if(descField && descField.parentNode) descField.parentNode.appendChild(container);
+                }
+                const list = document.getElementById('ai-features-list');
+                list.innerHTML = '';
+                data.key_features.forEach(f => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'btn btn-outline-secondary btn-sm';
+                    btn.textContent = f;
+                    btn.onclick = ()=>{
+                        const desc = document.getElementById('{{ form.description.id_for_label }}');
+                        if(desc){ desc.value = desc.value + '\n- ' + f; }
+                    };
+                    list.appendChild(btn);
+                });
+            }
+            // Prefill common standard or dynamic fields if AI returned them
+            const standardIds = {
+                brand: '{{ form.brand.id_for_label }}',
+                model: '{{ form.model.id_for_label }}',
+                color: '{{ form.color.id_for_label }}',
+                material: '{{ form.material.id_for_label }}',
+                dimensions: '{{ form.dimensions.id_for_label }}',
+                weight: '{{ form.weight.id_for_label }}',
+                price: '{{ form.price.id_for_label }}',
+                meta_description: '{{ form.meta_description.id_for_label }}'
+            };
+            const fieldNames = ['brand','model','color','material','dimensions','weight','price','meta_description'];
+            fieldNames.forEach(fn => {
+                if(data[fn] !== undefined && data[fn] !== null){
+                    // try standard form field id first
+                    try{
+                        const stdEl = document.getElementById(standardIds[fn]);
+                        if(stdEl){
+                            if(stdEl.tagName && stdEl.tagName.toLowerCase() === 'select'){
+                                // try to match option by value or text
+                                let matched = false;
+                                for(const opt of Array.from(stdEl.options)){
+                                    if(String(opt.value) === String(data[fn]) || (opt.text && opt.text.toLowerCase().includes(String(data[fn]).toLowerCase()))){ opt.selected = true; matched = true; break; }
+                                }
+                                if(matched) stdEl.dispatchEvent(new Event('change'));
+                            } else if(stdEl.type === 'checkbox'){
+                                stdEl.checked = !!data[fn];
+                            } else {
+                                stdEl.value = data[fn];
+                            }
+                        }
+                    }catch(e){ /* ignore if template var not present */ }
+
+                    // try dynamic field id 'dynamic_<name>'
+                    try{
+                        const dyn = document.getElementById('dynamic_' + fn);
+                        if(dyn){
+                            if(dyn.type === 'checkbox') dyn.checked = !!data[fn];
+                            else dyn.value = data[fn];
+                        }
+                    }catch(e){}
+                }
+            });
+        }catch(e){ console.warn('applySuggestion failed', e); }
+    }
+
+    if(ws){
+        ws.addEventListener('message', function(ev){
+            try{ const d = JSON.parse(ev.data || '{}'); if(d.type === 'generate_response' && d.ok){ applySuggestion(d.data || {}); } }
+            catch(e){ console.warn('Invalid agent message', e); }
+        });
+    }
+
+    const sendDebounced = debounce(function(){ const title = (titleEl.value||'').trim(); if(title.length>3) sendGenerate(title); }, 800);
+    titleEl.addEventListener('input', sendDebounced);
+    // Also trigger on blur
+    titleEl.addEventListener('blur', function(){ const title = (titleEl.value||'').trim(); if(title.length>3) sendGenerate(title); });
+})();
+</script>
 {% endblock %}

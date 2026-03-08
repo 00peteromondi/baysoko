@@ -5,6 +5,7 @@ from django.conf.urls.static import static
 from django.views.static import serve
 from django.urls import re_path
 from listings import admin_views
+from chats import views_agent
 
 # Import error handlers
 from . import views
@@ -20,10 +21,14 @@ urlpatterns = [
     path('listings/', include('listings.urls')),
     path('', include('users.urls')),
     path('chats/', include('chats.urls')),
+    path('chats/api/agent-search/', views_agent.agent_search_api),
+    path('chats/api/agent-feedback/', views_agent.agent_feedback_api),
+    path('chats/api/agent-send/', views_agent.agent_send_api),
     path('reviews/', include('reviews.urls')),
     path('blog/', include('blog.urls')),
     path('notifications/', include('notifications.urls')),
     path('storefront/', include('storefront.urls')),
+    path('healthz/', views.health, name='health'),
     
     # Delivery System
     path('delivery/', include('delivery.urls')),

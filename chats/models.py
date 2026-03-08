@@ -179,3 +179,27 @@ class UserOnlineStatus(models.Model):
     
     def __str__(self):
         return f"{self.user.username} - {'Online' if self.is_online else 'Offline'}"
+
+
+class AgentChat(models.Model):
+    """Lightweight per-user agent chat persistence.
+
+    This stores simple role/content/timestamp entries for the assistant widget.
+    It is intentionally decoupled from Conversation/Message for flexibility.
+    """
+    ROLE_CHOICES = (
+        ('user', 'User'),
+        ('assistant', 'Assistant'),
+    )
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='agent_chats')
+    role = models.CharField(max_length=16, choices=ROLE_CHOICES)
+    content = models.TextField()
+    meta = models.JSONField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['timestamp']
+
+    def __str__(self):
+        return f'AgentChat {self.user_id} {self.role} @{self.timestamp.isoformat()}'

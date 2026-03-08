@@ -6,6 +6,7 @@ from django.conf import settings
 from django.template.loader import render_to_string
 import requests
 from django.utils.html import strip_tags
+from django.utils.html import escape
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from baysoko.utils.sms import send_sms_brevo
@@ -63,12 +64,15 @@ def send_email_brevo(subject, plain_message, html_message, to_emails):
             masked = 'REDACTED'
         logger.debug('Attempting Brevo API send; api-key=%s, from=%s, to=%s', masked, sender.get('email'), to_emails)
         to = [{'email': email} for email in to_emails]
+        # Ensure htmlContent is present for Brevo API: fall back to escaped plain text wrapped in minimal HTML
+        safe_html = html_message if (html_message and str(html_message).strip()) else f"<pre>{escape(plain_message or '')}</pre>"
+        safe_text = plain_message or strip_tags(safe_html) or ''
         payload = {
             'sender': sender,
             'to': to,
             'subject': subject,
-            'textContent': plain_message,
-            'htmlContent': html_message,
+            'textContent': safe_text,
+            'htmlContent': safe_html,
         }
 
         # Try a few times for transient network issues

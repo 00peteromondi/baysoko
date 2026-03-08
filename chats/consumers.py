@@ -225,3 +225,107 @@ class ChatConsumer(AsyncWebsocketConsumer):
         ).exclude(
             sender=self.user
         ).update(is_read=True, read_at=timezone.now())
+
+
+
+class AgentConsumer(AsyncWebsocketConsumer):
+    """A lightweight AI agent websocket consumer that accepts a title or prompt and returns generated fields.
+
+    Expected incoming JSON: { "type": "generate", "title": "Product title here" }
+    Sends back: { "type": "generate_response", "ok": True, "data": { ... } }
+    """
+    async def connect(self):
+        self.user = self.scope.get('user')
+        if not self.user or not self.user.is_authenticated:
+            await self.close()
+            return
+        await self.accept()
+        # If the user has never interacted with the assistant, send an initial greeting
+        try:
+            from .models import AgentChat
+            from asgiref.sync import sync_to_async
+
+            @database_sync_to_async
+            def _ensure_greeting(user_id):
+                try:
+                    return AgentChat.objects.filter(user_id=user_id).exists()
+                except Exception:
+                    return False
+
+            has_history = await _ensure_greeting(self.user.id)
+            if not has_history:
+                greeting = "Hello, Welcome to Baysoko. Call me Bay Bee. How may I assist you today?"
+                # persist the greeting server-side for history
+                @database_sync_to_async
+                def _create_greeting(user_id, text):
+                    try:
+                        AgentChat.objects.create(user_id=user_id, role='assistant', content=text)
+                        return True
+                    except Exception:
+                        return False
+
+                await _create_greeting(self.user.id, greeting)
+                await self.send(text_data=json.dumps({'type': 'generate_response', 'ok': True, 'data': greeting}))
+        except Exception:
+            logger.exception('Failed to send initial assistant greeting')
+
+    async def disconnect(self, close_code):
+        try:
+            await self.close()
+        except Exception:
+            pass
+
+    async def receive(self, text_data=None, bytes_data=None):
+        try:
+            payload = json.loads(text_data or '{}')
+            if payload.get('type') != 'generate':
+                await self.send(text_data=json.dumps({'type': 'error', 'error': 'unsupported type'}))
+                return
+            title = payload.get('title') or payload.get('prompt')
+            if not title:
+                await self.send(text_data=json.dumps({'type': 'generate_response', 'ok': False, 'error': 'missing title'}))
+                return
+
+            # Perform generation in threadpool to avoid blocking event loop
+            from asgiref.sync import sync_to_async
+
+            # Accept optional conversation history for follow-up context
+            history = payload.get('history')
+            async_generate = sync_to_async(_generate_wrapper, thread_sensitive=False)
+            # If this looks like a question or conversational prompt, call assistant_reply
+            is_question = False
+            try:
+                if isinstance(title, str) and ('?' in title or title.strip().lower().startswith(('how', 'what', 'why', 'where', 'when', 'help', 'assist', 'can', 'could', 'would'))):
+                    is_question = True
+            except Exception:
+                is_question = False
+
+            if is_question:
+                # call assistant textual reply
+                from asgiref.sync import sync_to_async
+                async_assist = sync_to_async(_assistant_wrapper, thread_sensitive=False)
+                text = await async_assist(title, history, getattr(self.user, 'id', None))
+                await self.send(text_data=json.dumps({'type': 'generate_response', 'ok': True, 'data': text}))
+            else:
+                result = await async_generate(title, history)
+                await self.send(text_data=json.dumps({'type': 'generate_response', 'ok': True, 'data': result}))
+        except Exception as e:
+            logger.exception('AgentConsumer error')
+            await self.send(text_data=json.dumps({'type': 'generate_response', 'ok': False, 'error': str(e)}))
+
+
+def _generate_wrapper(title: str, history=None):
+    """Sync wrapper to call the AI helper and return a plain dict."""
+    try:
+        from listings.ai_assistant import generate_listing_fields
+        return generate_listing_fields(title, context=history)
+    except Exception as e:
+        return {'error': str(e)}
+
+
+def _assistant_wrapper(prompt: str, history=None, user_id=None):
+    try:
+        from listings.ai_assistant import assistant_reply
+        return assistant_reply(prompt, context=history, user_id=user_id)
+    except Exception as e:
+        return f'Assistant error: {e}'

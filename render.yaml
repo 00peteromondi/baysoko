@@ -9,8 +9,9 @@ services:
       python manage.py migrate --noinput
       python manage.py collectstatic --noinput
       python manage.py setup_oauth
-    # Use Daphne to serve ASGI (required for Channels/WebSockets)
-    startCommand: daphne -b 0.0.0.0 -p $PORT baysoko.asgi:application
+    # Use Gunicorn with Uvicorn worker to serve ASGI (robust on Render)
+    # Falls back to an ASGI server that handles HTTP and WebSockets reliably
+    startCommand: gunicorn baysoko.asgi:application -k uvicorn.workers.UvicornWorker -w 4 -b 0.0.0.0:$PORT
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -38,6 +39,10 @@ services:
         sync: false
       - key: CELERY_RESULT_BACKEND
         sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: USE_AIRLLM
+        value: 'false'
 
   - type: worker
     name: baysoko-celery-worker
@@ -57,6 +62,10 @@ services:
         sync: false
       - key: CELERY_RESULT_BACKEND
         sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: USE_AIRLLM
+        value: 'false'
 
   - type: worker
     name: baysoko-celery-beat
@@ -77,3 +86,7 @@ services:
         sync: false
       - key: CELERY_RESULT_BACKEND
         sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: USE_AIRLLM
+        value: 'false'

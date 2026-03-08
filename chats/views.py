@@ -10,6 +10,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.cache import cache
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db.models import Q, Count, OuterRef, Subquery, Max
@@ -23,7 +24,7 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from django.utils import timezone
 
-from .models import Conversation, Message, MessageAttachment, UserOnlineStatus
+from .models import Conversation, Message, MessageAttachment, UserOnlineStatus, AgentChat
 from .forms import MessageForm
 from .utils import broadcast_unread_sync
 
@@ -795,6 +796,94 @@ class UnifiedConversationView(LoginRequiredMixin, View):
             'reply_to_id': msg.reply_to_id,
             'is_pinned': msg.is_pinned,
         }
+
+
+@login_required
+@csrf_exempt
+def agent_history(request):
+    """GET: return recent agent chat entries for the current user; POST: append a new entry.
+
+    POST body: { role: 'user'|'assistant', content: '...' , meta: {...} }
+    """
+    try:
+        if request.method == 'GET':
+            # Prefer Conversation/Message history with the assistant bot if available
+            bot_username = getattr(settings, 'AGENT_BOT_USERNAME', 'assistant-bot')
+            bot_user = User.objects.filter(username=bot_username).first()
+            history = []
+            if bot_user:
+                convs = Conversation.objects.filter(participants=request.user).filter(participants=bot_user)
+                if convs.exists():
+                    msgs = Message.objects.filter(conversation__in=convs).order_by('timestamp')[:200]
+                    history = [{
+                        'id': m.id,
+                        'role': 'user' if m.sender_id == request.user.id else 'assistant',
+                        'content': m.content,
+                        'meta': None,
+                        'timestamp': m.timestamp.isoformat(),
+                    } for m in msgs]
+            # Fallback to AgentChat entries if no bot conversation found
+            if not history:
+                entries = list(request.user.agent_chats.order_by('-timestamp')[:100])
+                history = [{
+                    'id': e.id,
+                    'role': e.role,
+                    'content': e.content,
+                    'meta': e.meta,
+                    'timestamp': e.timestamp.isoformat(),
+                } for e in reversed(entries)]
+            return JsonResponse({'success': True, 'history': history})
+
+        if request.method == 'POST':
+            try:
+                payload = json.loads(request.body)
+            except Exception:
+                payload = request.POST
+            role = payload.get('role', 'assistant')
+            content = payload.get('content', '')
+            meta = payload.get('meta') if isinstance(payload, dict) else None
+            if not content:
+                return JsonResponse({'success': False, 'error': 'content required'}, status=400)
+
+            # Persist to AgentChat (legacy) AND to Conversation/Message with a bot user
+            ac = AgentChat.objects.create(user=request.user, role=role, content=content, meta=meta)
+
+            # Find or create a bot user
+            bot_username = getattr(settings, 'AGENT_BOT_USERNAME', 'assistant-bot')
+            bot_user, created = User.objects.get_or_create(username=bot_username, defaults={'is_active': False, 'first_name': 'Assistant'})
+
+            # Find or create a conversation between the user and the bot
+            conv = Conversation.objects.filter(participants=request.user).filter(participants=bot_user).first()
+            if not conv:
+                conv = Conversation.objects.create()
+                conv.participants.add(request.user, bot_user)
+
+            # Create a Message record attached to the conversation
+            sender = request.user if role == 'user' else bot_user
+            msg = Message.objects.create(conversation=conv, sender=sender, content=content)
+
+            conv.updated_at = timezone.now()
+            conv.save(update_fields=['updated_at'])
+
+            return JsonResponse({'success': True, 'id': ac.id, 'message_id': msg.id, 'timestamp': msg.timestamp.isoformat()})
+
+        return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+    except Exception as e:
+        logger.exception('agent_history error')
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+def gemini_status(request):
+    """Return cached Gemini model and recent probe logs for debugging."""
+    try:
+        working = cache.get('gemini_working_model')
+        probe = cache.get('gemini_probe_log')
+        last_error = cache.get('gemini_last_error')
+        return JsonResponse({'success': True, 'gemini_working_model': working, 'probe_log': probe, 'last_error': last_error})
+    except Exception as e:
+        logger.exception('gemini_status error')
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 class SendUnifiedMessageView(LoginRequiredMixin, View):

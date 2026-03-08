@@ -48,3 +48,8 @@ def client_error_log(request):
             return JsonResponse({'ok': False, 'error': str(e)}, status=500)
         except Exception:
             return JsonResponse({'ok': False}, status=500)
+
+
+def health(request):
+    """Simple health check used by load balancers and platform health checks."""
+    return JsonResponse({'status': 'ok'}, status=200)
