@@ -1642,6 +1642,28 @@
         }
     </style>
 
+    <!-- Replace broken /media/ images with placeholder to avoid visible 404s -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function(){
+            const placeholder = '{% static "images/placeholder.png" %}';
+            // Delegate: handle errors on images (covers images added later too)
+            document.body.addEventListener('error', function(e){
+                const tgt = e.target;
+                if (tgt && tgt.tagName === 'IMG') {
+                    try {
+                        const src = tgt.getAttribute('src') || '';
+                        if (src.startsWith('/media/') || src.includes('/media/')) {
+                            if (tgt.dataset._fallback !== '1') {
+                                tgt.dataset._fallback = '1';
+                                tgt.src = placeholder;
+                            }
+                        }
+                    } catch (err) { /* swallow */ }
+                }
+            }, true);
+        });
+    </script>
+
     <style>
         /* Thin, branded scrollbar: small width, primary orange thumb, transparent track */
         :root {

@@ -336,7 +336,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Prefer explicit env var `GEMINI_API_KEY` but fall back to `GOOGLE_API_KEY` if present
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY') or config('GEMINI_API_KEY', default='')
 # Pin a stable model to avoid runtime probing. Set via env `GEMINI_MODEL` to override.
-GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-3')
+# Default model: prefer a known-supported Gemini variant for REST fallbacks.
+# Override via the GEMINI_MODEL environment variable if you have a different model.
+GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-1.5-flash')
 # When pinned, candidate probing will use only the pinned model to avoid extra requests
 GEMINI_CANDIDATE_MODELS = [GEMINI_MODEL]
 
