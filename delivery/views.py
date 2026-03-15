@@ -314,7 +314,19 @@ def become_driver(request):
 
 def delivery_home(request):
     """Landing page for the delivery app (unauthenticated)."""
-    return render(request, 'delivery/home.html')
+    try:
+        if request.user.is_authenticated and request.session.get('delivery_auth'):
+            return redirect('delivery:dashboard')
+    except Exception:
+        pass
+    delivery_authenticated = False
+    try:
+        delivery_authenticated = bool(request.session.get('delivery_auth'))
+    except Exception:
+        delivery_authenticated = False
+    return render(request, 'delivery/home.html', {
+        'delivery_authenticated': delivery_authenticated,
+    })
 
 
 @require_GET
@@ -592,17 +604,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'delivery/dashboard.html'
 
     def dispatch(self, request, *args, **kwargs):
-        user = request.user
-        if user.is_authenticated:
-            is_privileged = user.is_staff or user.is_superuser or hasattr(user, 'delivery_person')
-            if not is_privileged:
-                try:
-                    from storefront.models import Store
-                    if not Store.objects.filter(owner=user).exists():
-                        messages.info(request, 'Access to the delivery dashboard is limited. You can track deliveries from the delivery home page.')
-                        return redirect('delivery:home')
-                except Exception:
-                    return redirect('delivery:home')
+        # Allow all authenticated users (buyers/sellers/drivers) full dashboard access.
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -775,6 +777,13 @@ class DeliveryLoginView(AuthLoginView):
             self.request.session['delivery_auth'] = True
         except Exception:
             pass
+        try:
+            if not getattr(self.request.user, 'email_verified', False):
+                self.request.session['post_verify_redirect'] = reverse_lazy('delivery:dashboard')
+                self.request.session['delivery_login_intent'] = True
+                return redirect('verification_required')
+        except Exception:
+            pass
         return response
 
     def get_success_url(self):
@@ -821,8 +830,13 @@ def delivery_register(request):
                 request.session.pop('delivery_login_intent', None)
             except Exception:
                 pass
-            messages.success(request, 'Account created. You are now logged in.')
-            return redirect('delivery:dashboard')
+            messages.success(request, 'Account created. Please verify your email to continue.')
+            try:
+                request.session['post_verify_redirect'] = reverse_lazy('delivery:dashboard')
+                request.session['delivery_login_intent'] = True
+            except Exception:
+                pass
+            return redirect('verification_required')
     else:
         form = DeliveryUserCreationForm()
 
@@ -859,9 +873,17 @@ def delivery_profile_complete(request):
             delivery_profile.user = user
             delivery_profile.save()
             try:
+                updated_fields = []
                 if delivery_profile.phone_number and not getattr(user, 'phone_number', None):
                     user.phone_number = delivery_profile.phone_number
-                    user.save(update_fields=['phone_number'])
+                    updated_fields.append('phone_number')
+                if not getattr(user, 'location', None):
+                    loc = delivery_profile.city or delivery_profile.address
+                    if loc:
+                        user.location = loc
+                        updated_fields.append('location')
+                if updated_fields:
+                    user.save(update_fields=updated_fields)
             except Exception:
                 pass
             messages.success(request, 'Delivery profile updated.')

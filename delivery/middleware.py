@@ -49,22 +49,8 @@ class DeliveryAppSessionMiddleware:
                                     return redirect('delivery:profile_complete')
                         except Exception:
                             pass
-                    # If user is a buyer (not seller/admin/delivery person), restrict to tracking-only routes
-                    try:
-                        is_privileged = request.user.is_staff or request.user.is_superuser or hasattr(request.user, 'delivery_person')
-                        if not is_privileged:
-                            from storefront.models import Store
-                            is_seller = Store.objects.filter(owner=request.user).exists()
-                            if not is_seller:
-                                buyer_allowed = [
-                                    '/delivery/', '/delivery/home', '/delivery/track',
-                                    '/delivery/profile/complete', '/delivery/logout',
-                                    '/delivery/api/track'
-                                ]
-                                if not any(path.startswith(p) for p in buyer_allowed):
-                                    return redirect('delivery:home')
-                    except Exception:
-                        pass
+                    # Buyers should have full access to delivery app features (not just tracking)
+                    # so we do not restrict non-seller users here.
         return self.get_response(request)
 
 

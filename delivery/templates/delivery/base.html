@@ -634,6 +634,7 @@
         @media (max-width: 992px) {
             .delivery-bottom-nav { display: block; }
             .delivery-content { padding-bottom: 90px; }
+            body.sidebar-open-mobile .delivery-bottom-nav { display: none; }
         }
     </style>
     
@@ -730,13 +731,14 @@
             </div>
         </div>
     </nav>
-    {% if user.is_authenticated and not is_delivery_person and not is_seller and not user.is_staff %}
+    {% if user.is_authenticated and not is_delivery_person and not is_seller and not user.is_staff and not request.session.delivery_auth %}
     <div class="delivery-redirect-banner">
         <div>
-            <strong>Tracking-only access.</strong>
-            <div class="text-muted small">You’re logged in as a buyer. You can track deliveries here or return to the marketplace.</div>
+            <strong>Delivery tools need a delivery sign-in.</strong>
+            <div class="text-muted small">You’re signed in to the marketplace. Sign in to the delivery app to access dispatch, tracking, and dashboards.</div>
         </div>
         <div class="d-flex gap-2">
+            <a href="{% url 'delivery:login' %}" class="btn btn-sm btn-delivery">Sign in to Delivery</a>
             <a href="{% url 'home' %}" class="btn btn-sm btn-delivery-outline">Go to Marketplace</a>
             <form method="post" action="{% url 'delivery:logout' %}">
                 {% csrf_token %}
@@ -861,6 +863,13 @@
                             <i class="bi bi-shop"></i>
                             <span>Back to Shop</span>
                         </a>
+                        <form method="post" action="{% url 'delivery:logout' %}" class="px-1">
+                            {% csrf_token %}
+                            <button type="submit" class="sidebar-link text-danger w-100 bg-transparent border-0 text-start">
+                                <i class="bi bi-box-arrow-right"></i>
+                                <span>Logout</span>
+                            </button>
+                        </form>
                     </div>
                 </div>
             </nav>
@@ -1005,6 +1014,7 @@
                         if (window.innerWidth < 992) {
                             deliverySidebar.classList.toggle('active');
                             sidebarOverlay.classList.toggle('active');
+                            document.body.classList.toggle('sidebar-open-mobile', deliverySidebar.classList.contains('active'));
                         } else {
                             document.body.classList.toggle('sidebar-mini');
                             try {
@@ -1017,12 +1027,14 @@
                 sidebarOverlay.addEventListener('click', function() {
                     deliverySidebar.classList.remove('active');
                     sidebarOverlay.classList.remove('active');
+                    document.body.classList.remove('sidebar-open-mobile');
                 });
                 
                 deliveryContent.addEventListener('click', function() {
                     if (window.innerWidth < 992) {
                         deliverySidebar.classList.remove('active');
                         sidebarOverlay.classList.remove('active');
+                        document.body.classList.remove('sidebar-open-mobile');
                     }
                 });
             }

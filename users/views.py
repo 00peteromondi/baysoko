@@ -420,6 +420,25 @@ def verify_email(request):
             except Exception:
                 pass
 
+        # Delivery flow: honor post-verify redirect and keep delivery session separate
+        post_verify_redirect = request.session.pop('post_verify_redirect', None)
+        if post_verify_redirect and _is_delivery_next(post_verify_redirect):
+            try:
+                request.session['delivery_auth'] = True
+                request.session.pop('delivery_login_intent', None)
+            except Exception:
+                pass
+            # If user doesn't have a delivery profile, take them to completion first
+            try:
+                if not hasattr(user, 'delivery_profile') and not hasattr(user, 'delivery_person'):
+                    post_verify_redirect = reverse('delivery:profile_complete')
+            except Exception:
+                pass
+            if redirect_after:
+                messages.success(request, 'Email verified! Redirecting to delivery...')
+                return redirect(post_verify_redirect)
+            return JsonResponse({'success': True, 'redirect': post_verify_redirect})
+
         # If the user has a phone number and it's not yet phone_verified, redirect to phone verification flow
         if getattr(user, 'phone_number', None) and not getattr(user, 'phone_verified', False):
             # build verify phone URL
@@ -831,6 +850,11 @@ def google_callback(request):
             next_url = _normalize_next_url(request.session.pop('post_login_redirect', None))
             is_delivery_flow = _is_delivery_next(next_url) or bool(request.session.get('delivery_login_intent'))
             if is_delivery_flow:
+                # If email not verified yet, route through verification then back to delivery
+                if not getattr(user, 'email_verified', False):
+                    request.session['post_verify_redirect'] = next_url or reverse('delivery:dashboard')
+                    request.session['delivery_login_intent'] = True
+                    return redirect('verification_required')
                 request.session['delivery_auth'] = True
                 request.session.pop('delivery_login_intent', None)
                 return redirect(next_url or reverse('delivery:dashboard'))
@@ -877,10 +901,11 @@ def google_callback(request):
             next_url = _normalize_next_url(request.session.pop('post_login_redirect', None))
             is_delivery_flow = _is_delivery_next(next_url) or bool(request.session.get('delivery_login_intent'))
             if is_delivery_flow:
-                request.session['delivery_auth'] = True
-                request.session.pop('delivery_login_intent', None)
-                messages.success(request, 'Account created. Welcome to Baysoko Delivery!')
-                return redirect(next_url or reverse('delivery:dashboard'))
+                # New delivery user must verify email first, then land in delivery app
+                request.session['post_verify_redirect'] = next_url or reverse('delivery:dashboard')
+                request.session['delivery_login_intent'] = True
+                messages.success(request, 'Account created. Please verify your email to continue.')
+                return redirect('verification_required')
             request.session['just_registered'] = True
             request.session['just_registered_message'] = 'Account created with Google! Check your email to verify your account.'
             if not user.location:
@@ -971,6 +996,10 @@ def facebook_callback(request):
             next_url = _normalize_next_url(request.session.pop('post_login_redirect', None))
             is_delivery_flow = _is_delivery_next(next_url) or bool(request.session.get('delivery_login_intent'))
             if is_delivery_flow:
+                if not getattr(user, 'email_verified', False):
+                    request.session['post_verify_redirect'] = next_url or reverse('delivery:dashboard')
+                    request.session['delivery_login_intent'] = True
+                    return redirect('verification_required')
                 request.session['delivery_auth'] = True
                 request.session.pop('delivery_login_intent', None)
                 return redirect(next_url or reverse('delivery:dashboard'))
@@ -1017,10 +1046,10 @@ def facebook_callback(request):
             next_url = _normalize_next_url(request.session.pop('post_login_redirect', None))
             is_delivery_flow = _is_delivery_next(next_url) or bool(request.session.get('delivery_login_intent'))
             if is_delivery_flow:
-                request.session['delivery_auth'] = True
-                request.session.pop('delivery_login_intent', None)
-                messages.success(request, 'Account created. Welcome to Baysoko Delivery!')
-                return redirect(next_url or reverse('delivery:dashboard'))
+                request.session['post_verify_redirect'] = next_url or reverse('delivery:dashboard')
+                request.session['delivery_login_intent'] = True
+                messages.success(request, 'Account created. Please verify your email to continue.')
+                return redirect('verification_required')
             request.session['just_registered'] = True
             request.session['just_registered_message'] = 'Account created with Facebook! Check your email to verify your account.'
             if not user.location:
