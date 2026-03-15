@@ -100,6 +100,15 @@ def create_delivery_from_order(order):
         # Get shipping address (order stores address fields directly)
         shipping_address = order.shipping_address
 
+        # Determine pickup store (best-effort)
+        pickup_store = None
+        try:
+            first_item = order.order_items.select_related('listing__store').first()
+            if first_item and first_item.listing and first_item.listing.store:
+                pickup_store = first_item.listing.store
+        except Exception:
+            pickup_store = None
+
         # Calculate package weight (best-effort): sum listing weight if numeric, otherwise default to 1.0
         package_weight = 0.0
         try:
@@ -112,6 +121,24 @@ def create_delivery_from_order(order):
         except Exception:
             package_weight = 1.0
         
+        # Determine delivery fee (prefer order.delivery_fee, fallback to route calc)
+        delivery_fee_val = 0
+        try:
+            if getattr(order, 'delivery_fee', None):
+                delivery_fee_val = float(order.delivery_fee)
+        except Exception:
+            delivery_fee_val = 0
+        if not delivery_fee_val:
+            try:
+                from .utils import calculate_delivery_fee
+                delivery_fee_val = float(calculate_delivery_fee(
+                    weight=package_weight or 1.0,
+                    pickup_address=(pickup_store.location if pickup_store and pickup_store.location else getattr(settings, 'DEFAULT_PICKUP_ADDRESS', 'Main Store, HomaBay')),
+                    recipient_address=shipping_address or ''
+                ))
+            except Exception:
+                delivery_fee_val = 0
+
         # Create delivery request
         delivery = DeliveryRequest.objects.create(
             order_id=str(order.id),
@@ -120,16 +147,20 @@ def create_delivery_from_order(order):
             priority=2 if getattr(order, 'is_urgent', False) else 1,
             
             # Pickup information (use site/store defaults; Order has no store reference)
-            pickup_name=getattr(settings, 'baysoko', {}).get('SITE_NAME', 'Baysoko'),
-            pickup_address=getattr(settings, 'DEFAULT_PICKUP_ADDRESS', 'Main Store, HomaBay'),
+            pickup_name=(pickup_store.name if pickup_store else getattr(settings, 'baysoko', {}).get('SITE_NAME', 'Baysoko')),
+            pickup_address=(pickup_store.location if pickup_store and pickup_store.location else getattr(settings, 'DEFAULT_PICKUP_ADDRESS', 'Main Store, HomaBay')),
             pickup_phone=getattr(settings, 'DEFAULT_PICKUP_PHONE', '+254700000000'),
             pickup_email=getattr(settings, 'DEFAULT_PICKUP_EMAIL', 'store@baysoko.com'),
+            pickup_latitude=(pickup_store.location_latitude if pickup_store else None),
+            pickup_longitude=(pickup_store.location_longitude if pickup_store else None),
             
             # Delivery information (customer)
             recipient_name=f"{order.first_name} {order.last_name}".strip() or order.user.get_full_name() or order.user.username,
             recipient_address=shipping_address or '',
             recipient_phone=order.phone_number or '',
             recipient_email=order.email or order.user.email,
+            recipient_latitude=(order.shipping_latitude if order.shipping_latitude else None),
+            recipient_longitude=(order.shipping_longitude if order.shipping_longitude else None),
             
             # Package details
             package_description=f"Order #{order.id} - {order.order_items.count()} items",
@@ -138,15 +169,15 @@ def create_delivery_from_order(order):
             requires_signature=True,
             
             # Financial details
-            delivery_fee=0,
-            total_amount=order.total_price,
+            delivery_fee=delivery_fee_val,
+            total_amount=delivery_fee_val,
             payment_status='paid' if order.status == 'paid' else 'pending',
             
             # Metadata
             metadata={
                 'order_id': order.id,
                 'user_id': getattr(getattr(order, 'user', None), 'id', None),
-                'store_id': (getattr(order, 'store', None).id if getattr(order, 'store', None) else None),
+                'store_id': (pickup_store.id if pickup_store else None),
                 'created_from': 'ecommerce',
                 'items': [
                     {

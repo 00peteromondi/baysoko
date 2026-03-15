@@ -581,7 +581,7 @@
         <!-- Social Login -->
         <div class="social-login-section">
             <div class="social-buttons">
-                <a href="{% url 'google_login' %}" class="social-btn-google" id="googleLoginBtn" data-no-ajax>
+                <a href="{% url 'google_login' %}" class="social-btn-google js-capture-location" id="googleLoginBtn" data-no-ajax>
                     Continue with Google
                 </a>
             </div>
@@ -896,9 +896,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ========== LOGIN via WebSocket ==========
+    let loginFallbackTimer = null;
+    let loginHandled = false;
     const loginForm = document.getElementById('loginForm');
     if (loginForm) {
         loginForm.addEventListener('submit', function(e) {
+            const useWsLogin = window.ENABLE_WS_LOGIN === true;
+            if (!useWsLogin) {
+                return; // allow normal form POST
+            }
             e.preventDefault();
             const submitBtn = document.getElementById('submitButton');
             const originalText = submitBtn.innerHTML;
@@ -910,6 +916,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const username = document.getElementById('id_username').value;
             const password = document.getElementById('id_password').value;
             const remember = rememberInput.checked;
+
+            loginHandled = false;
+            if (loginFallbackTimer) clearTimeout(loginFallbackTimer);
+            loginFallbackTimer = setTimeout(() => {
+                if (loginHandled) return;
+                loginForm.submit();
+            }, 3500);
 
             wsManager.send('login', {
                 username,
@@ -925,6 +938,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Register login response handler
     wsManager.on('login_response', function(data) {
+        loginHandled = true;
+        if (loginFallbackTimer) {
+            try { clearTimeout(loginFallbackTimer); } catch (e) {}
+        }
         const submitBtn = document.getElementById('submitButton');
         if (submitBtn) {
             submitBtn.innerHTML = '<i class="bi bi-box-arrow-in-right"></i> Sign In';

@@ -7,7 +7,7 @@ from .models import (
     DeliveryStatusHistory, DeliveryProof, DeliveryRoute,
     DeliveryRating, DeliveryNotification, DeliveryPricingRule,
     DeliveryPackageType, DeliveryTimeSlot, DeliveryInsurance,
-    DeliveryAnalytics
+    DeliveryAnalytics, DeliveryProfile, DeliveryRouteRate
 )
 from django.utils import timezone
 
@@ -118,82 +118,19 @@ class DeliveryRequestAdmin(admin.ModelAdmin):
                     'delivery_fee', 'created_at', 'delivery_person']
     list_filter = ['status', 'priority', 'payment_status', 'created_at']
     search_fields = ['tracking_number', 'order_id', 'recipient_name', 'recipient_phone']
-    readonly_fields = ['created_at', 'updated_at', 'tracking_number', 'calculate_distance']
-    list_editable = ['status', 'priority']
-    inlines = [DeliveryStatusHistoryInline, DeliveryProofInline]
-    
-    fieldsets = (
-        ('Tracking Information', {
-            'fields': ('tracking_number', 'order_id', 'external_order_ref', 'status', 'priority')
-        }),
-        ('Pickup Details', {
-            'fields': ('pickup_name', 'pickup_address', 'pickup_phone', 'pickup_email', 'pickup_notes')
-        }),
-        ('Delivery Details', {
-            'fields': ('recipient_name', 'recipient_address', 'recipient_phone', 
-                      'recipient_email', 'delivery_zone')
-        }),
-        ('Package Information', {
-            'fields': ('package_description', 'package_weight', 'declared_value',
-                      'is_fragile', 'requires_signature')
-        }),
-        ('Service Assignment', {
-            'fields': ('delivery_service', 'delivery_person')
-        }),
-        ('Financial Information', {
-            'fields': ('delivery_fee', 'tax_amount', 'insurance_fee', 'total_amount', 'payment_status')
-        }),
-        ('Timestamps', {
-            'fields': ('pickup_time', 'estimated_delivery_time', 'actual_delivery_time',
-                      'created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-        ('Additional Information', {
-            'fields': ('notes', 'metadata'),
-            'classes': ('collapse',)
-        }),
-    )
-    
-    actions = ['mark_as_delivered', 'assign_to_random_driver', 'calculate_all_distances']
-    
-    def mark_as_delivered(self, request, queryset):
-        updated = 0
-        for delivery in queryset:
-            delivery.status = 'delivered'
-            delivery.actual_delivery_time = timezone.now()
-            delivery.save()
-            updated += 1
-        
-        self.message_user(request, f"{updated} deliveries marked as delivered.")
-    mark_as_delivered.short_description = "Mark selected deliveries as delivered"
-    
-    def assign_to_random_driver(self, request, queryset):
-        from django.db.models import Count
-        available_drivers = DeliveryPerson.objects.filter(
-            is_available=True, 
-            current_status='available'
-        ).annotate(
-            delivery_count=Count('assignments')
-        ).order_by('delivery_count')
-        
-        if available_drivers.exists():
-            for delivery in queryset.filter(status='accepted'):
-                driver = available_drivers.first()
-                delivery.delivery_person = driver
-                delivery.status = 'assigned'
-                delivery.save()
-                available_drivers = available_drivers.exclude(id=driver.id)
-            self.message_user(request, f"Assigned {queryset.count()} deliveries to available drivers.")
-        else:
-            self.message_user(request, "No available drivers found.", level='error')
-    
-    def calculate_all_distances(self, request, queryset):
-        for delivery in queryset:
-            distance = delivery.calculate_distance()
-            if distance:
-                delivery.metadata['calculated_distance_km'] = distance
-                delivery.save()
-        self.message_user(request, f"Calculated distances for {queryset.count()} deliveries.")
+
+
+@admin.register(DeliveryProfile)
+class DeliveryProfileAdmin(admin.ModelAdmin):
+    list_display = ['user', 'phone_number', 'city', 'created_at']
+    search_fields = ['user__username', 'user__email', 'phone_number']
+
+
+@admin.register(DeliveryRouteRate)
+class DeliveryRouteRateAdmin(admin.ModelAdmin):
+    list_display = ['origin', 'destination', 'base_fee', 'is_active']
+    list_filter = ['origin', 'destination', 'is_active']
+    readonly_fields = ['created_at']
 
 
 @admin.register(DeliveryStatusHistory)

@@ -2,6 +2,7 @@
 
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.db.models.functions import Lower
 from django.conf import settings
 import os
 
@@ -157,6 +158,15 @@ class User(AbstractUser):
             return self.first_name
         else:
             return self.username
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                Lower('email'),
+                name='uniq_users_email_ci',
+                condition=~models.Q(email__isnull=True) & ~models.Q(email='')
+            )
+        ]
 
 class AccountDeletionLog(models.Model):
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)

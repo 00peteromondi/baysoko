@@ -8,8 +8,10 @@ import random
 import requests
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Q
+from django.db.models import Q, Sum, F, DecimalField
 from django.utils import timezone
+from django.urls import resolve, Resolver404
+from urllib.parse import urlsplit
 from requests.exceptions import RequestException
 
 logger = logging.getLogger(__name__)
@@ -367,6 +369,8 @@ def _filter_platform_items_for_prompt(prompt, text, items):
 
     if re.search(r"\b(subscription|subscriptions|plan|plans|billing|renew|upgrade|downgrade|cancel subscription|payment option)\b", context):
         return _dedupe_platform_items([it for it in items if type_match(it, {'subscription', 'subscription_plan', 'store'})] + action_items)[:5]
+    if re.search(r"\b(affiliate|affiliates|referral|referrals|commission|commissions|payout|payouts)\b", context):
+        return _dedupe_platform_items([it for it in items if type_match(it, {'affiliate'})] + action_items)[:5]
     if re.search(r"\b(order|orders|track|delivery)\b", context):
         return _dedupe_platform_items([it for it in items if type_match(it, {'order'})] + action_items)[:5]
     if re.search(r"\b(cart|checkout)\b", context):
@@ -401,6 +405,10 @@ def _extract_action_suggestions_from_text(text):
             url = '/listings/cart/'
         elif 'order' in low:
             url = '/listings/orders/'
+        elif 'affiliate' in low or 'referral' in low or 'commission' in low:
+            url = '/affiliates/'
+        elif 'dashboard' in low or 'seller' in low:
+            url = '/storefront/dashboard/'
         action_items.append({
             'type': 'action_suggestion',
             'id': f'action_{abs(hash(line)) % 1000000}',
@@ -440,6 +448,8 @@ def _attach_suggestion_reasons(prompt, text, items):
             item['reason'] = 'Relevant order.'
         elif t in {'subscription', 'subscription_plan'}:
             item['reason'] = 'Subscription option.'
+        elif t == 'affiliate':
+            item['reason'] = 'Affiliate resource.'
         elif t == 'action_suggestion':
             item['reason'] = item.get('reason') or 'Suggested action.'
         out.append(item)
@@ -531,6 +541,19 @@ def _normalize_internal_url(url):
     return None
 
 
+def _url_path_exists(url):
+    try:
+        path = urlsplit(url or '').path
+        if not path or not path.startswith('/'):
+            return False
+        resolve(path)
+        return True
+    except Resolver404:
+        return False
+    except Exception:
+        return False
+
+
 def _normalize_platform_item_urls(items):
     out = []
     for it in (items or []):
@@ -538,6 +561,8 @@ def _normalize_platform_item_urls(items):
             continue
         item = dict(it)
         item['url'] = _normalize_internal_url(item.get('url'))
+        if item.get('url') and not _url_path_exists(item.get('url')):
+            item['url'] = None
         out.append(item)
     return out
 
@@ -1103,7 +1128,7 @@ def assistant_reply(prompt: str, context=None, user_id=None):
     """
     sys_prompt = (
         "You are the Baysoko Assistant. Help users with buying, selling, creating stores, "
-        "listings, editing, deleting, subscriptions, orders, favorites, and general platform tasks. "
+        "listings, editing, deleting, subscriptions, orders, favorites, affiliate program, seller dashboard, and general platform tasks. "
         "Answer concisely and provide actionable steps; when appropriate, offer next actions (e.g., 'Add to cart', 'Create listing'). "
         "When user account context is available, answer account-specific questions strictly using the signed-in user's data only. "
         "Interpret first-person references (I/my/me) as the currently signed-in user unless the prompt is clearly general. "
@@ -1119,7 +1144,7 @@ def assistant_reply(prompt: str, context=None, user_id=None):
     try:
         if user_id is not None:
             from django.contrib.auth import get_user_model
-            from listings.models import Listing, Favorite, RecentlyViewed, Cart, Order
+            from listings.models import Listing, Favorite, RecentlyViewed, Cart, Order, OrderItem
             from storefront.models import Store, Subscription
             User = get_user_model()
             user = User.objects.filter(pk=user_id).first()
@@ -1243,6 +1268,56 @@ def assistant_reply(prompt: str, context=None, user_id=None):
                         platform_lines.append(
                             f"- {sub.store.name} | plan={sub.plan} | status={sub.status} | manage={sub_url}"
                         )
+                # Affiliate snapshot
+                try:
+                    from affiliates.models import AffiliateProfile, AffiliateClick, AffiliateAttribution, AffiliateCommission, AffiliatePayout
+                    affiliate_profile = AffiliateProfile.objects.filter(user=user).first()
+                    if affiliate_profile:
+                        link_base = getattr(settings, 'SITE_URL', '').rstrip('/')
+                        query_key = getattr(settings, 'AFFILIATE_QUERY_PARAM', 'aid')
+                        affiliate_link = f"{link_base}/?{query_key}={affiliate_profile.code}" if link_base else f"/?{query_key}={affiliate_profile.code}"
+                        clicks = AffiliateClick.objects.filter(affiliate=affiliate_profile).count()
+                        referrals = AffiliateAttribution.objects.filter(affiliate=affiliate_profile).count()
+                        commissions = AffiliateCommission.objects.filter(affiliate=affiliate_profile)
+                        total_commissions = commissions.aggregate(total=Sum('amount')).get('total') or 0
+                        paid_commissions = commissions.filter(status='paid').aggregate(total=Sum('amount')).get('total') or 0
+                        pending_commissions = commissions.filter(status='pending').aggregate(total=Sum('amount')).get('total') or 0
+                        platform_lines.append('Affiliate profile:')
+                        platform_lines.append(f"- code: {affiliate_profile.code} | active={affiliate_profile.is_active}")
+                        platform_lines.append(f"- link: {affiliate_link}")
+                        platform_lines.append(
+                            f"- clicks={clicks} | referrals={referrals} | total_commissions={total_commissions} | paid={paid_commissions} | pending={pending_commissions}"
+                        )
+                        platform_items.append({
+                            'type': 'affiliate',
+                            'id': affiliate_profile.id,
+                            'title': 'Affiliate dashboard',
+                            'code': affiliate_profile.code,
+                            'link': affiliate_link,
+                            'url': '/affiliates/',
+                        })
+                except Exception:
+                    logger.debug('Affiliate snapshot failed', exc_info=True)
+                # Seller dashboard snapshot (listings + sales)
+                try:
+                    listings_qs = Listing.objects.filter(Q(seller=user) | Q(store__owner=user))
+                    if listings_qs.exists():
+                        total_listings = listings_qs.count()
+                        active_listings = listings_qs.filter(is_active=True, is_sold=False).count()
+                        inactive_listings = listings_qs.filter(is_active=False).count()
+                        sold_listings = listings_qs.filter(is_sold=True).count()
+                        order_items = OrderItem.objects.filter(Q(listing__seller=user) | Q(listing__store__owner=user))
+                        seller_orders = order_items.values('order_id').distinct().count()
+                        revenue = order_items.aggregate(
+                            total=Sum(F('price') * F('quantity'), output_field=DecimalField(max_digits=12, decimal_places=2))
+                        ).get('total') or 0
+                        platform_lines.append('Seller dashboard snapshot:')
+                        platform_lines.append(
+                            f"- listings total={total_listings} | active={active_listings} | inactive={inactive_listings} | sold={sold_listings}"
+                        )
+                        platform_lines.append(f"- seller orders={seller_orders} | revenue={revenue}")
+                except Exception:
+                    logger.debug('Seller dashboard snapshot failed', exc_info=True)
             # Global lowest priced item
             should_include_market_listing = bool(re.search(r"\b(arrival|arrivals|new|featured|listing|listings|item|items|product|products|cheapest|lowest)\b", low_prompt))
             lowest = Listing.objects.filter(is_active=True, is_sold=False).order_by('price').first()
@@ -1387,6 +1462,24 @@ def assistant_reply(prompt: str, context=None, user_id=None):
             retrieval_items = items or []
         except Exception:
             logger.debug('Subscription retrieval failed', exc_info=True)
+
+    if retrieval_text is None and re.search(r"\b(affiliate|affiliates|referral|referrals|commission|commissions|payout|payouts)\b", low):
+        try:
+            res_text, items = _handle_affiliate_intent(prompt, user_id)
+            if res_text:
+                retrieval_text = res_text
+                retrieval_items = items or []
+        except Exception:
+            logger.debug('Affiliate retrieval failed', exc_info=True)
+
+    if retrieval_text is None and re.search(r"\b(seller dashboard|storefront dashboard|dashboard|analytics|performance|inventory|sales overview|seller analytics)\b", low):
+        try:
+            res_text, items = _handle_seller_dashboard_intent(prompt, user_id)
+            if res_text:
+                retrieval_text = res_text
+                retrieval_items = items or []
+        except Exception:
+            logger.debug('Seller dashboard retrieval failed', exc_info=True)
 
     if retrieval_text is None and re.search(r"\b(order|orders|my orders|track order)\b", low):
         try:
@@ -2594,6 +2687,142 @@ def _handle_subscription_intent(prompt: str, user_id=None):
     except Exception as e:
         logger.debug('_handle_subscription_intent error: %s', e)
         return ('Subscription service unavailable.', [])
+
+def _handle_affiliate_intent(prompt: str, user_id=None):
+    """Handle affiliate-related intents: link, stats, commissions, payouts, terms."""
+    try:
+        low = (prompt or '').strip().lower()
+        if not re.search(r"\b(affiliate|affiliates|referral|referrals|commission|commissions|payout|payouts|affiliate link|referral link)\b", low):
+            return (None, [])
+        if not user_id:
+            return ('Please sign in to view your affiliate profile and commissions.', [])
+        from affiliates.models import AffiliateProfile, AffiliateClick, AffiliateAttribution, AffiliateCommission, AffiliatePayout
+        profile = AffiliateProfile.objects.filter(user_id=user_id).first()
+        link_base = getattr(settings, 'SITE_URL', '').rstrip('/')
+        query_key = getattr(settings, 'AFFILIATE_QUERY_PARAM', 'aid')
+        affiliate_link = None
+        if profile:
+            affiliate_link = f"{link_base}/?{query_key}={profile.code}" if link_base else f"/?{query_key}={profile.code}"
+        items = []
+        if not profile:
+            text = (
+                "You are not enrolled in the Baysoko affiliate program yet. "
+                "Open the affiliate dashboard to activate your profile and get your referral link."
+            )
+            items.append({
+                'type': 'action_suggestion',
+                'id': 'affiliate_activate',
+                'title': 'Open affiliate dashboard',
+                'reason': 'Activate your affiliate profile.',
+                'url': '/affiliates/',
+            })
+            items.append({
+                'type': 'action_suggestion',
+                'id': 'affiliate_terms',
+                'title': 'View affiliate terms',
+                'reason': 'Review affiliate policies.',
+                'url': '/affiliates/terms/',
+            })
+            return (text, items)
+
+        clicks = AffiliateClick.objects.filter(affiliate=profile).count()
+        referrals = AffiliateAttribution.objects.filter(affiliate=profile).count()
+        commissions = AffiliateCommission.objects.filter(affiliate=profile)
+        total_commissions = commissions.aggregate(total=Sum('amount')).get('total') or 0
+        paid_commissions = commissions.filter(status='paid').aggregate(total=Sum('amount')).get('total') or 0
+        pending_commissions = commissions.filter(status='pending').aggregate(total=Sum('amount')).get('total') or 0
+        payout_count = AffiliatePayout.objects.filter(affiliate=profile).count()
+
+        if re.search(r"\b(link|referral link|affiliate link)\b", low):
+            text = f"Your affiliate link is ready. Share this link to earn commissions: {affiliate_link}"
+        elif re.search(r"\b(commission|commissions|earnings|payout|payouts)\b", low):
+            text = (
+                f"Affiliate earnings summary: total commissions {total_commissions}, "
+                f"paid {paid_commissions}, pending {pending_commissions}, payouts {payout_count}."
+            )
+        elif re.search(r"\b(click|clicks|referral|referrals)\b", low):
+            text = f"Affiliate performance: {clicks} clicks and {referrals} referral(s) recorded."
+        elif re.search(r"\b(terms|policy|rules)\b", low):
+            text = "Here are the Baysoko affiliate terms and guidelines."
+        else:
+            text = (
+                f"Affiliate overview: {clicks} clicks, {referrals} referrals, "
+                f"total commissions {total_commissions}. Your link: {affiliate_link}"
+            )
+
+        items.append({
+            'type': 'affiliate',
+            'id': profile.id,
+            'title': 'Affiliate dashboard',
+            'code': profile.code,
+            'link': affiliate_link,
+            'url': '/affiliates/',
+        })
+        items.append({
+            'type': 'action_suggestion',
+            'id': 'affiliate_commissions',
+            'title': 'View affiliate commissions',
+            'reason': 'Review your earnings and payouts.',
+            'url': '/affiliates/commissions/',
+        })
+        items.append({
+            'type': 'action_suggestion',
+            'id': 'affiliate_terms',
+            'title': 'View affiliate terms',
+            'reason': 'Review affiliate policies.',
+            'url': '/affiliates/terms/',
+        })
+        return (text, items)
+    except Exception as e:
+        logger.debug('_handle_affiliate_intent error: %s', e)
+        return ('Affiliate service unavailable.', [])
+
+def _handle_seller_dashboard_intent(prompt: str, user_id=None):
+    """Handle seller dashboard insights and navigation."""
+    try:
+        low = (prompt or '').strip().lower()
+        if not re.search(r"\b(seller dashboard|storefront dashboard|dashboard|analytics|performance|inventory|sales overview|seller analytics)\b", low):
+            return (None, [])
+        if not user_id:
+            return ('Please sign in to view your seller dashboard.', [])
+        from listings.models import Listing, OrderItem
+        from storefront.models import Store
+        listings_qs = Listing.objects.filter(Q(seller_id=user_id) | Q(store__owner_id=user_id))
+        total_listings = listings_qs.count()
+        active_listings = listings_qs.filter(is_active=True, is_sold=False).count()
+        inactive_listings = listings_qs.filter(is_active=False).count()
+        sold_listings = listings_qs.filter(is_sold=True).count()
+        order_items = OrderItem.objects.filter(Q(listing__seller_id=user_id) | Q(listing__store__owner_id=user_id))
+        seller_orders = order_items.values('order_id').distinct().count()
+        revenue = order_items.aggregate(
+            total=Sum(F('price') * F('quantity'), output_field=DecimalField(max_digits=12, decimal_places=2))
+        ).get('total') or 0
+
+        text = (
+            f"Seller dashboard summary: {total_listings} listing(s) "
+            f"({active_listings} active, {inactive_listings} inactive, {sold_listings} sold). "
+            f"{seller_orders} order(s) containing your listings. Total revenue recorded: {revenue}."
+        )
+        items = [{
+            'type': 'action_suggestion',
+            'id': 'seller_dashboard',
+            'title': 'Open seller dashboard',
+            'reason': 'Manage listings, orders, and payouts.',
+            'url': '/storefront/dashboard/',
+        }]
+        stores = Store.objects.filter(owner_id=user_id).order_by('-created_at')[:5]
+        for s in stores:
+            items.append({
+                'type': 'store',
+                'id': s.id,
+                'name': s.name,
+                'url': f"/storefront/dashboard/store/{s.slug}/",
+                'reason': 'Manage this store.',
+            })
+        return (text, items)
+    except Exception as e:
+        logger.debug('_handle_seller_dashboard_intent error: %s', e)
+        return ('Seller dashboard service unavailable.', [])
 
 def _handle_order_intent(prompt: str, user_id=None):
     """Handle order‑related intents: track, list recent orders."""

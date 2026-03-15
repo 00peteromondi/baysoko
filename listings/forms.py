@@ -18,7 +18,7 @@ class ListingForm(forms.ModelForm):
             'stock': forms.NumberInput(attrs={'min': '1', 'step': '1', 'placeholder': '1', 'class': 'form-control'}),
             'description': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Describe your item in detail...', 'class': 'form-control'}),
             'category': forms.Select(attrs={'class': 'form-select form-control'}),
-            'location': forms.Select(attrs={'class': 'form-select form-control'}),
+            'location': forms.HiddenInput(),
             'condition': forms.Select(attrs={'class': 'form-select form-control'}),
             'delivery_option': forms.Select(attrs={'class': 'form-select form-control'}),
             'brand': forms.TextInput(attrs={'placeholder': 'e.g., Samsung, Nike, Apple, etc.', 'class': 'form-control'}),
@@ -76,6 +76,24 @@ class ListingForm(forms.ModelForm):
                 if 'store' in self.fields:
                     del self.fields['store']
 
+        # Location is derived from store and should not be edited manually
+        if 'location' in self.fields:
+            self.fields['location'].required = False
+            self.fields['location'].help_text = 'Location is based on the selected store.'
+            # If instance/store exists, try to prefill from store
+            try:
+                store = self.instance.store if self.instance and self.instance.pk else None
+                if store and store.location:
+                    inferred = None
+                    try:
+                        inferred = Listing(store=store)._infer_location_from_store()
+                    except Exception:
+                        inferred = None
+                    if inferred:
+                        self.initial['location'] = inferred
+            except Exception:
+                pass
+
     def clean_store(self):
         """Additional validation for store field"""
         store = self.cleaned_data.get('store')
@@ -128,6 +146,41 @@ class ListingForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         category = cleaned_data.get('category')
+
+        # Force listing location to store location (store-owned listings only)
+        try:
+            store = cleaned_data.get('store')
+            if not store and self.instance and self.instance.pk:
+                store = getattr(self.instance, 'store', None)
+            if store and getattr(store, 'location', None):
+                inferred = None
+                try:
+                    inferred = Listing(store=store)._infer_location_from_store()
+                except Exception:
+                    inferred = None
+                if not inferred:
+                    # Try a best-effort match against choices by label/value
+                    store_text = str(store.location or '').lower()
+                    for code, label in Listing.HOMABAY_LOCATIONS:
+                        if store_text == code.lower():
+                            inferred = code
+                            break
+                        label_l = str(label).lower()
+                        if label_l in store_text or store_text in label_l:
+                            inferred = code
+                            break
+                        tokens = [t for t in label_l.replace('_', ' ').replace('-', ' ').split() if len(t) > 3]
+                        if any(t in store_text for t in tokens):
+                            inferred = code
+                            break
+                if inferred:
+                    cleaned_data['location'] = inferred
+                else:
+                    self.add_error('location', 'Store location must match a known listing location. Update the store location to proceed.')
+            elif store and not getattr(store, 'location', None):
+                self.add_error('location', 'Store location is missing. Update the store location to proceed.')
+        except Exception:
+            pass
 
         # Get JSON payload from POST (hidden input name 'dynamic_fields')
         raw = None
@@ -202,6 +255,9 @@ class CheckoutForm(forms.Form):
         widget=forms.Textarea(attrs={'rows': 3}),
         help_text="Where should we deliver your items?"
     )
+    shipping_latitude = forms.DecimalField(required=False, widget=forms.HiddenInput())
+    shipping_longitude = forms.DecimalField(required=False, widget=forms.HiddenInput())
+    shipping_place_id = forms.CharField(required=False, widget=forms.HiddenInput())
     phone_number = forms.CharField(
         max_length=15,
         help_text="Your phone number for delivery updates"
@@ -218,11 +274,11 @@ class CheckoutForm(forms.Form):
     email = forms.EmailField(
         help_text="Your email address"
     )
-    city = forms.CharField(max_length=50,
-        help_text="Your city"
+    city = forms.CharField(max_length=50, required=False,
+        help_text="City (optional)"
     )
-    postal_code = forms.CharField(max_length=20,
-        help_text="Your postal code"
+    postal_code = forms.CharField(max_length=20, required=False,
+        help_text="Postal code (optional)"
     )
 
     # Optionally accept a payment method (kept for compatibility)
@@ -338,7 +394,7 @@ class AIListingForm(ListingForm):
             'price': forms.NumberInput(attrs={'min': '0', 'step': '0.01', 'placeholder': '0.00', 'class': 'form-control'}),
             'stock': forms.NumberInput(attrs={'min': '1', 'step': '1', 'placeholder': '1', 'class': 'form-control'}),
             'category': forms.Select(attrs={'class': 'form-select form-control ai-suggestable'}),
-            'location': forms.Select(attrs={'class': 'form-select form-control ai-suggestable'}),
+            'location': forms.HiddenInput(),
             'condition': forms.Select(attrs={'class': 'form-select form-control ai-suggestable'}),
             'delivery_option': forms.Select(attrs={'class': 'form-select form-control ai-suggestable'}),
             'brand': forms.TextInput(attrs={'placeholder': 'e.g., Samsung, Nike, Apple, etc.', 'class': 'form-control'}),

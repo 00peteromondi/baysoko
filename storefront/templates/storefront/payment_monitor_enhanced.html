@@ -978,7 +978,7 @@
                 <small class="opacity-75">Funds are held in escrow for 7 days after delivery confirmation for buyer protection.</small>
             </div>
             <div>
-                {% if store.payout_verified and available_balance >= 10000 %}
+                {% if store.payout_verified and available_balance >= 5000 %}
                 <form method="post" action="{% url 'storefront:request_withdrawal' store.slug %}">
                     {% csrf_token %}
                     <input type="hidden" name="amount" value="{{ available_balance }}">
@@ -997,7 +997,7 @@
                     {% if not store.payout_verified %}
                         Please add and verify your M-Pesa payout phone in store settings first.
                     {% else %}
-                        Minimum withdrawal is KSh 10,000. You need KSh {{ 10000|add:available_balance|stringformat:"-.0f" }} more.
+                        Minimum withdrawal is KSh 5,000. You need KSh {{ 5000|add:available_balance|stringformat:"-.0f" }} more.
                     {% endif %}
                 </small>
                 {% endif %}
@@ -1023,10 +1023,42 @@
         </div>
     </div>
     {% endif %}
+
+    {% if affiliate_available_balance %}
+    <div class="withdrawal-banner" style="background: linear-gradient(135deg, #1f8a70 0%, #19c37d 100%);">
+        <div class="withdrawal-content">
+            <div class="withdrawal-text">
+                <h4>
+                    <i class="bi bi-people me-2"></i>
+                    Affiliate Earnings Available
+                </h4>
+                <p>You have <strong>KSh {{ affiliate_available_balance|intcomma }}</strong> available from affiliate referrals.</p>
+                <small class="opacity-75">Affiliate withdrawals are processed via M-Pesa once minimum threshold is reached.</small>
+            </div>
+            <div>
+                <form method="post" action="{% url 'affiliates:request_withdrawal' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="amount" value="{{ affiliate_available_balance }}">
+                    <button type="submit" class="btn btn-light btn-lg" style="font-weight: 600;" {% if affiliate_available_balance < affiliate_min_withdrawal %}disabled{% endif %}>
+                        <i class="bi bi-wallet2 me-2"></i>
+                        Withdraw Affiliate Earnings
+                    </button>
+                </form>
+                <small class="d-block mt-2 opacity-75">
+                    {% if affiliate_available_balance < affiliate_min_withdrawal %}
+                        Minimum withdrawal is KSh {{ affiliate_min_withdrawal|intcomma }}.
+                    {% else %}
+                        Your verified payout phone will be used for the transfer.
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
-{% block extra_scripts %}
+{% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Tab functionality

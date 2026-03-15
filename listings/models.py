@@ -220,6 +220,32 @@ class Listing(models.Model):
                 if hasattr(self.image, 'url'):
                     return self.image.url
         return '/static/images/listing_placeholder.svg'
+
+    def _infer_location_from_store(self):
+        try:
+            if not self.store or not self.store.location:
+                return None
+            t = str(self.store.location).lower()
+            if 'homa bay' in t or 'homabay' in t:
+                return 'HB_Town'
+            if 'kendu' in t:
+                return 'Kendu_Bay'
+            if 'rodi' in t:
+                return 'Rodi_Kopany'
+            if 'mbita' in t:
+                return 'Mbita'
+            if 'oyugis' in t:
+                return 'Oyugis'
+            if 'rangwe' in t:
+                return 'Rangwe'
+            if 'ndhiwa' in t:
+                return 'Ndhiwa'
+            if 'suba' in t:
+                return 'Suba'
+        except Exception:
+            return None
+        return None
+
     
     
     @property
@@ -283,6 +309,16 @@ class NewsletterSubscription(models.Model):
             except Exception as e:
                 # Store model might not be available yet (during migrations)
                 pass
+
+        # Default listing location to store location when missing/invalid
+        try:
+            valid_choices = {c[0] for c in self.HOMABAY_LOCATIONS}
+            if (not self.location) or (self.location not in valid_choices):
+                inferred = self._infer_location_from_store()
+                if inferred:
+                    self.location = inferred
+        except Exception:
+            pass
         
         # Enforce that only stores with active subscriptions (or valid trial)
         # can set `is_featured` to True. If the store does not have an
@@ -526,6 +562,12 @@ class Order(models.Model):
     shipping_address = models.TextField(blank=True)
     city = models.CharField(max_length=100, blank=True)
     postal_code = models.CharField(max_length=20, blank=True)
+    # Geo location (Google Maps / Places)
+    shipping_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    shipping_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    shipping_place_id = models.CharField(max_length=255, blank=True)
+    delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    delivery_breakdown = models.JSONField(default=dict, blank=True)
 
     tracking_number = models.CharField(max_length=100, blank=True)
     shipped_at = models.DateTimeField(null=True, blank=True)
@@ -974,6 +1016,15 @@ class Escrow(models.Model):
     )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=ESCROW_STATUS, default='held')
+    ready_for_release = models.BooleanField(default=False)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='escrow_approvals'
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     released_at = models.DateTimeField(null=True, blank=True)
     auto_release_date = models.DateTimeField(null=True, blank=True)
@@ -1012,6 +1063,65 @@ class Escrow(models.Model):
             user=self.order.user,
             action=f"Escrow released for Order #{self.order.id}"
         )
+
+    def _get_delivery_request(self):
+        try:
+            from delivery.models import DeliveryRequest
+            order = self.order
+            delivery = None
+            if getattr(order, 'delivery_request_id', None):
+                delivery = DeliveryRequest.objects.filter(id=order.delivery_request_id).first()
+            if not delivery and getattr(order, 'tracking_number', None):
+                delivery = DeliveryRequest.objects.filter(tracking_number=order.tracking_number).first()
+            if not delivery and getattr(order, 'delivery_tracking_number', None):
+                delivery = DeliveryRequest.objects.filter(tracking_number=order.delivery_tracking_number).first()
+            if not delivery:
+                delivery = DeliveryRequest.objects.filter(order_id=str(order.id)).first()
+            return delivery
+        except Exception:
+            return None
+
+    def can_approve_release(self):
+        """Check if escrow can be approved for release."""
+        try:
+            if self.status != 'held':
+                return False
+            if self.order.status != 'delivered':
+                return False
+            delivery = self._get_delivery_request()
+            if not delivery:
+                return False
+            if delivery.status != 'delivered':
+                return False
+            has_proof = delivery.proofs.exists() or bool((delivery.metadata or {}).get('proof'))
+            if not has_proof:
+                return False
+            otp_verified = delivery.otps.filter(used=True).exists()
+            if not otp_verified:
+                return False
+            if not delivery.confirmations.exists():
+                return False
+            return True
+        except Exception:
+            return False
+
+    def approve_release(self, approved_by=None):
+        """Approve and release escrow when delivery conditions are met."""
+        if not self.can_approve_release():
+            return False
+        self.ready_for_release = True
+        self.status = 'released'
+        self.released_at = timezone.now()
+        self.approved_by = approved_by
+        self.approved_at = timezone.now()
+        self.save()
+        try:
+            payment = getattr(self.order, 'payment', None)
+            if payment and getattr(payment, 'is_held_in_escrow', False):
+                payment.release_to_seller()
+        except Exception:
+            pass
+        return True
 
     def refund_funds(self):
         self.status = 'refunded'

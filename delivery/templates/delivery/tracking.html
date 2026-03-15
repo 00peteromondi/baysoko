@@ -194,11 +194,10 @@
 <div class="tracking-container">
     <!-- Tracking Header -->
     <div class="tracking-header animate-fade-in">
-        <h1 class="mb-3">
-            <i class="bi bi-truck text-primary me-2"></i>
-            Track Your Delivery
+        <h1 class="page-title mb-2">
+            <i class="bi bi-truck text-primary me-2"></i>Track Your Delivery
         </h1>
-        <p class="text-muted mb-4">Monitor your package in real-time</p>
+        <p class="page-subtitle mb-4">Monitor your package in real-time</p>
         
         <div class="tracking-number" id="trackingNumber">
             {{ delivery.tracking_number }}
@@ -211,7 +210,7 @@
                     {{ delivery.get_status_display }}
                 </span>
             </div>
-            <button class="btn btn-outline-primary" onclick="copyTracking()">
+            <button class="btn btn-delivery-outline" onclick="copyTracking(event)">
                 <i class="bi bi-clipboard"></i> Copy
             </button>
         </div>
@@ -235,6 +234,13 @@
                 {% endif %}
             </div>
         </div>
+    </div>
+
+    <!-- Map -->
+    <div class="tracking-header animate-fade-in" style="animation-delay: 0.05s">
+        <h5 class="mb-3"><i class="bi bi-geo-alt"></i> Delivery Map</h5>
+        <div class="delivery-map" id="deliveryTrackingMap"></div>
+        <div class="small text-muted mt-2" id="deliveryEta"></div>
     </div>
     
     <!-- Status Timeline -->
@@ -419,15 +425,41 @@
                     {% endif %}
                 </div>
             </div>
+            {% if order_items %}
+            <div class="mt-4">
+                <h6 class="fw-bold mb-3">Items in This Delivery</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th class="text-center">Qty</th>
+                                <th class="text-end">Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in order_items %}
+                            <tr>
+                                <td>{{ item.listing.title }}</td>
+                                <td class="text-center">{{ item.quantity }}</td>
+                                <td class="text-end">KSh {{ item.get_total_price|intcomma }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-muted small">Total items: {{ order_items_total_qty }}</div>
+            </div>
+            {% endif %}
         </div>
     </div>
     
     <!-- Delivery Actions -->
     <div class="delivery-actions animate-fade-in" style="animation-delay: 0.4s">
-        <a href="{% url 'delivery:dashboard' %}" class="btn btn-outline-primary">
+        <a href="{% url 'delivery:dashboard' %}" class="btn btn-delivery-outline">
             <i class="bi bi-speedometer2 me-2"></i>Back to Dashboard
         </a>
-        <button class="btn btn-primary" onclick="trackAnother()">
+        <button class="btn btn-delivery" onclick="trackAnother()">
             <i class="bi bi-search me-2"></i>Track Another Package
         </button>
         {% if delivery.status != 'delivered' and delivery.status != 'cancelled' %}
@@ -447,7 +479,7 @@
                            placeholder="Enter tracking number" required>
                 </div>
                 <div class="col-md-auto">
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" class="btn btn-delivery">
                         <i class="bi bi-search"></i> Track
                     </button>
                 </div>
@@ -455,25 +487,30 @@
         </div>
     </div>
 </div>
+{% endblock %}
 
 {% block extra_js %}
 <script>
+    {% if store_markers_json %}
+    {{ store_markers_json|json_script:"store_markers_json" }}
+    {% endif %}
     // Copy tracking number
-    function copyTracking() {
+    function copyTracking(e) {
         const trackingNumber = document.getElementById('trackingNumber').textContent;
         navigator.clipboard.writeText(trackingNumber)
             .then(() => {
-                const button = event.target.closest('button');
-                const originalHTML = button.innerHTML;
-                button.innerHTML = '<i class="bi bi-check"></i> Copied!';
-                button.classList.remove('btn-outline-primary');
-                button.classList.add('btn-success');
-
-                setTimeout(() => {
-                    button.innerHTML = originalHTML;
-                    button.classList.remove('btn-success');
-                    button.classList.add('btn-outline-primary');
-                }, 2000);
+                const button = e?.currentTarget || e?.target?.closest('button');
+                if (button) {
+                    const originalHTML = button.innerHTML;
+                    button.innerHTML = '<i class="bi bi-check"></i> Copied!';
+                    button.classList.remove('btn-delivery-outline');
+                    button.classList.add('btn-success');
+                    setTimeout(() => {
+                        button.innerHTML = originalHTML;
+                        button.classList.remove('btn-success');
+                        button.classList.add('btn-delivery-outline');
+                    }, 2000);
+                }
             })
             .catch(err => {
                 showToast('Failed to copy tracking number', 'error');
@@ -588,4 +625,93 @@
         });
     });
 </script>
+<script>
+    const pickupLat = {{ delivery.pickup_latitude|default:"null" }};
+    const pickupLng = {{ delivery.pickup_longitude|default:"null" }};
+    const recipLat = {{ delivery.recipient_latitude|default:"null" }};
+    const recipLng = {{ delivery.recipient_longitude|default:"null" }};
+    const defaultCenter = { lat: -0.5236, lng: 34.4560 }; // Homa Bay Town
+
+    function initDeliveryTrackingMap(userLoc) {
+        const mapEl = document.getElementById('deliveryTrackingMap');
+        if (!mapEl || !window.L) return;
+        if (mapEl.dataset.initialized === '1') return;
+
+        const hasPickup = pickupLat !== null && pickupLng !== null;
+        const hasRecip = recipLat !== null && recipLng !== null;
+        const center = hasRecip
+            ? { lat: recipLat, lng: recipLng }
+            : (hasPickup ? { lat: pickupLat, lng: pickupLng } : (userLoc || defaultCenter));
+
+        const map = L.map(mapEl).setView([center.lat, center.lng], hasPickup && hasRecip ? 12 : 11);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: "&copy; OpenStreetMap contributors"
+        }).addTo(map);
+        setTimeout(() => map.invalidateSize(), 200);
+
+        if (hasPickup) {
+            L.marker([pickupLat, pickupLng]).addTo(map).bindPopup("Pickup");
+        }
+        if (hasRecip) {
+            L.marker([recipLat, recipLng]).addTo(map).bindPopup("Delivery");
+        }
+        try {
+            const storeMarkers = document.getElementById('store_markers_json')
+                ? JSON.parse(document.getElementById('store_markers_json').textContent || '[]')
+                : [];
+            storeMarkers.forEach(s => {
+                if (!s || s.lat == null || s.lng == null) return;
+                L.circleMarker([s.lat, s.lng], {
+                    radius: 5,
+                    color: '#FF9E1F',
+                    weight: 2,
+                    fillColor: '#FF9E1F',
+                    fillOpacity: 0.7
+                }).addTo(map).bindPopup(`${s.name}<br><small>${s.location || ''}</small>`);
+            });
+        } catch (e) {}
+        if (hasPickup && hasRecip) {
+            L.polyline([[pickupLat, pickupLng], [recipLat, recipLng]], { color: '#06D6A0', weight: 4 }).addTo(map);
+
+            const toRad = (deg) => (deg * Math.PI) / 180;
+            const R = 6371;
+            const dLat = toRad(recipLat - pickupLat);
+            const dLng = toRad(recipLng - pickupLng);
+            const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRad(pickupLat)) * Math.cos(toRad(recipLat)) * Math.sin(dLng / 2) ** 2;
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const distanceKm = R * c;
+            const avgSpeedKmh = 30;
+            const etaHours = distanceKm / avgSpeedKmh;
+            const etaMinutes = Math.max(5, Math.round(etaHours * 60));
+            const etaEl = document.getElementById('deliveryEta');
+            if (etaEl) {
+                etaEl.textContent = `Estimated travel time: ${etaMinutes} min`;
+            }
+        }
+        mapEl.dataset.initialized = '1';
+    }
+
+    const whenLeafletReady = (cb) => {
+        if (window.L) return cb();
+        setTimeout(() => whenLeafletReady(cb), 100);
+    };
+    whenLeafletReady(() => {
+        if (window.BaysokoGeo) {
+            window.BaysokoGeo.requestCurrentLocation()
+                .then(loc => initDeliveryTrackingMap({ lat: loc.lat, lng: loc.lng }))
+                .catch(() => initDeliveryTrackingMap(null));
+        } else if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => initDeliveryTrackingMap({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                () => initDeliveryTrackingMap(null),
+                { enableHighAccuracy: true, timeout: 6000 }
+            );
+        } else {
+            initDeliveryTrackingMap(null);
+        }
+    });
+</script>
 {% endblock %}
+

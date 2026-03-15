@@ -165,6 +165,45 @@ def trigger_order_webhook(sender, instance, created, **kwargs):
         except:
             pass
 
+
+@receiver(post_save, sender=Order)
+def notify_sellers_on_order(sender, instance, created, **kwargs):
+    """Email each seller when an order containing their listings is created."""
+    if not created:
+        return
+    if not render_and_send:
+        return
+    try:
+        items = list(instance.order_items.select_related('listing', 'listing__store', 'listing__seller'))
+        if not items:
+            return
+        seller_map = {}
+        for item in items:
+            listing = item.listing
+            seller = None
+            if getattr(listing, 'store', None) and getattr(listing.store, 'owner', None):
+                seller = listing.store.owner
+            elif getattr(listing, 'seller', None):
+                seller = listing.seller
+            if not seller or not getattr(seller, 'email', None):
+                continue
+            seller_map.setdefault(seller, []).append(item)
+
+        for seller, seller_items in seller_map.items():
+            seller_total = sum([it.get_total_price() for it in seller_items])
+            ctx = {
+                'order': instance,
+                'buyer': instance.user,
+                'seller': seller,
+                'order_items': seller_items,
+                'seller_total': seller_total,
+                'site_url': getattr(settings, 'SITE_URL', ''),
+            }
+            subject = f'New order #{instance.id} for your listings'
+            render_and_send('emails/new_order_seller.html', 'emails/new_order_seller.txt', ctx, subject, [seller.email])
+    except Exception:
+        logger.exception('Error sending seller new order email')
+
 @receiver(post_save, sender=Payment)
 def trigger_payment_webhook(sender, instance, created, **kwargs):
     """

@@ -6,8 +6,11 @@ from .api import urls as api_urls
 app_name = 'delivery'
 
 urlpatterns = [
+    # Home / Landing
+    path('', views.delivery_home, name='home'),
+    path('home/', views.delivery_home, name='home'),
+
     # Dashboard
-    path('', views.DashboardView.as_view(), name='dashboard'),
     path('dashboard/', views.DashboardView.as_view(), name='dashboard'),
     path('dashboard/stats/', views.dashboard_stats, name='dashboard_stats'),
     
@@ -54,8 +57,7 @@ urlpatterns = [
     
     # Authentication
     path('register/', views.delivery_register, name='register'),
+    path('profile/complete/', views.delivery_profile_complete, name='profile_complete'),
     path('login/', views.DeliveryLoginView.as_view(), name='login'),
-    path('logout/', auth_views.LogoutView.as_view(
-        next_page='delivery:login'
-    ), name='logout'),
+    path('logout/', views.DeliveryLogoutView.as_view(), name='logout'),
 ]

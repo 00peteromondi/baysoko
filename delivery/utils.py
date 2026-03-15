@@ -14,25 +14,141 @@ from django.db.models import Q
 logger = logging.getLogger(__name__)
 
 
-def calculate_delivery_fee(weight, service_type=None, zone=None, distance=None):
+def _normalize_area(text):
+    if not text:
+        return None
+    t = str(text).lower()
+
+    # Known location keywords mapped to canonical area
+    keyword_map = {
+        'kendubay': 'kendu',
+        'kendu bay': 'kendu',
+        'kendu-bay': 'kendu',
+        'kendu': 'kendu',
+        'mbita': 'mbita',
+        'oyugis': 'oyugis',
+        'suba': 'suba',
+        'rodi': 'rodi',
+        'ndhiwa': 'ndhiwa',
+        'homa bay': 'homabay',
+        'homa-bay': 'homabay',
+        'homabay': 'homabay',
+    }
+
+    # Prefer the earliest matched location keyword (ignoring homabay until no other match)
+    best = None
+    best_pos = None
+    homabay_pos = None
+
+    for keyword, canonical in keyword_map.items():
+        pos = t.find(keyword)
+        if pos == -1:
+            continue
+        if canonical == 'homabay':
+            if homabay_pos is None or pos < homabay_pos:
+                homabay_pos = pos
+            continue
+        if best_pos is None or pos < best_pos:
+            best_pos = pos
+            best = canonical
+
+    if best:
+        return best
+
+    # Contextual hints for homabay when no specific area was matched
+    if 'junction' in t:
+        return 'homabay'
+    if homabay_pos is not None:
+        return 'homabay'
+
+    return None
+
+
+def _route_fee(origin_area, dest_area):
+    if not origin_area or not dest_area:
+        return None
+    if origin_area == dest_area == 'homabay':
+        return Decimal('100.00')
+    try:
+        from .models import DeliveryRouteRate
+        rate = DeliveryRouteRate.objects.filter(
+            origin=origin_area,
+            destination=dest_area,
+            is_active=True
+        ).first()
+        if rate:
+            return Decimal(rate.base_fee)
+    except Exception:
+        pass
+
+    static_rates = {
+        ('homabay', 'mbita'): Decimal('200.00'),
+        ('homabay', 'oyugis'): Decimal('200.00'),
+        ('homabay', 'kendu'): Decimal('200.00'),
+        ('homabay', 'suba'): Decimal('300.00'),
+        ('homabay', 'rodi'): Decimal('150.00'),
+        ('homabay', 'ndhiwa'): Decimal('200.00'),
+        ('kendu', 'oyugis'): Decimal('250.00'),
+        ('kendu', 'ndhiwa'): Decimal('250.00'),
+        ('mbita', 'rodi'): Decimal('300.00'),
+        ('mbita', 'ndhiwa'): Decimal('300.00'),
+        ('rodi', 'suba'): Decimal('350.00'),
+        ('rodi', 'kendu'): Decimal('200.00'),
+        ('rodi', 'oyugis'): Decimal('200.00'),
+        ('rodi', 'ndhiwa'): Decimal('250.00'),
+        ('oyugis', 'mbita'): Decimal('300.00'),
+        ('oyugis', 'suba'): Decimal('350.00'),
+        ('oyugis', 'ndhiwa'): Decimal('250.00'),
+        ('kendu', 'suba'): Decimal('350.00'),
+        ('kendu', 'mbita'): Decimal('300.00'),
+        ('ndhiwa', 'suba'): Decimal('300.00'),
+        ('mbita', 'suba'): Decimal('200.00'),
+    }
+    if (origin_area, dest_area) in static_rates:
+        return static_rates[(origin_area, dest_area)]
+    if (dest_area, origin_area) in static_rates:
+        return static_rates[(dest_area, origin_area)]
+    return None
+
+
+def calculate_delivery_fee(weight, service_type=None, zone=None, distance=None, pickup_address=None, recipient_address=None):
     """
-    Calculate delivery fee based on weight, service type, zone, and distance
+    Calculate delivery fee using fixed route pricing with weight surcharge.
     """
-    base_fee = Decimal('100.00')  # Default base fee
-    
-    if service_type:
-        # Add service type premium
-        if hasattr(service_type, 'base_price'):
-            base_fee = service_type.base_price
-        if weight and hasattr(service_type, 'price_per_kg'):
-            base_fee += service_type.price_per_kg * Decimal(str(weight))
-    
+    base_fee = Decimal('100.00')
+
+    origin = _normalize_area(pickup_address)
+    destination = _normalize_area(recipient_address)
+    if not origin and destination:
+        # Default origin to homabay when pickup location is missing
+        origin = 'homabay'
+    route_fee = _route_fee(origin, destination)
+    if route_fee:
+        base_fee = route_fee
+
     if zone and hasattr(zone, 'delivery_fee'):
-        base_fee = max(base_fee, zone.delivery_fee)
-    
+        base_fee = max(base_fee, Decimal(zone.delivery_fee))
+
+    if service_type and hasattr(service_type, 'base_price'):
+        base_fee = max(base_fee, Decimal(service_type.base_price))
+
     if distance and service_type and hasattr(service_type, 'price_per_km'):
-        base_fee += service_type.price_per_km * Decimal(str(distance))
-    
+        try:
+            base_fee += Decimal(service_type.price_per_km) * Decimal(str(distance))
+        except Exception:
+            pass
+
+    # Weight surcharge: >30kg adds 5% per 10kg
+    try:
+        weight_val = Decimal(str(weight or 0))
+        if weight_val > 30:
+            over = weight_val - Decimal('30')
+            steps = int((over / Decimal('10')).to_integral_value(rounding='ROUND_CEILING'))
+            surcharge = (base_fee * Decimal('0.05') * Decimal(steps))
+            base_fee += surcharge
+    except Exception:
+        pass
+
     return base_fee.quantize(Decimal('0.01'))
 
 

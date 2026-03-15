@@ -1082,6 +1082,19 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('WebSocket error:', e);
         }
     })();
+
+    // Polling fallback for real-time updates (every 30s)
+    (function() {
+        const tracking = '{{ order.tracking_number }}';
+        if (!tracking) return;
+        let poller = setInterval(() => refreshDeliveryStatus(tracking), 30000);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) refreshDeliveryStatus(tracking);
+        });
+        window.addEventListener('beforeunload', () => {
+            try { clearInterval(poller); } catch (e) {}
+        });
+    })();
 });
 </script>
 {% endblock %}

@@ -255,12 +255,12 @@
         cursor: pointer;
     }
     
-    .status-btn-primary {
+    .status-btn-delivery {
         background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
         color: white;
     }
     
-    .status-btn-primary:hover {
+    .status-btn-delivery:hover {
         transform: translateY(-2px);
         box-shadow: var(--shadow-md);
     }
@@ -333,7 +333,7 @@
     <div class="toast-container"></div>
     
     <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="page-header">
         <div>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
@@ -343,15 +343,14 @@
                 </ol>
             </nav>
             <div class="d-flex align-items-center gap-3">
-                <h1 class="h2 fw-bold mb-0 animate-fade-in">
-                    <i class="bi bi-box-seam me-2 text-primary"></i>
-                    Delivery #{{ delivery.tracking_number }}
+                <h1 class="page-title">
+                    <i class="bi bi-box-seam me-2 text-primary"></i>Delivery #{{ delivery.tracking_number }}
                 </h1>
                 <span class="status-badge status-{{ delivery.status }}">
                     {{ delivery.get_status_display }}
                 </span>
             </div>
-            <p class="text-muted mb-0 mt-2">
+            <p class="page-subtitle">
                 Created {{ delivery.created_at|naturaltime }}
                 {% if delivery.delivery_person %}
                 • Assigned to {{ delivery.delivery_person.user.get_full_name|default:delivery.delivery_person.employee_id }}
@@ -363,7 +362,7 @@
                 <i class="bi bi-pencil me-2"></i>Update Status
             </a>
             <div class="dropdown">
-                <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <button class="btn btn-delivery-outline dropdown-toggle" type="button" data-bs-toggle="dropdown">
                     <i class="bi bi-three-dots"></i>
                 </button>
                 <ul class="dropdown-menu">
@@ -905,10 +904,10 @@
                             <div class="signature-canvas border rounded p-3">
                                 <canvas id="signatureCanvas" width="600" height="200" class="w-100 border"></canvas>
                                 <div class="d-flex gap-2 mt-2">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearSignature()">
+                                    <button type="button" class="btn btn-sm btn-delivery-outline" onclick="clearSignature()">
                                         <i class="bi bi-eraser"></i> Clear
                                     </button>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="undoSignature()">
+                                    <button type="button" class="btn btn-sm btn-delivery-outline" onclick="undoSignature()">
                                         <i class="bi bi-arrow-counterclockwise"></i> Undo
                                     </button>
                                 </div>
@@ -926,7 +925,7 @@
                         <div class="col-12 mt-2" id="otpVerifyBox">
                             <div class="input-group">
                                 <input type="text" id="otp_code" class="form-control" placeholder="Enter OTP sent to recipient">
-                                <button class="btn btn-primary" id="otp_verify_btn" type="button">Verify Code</button>
+                                <button class="btn btn-delivery" id="otp_verify_btn" type="button">Verify Code</button>
                             </div>
                             <div class="form-text mt-1">Code expires at: {{ otp_expires_at }}</div>
                         </div>
@@ -979,7 +978,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary" id="downloadProofBtn">
+                <button type="button" class="btn btn-delivery" id="downloadProofBtn">
                     <i class="bi bi-download"></i> Download
                 </button>
             </div>
@@ -1077,8 +1076,14 @@ document.getElementById('otp_verify_btn')?.addEventListener('click', function(){
     
     // Update delivery status
     async function updateDeliveryStatus() {
-        const status = document.getElementById('quickStatus').value;
-        const notes = document.getElementById('statusNotes').value;
+        const statusEl = document.getElementById('quickStatus');
+        const notesEl = document.getElementById('statusNotes');
+        if (!statusEl || !notesEl) {
+            showToast('Status controls not available on this page.', 'warning');
+            return;
+        }
+        const status = statusEl.value;
+        const notes = notesEl.value;
         
         try {
             const response = await fetch('{% url "delivery:update_status" delivery.pk %}', {
@@ -1113,26 +1118,30 @@ document.getElementById('otp_verify_btn')?.addEventListener('click', function(){
     
     // Update proof sections based on selected type
     function updateProofSections(type) {
-        // Hide all sections first
-        document.getElementById('photoSection').style.display = 'none';
-        document.getElementById('signatureSection').classList.add('d-none');
-        document.getElementById('codeSection').classList.add('d-none');
-        document.getElementById('idSection').classList.add('d-none');
+        // Hide all sections first (guarded)
+        const photoSection = document.getElementById('photoSection');
+        const signatureSection = document.getElementById('signatureSection');
+        const codeSection = document.getElementById('codeSection');
+        const idSection = document.getElementById('idSection');
+        if (photoSection) photoSection.style.display = 'none';
+        if (signatureSection) signatureSection.classList.add('d-none');
+        if (codeSection) codeSection.classList.add('d-none');
+        if (idSection) idSection.classList.add('d-none');
         
         // Show relevant section
         switch(type) {
             case 'photo':
-                document.getElementById('photoSection').style.display = 'block';
+                if (photoSection) photoSection.style.display = 'block';
                 break;
             case 'signature':
-                document.getElementById('signatureSection').classList.remove('d-none');
+                if (signatureSection) signatureSection.classList.remove('d-none');
                 initSignatureCanvas();
                 break;
             case 'code':
-                document.getElementById('codeSection').classList.remove('d-none');
+                if (codeSection) codeSection.classList.remove('d-none');
                 break;
             case 'id_verification':
-                document.getElementById('idSection').classList.remove('d-none');
+                if (idSection) idSection.classList.remove('d-none');
                 break;
         }
     }
@@ -1141,6 +1150,7 @@ document.getElementById('otp_verify_btn')?.addEventListener('click', function(){
     function initSignatureCanvas() {
         const canvas = document.getElementById('signatureCanvas');
         if (!canvas) return;
+        if (canvas.dataset.bound === '1') return;
         
         signatureCanvas = canvas;
         signatureCtx = canvas.getContext('2d');
@@ -1164,6 +1174,7 @@ document.getElementById('otp_verify_btn')?.addEventListener('click', function(){
         canvas.addEventListener('touchstart', handleTouchStart);
         canvas.addEventListener('touchmove', handleTouchMove);
         canvas.addEventListener('touchend', stopDrawing);
+        canvas.dataset.bound = '1';
     }
     
     function handleTouchStart(e) {
@@ -1220,7 +1231,10 @@ document.getElementById('otp_verify_btn')?.addEventListener('click', function(){
         signatureCtx.stroke();
         
         // Update hidden input
-        document.getElementById('signatureData').value = signatureCanvas.toDataURL();
+        const signatureDataInput = document.getElementById('signatureData');
+        if (signatureDataInput) {
+            signatureDataInput.value = signatureCanvas.toDataURL();
+        }
     }
     
     function stopDrawing() {
@@ -1228,10 +1242,12 @@ document.getElementById('otp_verify_btn')?.addEventListener('click', function(){
     }
     
     function clearSignature() {
+        if (!signatureCtx || !signatureCanvas) return;
         signatureCtx.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
         signatureCtx.fillStyle = '#ffffff';
         signatureCtx.fillRect(0, 0, signatureCanvas.width, signatureCanvas.height);
-        document.getElementById('signatureData').value = '';
+        const signatureDataInput = document.getElementById('signatureData');
+        if (signatureDataInput) signatureDataInput.value = '';
         undoStack = [];
     }
     
@@ -1239,9 +1255,13 @@ document.getElementById('otp_verify_btn')?.addEventListener('click', function(){
         if (undoStack.length > 0) {
             const img = new Image();
             img.onload = function() {
+                if (!signatureCtx || !signatureCanvas) return;
                 signatureCtx.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
                 signatureCtx.drawImage(img, 0, 0);
-                document.getElementById('signatureData').value = signatureCanvas.toDataURL();
+                const signatureDataInput = document.getElementById('signatureData');
+                if (signatureDataInput) {
+                    signatureDataInput.value = signatureCanvas.toDataURL();
+                }
             };
             img.src = undoStack.pop();
         }
@@ -1394,4 +1414,4 @@ document.getElementById('otp_verify_btn')?.addEventListener('click', function(){
     }
 </script>
 {% endblock %}
-{% endblock %}
+

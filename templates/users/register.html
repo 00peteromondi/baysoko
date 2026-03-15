@@ -87,7 +87,8 @@
         z-index: 2;
         box-shadow: 4px 0 30px rgba(0,0,0,0.15);
         border-right: 1px solid var(--border-color);
-        height: 100vh;
+        min-height: 100vh;
+        height: auto;
         overflow-y: auto;
         backdrop-filter: blur(4px);
     }
@@ -569,6 +570,32 @@
         --bg-primary-rgb: 18,18,18;
         --accent-rgb: 6,214,160;
     }
+
+    .location-field-group { position: relative; }
+    .location-suggestions {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        box-shadow: var(--shadow-md);
+        z-index: 20;
+        max-height: 220px;
+        overflow-y: auto;
+        display: none;
+    }
+    .location-suggestion-item {
+        padding: 0.55rem 0.75rem;
+        font-size: 0.85rem;
+        cursor: pointer;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .location-suggestion-item:last-child { border-bottom: none; }
+    .location-suggestion-item:hover {
+        background: rgba(var(--primary-rgb), 0.08);
+    }
 </style>
 {% endblock %}
 
@@ -589,7 +616,7 @@
 
         <!-- Social Login -->
         <div class="social-login-section">
-            <a href="{% url 'google_login' %}" class="social-btn-google" id="googleRegisterBtn" data-no-ajax>
+            <a href="{% url 'google_login' %}" class="social-btn-google js-capture-location" id="googleRegisterBtn" data-no-ajax>
                 Sign up with Google
             </a>
             <div class="divider"><span>Or register with email</span></div>
@@ -653,9 +680,10 @@
                     <label class="form-label-modern">Phone *</label>
                     <input type="tel" name="phone_number" class="input-modern" id="id_phone_number" required>
                 </div>
-                <div class="form-group-modern">
+                <div class="form-group-modern location-field-group">
                     <label class="form-label-modern">Location *</label>
                     <input type="text" name="location" class="input-modern" id="id_location" required>
+                    <div class="location-suggestions" id="registerLocationSuggestions"></div>
                 </div>
             </div>
 
@@ -876,6 +904,120 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // ========== LOCATION AUTOCOMPLETE (HOMABAY COUNTY ONLY) ==========
+    (function() {
+        const input = document.getElementById('id_location');
+        const suggestions = document.getElementById('registerLocationSuggestions');
+        if (!input || !suggestions) return;
+        let timer = null;
+        const viewbox = '34.0,-0.1,35.2,-1.1';
+        const isAllowed = (name) => /Homa\\s*Bay|Homabay|Ndhiwa/i.test(name || '');
+        let HOMABAY_LANDMARKS = [];
+        const LANDMARKS_KEY = 'baysoko_recent_locations';
+
+        async function loadHomabayLandmarks() {
+            if (HOMABAY_LANDMARKS.length) return HOMABAY_LANDMARKS;
+            try {
+                const res = await fetch("{% static 'data/homabay_landmarks.json' %}", { cache: 'force-cache' });
+                if (res.ok) {
+                    const data = await res.json();
+                    HOMABAY_LANDMARKS = Array.isArray(data?.landmarks) ? data.landmarks : [];
+                }
+            } catch (e) {}
+            return HOMABAY_LANDMARKS;
+        }
+
+        function getRecentLocations() {
+            try {
+                const raw = localStorage.getItem(LANDMARKS_KEY);
+                const list = raw ? JSON.parse(raw) : [];
+                return Array.isArray(list) ? list : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function addRecentLocation(label) {
+            if (!label || typeof label !== 'string') return;
+            try {
+                const list = getRecentLocations();
+                const cleaned = label.trim();
+                if (!cleaned) return;
+                const deduped = [cleaned, ...list.filter(l => l.toLowerCase() !== cleaned.toLowerCase())].slice(0, 5);
+                localStorage.setItem(LANDMARKS_KEY, JSON.stringify(deduped));
+            } catch (e) {}
+        }
+
+        function localMatches(query) {
+            const q = (query || '').toLowerCase().trim();
+            const recent = getRecentLocations().map(label => ({ display_name: `${label}, Homa Bay County` }));
+            const matches = !q
+                ? HOMABAY_LANDMARKS.slice(0, 10)
+                : HOMABAY_LANDMARKS.filter(l => l.toLowerCase().includes(q)).slice(0, 10);
+            const locals = matches.map(label => ({ display_name: `${label}, Homa Bay County` }));
+            return [...recent, ...locals].slice(0, 10);
+        }
+
+        function renderSuggestions(items) {
+            if (!items.length) {
+                hideSuggestions();
+                return;
+            }
+            suggestions.innerHTML = items.map(item =>
+                `<div class="location-suggestion-item" data-label="${item.display_name.replace(/"/g, '&quot;')}">${item.display_name}</div>`
+            ).join('');
+            suggestions.style.display = 'block';
+        }
+
+        function hideSuggestions() {
+            suggestions.style.display = 'none';
+            suggestions.innerHTML = '';
+        }
+
+        loadHomabayLandmarks();
+
+        input.addEventListener('input', () => {
+            const query = input.value.trim();
+            clearTimeout(timer);
+            if (query.length < 2) {
+                renderSuggestions(localMatches(query));
+                return;
+            }
+            timer = setTimeout(async () => {
+                try {
+                    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=ke&viewbox=${viewbox}&bounded=1&q=${encodeURIComponent(query)}`;
+                    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+                    const data = await res.json();
+                    const items = (data || []).filter(r => isAllowed(r.display_name));
+                    const merged = [...items, ...localMatches(query)];
+                    renderSuggestions(merged.slice(0, 12));
+                } catch (e) {
+                    renderSuggestions(localMatches(query));
+                }
+            }, 280);
+        });
+
+        suggestions.addEventListener('click', (e) => {
+            const item = e.target.closest('.location-suggestion-item');
+            if (!item) return;
+            input.value = item.getAttribute('data-label') || item.textContent.trim();
+            addRecentLocation(input.value);
+            hideSuggestions();
+        });
+
+        input.addEventListener('blur', () => setTimeout(hideSuggestions, 200));
+
+        if (window.BaysokoGeo && (!input.value || !input.value.trim())) {
+            window.BaysokoGeo.requestCurrentLocation().then(async (loc) => {
+                const label = await window.BaysokoGeo.reverseGeocode(loc.lat, loc.lng);
+                if (label) {
+                    input.value = label;
+                    addRecentLocation(label);
+                }
+            }).catch(() => {});
+        }
+    })();
+
     // ========== WebSocket Manager ==========
     const wsManager = (function() {
         let socket = null;
@@ -981,10 +1123,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ========== REGISTRATION via WebSocket ==========
+    let registerFallbackTimer = null;
+    let registerHandled = false;
     const registerForm = document.getElementById('registerForm');
     const submitBtn = document.getElementById('submitButton');
 
     registerForm.addEventListener('submit', function(e) {
+        const useWsRegister = window.ENABLE_WS_LOGIN === true;
+        if (!useWsRegister) {
+            return; // allow normal form POST
+        }
         e.preventDefault();
         const originalText = submitBtn.innerHTML;
         submitBtn.innerHTML = '<span class="custom-spinner" role="status" aria-hidden="true" style="width:1rem;height:1rem;"></span> Creating Account...';
@@ -1005,10 +1153,21 @@ document.addEventListener('DOMContentLoaded', function() {
             terms: formData.get('terms') === 'on'
         };
 
+        registerHandled = false;
+        if (registerFallbackTimer) clearTimeout(registerFallbackTimer);
+        registerFallbackTimer = setTimeout(() => {
+            if (registerHandled) return;
+            registerForm.submit();
+        }, 4000);
+
         wsManager.send('register', payload);
     });
 
     wsManager.on('register_response', function(data) {
+        registerHandled = true;
+        if (registerFallbackTimer) {
+            try { clearTimeout(registerFallbackTimer); } catch (e) {}
+        }
         submitBtn.innerHTML = '<i class="bi bi-person-plus"></i> Create Account';
         submitBtn.disabled = false;
 

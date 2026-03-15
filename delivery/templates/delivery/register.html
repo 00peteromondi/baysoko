@@ -1,28 +1,836 @@
-{% extends 'delivery/base.html' %}
+<!-- users/templates/users/register.html -->
+{% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Register - Delivery{% endblock %}
+{% block title %}Join Baysoko – Register{% endblock %}
+{% block navbar %}{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== GLOBAL RESET ===== */
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+    .main-nav, .bottom-nav, .side-nav, footer.footer, .site-footer, .footer {
+        display: none !important;
+    }
+    .main-content {
+        padding: 0 !important;
+        min-height: 100vh;
+        overflow: visible;
+    }
+
+    /* ===== MAIN CONTAINER ===== */
+    .register-container {
+        position: relative;
+        display: flex;
+        height: 100vh;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        background: var(--bg-primary);
+        overflow: hidden;
+    }
+
+    /* ===== RAINING ICONS BACKGROUND ===== */
+    .rain-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    .rain-icon {
+        position: absolute;
+        color: rgba(255, 255, 255, 0.25);
+        font-size: 2rem;
+        opacity: 0;
+        animation: bounce-rain linear infinite;
+        will-change: transform;
+        user-select: none;
+    }
+
+    @keyframes bounce-rain {
+        0% {
+            transform: translateY(-20vh) translateX(0) rotate(0deg);
+            opacity: 0.3;
+        }
+        60% {
+            transform: translateY(70vh) translateX(10px) rotate(180deg);
+            opacity: 0.7;
+        }
+        80% {
+            transform: translateY(60vh) translateX(5px) rotate(240deg);
+            opacity: 0.7;
+        }
+        100% {
+            transform: translateY(100vh) translateX(20px) rotate(360deg);
+            opacity: 0;
+        }
+    }
+
+    /* LEFT: Registration Form */
+    .form-section {
+        flex: 0 0 480px;
+        background: rgba(var(--bg-primary-rgb), 0.7);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 1.8rem 2.2rem;
+        z-index: 2;
+        box-shadow: 4px 0 30px rgba(0,0,0,0.15);
+        border-right: 1px solid var(--border-color);
+        min-height: 100vh;
+        height: auto;
+        overflow-y: auto;
+        backdrop-filter: blur(4px);
+    }
+    .form-section::-webkit-scrollbar {
+        width: 1px !important;
+        background: transparent;
+    }
+
+    /* Form Header */
+    .form-header {
+        text-align: center;
+        margin-bottom: 0.8rem;
+        animation: fadeInDown 0.8s ease-out;
+    }
+    .form-logo {
+        width: 55px;
+        height: 55px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 0.6rem;
+        box-shadow: 0 8px 16px rgba(6,214,160,0.3);
+    }
+    .form-logo i {
+        font-size: 1.7rem;
+        color: white;
+    }
+    .form-title {
+        font-size: 1.8rem;
+        font-weight: 800;
+        margin-bottom: 0.1rem;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .form-subtitle {
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+    }
+
+    /* Social Login */
+    .social-login-section {
+        margin-bottom: 0.5rem;
+    }
+    .social-btn-google {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        background: transparent;
+        color: #06D6A0;
+        border: 2px solid transparent;
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-size: 15px;
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.3s;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .social-btn-google:hover {
+        border-color: #06D6A0;
+        box-shadow: 0 4px 12px rgba(6,214,160,0.2);
+    }
+    .social-btn-google::before {
+        content: '';
+        width: 18px;
+        height: 18px;
+        background-image: url('https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg');
+        background-size: contain;
+        background-repeat: no-repeat;
+    }
+    .divider {
+        display: flex;
+        align-items: center;
+        margin: 0.8rem 0;
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+    }
+    .divider::before, .divider::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--border-color);
+    }
+    .divider span {
+        padding: 0 0.8rem;
+    }
+
+    /* Form Groups */
+    .form-group-modern {
+        margin-bottom: 0.4rem;
+    }
+    .form-label-modern {
+        display: block;
+        margin-bottom: 0.2rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+    }
+    .input-modern {
+        width: 100%;
+        padding: 0.55rem 0.8rem;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 0.9rem;
+        transition: all 0.3s;
+        outline: none;
+    }
+    .input-modern:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(6,214,160,0.2);
+    }
+    .input-group-modern {
+        position: relative;
+    }
+    .password-toggle {
+        position: absolute;
+        right: 0.8rem;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        cursor: pointer;
+        padding: 0.2rem;
+    }
+
+    /* Form Grid */
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.8rem;
+    }
+
+    /* Password Strength */
+    .password-strength-container {
+        margin-top: 0.2rem;
+    }
+    .strength-meter {
+        height: 4px;
+        background: var(--border-color);
+        border-radius: 2px;
+        overflow: hidden;
+    }
+    .strength-fill {
+        height: 100%;
+        width: 0%;
+        border-radius: 2px;
+        transition: all 0.3s;
+    }
+    .strength-text {
+        font-size: 0.65rem;
+        text-align: right;
+        margin-top: 0.1rem;
+    }
+    .strength-weak { background: var(--danger); width: 25%; }
+    .strength-fair { background: var(--warning); width: 50%; }
+    .strength-good { background: var(--info); width: 75%; }
+    .strength-strong { background: var(--success); width: 100%; }
+
+    /* Terms Checkbox */
+    .terms-container {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin: 1rem 0;
+        padding: 0.5rem 1rem;
+        background: rgba(var(--accent-rgb), 0.03);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        cursor: pointer;
+    }
+    .checkbox-modern {
+        width: 18px;
+        height: 18px;
+        border: 2px solid var(--border-color);
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg-primary);
+        flex-shrink: 0;
+    }
+    .checkbox-modern.checked {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: white;
+    }
+    .checkbox-modern i {
+        font-size: 0.7rem;
+        opacity: 0;
+    }
+    .checkbox-modern.checked i {
+        opacity: 1;
+    }
+    .terms-text {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+    .terms-text a {
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+    /* Submit Button */
+    .btn-modern {
+        padding: 0.8rem 1.2rem;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        border: none;
+        cursor: pointer;
+        width: 100%;
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(6,214,160,0.4);
+        font-size: 0.95rem;
+        transition: all 0.3s;
+    }
+    .btn-modern:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(6,214,160,0.5);
+    }
+
+    /* Login Link */
+    .login-link {
+        text-align: center;
+        margin-top: 1rem;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+    }
+    .login-link a {
+        color: var(--accent);
+        font-weight: 700;
+        text-decoration: none;
+    }
+
+    /* Trust Indicators */
+    .trust-indicators {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        margin-top: 1.2rem;
+        padding: 0.6rem 0.5rem;
+        background: rgba(var(--accent-rgb), 0.03);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+    }
+    .trust-item {
+        text-align: center;
+    }
+    .trust-icon {
+        font-size: 1.1rem;
+        color: var(--accent);
+        margin-bottom: 0.1rem;
+    }
+    .trust-text {
+        font-size: 0.6rem;
+        color: var(--text-secondary);
+        font-weight: 600;
+    }
+
+    /* ===== RIGHT COLUMN: VERTICAL CAROUSEL ===== */
+    .creative-section {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+        background: transparent;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 0.5rem;
+        z-index: 2;
+        height: 100vh;
+    }
+
+    .marketplace-heading {
+        text-align: center;
+        margin-bottom: 0.5rem;
+        z-index: 3;
+    }
+    .marketplace-heading h2 {
+        font-size: 2.2rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin: 0;
+        line-height: 1.2;
+        text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .marketplace-heading p {
+        color: var(--text-secondary);
+        font-size: 1rem;
+        margin-top: 0.2rem;
+        letter-spacing: 1px;
+        text-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+
+    .carousel-vertical {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        max-width: 550px;
+        height: 500px;
+        overflow: hidden;
+        border-radius: var(--radius-xl);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    }
+    .carousel-track {
+        position: relative;
+        height: 100%;
+    }
+    .carousel-slide {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.5rem;
+        opacity: 0;
+        transform: scale(0.96);
+        transform-origin: center center;
+        transition: opacity 0.32s cubic-bezier(0.2,0,0,1), transform 0.32s cubic-bezier(0.2,0,0,1);
+    }
+    .carousel-slide.active {
+        opacity: 1;
+        transform: scale(1);
+    }
+    .card-floating {
+        background: rgba(var(--bg-primary-rgb), 0.2);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: var(--radius-xl);
+        padding: 1.2rem;
+        color: white;
+        box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+        width: 100%;
+        max-width: 450px;
+        text-align: center;
+        animation: glowPulse 4s infinite alternate;
+        overflow: hidden;
+        backdrop-filter: blur(8px);
+    }
+    @keyframes glowPulse {
+        0% { box-shadow: 0 15px 30px rgba(0,0,0,0.2); }
+        100% { box-shadow: 0 15px 50px rgba(6,214,160,0.4); }
+    }
+    .card-floating h3 {
+        font-size: 1.6rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .card-floating p {
+        font-size: 0.9rem;
+        opacity: 0.9;
+        margin-bottom: 1rem;
+        color: var(--text-secondary);
+    }
+    .card-floating .icon-large {
+        font-size: 2.5rem;
+        color: var(--secondary);
+        margin-bottom: 0.8rem;
+    }
+    .card-floating img {
+        max-width: 100%;
+        border-radius: var(--radius-md);
+        max-height: 160px;
+        object-fit: cover;
+    }
+
+    .carousel-indicators {
+        display: none !important;
+    }
+
+    .animated-footer-desktop {
+        position: absolute;
+        bottom: 15px;
+        align-self: center;
+        z-index: 10;
+        font-size: 0.7rem;
+        color: rgba(255,255,255,0.7);
+        background: rgba(0,0,0,0.2);
+        padding: 0.3rem 0.8rem;
+        border-radius: 50px;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+    .animated-footer-mobile {
+        display: none;
+        text-align: center;
+        margin-top: 1rem;
+        font-size: 0.7rem;
+        color: var(--text-secondary);
+        background: transparent;
+        border-top: none;
+    }
+    .animated-footer-desktop a, .animated-footer-mobile a {
+        color: inherit;
+        text-decoration: none;
+        margin: 0 0.2rem;
+        font-weight: 600;
+    }
+
+    @keyframes fadeInDown {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 1024px) {
+        .form-section { flex: 0 0 400px; padding: 1.5rem; }
+        .carousel-vertical { height: 450px; }
+        .marketplace-heading h2 { font-size: 2rem; }
+    }
+
+    @media (max-width: 768px) {
+        .register-container {
+            flex-direction: column;
+            overflow-y: auto;
+            height: auto;
+            min-height: 100vh;
+        }
+        .form-section, .creative-section {
+            height: auto;
+            min-height: 50vh;
+            flex: none;
+            width: 100%;
+            overflow-y: visible;
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        .form-section {
+            order: 2;
+            padding: 1.5rem 1rem;
+        }
+        .creative-section {
+            order: 1;
+            padding: 1rem 0.5rem;
+            min-height: 50vh;
+        }
+        .carousel-vertical {
+            height: 40vh;
+            max-height: 350px;
+        }
+        .card-floating img { max-height: 100px; }
+        .animated-footer-desktop { display: none; }
+        .animated-footer-mobile { display: block; }
+        .form-title { font-size: 1.6rem; }
+        .form-logo { width: 50px; height: 50px; }
+        .form-grid { gap: 0.5rem; }
+        .marketplace-heading h2 { font-size: 1.8rem; }
+    }
+
+    @media (max-width: 480px) {
+        .form-section { padding: 0.8rem; }
+        .form-title { font-size: 1.4rem; }
+        .form-grid { grid-template-columns: 1fr 1fr; }
+        .card-floating { padding: 1rem; }
+        .card-floating h3 { font-size: 1.4rem; }
+    }
+
+    :root {
+        --bg-primary-rgb: 255,255,255;
+        --accent-rgb: 6,214,160;
+    }
+    [data-theme="dark"] {
+        --bg-primary-rgb: 18,18,18;
+        --accent-rgb: 6,214,160;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center align-items-center min-vh-75">
-    <div class="col-md-6 col-lg-5">
-        <div class="card shadow-lg">
-            <div class="card-body p-5">
-                <div class="text-center mb-4">
-                    <h2>Create Account</h2>
-                    <p class="text-muted">Create a delivery account to manage standalone deliveries</p>
+<div class="register-container">
+    <!-- RAINING ICONS BACKGROUND -->
+    <div class="rain-container" id="rainContainer"></div>
+
+    <!-- LEFT: Registration Form -->
+    <div class="form-section">
+        <div class="form-header">
+            <div class="form-logo">
+                <i class="bi bi-person-plus"></i>
+            </div>
+            <h1 class="form-title">Join Baysoko Delivery</h1>
+            <p class="form-subtitle">Create your delivery account</p>
+        </div>
+
+        {% if form.errors %}
+            <div class="alert alert-danger" style="font-size:0.8rem; padding:0.5rem;">
+                Please correct the highlighted errors and try again.
+            </div>
+        {% endif %}
+
+        <div class="social-login-section">
+                <a href="{% url 'google_login' %}?next=/delivery/dashboard/" class="social-btn-google js-capture-location" data-no-ajax>
+                    Continue with Google
+                </a>
+        </div>
+        <div class="divider"><span>or create with email</span></div>
+
+        <!-- Registration Form (WebSocket) -->
+        <form method="post" id="registerForm" novalidate data-no-ajax action="{% url 'delivery:register' %}">
+            {% csrf_token %}
+
+            <div class="form-grid">
+                <div class="form-group-modern">
+                    <label class="form-label-modern">First Name *</label>
+                    <input type="text" name="first_name" class="input-modern {% if form.first_name.errors %}error{% endif %}" id="id_first_name" required value="{{ form.first_name.value|default_if_none:'' }}">
+                    {% if form.first_name.errors %}
+                        <div class="error-message" style="font-size:0.75rem; color: var(--danger);">
+                            {{ form.first_name.errors|join:", " }}
+                        </div>
+                    {% endif %}
                 </div>
-                <form method="post" action="">
-                    {% csrf_token %}
-                    {{ form.as_p }}
+                <div class="form-group-modern">
+                    <label class="form-label-modern">Last Name *</label>
+                    <input type="text" name="last_name" class="input-modern {% if form.last_name.errors %}error{% endif %}" id="id_last_name" required value="{{ form.last_name.value|default_if_none:'' }}">
+                    {% if form.last_name.errors %}
+                        <div class="error-message" style="font-size:0.75rem; color: var(--danger);">
+                            {{ form.last_name.errors|join:", " }}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
 
-                    <button type="submit" class="btn btn-primary w-100">Create account</button>
-                </form>
+            <div class="form-group-modern">
+                <label class="form-label-modern">Username *</label>
+                <input type="text" name="username" class="input-modern {% if form.username.errors %}error{% endif %}" id="id_username" required value="{{ form.username.value|default_if_none:'' }}">
+                {% if form.username.errors %}
+                    <div class="error-message" style="font-size:0.75rem; color: var(--danger);">
+                        {{ form.username.errors|join:", " }}
+                    </div>
+                {% endif %}
+            </div>
 
-                <div class="text-center mt-3">
-                    <a href="{% url 'delivery:login' %}">Back to login</a>
+            <div class="form-group-modern">
+                <label class="form-label-modern">Email *</label>
+                <input type="email" name="email" class="input-modern {% if form.email.errors %}error{% endif %}" id="id_email" required value="{{ form.email.value|default_if_none:'' }}">
+                {% if form.email.errors %}
+                    <div class="error-message" style="font-size:0.75rem; color: var(--danger);">
+                        {{ form.email.errors|join:", " }}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group-modern">
+                    <label class="form-label-modern">Password *</label>
+                    <div class="input-group-modern">
+                        <input type="password" name="password1" class="input-modern {% if form.password1.errors %}error{% endif %}" id="id_password1" required>
+                        <button type="button" class="password-toggle" data-target="id_password1">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
+                    <div class="password-strength-container">
+                        <div class="strength-meter">
+                            <div class="strength-fill" id="strengthFill"></div>
+                        </div>
+                        <div class="strength-text" id="strengthText">Strength</div>
+                    </div>
+                </div>
+                <div class="form-group-modern">
+                    <label class="form-label-modern">Confirm *</label>
+                    <div class="input-group-modern">
+                        <input type="password" name="password2" class="input-modern {% if form.password2.errors %}error{% endif %}" id="id_password2" required>
+                        <button type="button" class="password-toggle" data-target="id_password2">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
+                    <div class="password-match" id="passwordMatch" style="font-size:0.7rem;"></div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-modern" id="submitButton">
+                <i class="bi bi-person-plus"></i> Create Account
+            </button>
+        </form>
+
+        <div class="login-link">
+            Already have an account? <a href="{% url 'delivery:login' %}">Sign In</a>
+        </div>
+
+        <div class="trust-indicators">
+            <div class="trust-item"><i class="bi bi-shield-check trust-icon"></i><div class="trust-text">SSL Secure</div></div>
+            <div class="trust-item"><i class="bi bi-lock trust-icon"></i><div class="trust-text">Privacy First</div></div>
+            <div class="trust-item"><i class="bi bi-award trust-icon"></i><div class="trust-text">Verified</div></div>
+        </div>
+
+        <!-- Mobile footer -->
+        <div class="animated-footer-mobile">
+            © 2026 Baysoko Delivery. <a href="#">Privacy</a> • <a href="#">Terms</a>
+        </div>
+    </div>
+
+    <!-- RIGHT: Creative Carousel -->
+    <div class="creative-section">
+        <div class="marketplace-heading">
+            <h2>Baysoko Delivery</h2>
+            <p>Fast, trackable, and secure deliveries</p>
+        </div>
+        <div class="carousel-vertical">
+            <div class="carousel-track" id="carouselTrack">
+                <div class="carousel-slide">
+                    <div class="card-floating">
+                        <i class="bi bi-gem icon-large"></i>
+                        <h3>Start Your Journey</h3>
+                        <p>Join thousands in Homabay.</p>
+                        <img src="https://imgs.search.brave.com/IUz9a1uvKiBI0GKI04p2ZqNij1XdVCY9T5PkfMcpmSA/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9jb21t/dW5pdHkuZWJheS5j/b20vdDUvaW1hZ2Uv/c2VydmVycGFnZS9p/bWFnZS1pZC85Mjcy/MzNpODNERDgyQ0ZG/ODg5QTU3NS9pbWFn/ZS1zaXplL2xhcmdl/P3Y9djImcHg9OTk5" alt="Marketplace">
+                    </div>
+                </div>
+                <div class="carousel-slide">
+                    <div class="card-floating">
+                        <i class="bi bi-shield-check icon-large"></i>
+                        <h3>Secure & Safe</h3>
+                        <p>Protected transactions.</p>
+                        <img src="https://images.unsplash.com/photo-1563013544-824ae1b704d3?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80" alt="Secure">
+                    </div>
+                </div>
+                <div class="carousel-slide">
+                    <div class="card-floating">
+                        <i class="bi bi-truck icon-large"></i>
+                        <h3>Fast Delivery</h3>
+                        <p>Same‑day across county.</p>
+                        <img src="https://imgs.search.brave.com/e8md7E90wCHLK_XJtODBp-Y6dTEdd24hgLqPkVGLeuM/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly90aHVt/YnMuZHJlYW1zdGlt/ZS5jb20vYi9icmVh/ZC1kZWxpdmVyeS10/cnVjay1wYXJrZWQt/bWFuYXNzYXMtdmly/Z2luaWEtdXNhLTM5/ODQ2ODA3MS5qcGc" alt="Delivery">
+                    </div>
                 </div>
             </div>
         </div>
+
+        <!-- Desktop footer -->
+        <div class="animated-footer-desktop">
+            © 2026 Baysoko Delivery. <a href="#">Privacy</a> • <a href="#">Terms</a> • <a href="#">Sitemap</a>
+        </div>
     </div>
 </div>
+
+<!-- Verification Modal -->
+<div class="verification-modal" id="verificationModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); align-items:center; justify-content:center; z-index:10000;">
+    <div class="modal-card" style="background:var(--card-bg); border-radius:30px; padding:2rem; max-width:400px; width:90%; text-align:center;">
+        <div class="modal-icon" style="font-size:3rem; color:var(--accent); margin-bottom:1rem;"><i class="bi bi-envelope-check"></i></div>
+        <h3>Verify Your Email</h3>
+        <p>We've sent a 7‑digit code to <span id="userEmail"></span>.</p>
+        <input type="text" class="verification-input" id="verificationCode" maxlength="7" style="width:100%; padding:1rem; font-size:2rem; text-align:center; letter-spacing:8px; border:2px solid var(--border-color); border-radius:12px; background:var(--input-bg); color:var(--text-primary);">
+        <div class="timer" id="timerDisplay" style="margin:1rem 0; font-size:0.9rem; color:var(--text-secondary);"></div>
+        <button class="resend-btn" id="resendBtn" disabled style="background:none; border:1px solid var(--accent); color:var(--accent); padding:0.5rem 1rem; border-radius:20px; cursor:pointer;">Resend Code</button>
+        <div id="verificationMessage" style="margin-top:1rem; font-size:0.9rem;"></div>
+    </div>
+</div>
+
+<!-- Global message container -->
+<div id="globalMessageContainer" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const rainContainer = document.getElementById('rainContainer');
+    const icons = ['bi-truck', 'bi-geo-alt', 'bi-clock', 'bi-box', 'bi-shield-check', 'bi-chat-dots'];
+    if (rainContainer) {
+        for (let i = 0; i < 40; i++) {
+            const icon = document.createElement('i');
+            icon.classList.add('bi', icons[Math.floor(Math.random() * icons.length)], 'rain-icon');
+            icon.style.left = `${Math.random() * 100}vw`;
+            icon.style.animationDuration = `${4 + Math.random() * 3}s`;
+            icon.style.animationDelay = `${Math.random() * 2}s`;
+            icon.style.fontSize = `${1 + Math.random() * 2}rem`;
+            rainContainer.appendChild(icon);
+        }
+    }
+
+    const track = document.getElementById('carouselTrack');
+    const slides = document.querySelectorAll('.carousel-slide');
+    if (track && slides.length) {
+        let currentIndex = 0;
+        const carousel = document.querySelector('.carousel-vertical');
+        setInterval(() => {
+            currentIndex = (currentIndex + 1) % slides.length;
+            const offset = -currentIndex * (carousel.clientHeight);
+            track.style.transform = `translateY(${offset}px)`;
+        }, 4200);
+    }
+
+    document.querySelectorAll('.password-toggle').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const target = document.getElementById(this.dataset.target);
+            const icon = this.querySelector('i');
+            if (!target) return;
+            if (target.type === 'password') {
+                target.type = 'text';
+                icon.classList.replace('bi-eye', 'bi-eye-slash');
+            } else {
+                target.type = 'password';
+                icon.classList.replace('bi-eye-slash', 'bi-eye');
+            }
+        });
+    });
+
+    const pwd1 = document.getElementById('id_password1');
+    const pwd2 = document.getElementById('id_password2');
+    const strengthFill = document.getElementById('strengthFill');
+    const strengthText = document.getElementById('strengthText');
+    if (pwd1 && strengthFill && strengthText) {
+        pwd1.addEventListener('input', function() {
+            const val = this.value || '';
+            let strength = 0;
+            if (val.length >= 8) strength++;
+            if (/[A-Z]/.test(val)) strength++;
+            if (/[0-9]/.test(val)) strength++;
+            if (/[^A-Za-z0-9]/.test(val)) strength++;
+            const pct = (strength / 4) * 100;
+            strengthFill.style.width = `${pct}%`;
+            strengthFill.style.background = strength >= 3 ? 'var(--success)' : (strength === 2 ? 'var(--warning)' : 'var(--danger)');
+            strengthText.textContent = strength >= 3 ? 'Strong' : (strength === 2 ? 'Medium' : 'Weak');
+        });
+    }
+    const matchDiv = document.getElementById('passwordMatch');
+    function checkMatch() {
+        if (!pwd2 || !matchDiv) return;
+        if (pwd2.value.length) {
+            matchDiv.innerHTML = pwd1.value === pwd2.value ?
+                '<i class="bi bi-check-circle text-success"></i> Passwords match' :
+                '<i class="bi bi-x-circle text-danger"></i> Passwords do not match';
+        } else {
+            matchDiv.innerHTML = '';
+        }
+    }
+    if (pwd1 && pwd2) {
+        pwd1.addEventListener('input', checkMatch);
+        pwd2.addEventListener('input', checkMatch);
+    }
+});
+</script>
 {% endblock %}
+
+

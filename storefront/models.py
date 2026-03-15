@@ -33,6 +33,10 @@ class Store(models.Model):
     policies = models.TextField(blank=True, help_text="Store policies, return policy, etc.")
     is_featured = models.BooleanField(default=False, help_text="Featured stores get premium placement")
     total_views = models.PositiveIntegerField(default=0)
+    # Geo location (Google Maps / Places)
+    location_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    location_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    location_place_id = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ['-created_at']
@@ -834,8 +838,13 @@ class WithdrawalRequest(models.Model):
     processed_at = models.DateTimeField(null=True, blank=True)
     reference = models.CharField(max_length=100, blank=True)
     note = models.TextField(blank=True)
+    mpesa_phone = models.CharField(max_length=15, blank=True)
+    mpesa_reference = models.CharField(max_length=100, blank=True)
+    mpesa_conversation_id = models.CharField(max_length=100, blank=True)
+    mpesa_status = models.CharField(max_length=20, blank=True)
+    mpesa_response = models.JSONField(default=dict, blank=True)
 
-    MIN_WITHDRAWAL = 10000
+    MIN_WITHDRAWAL = 5000
 
     def schedule(self):
         """Schedule the withdrawal for the next Thursday if valid.

@@ -66,6 +66,7 @@ def onesignal_config(request) -> Dict[str, str]:
 		from django.conf import settings
 		return {
 			'ONESIGNAL_APP_ID': getattr(settings, 'ONESIGNAL_APP_ID', ''),
+			'GOOGLE_MAPS_API_KEY': getattr(settings, 'GOOGLE_MAPS_API_KEY', ''),
 		}
 	except Exception:
-		return {'ONESIGNAL_APP_ID': ''}
+		return {'ONESIGNAL_APP_ID': '', 'GOOGLE_MAPS_API_KEY': ''}

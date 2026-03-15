@@ -61,6 +61,28 @@ from listings.models import Listing
 
 logger = logging.getLogger(__name__)
 
+def _sync_from_delivery_profile(user):
+    """Best-effort sync of missing marketplace profile fields from delivery profile."""
+    try:
+        delivery_profile = getattr(user, 'delivery_profile', None)
+        if not delivery_profile:
+            return False
+        updated = False
+        if not user.phone_number and getattr(delivery_profile, 'phone_number', None):
+            user.phone_number = delivery_profile.phone_number
+            updated = True
+        if not user.location:
+            loc = getattr(delivery_profile, 'city', '') or getattr(delivery_profile, 'address', '')
+            if loc:
+                user.location = loc
+                updated = True
+        if updated:
+            user.save(update_fields=['phone_number', 'location'])
+        return updated
+    except Exception:
+        logger.exception('Failed to sync delivery profile for user %s', getattr(user, 'id', None))
+        return False
+
 from baysoko.utils.email_helpers import _send_email_threaded, send_email_brevo, render_and_send
 from notifications.utils import notify_system_message
 from notifications.utils import create_and_broadcast_notification
@@ -216,7 +238,12 @@ def register(request):
 
                 user = form.save(commit=False)
                 if not user.location:
-                    user.location = 'Homabay'
+                    try:
+                        pending_location = (request.session.get('pending_location') or '').strip()
+                        if pending_location:
+                            user.location = pending_location
+                    except Exception:
+                        pass
                 # ensure empty phone stored as NULL
                 if not getattr(user, 'phone_number', None):
                     user.phone_number = None
@@ -775,10 +802,19 @@ def google_callback(request):
             return redirect('profile-edit', pk=request.user.pk)
 
         try:
-            user = User.objects.get(email=email)
-            login(request, user)
+            users = User.objects.filter(email__iexact=email).order_by('date_joined', 'id')
+            if users.count() > 1:
+                logger.warning("Google callback: multiple users found for email=%s; using earliest account.", email)
+            user = users.first()
+            if not user:
+                raise User.DoesNotExist()
+            login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+            _sync_from_delivery_profile(user)
             if not user.phone_number:
                 messages.info(request, 'Please verify your details and include phone number to continue.')
+                return redirect('profile-edit', pk=user.pk)
+            if not user.location:
+                messages.info(request, 'Please add your location to continue.')
                 return redirect('profile-edit', pk=user.pk)
             messages.success(request, f"Welcome back, {user.first_name}!")
             return redirect('home')
@@ -790,12 +826,13 @@ def google_callback(request):
                 username = f"{original}{counter}"
                 counter += 1
 
+            pending_location = (request.session.pop('pending_location', '') or '').strip()
             user = User.objects.create(
                 email=email.lower(),
                 username=username,
                 first_name=userinfo.get('given_name', ''),
                 last_name=userinfo.get('family_name', ''),
-                location='Homabay',
+                location=pending_location,
                 phone_number=None,
                 is_active=True
             )
@@ -815,6 +852,9 @@ def google_callback(request):
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
             request.session['just_registered'] = True
             request.session['just_registered_message'] = 'Account created with Google! Check your email to verify your account.'
+            if not user.location:
+                messages.info(request, 'Please add your location to continue.')
+                return redirect('profile-edit', pk=user.pk)
             return redirect('verification_required')
 
     except Exception as e:
@@ -884,10 +924,19 @@ def facebook_callback(request):
             email = f"{userinfo.get('id')}@facebook.com"
 
         try:
-            user = User.objects.get(email=email)
-            login(request, user)
+            users = User.objects.filter(email__iexact=email).order_by('date_joined', 'id')
+            if users.count() > 1:
+                logger.warning("Facebook callback: multiple users share email %s; using earliest account.", email)
+            user = users.first() if users.exists() else None
+            if not user:
+                raise User.DoesNotExist()
+            login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+            _sync_from_delivery_profile(user)
             if not user.phone_number:
                 messages.info(request, 'Please add your phone number to continue.')
+                return redirect('profile-edit', pk=user.pk)
+            if not user.location:
+                messages.info(request, 'Please add your location to continue.')
                 return redirect('profile-edit', pk=user.pk)
             messages.success(request, f"Welcome back, {user.first_name}!")
             return redirect('home')
@@ -899,12 +948,13 @@ def facebook_callback(request):
                 username = f"{original}{counter}"
                 counter += 1
 
+            pending_location = (request.session.pop('pending_location', '') or '').strip()
             user = User.objects.create(
                 email=email.lower(),
                 username=username,
                 first_name=userinfo.get('first_name', ''),
                 last_name=userinfo.get('last_name', ''),
-                location='Homabay',
+                location=pending_location,
                 phone_number=None,
                 is_active=True
             )
@@ -924,6 +974,9 @@ def facebook_callback(request):
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
             request.session['just_registered'] = True
             request.session['just_registered_message'] = 'Account created with Facebook! Check your email to verify your account.'
+            if not user.location:
+                messages.info(request, 'Please add your location to continue.')
+                return redirect('profile-edit', pk=user.pk)
             return redirect('verification_required')
 
     except Exception as e:
@@ -1009,7 +1062,21 @@ class ProfileUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
         form.fields['last_name'].initial = self.object.last_name
         form.fields['username'].initial = self.object.username
         form.fields['email'].initial = self.object.email
-        form.fields['phone_number'].initial = self.object.phone_number
+        # If user came from delivery app first, try to prefill from delivery profile
+        delivery_profile = getattr(self.object, 'delivery_profile', None)
+        if not self.object.phone_number and delivery_profile and getattr(delivery_profile, 'phone_number', None):
+            form.fields['phone_number'].initial = delivery_profile.phone_number
+        else:
+            form.fields['phone_number'].initial = self.object.phone_number
+        # Location: prefer user.location, otherwise fall back to delivery profile city/address
+        try:
+            if hasattr(form.fields, 'get') and form.fields.get('location'):
+                if self.object.location:
+                    form.fields['location'].initial = self.object.location
+                elif delivery_profile:
+                    form.fields['location'].initial = getattr(delivery_profile, 'city', '') or getattr(delivery_profile, 'address', '')
+        except Exception:
+            pass
         form.fields['bio'].initial = self.object.bio
         form.fields['show_contact_info'].initial = self.object.show_contact_info
         return form
@@ -1029,6 +1096,27 @@ class ProfileUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
 
         # Save the form and update the instance
         response = super().form_valid(form)
+
+        # Sync to delivery profile when user originated from delivery app
+        try:
+            delivery_profile = getattr(self.object, 'delivery_profile', None)
+            if delivery_profile:
+                updated = False
+                if self.object.phone_number and delivery_profile.phone_number != self.object.phone_number:
+                    delivery_profile.phone_number = self.object.phone_number
+                    updated = True
+                # If delivery profile lacks city/address, use user's location
+                if self.object.location:
+                    if not delivery_profile.city:
+                        delivery_profile.city = self.object.location
+                        updated = True
+                    if not delivery_profile.address:
+                        delivery_profile.address = self.object.location
+                        updated = True
+                if updated:
+                    delivery_profile.save()
+        except Exception:
+            logger.exception('Failed to sync delivery profile from user profile update')
 
         # After saving, if a phone number was added/changed or phone is unverified, send verification SMS
         try:
@@ -1388,6 +1476,13 @@ class CustomLoginView(LoginView):
 
     def form_valid(self, form):
         response = super().form_valid(form)
+        # Ensure main app login doesn't implicitly authenticate delivery session
+        try:
+            self.request.session.pop('delivery_login_intent', None)
+            if 'delivery_auth' in self.request.session:
+                self.request.session['delivery_auth'] = False
+        except Exception:
+            pass
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({
                 'success': True,
@@ -1412,6 +1507,12 @@ class CustomLogoutView(LogoutView):
 
     def dispatch(self, request, *args, **kwargs):
         messages.success(request, 'You have been logged out.')
+        try:
+            if 'delivery_auth' in request.session:
+                request.session['delivery_auth'] = False
+            request.session.pop('delivery_login_intent', None)
+        except Exception:
+            pass
         return super().dispatch(request, *args, **kwargs)
 
 # users/views.py
@@ -1617,4 +1718,24 @@ def update_notification_settings(request):
         settings.marketing_emails = bool(data['marketing_emails'])
     settings.save()
 
+    return JsonResponse({'success': True})
+
+
+@require_POST
+@ensure_csrf_cookie
+def capture_location(request):
+    """Capture device location label for social signups (stored in session)."""
+    try:
+        payload = json.loads(request.body.decode('utf-8') or '{}') if request.body else {}
+    except Exception:
+        payload = {}
+    if not payload:
+        payload = request.POST
+    label = (payload.get('location') or payload.get('label') or '').strip()
+    lat = payload.get('lat')
+    lng = payload.get('lng')
+    if label:
+        request.session['pending_location'] = label
+        if lat and lng:
+            request.session['pending_location_coords'] = {'lat': lat, 'lng': lng}
     return JsonResponse({'success': True})

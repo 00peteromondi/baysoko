@@ -123,8 +123,6 @@
       this.messagesEl = container.querySelector('[data-agent-messages]');
       this.typingEl = container.querySelector('[data-agent-typing]');
       this.unreadBadge = container.querySelector('[data-agent-unread]');
-      this.autofillWrap = container.querySelector('[data-agent-autofill-wrap]');
-      this.autofillToggle = container.querySelector('[data-agent-autofill-toggle]');
       this.lastData = null;
       this.ws = null;
       this.lastUserPrompt = '';
@@ -137,13 +135,12 @@
       this._pendingPromptByRequestId = {};
       this._messageTextById = {};
       this._messageIdCounter = 0;
-      this._titleAutofillEnabled = false;
+      this._proactiveBubble = null;
       this._currentUserId = String(this.container?.dataset?.agentUserId || '').trim() || 'guest';
       this._storageKeys = {
         panelOpen: `agent_panel_open:${this._currentUserId}`,
         history: `agent_chat_history_v1:${this._currentUserId}`,
         offlineQueue: `agent_offline_queue_v1:${this._currentUserId}`,
-        titleAutofill: `agent_autofill_title_enabled:${this._currentUserId}`,
         dailyWelcomeDate: `agent_daily_welcome_date:${this._currentUserId}`
       };
       this._connect();
@@ -154,34 +151,9 @@
       // restore panel state
       try {
         const s = localStorage.getItem(this._storageKeys.panelOpen);
-        if (s === 'true') this.container.classList.add('open');
-      } catch (e) {}
-      // Optional title-based listing autofill (explicit toggle required)
-      try {
-        const listingTitle = document.getElementById('id_title');
-          if (listingTitle) {
-          if (this.autofillWrap) this.autofillWrap.hidden = false;
-          const saved = localStorage.getItem(this._storageKeys.titleAutofill);
-          this._titleAutofillEnabled = saved === 'true';
-          if (this.autofillToggle) {
-            this.autofillToggle.checked = this._titleAutofillEnabled;
-            this.autofillToggle.addEventListener('change', () => {
-              this._titleAutofillEnabled = !!this.autofillToggle.checked;
-              localStorage.setItem(this._storageKeys.titleAutofill, this._titleAutofillEnabled ? 'true' : 'false');
-            });
-          }
-          let tmr;
-          listingTitle.addEventListener('input', () => {
-            if (!this._titleAutofillEnabled) return;
-            clearTimeout(tmr);
-            tmr = setTimeout(() => {
-              const v = listingTitle.value.trim();
-              if (v.length > 4) {
-                this._showTyping(true);
-                this._sendGenerate(v, { mode: 'listing_fields' });
-              }
-            }, 900);
-          });
+        if (s === 'true') {
+          this.container.classList.add('open');
+          document.body.classList.add('agent-open');
         }
       } catch (e) {}
     }
@@ -199,7 +171,7 @@
     }
 
     _dailyWelcomeText() {
-      return `Hello ${this._getDisplayName()}, I am Baysoko Assistant. I can help with your cart, listings, stores, subscriptions, and orders.`;
+      return `Hello ${this._getDisplayName()}, I am Baysoko Assistant. I can help with your cart, listings, stores, subscriptions, orders, and many more.`;
     }
 
     _todayStamp() {
@@ -261,6 +233,7 @@
           const open = this.container.classList.toggle('open');
           if (this.panel) this.panel.setAttribute('aria-hidden', (!open).toString());
           this.toggleBtn.setAttribute('aria-expanded', open);
+          document.body.classList.toggle('agent-open', open);
           if (open) {
             this.input?.focus();
             this._scrollToLatest();
@@ -413,8 +386,10 @@
           const delta = y - this._lastScrollY;
           if (delta > 8 && y > 120) {
             this.container.classList.add('scroll-hidden');
+            this._syncProactiveBubbleVisibility(true);
           } else if (delta < -8 || y <= 80) {
             this.container.classList.remove('scroll-hidden');
+            this._syncProactiveBubbleVisibility(false);
           }
           this._lastScrollY = y;
         });
@@ -453,6 +428,10 @@
 
     _showPopupPrompt(text) {
       try {
+        if (this._proactiveBubble) {
+          try { this._proactiveBubble.remove(); } catch (e) {}
+          this._proactiveBubble = null;
+        }
         // small transient bubble near the toggle button
         const bubble = document.createElement('div');
         bubble.className = 'agent-proactive-bubble';
@@ -466,14 +445,33 @@
         bubble.style.borderRadius = '18px';
         bubble.style.zIndex = 99999;
         document.body.appendChild(bubble);
+        this._proactiveBubble = bubble;
         setTimeout(() => { bubble.classList.add('visible'); }, 50);
-        bubble.addEventListener('click', () => { this.container.classList.add('open'); if (this.input) this.input.focus(); bubble.remove(); });
-        setTimeout(() => { try{ bubble.remove(); }catch(e){} }, 10000);
+        bubble.addEventListener('click', () => {
+          this.container.classList.add('open');
+          document.body.classList.add('agent-open');
+          if (this.input) this.input.focus();
+          bubble.remove();
+          if (this._proactiveBubble === bubble) this._proactiveBubble = null;
+        });
+        setTimeout(() => { try{ bubble.remove(); }catch(e){}; if (this._proactiveBubble === bubble) this._proactiveBubble = null; }, 10000);
+      } catch (e) {}
+    }
+
+    _syncProactiveBubbleVisibility(hidden) {
+      try {
+        if (!this._proactiveBubble) return;
+        if (hidden) {
+          this._proactiveBubble.classList.add('scroll-hidden');
+        } else {
+          this._proactiveBubble.classList.remove('scroll-hidden');
+        }
       } catch (e) {}
     }
 
     _closePanel() {
       this.container.classList.remove('open');
+      document.body.classList.remove('agent-open');
       if (this.panel) this.panel.setAttribute('aria-hidden', 'true');
       if (this.toggleBtn) this.toggleBtn.setAttribute('aria-expanded', 'false');
       localStorage.setItem(this._storageKeys.panelOpen, 'false');
@@ -735,6 +733,9 @@
       }
       if (/\b(subscription|subscriptions|plan|plans|billing|renew|upgrade|downgrade|cancel subscription|payment option)\b/.test(contextText)) {
         return [...items.filter((it) => it && (it.type === 'subscription' || it.type === 'subscription_plan' || it.type === 'store')), ...actionItems].slice(0, 8);
+      }
+      if (/\b(affiliate|affiliates|referral|referrals|commission|commissions|payout|payouts)\b/.test(contextText)) {
+        return [...items.filter((it) => it && it.type === 'affiliate'), ...actionItems].slice(0, 8);
       }
       if (/\b(cart|checkout)\b/.test(contextText)) {
         return [...items.filter((it) => it && (it.type === 'cart_item' || it.type === 'cart')), ...actionItems].slice(0, 8);

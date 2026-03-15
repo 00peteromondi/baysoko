@@ -92,6 +92,19 @@ class DeliveryPerson(models.Model):
         self.save(update_fields=['current_latitude', 'current_longitude'])
 
 
+class DeliveryProfile(models.Model):
+    """Profile completion data for delivery app users (non-driver, non-admin)."""
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='delivery_profile')
+    phone_number = models.CharField(max_length=20)
+    address = models.CharField(max_length=255, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Delivery Profile - {self.user.username}"
+
+
 class DeliveryZone(models.Model):
     """Geographical zones for delivery"""
     name = models.CharField(max_length=100)
@@ -110,6 +123,32 @@ class DeliveryZone(models.Model):
     
     def __str__(self):
         return f"{self.name} - KES {self.delivery_fee}"
+
+
+class DeliveryRouteRate(models.Model):
+    """Fixed route rates between key towns."""
+    ROUTE_POINTS = [
+        ('homabay', 'Homabay'),
+        ('mbita', 'Mbita'),
+        ('oyugis', 'Oyugis'),
+        ('kendu', 'Kendu Bay'),
+        ('suba', 'Suba'),
+        ('rodi', 'Rodi Kopany'),
+        ('ndhiwa', 'Ndhiwa'),
+    ]
+
+    origin = models.CharField(max_length=30, choices=ROUTE_POINTS)
+    destination = models.CharField(max_length=30, choices=ROUTE_POINTS)
+    base_fee = models.DecimalField(max_digits=10, decimal_places=2)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['origin', 'destination']
+        ordering = ['origin', 'destination']
+
+    def __str__(self):
+        return f"{self.origin} → {self.destination} (KES {self.base_fee})"
 
 
 class DeliveryRequest(models.Model):
@@ -230,6 +269,12 @@ class DeliveryRequest(models.Model):
     
     def update_status(self, new_status, notes="", changed_by_user=None):
         """Update delivery status with history tracking"""
+        try:
+            if isinstance(self.metadata, dict) and self.metadata.get('external_delivery'):
+                if self.payment_status != 'paid' and new_status not in ['pending', 'accepted', 'cancelled']:
+                    raise ValueError("Payment required before dispatching this delivery.")
+        except Exception:
+            pass
         old_status = self.status
         self.status = new_status
         
@@ -380,28 +425,12 @@ class DeliveryConfirmation(models.Model):
             if not order:
                 return False
 
-            # Schedule escrow release after a short review window (24 hours)
+            # Mark escrow ready for admin approval (do not auto-release)
             escrow = getattr(order, 'escrow', None)
             if escrow and escrow.status == 'held':
                 try:
-                    # Set auto_release_date to now + 24 hours (admins can override)
-                    from django.utils import timezone
-                    from datetime import timedelta
-                    escrow.auto_release_date = timezone.now() + timedelta(hours=24)
+                    escrow.ready_for_release = True
                     escrow.save()
-                except Exception:
-                    pass
-
-            # Mark associated payment with scheduled release date (do not immediately clear escrow flag)
-            payment = getattr(order, 'payment', None)
-            if payment and getattr(payment, 'is_held_in_escrow', False):
-                try:
-                    from django.utils import timezone
-                    from datetime import timedelta
-                    payment.actual_release_date = timezone.now() + timedelta(hours=24)
-                    if not payment.seller_payout_reference:
-                        payment.seller_payout_reference = f"PAYOUT-{order.id}-{int(timezone.now().timestamp())}"
-                    payment.save()
                 except Exception:
                     pass
 

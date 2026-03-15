@@ -62,6 +62,18 @@ def store_detail(request, slug):
     
     # Only show listings associated with this specific store
     products = Listing.objects.filter(store=store, is_active=True)
+    # Ensure any legacy listings without slugs get one so product URLs remain valid
+    try:
+        from django.db.models import Q
+        missing_slugs = products.filter(Q(slug__isnull=True) | Q(slug=''))
+        if missing_slugs.exists():
+            for listing in missing_slugs:
+                try:
+                    listing.save()
+                except Exception:
+                    continue
+    except Exception:
+        pass
     user_favorites = []
     if request.user.is_authenticated:
         user_favorites = Favorite.objects.filter(
@@ -795,6 +807,20 @@ def payment_monitor(request):
 
     customer_purchases = customer_purchases.order_by('-created_at')[:50]
 
+    # ===== AFFILIATE WITHDRAWALS FOR SELLERS =====
+    affiliate_available_balance = 0
+    affiliate_min_withdrawal = Decimal('5000')
+    try:
+        from affiliates.models import AffiliateProfile, AffiliateCommission, AffiliateSubscriptionCommission, AffiliatePayout
+        profile = AffiliateProfile.objects.filter(user=request.user).first()
+        if profile:
+            approved_order = AffiliateCommission.objects.filter(affiliate=profile, status='approved').aggregate(total=Sum('amount')).get('total') or 0
+            approved_subs = AffiliateSubscriptionCommission.objects.filter(affiliate=profile, status='approved').aggregate(total=Sum('amount')).get('total') or 0
+            payouts_total = AffiliatePayout.objects.filter(affiliate=profile, status__in=['pending', 'paid']).aggregate(total=Sum('amount')).get('total') or 0
+            affiliate_available_balance = max(Decimal(approved_order + approved_subs) - Decimal(payouts_total), Decimal('0'))
+    except Exception:
+        affiliate_available_balance = 0
+
     context = {
         'period': period,
         'user_stores': user_stores,
@@ -814,6 +840,8 @@ def payment_monitor(request):
         'released_escrow': released_escrow,
         'subscription_revenue': subscription_revenue,
         'available_balance': released_escrow,  # Funds available for withdrawal
+        'affiliate_available_balance': affiliate_available_balance,
+        'affiliate_min_withdrawal': affiliate_min_withdrawal,
 
         # Counts
         'subscription_count': subscription_payments.count(),
@@ -892,6 +920,71 @@ def payout_verification_callback(request):
             pv.verified = False
             pv.save()
             return JsonResponse({'success': False, 'error': 'Verification failed'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def mpesa_b2c_result(request):
+    """Handle M-Pesa B2C payout result callbacks for withdrawals and affiliate payouts."""
+    try:
+        data = json.loads(request.body or '{}')
+        result = data.get('Result', {})
+        originator = result.get('OriginatorConversationID') or result.get('ConversationID')
+        result_code = result.get('ResultCode')
+        result_desc = result.get('ResultDesc')
+
+        status = 'processed' if result_code == 0 else 'failed'
+
+        # Update seller withdrawals
+        wr = WithdrawalRequest.objects.filter(
+            Q(mpesa_reference=originator) | Q(mpesa_conversation_id=originator)
+        ).first()
+        if wr:
+            wr.mpesa_status = status
+            wr.mpesa_response = data
+            wr.status = status
+            if status == 'processed':
+                wr.processed_at = timezone.now()
+            wr.save()
+
+        # Update affiliate payouts
+        try:
+            from affiliates.models import AffiliatePayout
+            payout = AffiliatePayout.objects.filter(mpesa_reference=originator).first()
+            if payout:
+                payout.mpesa_status = status
+                payout.mpesa_response = data
+                payout.status = 'paid' if status == 'processed' else 'canceled'
+                if payout.status == 'paid':
+                    payout.paid_at = timezone.now()
+                payout.save()
+        except Exception:
+            pass
+
+        return JsonResponse({'success': True, 'status': status, 'description': result_desc})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def mpesa_b2c_timeout(request):
+    """Handle M-Pesa B2C timeout callbacks."""
+    try:
+        data = json.loads(request.body or '{}')
+        result = data.get('Result', {})
+        originator = result.get('OriginatorConversationID') or result.get('ConversationID')
+        wr = WithdrawalRequest.objects.filter(
+            Q(mpesa_reference=originator) | Q(mpesa_conversation_id=originator)
+        ).first()
+        if wr:
+            wr.mpesa_status = 'timeout'
+            wr.mpesa_response = data
+            wr.status = 'failed'
+            wr.save()
+        return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
@@ -2333,13 +2426,32 @@ def request_withdrawal(request, slug):
         messages.error(request, 'Please add and verify your payout phone before requesting withdrawals.')
         return redirect('storefront:payment_monitor')
 
-    wr = WithdrawalRequest.objects.create(store=store, amount=amount)
-    if not wr.schedule():
+    if amount < WithdrawalRequest.MIN_WITHDRAWAL:
         messages.error(request, f'Withdrawal must be at least KSh {WithdrawalRequest.MIN_WITHDRAWAL}')
         return redirect('storefront:payment_monitor')
 
-    messages.success(request, f'Withdrawal request for KSh {amount:,.0f} scheduled. Processing will occur on the next Thursday.')
-    return redirect('storefront:payment_monitor')
+    from listings.mpesa_utils import MpesaGateway
+    gateway = MpesaGateway()
+    mpesa_phone = store.payout_phone
+    resp = gateway.initiate_b2c_payout(mpesa_phone, amount, remarks='Seller Withdrawal', occasion=f'STORE-{store.id}')
 
-    messages.success(request, 'Withdrawal scheduled for processing on the next Thursday.')
+    wr = WithdrawalRequest.objects.create(
+        store=store,
+        amount=amount,
+        mpesa_phone=mpesa_phone,
+        mpesa_reference=resp.get('originator_conversation_id', ''),
+        mpesa_conversation_id=resp.get('conversation_id', ''),
+        mpesa_status='processed' if resp.get('simulated') else 'initiated',
+        mpesa_response=resp,
+        status='processed' if resp.get('simulated') else 'pending',
+        processed_at=timezone.now() if resp.get('simulated') else None,
+    )
+
+    if resp.get('success'):
+        messages.success(request, f'Withdrawal request for KSh {amount:,.0f} submitted. M-Pesa transfer is being processed.')
+    else:
+        wr.status = 'failed'
+        wr.save(update_fields=['status'])
+        messages.error(request, f'Withdrawal initiation failed: {resp.get("error", "Unknown error")}')
+
     return redirect('storefront:payment_monitor')

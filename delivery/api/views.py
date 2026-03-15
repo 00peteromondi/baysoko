@@ -55,7 +55,7 @@ class DeliveryViewSet(viewsets.ModelViewSet):
         if delivery_person_id:
             queryset = queryset.filter(delivery_person_id=delivery_person_id)
         
-        # For non-admin users, only allow access to store owners (sellers) or delivery persons
+        # For non-admin users, allow delivery persons, sellers, or the delivery creator
         user = self.request.user
         if not (user.is_staff or user.is_superuser):
             # Delivery person may see their own assignments
@@ -73,8 +73,8 @@ class DeliveryViewSet(viewsets.ModelViewSet):
                         Q(metadata__store__in=store_lookup)
                     )
                 else:
-                    # No access for regular users without stores
-                    return DeliveryRequest.objects.none()
+                    # Regular users: limit to deliveries they created
+                    queryset = queryset.filter(Q(metadata__user_id=user.id))
         
         return queryset.order_by('-created_at')
     
@@ -90,6 +90,17 @@ class DeliveryViewSet(viewsets.ModelViewSet):
                 {'error': 'Status is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # Block progress for unpaid external deliveries
+        try:
+            if isinstance(delivery.metadata, dict) and delivery.metadata.get('external_delivery'):
+                if delivery.payment_status != 'paid' and new_status not in ['cancelled']:
+                    return Response(
+                        {'error': 'Payment required before dispatching this delivery.'},
+                        status=status.HTTP_402_PAYMENT_REQUIRED
+                    )
+        except Exception:
+            pass
         
         # Check permissions: allow admin, delivery person assigned, or store owner of the delivery
         user = request.user
@@ -120,7 +131,11 @@ class DeliveryViewSet(viewsets.ModelViewSet):
                         else:
                             return Response({'error': 'You do not have permission to update delivery status'}, status=status.HTTP_403_FORBIDDEN)
                     else:
-                        return Response({'error': 'You do not have permission to update delivery status'}, status=status.HTTP_403_FORBIDDEN)
+                        # Allow creators to cancel their own external deliveries
+                        if isinstance(delivery.metadata, dict) and delivery.metadata.get('user_id') == user.id and new_status == 'cancelled':
+                            pass
+                        else:
+                            return Response({'error': 'You do not have permission to update delivery status'}, status=status.HTTP_403_FORBIDDEN)
                 except Exception:
                     return Response({'error': 'You do not have permission to update delivery status'}, status=status.HTTP_403_FORBIDDEN)
         
@@ -212,6 +227,8 @@ def calculate_delivery_fee_api(request):
         service_id = request.data.get('service_id')
         zone_id = request.data.get('zone_id')
         distance = request.data.get('distance')
+        pickup_address = request.data.get('pickup_address')
+        recipient_address = request.data.get('recipient_address')
         
         service = None
         zone = None
@@ -225,7 +242,9 @@ def calculate_delivery_fee_api(request):
             weight=weight,
             service_type=service,
             zone=zone,
-            distance=distance
+            distance=distance,
+            pickup_address=pickup_address,
+            recipient_address=recipient_address
         )
         
         return Response({

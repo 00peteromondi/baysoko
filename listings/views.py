@@ -22,6 +22,7 @@ from django.db.models import Q, Case, When, Value
 from blog.models import BlogPost
 from django.http import JsonResponse, HttpResponse
 import json
+from decimal import Decimal
 from .decorators import ajax_required
 from storefront.models import Store, Subscription
 from django.utils import timezone
@@ -77,6 +78,157 @@ def _assign_store_to_listing(listing, user):
     )
     
     return default_store
+
+
+def _estimate_delivery_fee_for_cart(cart, shipping_address):
+    if not shipping_address:
+        return None, []
+    try:
+        from delivery.utils import calculate_delivery_fee
+    except Exception:
+        return None, []
+
+    store_ids = set()
+    delivery_fee_total = Decimal('0')
+    delivery_breakdown = []
+    store_groups = {}
+    for cart_item in cart.items.all():
+        store_key = None
+        try:
+            store_key = cart_item.listing.store_id
+        except Exception:
+            store_key = None
+        if store_key:
+            store_ids.add(store_key)
+        store_groups.setdefault(store_key, []).append(cart_item)
+
+    missing_locations = []
+    if store_ids:
+        stores_missing = Store.objects.filter(id__in=store_ids, location__isnull=True) | Store.objects.filter(id__in=store_ids, location='')
+        missing_locations = list(stores_missing.values_list('name', flat=True))
+
+    if missing_locations:
+        return None, [{
+            'error': 'missing_store_location',
+            'stores': missing_locations,
+            'message': 'Some stores are missing locations. Ask sellers to complete store location to calculate delivery fees.'
+        }]
+
+    for store_id, items in store_groups.items():
+        pickup_address = ''
+        try:
+            if store_id:
+                store = Store.objects.filter(id=store_id).first()
+                pickup_address = store.location if store else ''
+        except Exception:
+            pickup_address = ''
+
+        total_weight = 0
+        notes = []
+        for item in items:
+            try:
+                w = getattr(item.listing, 'weight', None)
+                if w:
+                    weight_val = float(w)
+                else:
+                    weight_val = 1.0
+                total_weight += weight_val * (item.quantity or 1)
+            except Exception:
+                total_weight += 1.0 * (item.quantity or 1)
+
+        assumed_weight = min(total_weight, 30)
+        if total_weight > 30 and 'Actual weight above 30kg may incur extra delivery charges after confirmation.' not in notes:
+            notes.append('Actual weight above 30kg may incur extra delivery charges after confirmation.')
+        try:
+            fee = calculate_delivery_fee(
+                weight=assumed_weight,
+                pickup_address=pickup_address,
+                recipient_address=shipping_address
+            )
+        except Exception:
+            fee = 0
+        fee_decimal = Decimal(str(fee or 0))
+        delivery_fee_total += fee_decimal
+        delivery_breakdown.append({
+            'store_id': store_id,
+            'pickup_address': pickup_address,
+            'weight': round(total_weight, 2),
+            'fee': float(fee_decimal),
+            'notes': notes,
+            'items': [
+                {'listing_id': i.listing_id, 'quantity': i.quantity}
+                for i in items
+            ]
+        })
+
+    if not delivery_breakdown:
+        return None, []
+
+    # If multiple stores, take the highest single-store delivery fee as the cart delivery estimate
+    max_fee = max((Decimal(str(row.get('fee', 0))) for row in delivery_breakdown), default=Decimal('0'))
+    return max_fee, delivery_breakdown
+
+
+def _extract_delivery_error_message(breakdown):
+    for row in breakdown or []:
+        if isinstance(row, dict) and row.get('error'):
+            return row.get('message') or 'Delivery fee unavailable due to missing store locations.'
+    return None
+
+
+def _get_default_shipping_address(user):
+    """Return best-available shipping address for fee estimation."""
+    try:
+        latest_order = Order.objects.filter(
+            user=user,
+            status__in=['delivered', 'shipped']
+        ).order_by('-created_at').first()
+        if latest_order and latest_order.shipping_address:
+            return latest_order.shipping_address
+    except Exception:
+        pass
+    try:
+        return getattr(user, 'location', '') or ''
+    except Exception:
+        return ''
+
+
+def _get_shipping_address_for_estimate(request):
+    """Prefer checkout-typed address stored in session, fallback to defaults."""
+    try:
+        addr = (request.session.get('checkout_shipping_address') or '').strip()
+        if addr:
+            return addr
+    except Exception:
+        pass
+    try:
+        return _get_default_shipping_address(request.user)
+    except Exception:
+        return ''
+
+
+def _get_store_markers_json(limit=200):
+    try:
+        stores_qs = Store.objects.filter(
+            is_active=True,
+            location_latitude__isnull=False,
+            location_longitude__isnull=False
+        ).exclude(location_latitude='', location_longitude='')[:limit]
+        markers = []
+        for s in stores_qs:
+            try:
+                markers.append({
+                    'name': s.name,
+                    'location': s.location,
+                    'slug': s.slug,
+                    'lat': float(s.location_latitude),
+                    'lng': float(s.location_longitude),
+                })
+            except Exception:
+                continue
+        return json.dumps(markers)
+    except Exception:
+        return '[]'
 
 # In your listings/views.py - Updated ListingListView class
 class ListingListView(ListView):
@@ -240,6 +392,38 @@ class ListingListView(ListView):
         # Sort by listing count and limit to 8
         context['featured_stores'].sort(key=lambda x: x.listing_count, reverse=True)
         context['featured_stores'] = context['featured_stores'][:8]
+
+        # Stores with coordinates for "Nearby" section
+        try:
+            base_stores = Store.objects.filter(is_active=True)
+            nearby_qs = base_stores.filter(
+                location_latitude__isnull=False,
+                location_longitude__isnull=False
+            )
+            if not nearby_qs.exists():
+                # Fallback: try text-based location match using user's stored location
+                user_location = ''
+                try:
+                    if self.request.user.is_authenticated:
+                        user_location = getattr(self.request.user, 'location', '') or ''
+                except Exception:
+                    user_location = ''
+                if user_location:
+                    loc_tokens = ['homa bay', 'homabay', 'ndhiwa', 'oyugis', 'mbita', 'kendu', 'rodi', 'suba']
+                    loc_q = Q()
+                    for token in loc_tokens:
+                        if token in user_location.lower():
+                            loc_q |= Q(location__icontains=token)
+                    if loc_q:
+                        loc_matches = base_stores.filter(loc_q)
+                        if loc_matches.exists():
+                            nearby_qs = loc_matches
+                if not nearby_qs.exists():
+                    nearby_qs = base_stores
+            context['nearby_stores'] = nearby_qs[:24]
+        except Exception:
+            context['nearby_stores'] = []
+        context['store_markers_json'] = _get_store_markers_json()
         
         # Featured categories (if your Category model has is_featured field)
         # If not, you can use categories with most listings as featured
@@ -1668,10 +1852,23 @@ def cart_summary(request):
                 'stock': ci.listing.stock if ci.listing and hasattr(ci.listing, 'stock') else 999
             }
 
+        shipping_address = _get_shipping_address_for_estimate(request)
+        delivery_fee_estimate, _ = _estimate_delivery_fee_for_cart(cart, shipping_address)
+        delivery_fee_estimate = delivery_fee_estimate if delivery_fee_estimate is not None else None
+        total_with_delivery = None
+        if delivery_fee_estimate is not None:
+            try:
+                total_with_delivery = cart.get_total_price() + delivery_fee_estimate
+            except Exception:
+                total_with_delivery = None
+
         data = {
             'cart_total': float(cart.get_total_price()),
             'cart_item_count': sum(int(item.quantity or 0) for item in cart.items.all()),
             'item_totals': item_totals,
+            'delivery_fee_estimate': float(delivery_fee_estimate) if delivery_fee_estimate is not None else None,
+            'total_with_delivery': float(total_with_delivery) if total_with_delivery is not None else None,
+            'shipping_address_used': shipping_address or ''
         }
         return JsonResponse(data)
     except Exception as e:
@@ -1792,13 +1989,25 @@ import json
 @login_required
 def view_cart(request):
     cart, created = Cart.objects.get_or_create(user=request.user)
+    shipping_address = _get_shipping_address_for_estimate(request)
+    delivery_fee_estimate, _ = _estimate_delivery_fee_for_cart(cart, shipping_address)
+    delivery_fee_estimate = delivery_fee_estimate if delivery_fee_estimate is not None else None
+    total_with_delivery = None
+    try:
+        if delivery_fee_estimate is not None:
+            total_with_delivery = (cart.get_total_price() + delivery_fee_estimate)
+    except Exception:
+        total_with_delivery = None
     
     # Handle AJAX requests
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         cart_data = {
             'items': [],
             'total_price': float(cart.get_total_price()),
-            'item_count': sum(int(item.quantity or 0) for item in cart.items.all())
+            'item_count': sum(int(item.quantity or 0) for item in cart.items.all()),
+            'delivery_fee_estimate': float(delivery_fee_estimate) if delivery_fee_estimate is not None else None,
+            'total_with_delivery': float(total_with_delivery) if total_with_delivery is not None else None,
+            'shipping_address_used': shipping_address or ''
         }
         
         for item in cart.items.all():
@@ -1818,7 +2027,12 @@ def view_cart(request):
         
         return JsonResponse(cart_data)
     
-    return render(request, 'listings/cart.html', {'cart': cart})
+    return render(request, 'listings/cart.html', {
+        'cart': cart,
+        'delivery_fee_estimate': delivery_fee_estimate,
+        'total_with_delivery': total_with_delivery,
+        'shipping_address_used': shipping_address or ''
+    })
 
 # In listings/views.py
 
@@ -1893,13 +2107,26 @@ def update_cart_item(request, item_id):
     except Exception:
         logger.exception('Failed to broadcast cart_updated from update_cart_item')
 
+    # Delivery fee estimate for current cart (best-effort)
+    shipping_address = _get_shipping_address_for_estimate(request)
+    delivery_fee_estimate, _ = _estimate_delivery_fee_for_cart(cart, shipping_address)
+    total_with_delivery = None
+    if delivery_fee_estimate is not None:
+        try:
+            total_with_delivery = cart_total + delivery_fee_estimate
+        except Exception:
+            total_with_delivery = None
+
     return JsonResponse({
         'success': True,
         'message': 'Cart updated successfully',
         'cart_item_count': item_count,
         'cart_total': float(cart_total),
         'item_count': item_count,
-        'item_totals': item_totals
+        'item_totals': item_totals,
+        'delivery_fee_estimate': float(delivery_fee_estimate) if delivery_fee_estimate is not None else None,
+        'total_with_delivery': float(total_with_delivery) if total_with_delivery is not None else None,
+        'shipping_address_used': shipping_address or ''
     })
 
     # NOTE: we return above; broadcasting is handled in add/update/remove functions where appropriate
@@ -1943,13 +2170,25 @@ def remove_from_cart(request, item_id):
     except Exception:
         logger.exception('Failed to broadcast cart_updated from remove_from_cart')
 
+    shipping_address = _get_shipping_address_for_estimate(request)
+    delivery_fee_estimate, _ = _estimate_delivery_fee_for_cart(cart, shipping_address)
+    total_with_delivery = None
+    if delivery_fee_estimate is not None:
+        try:
+            total_with_delivery = cart_total + delivery_fee_estimate
+        except Exception:
+            total_with_delivery = None
+
     return JsonResponse({
         'success': True,
         'message': f'{listing_title} removed from cart',
         'cart_item_count': item_count,
         'cart_total': float(cart_total),
         'item_count': item_count,
-        'removed_item_id': item_id
+        'removed_item_id': item_id,
+        'delivery_fee_estimate': float(delivery_fee_estimate) if delivery_fee_estimate is not None else None,
+        'total_with_delivery': float(total_with_delivery) if total_with_delivery is not None else None,
+        'shipping_address_used': shipping_address or ''
     })
 
 @login_required
@@ -1983,12 +2222,17 @@ def clear_cart(request):
     except Exception:
         logger.exception('Failed to broadcast cart_updated from clear_cart')
 
+    shipping_address = _get_shipping_address_for_estimate(request)
+    delivery_fee_estimate, _ = _estimate_delivery_fee_for_cart(cart, shipping_address)
     return JsonResponse({
         'success': True,
         'message': f'Cart cleared ({cart_items_count} items removed)',
         'cart_item_count': 0,
         'cart_total': 0,
-        'item_count': 0
+        'item_count': 0,
+        'delivery_fee_estimate': float(delivery_fee_estimate) if delivery_fee_estimate is not None else None,
+        'total_with_delivery': 0,
+        'shipping_address_used': shipping_address or ''
     })
 
 from django.http import JsonResponse, HttpResponse
@@ -2122,7 +2366,13 @@ def add_to_cart(request, listing_id):
 @login_required
 def checkout(request):
     cart = get_object_or_404(Cart, user=request.user)
-    
+
+    # Latest successful order (used for shipping defaults and delivery fee estimate)
+    latest_order = Order.objects.filter(
+        user=request.user,
+        status__in=['delivered', 'shipped']
+    ).order_by('-created_at').first()
+
     # Validate stock before checkout
     for cart_item in cart.items.all():
         if cart_item.quantity > cart_item.listing.stock:
@@ -2138,12 +2388,6 @@ def checkout(request):
             'email': request.user.email,
             'phone_number': getattr(request.user, 'phone_number', ''),
         }
-        
-        # Get latest successful order for shipping info
-        latest_order = Order.objects.filter(
-            user=request.user,
-            status__in=['delivered', 'shipped']
-        ).order_by('-created_at').first()
         
         if latest_order:
             initial_data.update({
@@ -2166,16 +2410,76 @@ def checkout(request):
             form = CheckoutForm(request.POST)
         
         if form.is_valid():
+            try:
+                request.session['checkout_shipping_address'] = (form.cleaned_data.get('shipping_address') or '').strip()
+            except Exception:
+                pass
             logger.info('Checkout form is valid for user=%s; cleaned keys=%s', request.user, list(form.cleaned_data.keys()))
             # Use payment_method from form if provided, default to mpesa
             selected_pm = form.cleaned_data.get('payment_method') or request.session.get('selected_payment_method') or 'mpesa'
             request.session['selected_payment_method'] = selected_pm
             try:
                 with transaction.atomic():
+                    # Calculate delivery fee per store based on route logic
+                    delivery_fee_total = Decimal('0')
+                    delivery_breakdown = []
+                    try:
+                        from delivery.utils import calculate_delivery_fee
+                    except Exception:
+                        calculate_delivery_fee = None
+
+                    if calculate_delivery_fee:
+                        # group cart items by store (or fallback to unknown)
+                        store_groups = {}
+                        for cart_item in cart.items.all():
+                            store_key = None
+                            try:
+                                store_key = cart_item.listing.store_id
+                            except Exception:
+                                store_key = None
+                            store_groups.setdefault(store_key, []).append(cart_item)
+
+                        for store_id, items in store_groups.items():
+                            pickup_address = ''
+                            try:
+                                if store_id:
+                                    from storefront.models import Store
+                                    store = Store.objects.filter(id=store_id).first()
+                                    pickup_address = store.location if store else ''
+                            except Exception:
+                                pickup_address = ''
+
+                            total_weight = 0
+                            for item in items:
+                                try:
+                                    w = getattr(item.listing, 'weight', None)
+                                    total_weight += (float(w) if w else 1.0) * (item.quantity or 1)
+                                except Exception:
+                                    total_weight += 1.0 * (item.quantity or 1)
+
+                            fee = calculate_delivery_fee(
+                                weight=total_weight,
+                                pickup_address=pickup_address,
+                                recipient_address=form.cleaned_data.get('shipping_address')
+                            )
+                            fee_decimal = Decimal(str(fee or 0))
+                            delivery_fee_total += fee_decimal
+                            delivery_breakdown.append({
+                                'store_id': store_id,
+                                'pickup_address': pickup_address,
+                                'weight': round(total_weight, 2),
+                                'fee': float(fee_decimal),
+                                'items': [
+                                    {'listing_id': i.listing_id, 'quantity': i.quantity}
+                                    for i in items
+                                ]
+                            })
+
+                    order_total = cart.get_total_price() + (delivery_fee_total or Decimal('0'))
                     # Create order
                     order = Order.objects.create(
                         user=request.user,
-                        total_price=cart.get_total_price(),
+                        total_price=order_total,
                         first_name=form.cleaned_data['first_name'],
                         last_name=form.cleaned_data['last_name'],
                         email=form.cleaned_data['email'],
@@ -2183,6 +2487,11 @@ def checkout(request):
                         shipping_address=form.cleaned_data['shipping_address'],
                         city=form.cleaned_data['city'],
                         postal_code=form.cleaned_data['postal_code'],
+                        shipping_latitude=form.cleaned_data.get('shipping_latitude'),
+                        shipping_longitude=form.cleaned_data.get('shipping_longitude'),
+                        shipping_place_id=form.cleaned_data.get('shipping_place_id') or '',
+                        delivery_fee=delivery_fee_total,
+                        delivery_breakdown=delivery_breakdown,
                     )
                     
                     # Create order items
@@ -2231,10 +2540,25 @@ def checkout(request):
                 logger.warning('Checkout form invalid for user=%s; could not serialize errors; POST keys=%s', request.user, list(request.POST.keys()))
             # Inform the user that some fields are invalid
             messages.error(request, 'Please correct the highlighted fields before placing your order.')
+            shipping_address = form.data.get('shipping_address') or getattr(request.user, 'location', '')
+            try:
+                request.session['checkout_shipping_address'] = (shipping_address or '').strip()
+            except Exception:
+                pass
+            delivery_fee_estimate, delivery_breakdown_estimate = _estimate_delivery_fee_for_cart(cart, shipping_address)
+            delivery_error_message = _extract_delivery_error_message(delivery_breakdown_estimate)
+            if delivery_error_message:
+                delivery_fee_estimate = None
+            estimated_total = cart.get_total_price() + (delivery_fee_estimate or Decimal('0'))
             return render(request, 'listings/checkout.html', {
                 'cart': cart,
                 'form': form,
-                'use_alternate_shipping': use_alternate
+                'use_alternate_shipping': use_alternate,
+                'delivery_fee_estimate': delivery_fee_estimate,
+                'delivery_breakdown_estimate': delivery_breakdown_estimate,
+                'delivery_error_message': delivery_error_message,
+                'estimated_total': estimated_total,
+                'store_markers_json': _get_store_markers_json()
             })
     else:
         # Pre-fill form with user's info
@@ -2245,12 +2569,6 @@ def checkout(request):
             'phone_number': getattr(request.user, 'phone_number', ''),
         }
         
-        # Get latest successful order for shipping info
-        latest_order = Order.objects.filter(
-            user=request.user,
-            status__in=['delivered', 'shipped']
-        ).order_by('-created_at').first()
-        
         if latest_order:
             initial_data.update({
                 'shipping_address': latest_order.shipping_address,
@@ -2259,12 +2577,67 @@ def checkout(request):
             })
             
         form = CheckoutForm(initial=initial_data)
-    
+    shipping_address = initial_data.get('shipping_address') or getattr(request.user, 'location', '')
+    try:
+        request.session['checkout_shipping_address'] = (shipping_address or '').strip()
+    except Exception:
+        pass
+    delivery_fee_estimate, delivery_breakdown_estimate = _estimate_delivery_fee_for_cart(cart, shipping_address)
+    delivery_error_message = _extract_delivery_error_message(delivery_breakdown_estimate)
+    if delivery_error_message:
+        delivery_fee_estimate = None
+    estimated_total = cart.get_total_price() + (delivery_fee_estimate or Decimal('0'))
+
     return render(request, 'listings/checkout.html', {
         'cart': cart,
         'form': form,
         'use_alternate_shipping': False,
-        'has_previous_orders': latest_order is not None
+        'has_previous_orders': latest_order is not None,
+        'delivery_fee_estimate': delivery_fee_estimate,
+        'delivery_breakdown_estimate': delivery_breakdown_estimate,
+        'delivery_error_message': delivery_error_message,
+        'estimated_total': estimated_total,
+        'store_markers_json': _get_store_markers_json()
+    })
+
+
+@login_required
+@require_POST
+def checkout_delivery_fee(request):
+    cart = get_object_or_404(Cart, user=request.user)
+    try:
+        payload = json.loads(request.body.decode('utf-8') or '{}') if request.body else {}
+    except Exception:
+        payload = {}
+    if not payload:
+        payload = request.POST
+    shipping_address = (payload.get('shipping_address') or '').strip()
+    if not shipping_address:
+        return JsonResponse({'error': 'shipping_address_required'}, status=400)
+    try:
+        request.session['checkout_shipping_address'] = shipping_address
+    except Exception:
+        pass
+    fee, breakdown = _estimate_delivery_fee_for_cart(cart, shipping_address)
+    fee = fee or Decimal('0')
+    total = cart.get_total_price() + fee
+    notes = []
+    for row in breakdown or []:
+        if isinstance(row, dict):
+            if row.get('error') == 'missing_store_location':
+                return JsonResponse({
+                    'error': 'missing_store_location',
+                    'stores': row.get('stores', []),
+                    'message': row.get('message', 'Store locations missing.')
+                }, status=400)
+            for note in row.get('notes', []) or []:
+                if note not in notes:
+                    notes.append(note)
+    return JsonResponse({
+        'delivery_fee': str(fee),
+        'total': str(total),
+        'breakdown': breakdown,
+        'notes': notes
     })
 
 from django.views.decorators.csrf import csrf_exempt
@@ -2279,6 +2652,14 @@ logger = logging.getLogger(__name__)
 @login_required
 def process_payment(request, order_id):
     order = get_object_or_404(Order, id=order_id, user=request.user)
+    try:
+        delivery_fee_val = order.delivery_fee or Decimal('0')
+    except Exception:
+        delivery_fee_val = Decimal('0')
+    try:
+        subtotal_val = (order.total_price or Decimal('0')) - delivery_fee_val
+    except Exception:
+        subtotal_val = Decimal('0')
     selected_payment_method = request.session.get('selected_payment_method', 'mpesa')
     if 'selected_payment_method' in request.session:
         del request.session['selected_payment_method']
@@ -2297,7 +2678,7 @@ def process_payment(request, order_id):
             phone_number = request.POST.get('phone_number')
             if not phone_number:
                 messages.error(request, "Please provide your M-Pesa phone number.")
-                return render(request, 'listings/payment.html', {'order': order})
+                return render(request, 'listings/payment.html', {'order': order, 'subtotal': subtotal_val})
 
             # Format phone like in AJAX path
             formatted_phone = phone_number.replace(' ', '')
@@ -2316,19 +2697,23 @@ def process_payment(request, order_id):
 
             if success:
                 messages.success(request, f"M-Pesa payment initiated: {message}")
-                return render(request, 'listings/payment.html', {'order': order})
+                return render(request, 'listings/payment.html', {'order': order, 'subtotal': subtotal_val})
             else:
                 messages.error(request, f"Failed to initiate M-Pesa payment: {message}")
-                return render(request, 'listings/payment.html', {'order': order})
+                return render(request, 'listings/payment.html', {'order': order, 'subtotal': subtotal_val})
         # end POST handling
     
-    return render(request, 'listings/payment.html', {'order': order})
+    return render(request, 'listings/payment.html', {'order': order, 'subtotal': subtotal_val})
 
 def _notify_sellers_after_payment(order):
     """Notify all sellers in an order after successful payment"""
     # Group order items by seller
     from collections import defaultdict
     seller_items = defaultdict(list)
+    try:
+        from baysoko.utils.email_helpers import render_and_send
+    except Exception:
+        render_and_send = None
     
     for order_item in order.order_items.all():
         seller_items[order_item.listing.seller].append(order_item)
@@ -2336,6 +2721,25 @@ def _notify_sellers_after_payment(order):
     # Notify each seller
     for seller, items in seller_items.items():
         notify_payment_received(seller, order.user, order)
+        try:
+            if render_and_send and getattr(seller, 'email', None):
+                payment = getattr(order, 'payment', None)
+                escrow = getattr(order, 'escrow', None)
+                seller_total = sum([it.get_total_price() for it in items])
+                ctx = {
+                    'order': order,
+                    'buyer': order.user,
+                    'seller': seller,
+                    'order_items': items,
+                    'seller_total': seller_total,
+                    'payment_status': getattr(payment, 'status', 'unknown'),
+                    'escrow_status': getattr(escrow, 'status', 'none'),
+                    'site_url': getattr(settings, 'SITE_URL', ''),
+                }
+                subject = f'Order #{order.id} paid — items to fulfill'
+                render_and_send('emails/order_paid_seller.html', 'emails/order_paid_seller.txt', ctx, subject, [seller.email])
+        except Exception:
+            logger.exception('Failed to send seller paid email for order %s', order.id)
         
         # Create activity log
         Activity.objects.create(
@@ -2405,6 +2809,11 @@ def check_payment_status(request, order_id):
 
     # First check the current payment state in our DB
     if payment.status == 'completed':
+        try:
+            if 'checkout_shipping_address' in request.session:
+                del request.session['checkout_shipping_address']
+        except Exception:
+            pass
         return JsonResponse({
             'success': True,
             'payment_status': 'completed',
@@ -2444,6 +2853,11 @@ def check_payment_status(request, order_id):
                 payment.mark_as_completed(
                     status_response.get('response_data', {}).get('MpesaReceiptNumber')
                 )
+                try:
+                    if 'checkout_shipping_address' in request.session:
+                        del request.session['checkout_shipping_address']
+                except Exception:
+                    pass
                 return JsonResponse({
                     'success': True,
                     'payment_status': 'completed',
@@ -2722,6 +3136,13 @@ def order_list(request):
 def order_detail(request, order_id):
     """Order detail view that works for both buyers and sellers"""
     order = get_object_or_404(Order, id=order_id)
+    # Clear any checkout-typed shipping address once the buyer lands on order detail
+    try:
+        if request.user.is_authenticated and order.user_id == request.user.id:
+            if 'checkout_shipping_address' in request.session:
+                del request.session['checkout_shipping_address']
+    except Exception:
+        pass
     
     # Check if user has permission to view this order
     if order.user != request.user and not order.order_items.filter(listing__seller=request.user).exists():
@@ -2861,12 +3282,20 @@ def ajax_delete_listing(request, listing_id):
 
 @login_required
 def seller_orders(request):
-    # By request: show only orders that contain items exclusively from this seller
-    # i.e. total order_items == order_items belonging to this seller
-    orders = Order.objects.annotate(
-        total_items=Count('order_items'),
-        seller_items=Count('order_items', filter=Q(order_items__listing__seller=request.user))
-    ).filter(total_items=F('seller_items')).order_by('-created_at')
+    # Show orders that contain at least one item sold by this seller.
+    orders = Order.objects.filter(
+        order_items__listing__seller=request.user
+    ).distinct().order_by('-created_at')
+
+    # Attach seller-specific totals/counts for display.
+    for order in orders:
+        seller_items = order.order_items.filter(listing__seller=request.user)
+        order.seller_items_count = seller_items.count()
+        try:
+            order.seller_total = sum((item.price or 0) * (item.quantity or 0) for item in seller_items)
+        except Exception:
+            order.seller_total = 0
+        order.shipped_count = seller_items.filter(shipped=True).count()
 
     return render(request, 'listings/seller_orders.html', {
         'orders': orders,
@@ -3056,6 +3485,14 @@ def confirm_delivery(request, order_id):
     if not proof:
         messages.warning(request, "Cannot confirm delivery: proof of delivery not yet recorded. Please contact support or wait for delivery proof.")
         return redirect('order_detail', order_id=order.id)
+    # Require OTP verification recorded in delivery app
+    try:
+        otp_verified = delivery.otps.filter(used=True).exists()
+    except Exception:
+        otp_verified = False
+    if not otp_verified:
+        messages.warning(request, "Cannot confirm delivery: delivery OTP verification has not been completed.")
+        return redirect('order_detail', order_id=order.id)
 
     if order.status == 'delivered':
         messages.info(request, "Order already confirmed delivered.")
@@ -3065,11 +3502,23 @@ def confirm_delivery(request, order_id):
     order.status = 'delivered'
     order.delivered_at = timezone.now()
     order.save()
+
+    # Record delivery confirmation in delivery app (best-effort)
+    try:
+        from delivery.models import DeliveryConfirmation
+        DeliveryConfirmation.objects.get_or_create(delivery_request=delivery, confirmed_by=request.user)
+    except Exception:
+        pass
     
-    # Release escrow funds to all sellers
-    _release_escrow_to_sellers(order)
+    # Mark escrow ready for admin approval (do not release immediately)
+    try:
+        if getattr(order, 'escrow', None):
+            order.escrow.ready_for_release = True
+            order.escrow.save()
+    except Exception:
+        pass
     
-    # Notify sellers about delivery confirmation and fund release
+    # Notify sellers about delivery confirmation and pending approval
     _notify_sellers_delivery_confirmed(order)
     
     # Create activity log
@@ -3078,7 +3527,7 @@ def confirm_delivery(request, order_id):
         action=f"Order #{order.id} delivered and confirmed"
     )
     
-    messages.success(request, "Thank you for confirming delivery! Funds have been released to the seller(s).")
+    messages.success(request, "Thank you for confirming delivery! Funds will be released after escrow approval.")
     return redirect('order_detail', order_id=order.id)
 
 def _release_escrow_to_sellers(order):

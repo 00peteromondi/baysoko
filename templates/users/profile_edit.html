@@ -154,6 +154,7 @@
 
     .form-group-modern {
         margin-bottom: var(--spacing-lg);
+        position: relative;
     }
 
     .form-label-modern {
@@ -182,6 +183,31 @@
         border-color: var(--primary);
         box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.15);
         transform: translateY(-2px);
+    }
+
+    .location-suggestions {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-md);
+        z-index: 20;
+        max-height: 220px;
+        overflow-y: auto;
+        display: none;
+    }
+    .location-suggestion-item {
+        padding: 0.55rem 0.75rem;
+        font-size: 0.9rem;
+        cursor: pointer;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .location-suggestion-item:last-child { border-bottom: none; }
+    .location-suggestion-item:hover {
+        background: rgba(var(--primary-rgb), 0.08);
     }
 
     .textarea-modern {
@@ -995,8 +1021,9 @@
                            value="{{ form.location.value|default:'' }}" 
                            class="input-modern {% if form.location.errors %}border-danger{% endif %}" 
                            id="{{ form.location.id_for_label }}" 
-                           placeholder="Your area in Homabay"
-                           required>
+                            placeholder="Your area in Homabay"
+                            required>
+                    <div class="location-suggestions" id="profileLocationSuggestions"></div>
                     {% if form.location.errors %}
                         <div class="error-message-modern mt-2">{{ form.location.errors }}</div>
                     {% endif %}
@@ -1177,8 +1204,21 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ form.errors|json_script:"profileErrors" }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Show form errors as toasts for clearer feedback
+    try {
+        const raw = document.getElementById('profileErrors');
+        if (raw && raw.textContent) {
+            const data = JSON.parse(raw.textContent || '{}');
+            if (data && typeof data === 'object' && window.showToast) {
+                Object.keys(data).forEach(key => {
+                    (data[key] || []).forEach(msg => showToast(msg, 'error'));
+                });
+            }
+        }
+    } catch (e) {}
     // ========== EXISTING PROFILE EDIT JS (image previews, counters, etc.) ==========
     // (Preserved exactly as in original; only the security actions are replaced with modal triggers)
 
@@ -1278,6 +1318,120 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+    // Location autocomplete (Homabay County only)
+    (function() {
+        const input = document.getElementById('id_location');
+        const suggestions = document.getElementById('profileLocationSuggestions');
+        if (!input || !suggestions) return;
+        let timer = null;
+        const viewbox = '34.0,-0.1,35.2,-1.1';
+        const isAllowed = (name) => /Homa\\s*Bay|Homabay|Ndhiwa/i.test(name || '');
+        let HOMABAY_LANDMARKS = [];
+        const LANDMARKS_KEY = 'baysoko_recent_locations';
+
+        async function loadHomabayLandmarks() {
+            if (HOMABAY_LANDMARKS.length) return HOMABAY_LANDMARKS;
+            try {
+                const res = await fetch("{% static 'data/homabay_landmarks.json' %}", { cache: 'force-cache' });
+                if (res.ok) {
+                    const data = await res.json();
+                    HOMABAY_LANDMARKS = Array.isArray(data?.landmarks) ? data.landmarks : [];
+                }
+            } catch (e) {}
+            return HOMABAY_LANDMARKS;
+        }
+
+        function getRecentLocations() {
+            try {
+                const raw = localStorage.getItem(LANDMARKS_KEY);
+                const list = raw ? JSON.parse(raw) : [];
+                return Array.isArray(list) ? list : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function addRecentLocation(label) {
+            if (!label || typeof label !== 'string') return;
+            try {
+                const list = getRecentLocations();
+                const cleaned = label.trim();
+                if (!cleaned) return;
+                const deduped = [cleaned, ...list.filter(l => l.toLowerCase() !== cleaned.toLowerCase())].slice(0, 5);
+                localStorage.setItem(LANDMARKS_KEY, JSON.stringify(deduped));
+            } catch (e) {}
+        }
+
+        function localMatches(query) {
+            const q = (query || '').toLowerCase().trim();
+            const recent = getRecentLocations().map(label => ({ display_name: `${label}, Homa Bay County` }));
+            const matches = !q
+                ? HOMABAY_LANDMARKS.slice(0, 10)
+                : HOMABAY_LANDMARKS.filter(l => l.toLowerCase().includes(q)).slice(0, 10);
+            const locals = matches.map(label => ({ display_name: `${label}, Homa Bay County` }));
+            return [...recent, ...locals].slice(0, 10);
+        }
+
+        function renderSuggestions(items) {
+            if (!items.length) {
+                hideSuggestions();
+                return;
+            }
+            suggestions.innerHTML = items.map(item =>
+                `<div class="location-suggestion-item" data-label="${item.display_name.replace(/"/g, '&quot;')}">${item.display_name}</div>`
+            ).join('');
+            suggestions.style.display = 'block';
+        }
+
+        function hideSuggestions() {
+            suggestions.style.display = 'none';
+            suggestions.innerHTML = '';
+        }
+
+        loadHomabayLandmarks();
+
+        input.addEventListener('input', () => {
+            const query = input.value.trim();
+            clearTimeout(timer);
+            if (query.length < 2) {
+                renderSuggestions(localMatches(query));
+                return;
+            }
+            timer = setTimeout(async () => {
+                try {
+                    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=ke&viewbox=${viewbox}&bounded=1&q=${encodeURIComponent(query)}`;
+                    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+                    const data = await res.json();
+                    const items = (data || []).filter(r => isAllowed(r.display_name));
+                    const merged = [...items, ...localMatches(query)];
+                    renderSuggestions(merged.slice(0, 12));
+                } catch (e) {
+                    renderSuggestions(localMatches(query));
+                }
+            }, 280);
+        });
+
+        suggestions.addEventListener('click', (e) => {
+            const item = e.target.closest('.location-suggestion-item');
+            if (!item) return;
+            input.value = item.getAttribute('data-label') || item.textContent.trim();
+            addRecentLocation(input.value);
+            hideSuggestions();
+        });
+
+        input.addEventListener('blur', () => setTimeout(hideSuggestions, 200));
+
+        if (window.BaysokoGeo && (!input.value || !input.value.trim())) {
+            window.BaysokoGeo.requestCurrentLocation().then(async (loc) => {
+                const label = await window.BaysokoGeo.reverseGeocode(loc.lat, loc.lng);
+                if (label) {
+                    input.value = label;
+                    addRecentLocation(label);
+                }
+            }).catch(() => {});
+        }
+    })();
 
     // ========== MODAL FUNCTIONALITY ==========
     const changeModal = document.getElementById('changePasswordModal');
@@ -1614,6 +1768,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     `;
     document.head.appendChild(style);
+
+    // Toast validation errors (if any)
+    try {
+        const errors = JSON.parse(document.getElementById('profileErrors')?.textContent || '{}');
+        Object.keys(errors || {}).forEach(key => {
+            const msgs = errors[key] || [];
+            msgs.forEach(msg => {
+                if (window.showToast) {
+                    window.showToast(msg, 'error');
+                }
+            });
+        });
+    } catch (e) {}
 });
 </script>
 {% endblock %}

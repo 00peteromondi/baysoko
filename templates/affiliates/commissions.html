@@ -3,8 +3,76 @@
 
 {% block title %}Affiliate Commissions{% endblock %}
 
+{% block extra_css %}
+<style>
+    .affiliate-theme .btn-custom.btn-ghost {
+        border-color: rgba(255,107,53,0.35);
+        color: var(--text-primary);
+    }
+    .affiliate-theme .btn-custom.btn-ghost:hover {
+        background: rgba(255,107,53,0.12);
+    }
+    .affiliate-theme .table {
+        color: var(--text-primary);
+    }
+    .affiliate-theme .table th,
+    .affiliate-theme .table td {
+        border-color: var(--border-color);
+    }
+    .affiliate-theme .table thead th {
+        color: var(--text-secondary);
+    }
+    .affiliate-theme .badge.bg-secondary {
+        background: rgba(255,107,53,0.18) !important;
+        color: var(--primary) !important;
+        border: 1px solid rgba(255,107,53,0.35);
+    }
+    .affiliate-header {
+        background: linear-gradient(120deg, rgba(255,107,53,0.18), rgba(0,0,0,0));
+        border: 1px solid rgba(255,107,53,0.25);
+        border-radius: 18px;
+        padding: 18px;
+        margin-bottom: 16px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<section class="container py-5">
+<section class="container py-5 affiliate-theme">
+    <div class="affiliate-header">
+        <h3 class="mb-1">Affiliate Commissions</h3>
+        <p class="text-muted mb-0">Review earnings, statuses, and payouts.</p>
+    </div>
+    {% if error_message %}
+        <div class="alert alert-danger">{{ error_message }}</div>
+    {% endif %}
+    {% if success_message %}
+        <div class="alert alert-success">{{ success_message }}</div>
+    {% endif %}
+
+    {% if not is_seller %}
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+                <h5 class="mb-1">Withdraw via M-Pesa</h5>
+                <p class="text-muted mb-0">Available balance: <strong>KSh {{ affiliate_available_balance|floatformat:2|intcomma }}</strong></p>
+                <small class="text-muted">Minimum withdrawal: KSh {{ affiliate_min_withdrawal|floatformat:0|intcomma }}</small>
+            </div>
+            <form method="post" action="{% url 'affiliates:request_withdrawal' %}" class="d-flex flex-wrap gap-2 align-items-center">
+                {% csrf_token %}
+                <input type="hidden" name="amount" value="{{ affiliate_available_balance }}">
+                <input type="text" name="phone" class="form-control" placeholder="M-Pesa phone (2547...)" style="max-width: 220px;">
+                <button type="submit" class="btn-custom btn-primary" {% if affiliate_available_balance < affiliate_min_withdrawal %}disabled{% endif %}>
+                    Request Withdrawal
+                </button>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        Seller affiliate withdrawals are managed from your payment dashboard.
+    </div>
+    {% endif %}
     <div class="card border-0 shadow-sm">
         <div class="card-body">
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
@@ -37,6 +105,38 @@
                         {% else %}
                             <tr>
                                 <td colspan="4" class="text-muted">No commissions yet.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="table-responsive mt-4">
+                <h5 class="mb-2">Subscription & Bonus Commissions</h5>
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Subscription</th>
+                            <th>Type</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if subscription_commissions %}
+                            {% for commission in subscription_commissions %}
+                            <tr>
+                                <td>{{ commission.subscription.store.name }}</td>
+                                <td class="text-uppercase">{{ commission.get_commission_type_display }}</td>
+                                <td>KSh {{ commission.amount|floatformat:2|intcomma }}</td>
+                                <td><span class="badge bg-secondary text-uppercase">{{ commission.status }}</span></td>
+                                <td>{{ commission.created_at|date:"M d, Y" }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-muted">No subscription commissions yet.</td>
                             </tr>
                         {% endif %}
                     </tbody>

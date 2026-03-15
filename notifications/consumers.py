@@ -85,7 +85,8 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
                 )
             
             self.is_connected = False
-            logger.info(f"Notification WebSocket disconnected for user {self.user_id}, code: {close_code}")
+            user_id = getattr(self, 'user_id', None)
+            logger.info(f"Notification WebSocket disconnected for user {user_id}, code: {close_code}")
             
         except Exception as e:
             logger.error(f"Error in notification consumer disconnect: {str(e)}")

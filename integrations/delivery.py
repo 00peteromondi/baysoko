@@ -12,16 +12,28 @@ class DeliverySystemIntegration:
     
     def create_delivery_from_order(self, order):
         """Create delivery in delivery system from Baysoko order"""
+        store = None
+        try:
+            first_item = order.order_items.select_related('listing__store').first()
+            if first_item and first_item.listing and first_item.listing.store:
+                store = first_item.listing.store
+        except Exception:
+            store = None
+
         delivery_data = {
             'order_id': str(order.id),
             'marketplace': 'baysoko',
             'order_total': float(order.total_price),
             'seller_name': order.order_items.first().listing.seller.get_full_name(),
             'seller_phone': order.order_items.first().listing.seller.phone_number,
-            'pickup_address': self._get_seller_address(order),
+            'pickup_address': (store.location if store and store.location else self._get_seller_address(order)),
+            'pickup_latitude': float(store.location_latitude) if store and store.location_latitude else None,
+            'pickup_longitude': float(store.location_longitude) if store and store.location_longitude else None,
             'customer_name': f"{order.first_name} {order.last_name}",
             'customer_phone': order.phone_number,
             'delivery_address': order.shipping_address,
+            'delivery_latitude': float(order.shipping_latitude) if order.shipping_latitude else None,
+            'delivery_longitude': float(order.shipping_longitude) if order.shipping_longitude else None,
             'package_description': self._get_package_description(order),
             'package_weight': self._estimate_package_weight(order)
         }

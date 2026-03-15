@@ -147,6 +147,7 @@ class CustomUserChangeForm(forms.ModelForm):
             'username', 
             'email', 
             'phone_number', 
+            'location',
             'bio', 
             'profile_picture',
             'cover_photo',
@@ -156,6 +157,7 @@ class CustomUserChangeForm(forms.ModelForm):
             'bio': forms.Textarea(attrs={'rows': 4, 'maxlength': 500}),
             'profile_picture': forms.FileInput(attrs={'accept': 'image/*'}),
             'cover_photo': forms.FileInput(attrs={'accept': 'image/*'}),
+            'location': forms.TextInput(attrs={'class': 'input-modern', 'placeholder': 'Your area in Homabay'}),
         }
 
     def clean_username(self):

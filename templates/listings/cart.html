@@ -444,7 +444,16 @@
                 
                 <div class="summary-item">
                     <span>Shipping</span>
-                    <span>KSh 0.00</span>
+                    <span id="cart-delivery-fee">
+                        {% if delivery_fee_estimate != None %}
+                            KSh {{ delivery_fee_estimate|floatformat:2|intcomma }}
+                        {% else %}
+                            Calculated at checkout
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="small text-muted mb-2" id="cart-shipping-address-hint" {% if not shipping_address_used %}style="display:none"{% endif %}>
+                    Estimated for: {{ shipping_address_used|truncatechars:50 }}
                 </div>
                 
                 <div class="summary-item">
@@ -454,7 +463,13 @@
                 
                 <div class="summary-total">
                     <span>Total</span>
-                    <span>KSh <span id="cart-total">{{ cart.get_total_price|floatformat:2|intcomma:2 }}</span></span>
+                    <span>KSh <span id="cart-total">
+                        {% if total_with_delivery != None %}
+                            {{ total_with_delivery|floatformat:2|intcomma:2 }}
+                        {% else %}
+                            {{ cart.get_total_price|floatformat:2|intcomma:2 }}
+                        {% endif %}
+                    </span></span>
                 </div>
                 
                 <div class="d-grid mt-4">
@@ -647,6 +662,8 @@
         // Update cart totals with safe defaults
         const subtotal = document.getElementById('cart-subtotal');
         const total = document.getElementById('cart-total');
+        const deliveryEl = document.getElementById('cart-delivery-fee');
+        const addressHint = document.getElementById('cart-shipping-address-hint');
         
         const cartTotal = parseFloat(data.cart_total || 0).toFixed(2);
         console.log('Setting cart total to:', cartTotal);
@@ -654,8 +671,31 @@
         if (subtotal) {
             subtotal.textContent = cartTotal;
         }
+        const deliveryFee = (data.delivery_fee_estimate === null || typeof data.delivery_fee_estimate === 'undefined')
+            ? null
+            : parseFloat(data.delivery_fee_estimate || 0);
+        if (deliveryEl) {
+            if (deliveryFee === null || isNaN(deliveryFee)) {
+                deliveryEl.textContent = 'Calculated at checkout';
+            } else {
+                deliveryEl.textContent = `KSh ${deliveryFee.toFixed(2)}`;
+            }
+        }
+        if (addressHint) {
+            const addr = (data.shipping_address_used || '').toString().trim();
+            if (addr) {
+                addressHint.textContent = `Estimated for: ${addr}`;
+                addressHint.style.display = '';
+            } else {
+                addressHint.style.display = 'none';
+            }
+        }
         if (total) {
-            total.textContent = cartTotal;
+            if (typeof data.total_with_delivery !== 'undefined' && data.total_with_delivery !== null) {
+                total.textContent = parseFloat(data.total_with_delivery || 0).toFixed(2);
+            } else {
+                total.textContent = cartTotal;
+            }
         }
         
         // Update cart badge in cart page
@@ -773,9 +813,11 @@
         // Update summary
         const subtotalElement = document.getElementById('cart-subtotal');
         const totalElement = document.getElementById('cart-total');
+        const deliveryEl = document.getElementById('cart-delivery-fee');
         
         if (subtotalElement) subtotalElement.textContent = subtotal.toFixed(2);
         if (totalElement) totalElement.textContent = subtotal.toFixed(2);
+        if (deliveryEl) deliveryEl.textContent = 'Calculated at checkout';
         
         return subtotal;
     }
@@ -1001,6 +1043,8 @@
                 
                 if (subtotal) subtotal.textContent = total.toFixed(2);
                 if (totalEl) totalEl.textContent = total.toFixed(2);
+                const deliveryEl = document.getElementById('cart-delivery-fee');
+                if (deliveryEl) deliveryEl.textContent = 'Calculated at checkout';
             }
         });
         
@@ -1023,7 +1067,13 @@
 
         function applySummary(data) {
             if (!data) return;
-            updateCartSummary({ cart_total: parseFloat(data.cart_total || data.total || 0), cart_item_count: parseInt(data.cart_item_count || data.item_count || 0), item_totals: data.item_totals || itemTotals });
+            updateCartSummary({
+                cart_total: parseFloat(data.cart_total || data.total || 0),
+                cart_item_count: parseInt(data.cart_item_count || data.item_count || 0),
+                item_totals: data.item_totals || itemTotals,
+                delivery_fee_estimate: (typeof data.delivery_fee_estimate !== 'undefined') ? data.delivery_fee_estimate : null,
+                total_with_delivery: (typeof data.total_with_delivery !== 'undefined') ? data.total_with_delivery : null
+            });
         }
 
         // Attempt WebSocket (non-blocking). Server may or may not support it; this is a best-effort enhancement.
@@ -1058,7 +1108,13 @@
 
         // If server didn't provide window.cartState, fetch immediately as fallback
         if (window.cartState && (typeof window.cartState.total !== 'undefined')) {
-            applySummary({ cart_total: parseFloat(window.cartState.total || 0), cart_item_count: parseInt(window.cartState.itemCount || 0), item_totals: itemTotals });
+            applySummary({
+                cart_total: parseFloat(window.cartState.total || 0),
+                cart_item_count: parseInt(window.cartState.itemCount || 0),
+                item_totals: itemTotals,
+                delivery_fee_estimate: window.cartState.delivery_fee_estimate,
+                total_with_delivery: window.cartState.total_with_delivery
+            });
         } else {
             // Fetch summary endpoint as reliable fallback
             safeFetch('/cart/summary/', { method: 'GET' }).then(data => {
@@ -1066,7 +1122,13 @@
             }).catch(err => {
                 // Final fallback: recalc from DOM
                 const subtotal = recalculateCartTotals();
-                applySummary({ cart_total: subtotal, cart_item_count: document.querySelectorAll('.cart-item').length, item_totals: itemTotals });
+                applySummary({
+                    cart_total: subtotal,
+                    cart_item_count: document.querySelectorAll('.cart-item').length,
+                    item_totals: itemTotals,
+                    delivery_fee_estimate: null,
+                    total_with_delivery: null
+                });
             });
         }
     })();

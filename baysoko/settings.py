@@ -98,6 +98,14 @@ else:
         }
     }
     print("⚠️  Using SQLite as emergency fallback database for local operations")
+
+# SQLite tuning to reduce "database is locked" errors during concurrent requests
+try:
+    if DATABASES.get('default', {}).get('ENGINE') == 'django.db.backends.sqlite3':
+        DATABASES['default'].setdefault('OPTIONS', {})
+        DATABASES['default']['OPTIONS'].setdefault('timeout', 30)
+except Exception:
+    pass
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-default-key-for-dev')
 
@@ -245,6 +253,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'delivery.middleware.DeliveryAppSessionMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
@@ -400,7 +409,7 @@ SECURE_HSTS_PRELOAD = config('SECURE_HSTS_PRELOAD', default=True, cast=bool)
 
 # Determine what command is being run
 RUNNING_TESTS = len(sys.argv) > 1 and sys.argv[1] == 'test'
-RUNNING_RUNSERVER = len(sys.argv) > 1 and sys.argv[1] in ('runserver', 'daphne')
+RUNNING_RUNSERVER = any(arg in ('runserver', 'daphne', 'uvicorn') or 'uvicorn' in arg for arg in sys.argv)
 RUNNING_MIGRATE = 'migrate' in sys.argv
 
 # SSL / cookie settings (default to secure values; tests and localhost can
@@ -463,13 +472,28 @@ else:
 
 # Site ID
 SITE_ID = 1
-SITE_URL = config('SITE_URL', default='http://localhost:8000')
+SITE_URL = config(
+    'SITE_URL',
+    default=('http://localhost:8000' if DEBUG else 'https://bay-soko.onrender.com')
+)
+
+# If running on localhost over HTTP, ensure session/CSRF cookies are not secure-only.
+# This prevents "login then logged out" when the browser refuses to send secure cookies.
+try:
+    site_is_local = SITE_URL.startswith('http://localhost') or SITE_URL.startswith('http://127.0.0.1')
+    if site_is_local or (RUNNING_TESTS or RUNNING_RUNSERVER or DEBUG):
+        SESSION_COOKIE_SECURE = False
+        CSRF_COOKIE_SECURE = False
+except Exception:
+    pass
 
 # Affiliate program (native)
 AFFILIATE_QUERY_PARAM = 'aid'
 AFFILIATE_COOKIE_NAME = 'baysoko_affiliate'
 AFFILIATE_COOKIE_AGE = 60 * 60 * 24 * 30  # 30 days
 AFFILIATE_DEFAULT_RATE = Decimal('0.05')
+AFFILIATE_SUBSCRIPTION_RATE = Decimal('0.05')
+AFFILIATE_BONUS_RATE = Decimal('0.02')
 
 # CSRF and Cross-Origin Configuration
 CSRF_TRUSTED_ORIGINS = [
@@ -511,85 +535,31 @@ DELIVERY_UPDATE_ORDER_STATUS = config('DELIVERY_UPDATE_ORDER_STATUS', default=Tr
 # Authentication backends
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
-    
+    'allauth.account.auth_backends.AuthenticationBackend',
 ]
 
-# Allauth settings (updated to new configuration keys to avoid deprecation warnings)
-# Use ACCOUNT_LOGIN_METHODS to specify allowed login methods (order-independent)
+# ===== Allauth / Social Auth (consolidated) =====
 ACCOUNT_LOGIN_METHODS = {'email', 'username'}
-
-# Configure required signup fields using the new ACCOUNT_SIGNUP_FIELDS pattern.
-# Use '*' suffix to indicate a required field in the new configuration.
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'username*', 'password1*', 'password2*']
-
-# Keep email verification and uniqueness as configured
 ACCOUNT_EMAIL_VERIFICATION = 'optional'
 ACCOUNT_UNIQUE_EMAIL = True
-# Deprecated settings removed: use ACCOUNT_LOGIN_METHODS and ACCOUNT_SIGNUP_FIELDS above.
-# ACCOUNT_EMAIL_REQUIRED, ACCOUNT_AUTHENTICATION_METHOD, and ACCOUNT_USERNAME_REQUIRED
-# have been replaced by the new Allauth configuration keys.
+ACCOUNT_LOGOUT_ON_GET = False
+LOGIN_REDIRECT_URL = 'home'
+ACCOUNT_LOGOUT_REDIRECT_URL = 'home'
 
-# Add this after the existing SOCIALACCOUNT_PROVIDERS configuration
-# Update SOCIALACCOUNT_PROVIDERS with the improved structure
-SOCIALACCOUNT_PROVIDERS = {
-    'google': {
-        'SCOPE': ['profile', 'email'],
-        'AUTH_PARAMS': {'access_type': 'online'},
-        'APP': {
-            'client_id': os.environ.get('GOOGLE_OAUTH_CLIENT_ID', ''),
-            'secret': os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET', ''),
-            'key': ''
-        }
-    },
-    'facebook': {
-        'METHOD': 'oauth2',
-        'SCOPE': ['email', 'public_profile'],
-        'AUTH_PARAMS': {'auth_type': 'reauthenticate'},
-        'INIT_PARAMS': {'cookie': True},
-        'FIELDS': [
-            'id',
-            'first_name',
-            'last_name',
-            'middle_name',
-            'name',
-            'name_format',
-            'picture',
-            'short_name'
-        ],
-        'EXCHANGE_TOKEN': True,
-        'VERIFIED_EMAIL': False,
-        'VERSION': 'v13.0',
-        'APP': {
-            'client_id': os.environ.get('FACEBOOK_OAUTH_CLIENT_ID', ''),
-            'secret': os.environ.get('FACEBOOK_OAUTH_CLIENT_SECRET', ''),
-            'key': ''
-        }
-    }
-}
-
-# Update these settings for better OAuth experience
-LOGIN_REDIRECT_URL = '/'
-ACCOUNT_LOGOUT_REDIRECT_URL = '/'
-SOCIALACCOUNT_LOGIN_ON_GET = True  # Auto-redirect for social login
+SOCIALACCOUNT_ENABLED = True
+SOCIALACCOUNT_LOGIN_ON_GET = False  # show intermediate confirmation
 SOCIALACCOUNT_AUTO_SIGNUP = True
 SOCIALACCOUNT_EMAIL_VERIFICATION = 'optional'
 SOCIALACCOUNT_EMAIL_REQUIRED = True
 SOCIALACCOUNT_QUERY_EMAIL = True
 SOCIALACCOUNT_STORE_TOKENS = True
 
-# Custom adapter and forms (keep these as they are)
 SOCIALACCOUNT_ADAPTER = 'users.adapters.CustomSocialAccountAdapter'
 SOCIALACCOUNT_FORMS = {
     'signup': 'users.social_forms.CustomSocialSignupForm',
 }
-# Disable the problematic 3rdparty signup if it's causing issues
-SOCIALACCOUNT_ENABLED = True
 
-# Login redirects
-LOGIN_REDIRECT_URL = 'home'
-ACCOUNT_LOGOUT_REDIRECT_URL = 'home'
-SOCIALACCOUNT_LOGIN_ON_GET = False  # Show intermediate page
-ACCOUNT_LOGOUT_ON_GET = True  # Logout immediately on GET request
 # Social Auth Environment Variables
 GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '')
 GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET', '')
@@ -598,36 +568,30 @@ FACEBOOK_OAUTH_CLIENT_SECRET = os.environ.get('FACEBOOK_OAUTH_CLIENT_SECRET', ''
 
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
-        'SCOPE': [
-            'profile',
-            'email',
-        ],
-        'AUTH_PARAMS': {
-            'access_type': 'online',
-        },
+        'SCOPE': ['profile', 'email'],
+        'AUTH_PARAMS': {'access_type': 'online'},
         'OAUTH_PKCE_ENABLED': True,
+        'APP': {
+            'client_id': GOOGLE_OAUTH_CLIENT_ID,
+            'secret': GOOGLE_OAUTH_CLIENT_SECRET,
+            'key': ''
+        }
     },
     'facebook': {
         'METHOD': 'oauth2',
         'SCOPE': ['email', 'public_profile'],
         'AUTH_PARAMS': {'auth_type': 'reauthenticate'},
         'INIT_PARAMS': {'cookie': True},
-        'FIELDS': [
-            'id',
-            'first_name',
-            'last_name',
-            'email',
-        ],
+        'FIELDS': ['id', 'first_name', 'last_name', 'email'],
         'EXCHANGE_TOKEN': True,
         'VERIFIED_EMAIL': False,
         'VERSION': 'v13.0',
+        'APP': {
+            'client_id': FACEBOOK_OAUTH_CLIENT_ID,
+            'secret': FACEBOOK_OAUTH_CLIENT_SECRET,
+            'key': ''
+        }
     }
-}
-
-# Custom adapter
-SOCIALACCOUNT_ADAPTER = 'users.adapters.CustomSocialAccountAdapter'
-SOCIALACCOUNT_FORMS = {
-    'signup': 'users.social_forms.CustomSocialSignupForm',
 }
 
 # OpenAI Configuration
@@ -637,9 +601,6 @@ OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
 # AI Listing Assistant flag
 AI_LISTING_ENABLED = bool(OPENAI_API_KEY)
 
-# Auto connect social accounts to existing users by email
-SOCIALACCOUNT_AUTO_SIGNUP = True
-
 AFRICASTALKING_USERNAME = os.environ.get('AFRICASTALKING_USERNAME', '')
 AFRICASTALKING_API_KEY = os.environ.get('AFRICASTALKING_API_KEY', '')
 SMS_ENABLED = os.environ.get('SMS_ENABLED', 'False').lower() == 'true'
@@ -648,6 +609,9 @@ SMS_ENABLED = os.environ.get('SMS_ENABLED', 'False').lower() == 'true'
 ONESIGNAL_APP_ID = os.environ.get('ONESIGNAL_APP_ID', '')
 ONESIGNAL_API_KEY = os.environ.get('ONESIGNAL_API_KEY', '')
 ONESIGNAL_REST_URL = os.environ.get('ONESIGNAL_REST_URL', 'https://onesignal.com/api/v1/notifications')
+
+# Google Maps / Places
+GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', '')
 
 # Delivery System Integration
 # Delivery settings
@@ -675,13 +639,16 @@ ENABLE_EMAIL_NOTIFICATIONS = config('ENABLE_EMAIL_NOTIFICATIONS', default=True, 
 ENABLE_SMS_NOTIFICATIONS = config('ENABLE_SMS_NOTIFICATIONS', default=False, cast=bool)
 # E-commerce platform configuration
 ECOMMERCE_PLATFORM_NAME = config('ECOMMERCE_PLATFORM_NAME', default='Baysoko')
-ECOMMERCE_WEBHOOK_URL = config('ECOMMERCE_WEBHOOK_URL', default='http://localhost:8000/api/delivery/webhook/baysoko/')
+ECOMMERCE_WEBHOOK_URL = config(
+    'ECOMMERCE_WEBHOOK_URL',
+    default=f"{SITE_URL}/api/delivery/webhook/baysoko/"
+)
 # E-commerce platforms
 ECOMMERCE_PLATFORMS = [
     {
         'name': 'Baysoko',
         'platform_type': 'baysoko',
-        'base_url': 'http://localhost:8000',
+        'base_url': SITE_URL,
         'api_key': '',
         'webhook_secret': DELIVERY_WEBHOOK_KEY,
         'sync_enabled': True,
@@ -817,17 +784,45 @@ CELERY_TIMEZONE = 'Africa/Nairobi'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 
-# Redis for caching and channels
+# Redis for caching and channels (with safe local fallback)
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/1')
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": REDIS_URL,
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+USE_REDIS_CACHE = False
+FORCE_REDIS_CACHE = os.environ.get('FORCE_REDIS_CACHE', '').lower() in ('1', 'true', 'yes')
+LOCAL_REDIS = isinstance(REDIS_URL, str) and ('localhost' in REDIS_URL or '127.0.0.1' in REDIS_URL)
+if REDIS_URL and isinstance(REDIS_URL, str) and REDIS_URL.startswith('redis://'):
+    try:
+        import redis  # type: ignore
+        _redis_client = redis.Redis.from_url(REDIS_URL)
+        _redis_client.ping()
+        # Avoid cache-backed sessions in dev/local/runserver unless explicitly forced
+        if (FORCE_REDIS_CACHE):
+            USE_REDIS_CACHE = True
+        elif (DEBUG or RUNNING_RUNSERVER) and LOCAL_REDIS:
+            print("ℹ️  Using DB sessions in DEBUG/RUNSERVER with local Redis to avoid session interruptions.")
+            USE_REDIS_CACHE = False
+        else:
+            USE_REDIS_CACHE = True
+    except Exception as e:
+        print(f"⚠️  Redis cache unavailable at {REDIS_URL}: {e}. Falling back to LocMem cache.")
+        USE_REDIS_CACHE = False
+
+if USE_REDIS_CACHE:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            }
         }
     }
-}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "baysoko-local-cache"
+        }
+    }
 
 # Channels Configuration
 # Prefer full Redis URL strings for channels_redis. If REDIS_URL is a proper
@@ -893,13 +888,18 @@ except Exception:
         },
     }
 
-# If Redis is configured, prefer cache-backed sessions to avoid SQLite 'database is locked' issues
-try:
-    if REDIS_URL and isinstance(REDIS_URL, str) and REDIS_URL.startswith('redis://'):
+# Sessions: use Redis cache only when it is reachable
+if USE_REDIS_CACHE:
+    SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+    SESSION_CACHE_ALIAS = 'default'
+else:
+    # Avoid SQLite session write locks in DEBUG by using cache sessions (LocMem)
+    if DATABASES.get('default', {}).get('ENGINE') == 'django.db.backends.sqlite3' and DEBUG:
         SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
         SESSION_CACHE_ALIAS = 'default'
-except Exception:
-    pass
+        print("ℹ️  Using cache sessions in DEBUG with SQLite to avoid session lock errors.")
+    else:
+        SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 
 # API Configuration
 REST_FRAMEWORK = {

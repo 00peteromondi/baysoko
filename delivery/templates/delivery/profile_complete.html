@@ -1,0 +1,220 @@
+{% extends 'delivery/base.html' %}
+{% load crispy_forms_tags static %}
+
+{% block title %}Complete Profile - Delivery{% endblock %}
+
+{% block extra_css %}
+<style>
+    .profile-card {
+        max-width: 720px;
+        margin: 2rem auto;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 2rem;
+        box-shadow: var(--shadow-sm);
+    }
+    .profile-card h2 {
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+    }
+    .profile-card p {
+        color: var(--text-secondary);
+    }
+    .profile-actions {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-top: 1.5rem;
+    }
+    .location-suggestions {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        margin-top: 6px;
+        overflow: hidden;
+        display: none;
+        box-shadow: var(--shadow-sm);
+    }
+    .location-suggestion-item {
+        padding: 8px 10px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .location-suggestion-item:last-child {
+        border-bottom: none;
+    }
+    .location-suggestion-item:hover {
+        background: var(--bg-secondary);
+    }
+    @media (max-width: 768px) {
+        .profile-card {
+            margin: 1rem;
+            padding: 1.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="profile-card">
+    <div class="page-header">
+        <div>
+            <h2 class="page-title">Complete Your Delivery Profile</h2>
+            <p class="page-subtitle">Add your delivery contact details so we can route orders and notifications properly.</p>
+        </div>
+    </div>
+    <form method="post" novalidate>
+        {% csrf_token %}
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label for="{{ form.phone_number.id_for_label }}" class="form-label">Phone number</label>
+                {{ form.phone_number }}
+                {% if form.phone_number.errors %}
+                    <div class="text-danger small mt-1">{{ form.phone_number.errors }}</div>
+                {% endif %}
+            </div>
+            <div class="col-12">
+                <label for="{{ form.address.id_for_label }}" class="form-label">Address</label>
+                {{ form.address }}
+                <div class="location-suggestions" id="deliveryAddressSuggestions"></div>
+                {% if form.address.errors %}
+                    <div class="text-danger small mt-1">{{ form.address.errors }}</div>
+                {% endif %}
+            </div>
+            <div class="col-md-6">
+                <label for="{{ form.city.id_for_label }}" class="form-label">City</label>
+                {{ form.city }}
+                <div class="location-suggestions" id="deliveryCitySuggestions"></div>
+                {% if form.city.errors %}
+                    <div class="text-danger small mt-1">{{ form.city.errors }}</div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="profile-actions">
+            <button type="submit" class="btn btn-delivery">Save Profile</button>
+            <a href="{% url 'delivery:home' %}" class="btn btn-delivery-outline">Back to Home</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function() {
+        const addressInput = document.getElementById('id_address');
+        const cityInput = document.getElementById('id_city');
+        const addressSuggestions = document.getElementById('deliveryAddressSuggestions');
+        const citySuggestions = document.getElementById('deliveryCitySuggestions');
+        const viewbox = '34.0,-0.1,35.2,-1.1';
+        let HOMABAY_LANDMARKS = [];
+        const LANDMARKS_KEY = 'baysoko_recent_locations';
+
+        async function loadHomabayLandmarks() {
+            if (HOMABAY_LANDMARKS.length) return HOMABAY_LANDMARKS;
+            try {
+                const res = await fetch("{% static 'data/homabay_landmarks.json' %}", { cache: 'force-cache' });
+                if (res.ok) {
+                    const data = await res.json();
+                    HOMABAY_LANDMARKS = Array.isArray(data?.landmarks) ? data.landmarks : [];
+                }
+            } catch (e) {}
+            return HOMABAY_LANDMARKS;
+        }
+
+        function getRecentLocations() {
+            try {
+                const raw = localStorage.getItem(LANDMARKS_KEY);
+                const list = raw ? JSON.parse(raw) : [];
+                return Array.isArray(list) ? list : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function addRecentLocation(label) {
+            if (!label || typeof label !== 'string') return;
+            try {
+                const list = getRecentLocations();
+                const cleaned = label.trim();
+                if (!cleaned) return;
+                const deduped = [cleaned, ...list.filter(l => l.toLowerCase() !== cleaned.toLowerCase())].slice(0, 5);
+                localStorage.setItem(LANDMARKS_KEY, JSON.stringify(deduped));
+            } catch (e) {}
+        }
+
+        function localMatches(query) {
+            const q = (query || '').toLowerCase().trim();
+            const recent = getRecentLocations().map(label => ({ display_name: `${label}, Homa Bay County` }));
+            const matches = !q
+                ? HOMABAY_LANDMARKS.slice(0, 10)
+                : HOMABAY_LANDMARKS.filter(l => l.toLowerCase().includes(q)).slice(0, 10);
+            const locals = matches.map(label => ({ display_name: `${label}, Homa Bay County` }));
+            return [...recent, ...locals].slice(0, 10);
+        }
+
+        function renderSuggestions(items, target) {
+            if (!target) return;
+            target.innerHTML = '';
+            if (!items.length) {
+                target.style.display = 'none';
+                return;
+            }
+            target.innerHTML = items.map(item =>
+                `<div class="location-suggestion-item" data-label="${item.display_name.replace(/"/g, '&quot;')}">${item.display_name}</div>`
+            ).join('');
+            target.style.display = 'block';
+        }
+
+        async function fetchNominatim(query) {
+            const url = `https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=ke&viewbox=${viewbox}&bounded=1&q=${encodeURIComponent(query)}`;
+            const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+            if (!res.ok) return [];
+            const data = await res.json();
+            return (data || []).filter(r => /Homa\\s*Bay|Homabay|Ndhiwa/i.test(r.display_name || ''));
+        }
+
+        function setupAutocomplete(input, target) {
+            if (!input || !target) return;
+            let debounce;
+            input.addEventListener('input', () => {
+                const q = input.value.trim();
+                clearTimeout(debounce);
+                if (q.length < 2) {
+                    renderSuggestions(localMatches(q), target);
+                    return;
+                }
+                debounce = setTimeout(async () => {
+                    const results = await fetchNominatim(q);
+                    const merged = [...results, ...localMatches(q)];
+                    renderSuggestions(merged.slice(0, 12), target);
+                }, 280);
+            });
+            target.addEventListener('click', (e) => {
+                const item = e.target.closest('.location-suggestion-item');
+                if (!item) return;
+                input.value = item.getAttribute('data-label') || item.textContent.trim();
+                addRecentLocation(input.value);
+                target.style.display = 'none';
+            });
+            input.addEventListener('blur', () => setTimeout(() => target.style.display = 'none', 200));
+        }
+
+        loadHomabayLandmarks();
+        setupAutocomplete(addressInput, addressSuggestions);
+        setupAutocomplete(cityInput, citySuggestions);
+
+        if (window.BaysokoGeo && cityInput && (!cityInput.value || !cityInput.value.trim())) {
+            window.BaysokoGeo.requestCurrentLocation().then(async (loc) => {
+                const label = await window.BaysokoGeo.reverseGeocode(loc.lat, loc.lng);
+                if (label) {
+                    cityInput.value = label;
+                    addRecentLocation(label);
+                }
+            }).catch(() => {});
+        }
+    })();
+</script>
+{% endblock %}
+

@@ -452,6 +452,69 @@
         cursor: not-allowed;
         transform: none;
     }
+
+    .delivery-map {
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        overflow: hidden;
+    }
+
+    .shipping-location-wrap {
+        position: relative;
+    }
+    .map-help {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-top: 0.5rem;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        padding: 0.5rem 0.75rem;
+    }
+    .map-help-text {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+    .map-help .btn-ghost {
+        border: 1px solid var(--border-color);
+        background: transparent;
+        color: var(--text-primary);
+        padding: 0.35rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .location-suggestions {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        z-index: 10;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        overflow: hidden;
+        display: none;
+        box-shadow: var(--shadow-sm);
+        max-height: 220px;
+        overflow-y: auto;
+    }
+    .location-suggestion-item {
+        padding: 8px 10px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .location-suggestion-item:last-child {
+        border-bottom: none;
+    }
+    .location-suggestion-item:hover {
+        background: var(--bg-secondary);
+    }
     
     /* ===== SECURITY INFO ===== */
     .security-info {
@@ -825,19 +888,30 @@
                 </div>
                 
                 <!-- Common Shipping Fields -->
-                <div class="form-group">
+                <div class="form-group shipping-location-wrap">
                     <label class="form-label">Shipping Address *</label>
                     <textarea name="shipping_address" class="form-control" rows="3" placeholder="Enter your complete shipping address" required></textarea>
+                    <input type="hidden" name="shipping_latitude" id="id_shipping_latitude">
+                    <input type="hidden" name="shipping_longitude" id="id_shipping_longitude">
+                    <input type="hidden" name="shipping_place_id" id="id_shipping_place_id">
+                    <div class="location-suggestions" id="shippingLocationSuggestions"></div>
+                    <div class="delivery-map mt-2" id="checkoutShippingMap" style="height: 220px;"></div>
+                    <div class="map-help">
+                        <div class="map-help-text">
+                            Click on the map to drop a pin for delivery. Location access helps us get your order to the right place.
+                        </div>
+                        <button type="button" class="btn-ghost use-device-location">Use my location</button>
+                    </div>
                 </div>
                 
                 <div class="row">
                     <div class="col-md-6 form-group">
-                        <label class="form-label">City *</label>
-                        <input type="text" name="city" class="form-control" placeholder="Nairobi" required>
+                        <label class="form-label">City (optional)</label>
+                        <input type="text" name="city" class="form-control" placeholder="Homa Bay">
                     </div>
                     <div class="col-md-6 form-group">
-                        <label class="form-label">Postal Code *</label>
-                        <input type="text" name="postal_code" class="form-control" placeholder="00100" required>
+                        <label class="form-label">Postal Code (optional)</label>
+                        <input type="text" name="postal_code" class="form-control" placeholder="40300">
                     </div>
                 </div>
                 
@@ -970,8 +1044,19 @@
                 
                 <!-- Common Shipping Fields -->
                 <div class="row">
-                    <div class="col-12">
+                    <div class="col-12 shipping-location-wrap">
                         {{ checkout_form.shipping_address|as_crispy_field }}
+                        {{ checkout_form.shipping_latitude }}
+                        {{ checkout_form.shipping_longitude }}
+                        {{ checkout_form.shipping_place_id }}
+                        <div class="location-suggestions" id="shippingLocationSuggestions"></div>
+                        <div class="delivery-map mt-2" id="checkoutShippingMap" style="height: 220px;"></div>
+                        <div class="map-help">
+                            <div class="map-help-text">
+                                Click on the map to drop a pin for delivery. Location access helps us get your order to the right place.
+                            </div>
+                            <button type="button" class="btn-ghost use-device-location">Use my location</button>
+                        </div>
                     </div>
                 </div>
                 
@@ -1085,16 +1170,29 @@
                         <span>KSh {{ cart.get_total_price }}</span>
                     </div>
                     <div class="total-row">
-                        <span>Shipping</span>
-                        <span class="text-success">Free</span>
+                        <span>Delivery</span>
+                        {% if delivery_fee_estimate != None %}
+                            <span id="deliveryFeeValue">KSh {{ delivery_fee_estimate|floatformat:2 }}</span>
+                        {% else %}
+                            <span class="text-muted" id="deliveryFeeValue">Calculated at checkout</span>
+                        {% endif %}
                     </div>
+                    {% if delivery_error_message %}
+                    <div class="alert alert-warning mt-3">
+                        <i class="bi bi-exclamation-triangle me-2"></i>{{ delivery_error_message }}
+                    </div>
+                    {% endif %}
                     <div class="total-row">
                         <span>Tax</span>
                         <span>KSh 0.00</span>
                     </div>
                     <div class="total-row total">
                         <span>Total</span>
-                        <span>KSh {{ cart.get_total_price }}</span>
+                        {% if estimated_total %}
+                            <span id="checkoutTotalValue">KSh {{ estimated_total|floatformat:2 }}</span>
+                        {% else %}
+                            <span id="checkoutTotalValue">KSh {{ cart.get_total_price }}</span>
+                        {% endif %}
                     </div>
                 </div>
                 
@@ -1137,6 +1235,9 @@
 {% endblock %}
 
 {% block extra_js %}
+{% if store_markers_json %}
+{{ store_markers_json|json_script:"store_markers_json" }}
+{% endif %}
 <script>
     function initializeCheckoutPage() {
         console.log('Checkout page initialized');
@@ -1154,6 +1255,19 @@
         const mpesaPhoneField = document.getElementById('id_mpesa_phone') || checkoutForm?.querySelector('[name="mpesa_phone"]');
         const toastContainer = document.getElementById('toastContainer');
         const selectedPaymentMethodField = document.getElementById('selectedPaymentMethod');
+        const shippingAddressField = document.getElementById('id_shipping_address') || checkoutForm?.querySelector('[name="shipping_address"]') || document.querySelector('textarea[name="shipping_address"]');
+        const cityField = document.getElementById('id_city') || checkoutForm?.querySelector('[name="city"]') || document.querySelector('input[name="city"]');
+        const postalCodeField = document.getElementById('id_postal_code') || checkoutForm?.querySelector('[name="postal_code"]') || document.querySelector('input[name="postal_code"]');
+        const shippingLatField = document.getElementById('id_shipping_latitude');
+        const shippingLngField = document.getElementById('id_shipping_longitude');
+        const shippingPlaceIdField = document.getElementById('id_shipping_place_id');
+        const shippingMapEl = (() => {
+            const maps = Array.from(document.querySelectorAll('#checkoutShippingMap'));
+            return maps.find(el => el && el.offsetParent !== null) || maps[0] || null;
+        })();
+        if (shippingAddressField) {
+            shippingAddressField.setAttribute('data-geo-suggest', '1');
+        }
         
         // ===== TOAST NOTIFICATION SYSTEM =====
         window.showToast = function(message, type = 'info') {
@@ -1199,6 +1313,408 @@
                 default: return 'bi-info-circle-fill text-primary';
             }
         }
+
+        // ===== LEAFLET + NOMINATIM: SHIPPING ADDRESS =====
+        const HOMABAY_LOCATIONS = [
+            { name: 'Homa Bay Town', lat: -0.5236, lon: 34.4560 },
+            { name: 'Homa Bay Stadium', lat: -0.5230, lon: 34.4550 },
+            { name: 'Homa Bay County Referral Hospital', lat: -0.5245, lon: 34.4575 },
+            { name: 'Homa Bay Market', lat: -0.5240, lon: 34.4540 },
+            { name: 'Asego Hill', lat: -0.5450, lon: 34.4690 },
+            { name: 'Rangwe', lat: -0.6362, lon: 34.5530 },
+            { name: 'Kendu Bay', lat: -0.3572, lon: 34.6431 },
+            { name: 'Kendu Bay Market', lat: -0.3575, lon: 34.6400 },
+            { name: 'Rodi Kopany', lat: -0.5620, lon: 34.5970 },
+            { name: 'Oyugis', lat: -0.5080, lon: 34.7430 },
+            { name: 'Mbita', lat: -0.4330, lon: 34.2000 },
+            { name: 'Suba', lat: -0.4310, lon: 34.3000 },
+            { name: 'Ndhiwa', lat: -0.6950, lon: 34.9170 },
+            { name: 'Kobodo', lat: -0.6900, lon: 34.9000 },
+            { name: 'Homa Bay University Town', lat: -0.5140, lon: 34.4630 }
+        ];
+        let HOMABAY_LANDMARKS = [];
+        const LANDMARKS_KEY = 'baysoko_recent_locations';
+
+        async function loadHomabayLandmarks() {
+            if (HOMABAY_LANDMARKS.length) return HOMABAY_LANDMARKS;
+            try {
+                const res = await fetch("{% static 'data/homabay_landmarks.json' %}", { cache: 'force-cache' });
+                if (res.ok) {
+                    const data = await res.json();
+                    HOMABAY_LANDMARKS = Array.isArray(data?.landmarks) ? data.landmarks : [];
+                }
+            } catch (e) {}
+            return HOMABAY_LANDMARKS;
+        }
+
+        function getRecentLocations() {
+            try {
+                const raw = localStorage.getItem(LANDMARKS_KEY);
+                const list = raw ? JSON.parse(raw) : [];
+                return Array.isArray(list) ? list : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function addRecentLocation(label) {
+            if (!label || typeof label !== 'string') return;
+            try {
+                const list = getRecentLocations();
+                const cleaned = label.trim();
+                if (!cleaned) return;
+                const deduped = [cleaned, ...list.filter(l => l.toLowerCase() !== cleaned.toLowerCase())].slice(0, 5);
+                localStorage.setItem(LANDMARKS_KEY, JSON.stringify(deduped));
+            } catch (e) {}
+        }
+
+        const suggestionsEl = (() => {
+            const lists = Array.from(document.querySelectorAll('#shippingLocationSuggestions'));
+            return lists.find(el => el && el.offsetParent !== null) || lists[0] || null;
+        })();
+        let shippingMap = null;
+        let shippingMarker = null;
+        let shippingMapReady = false;
+        let lastShippingAddress = '';
+
+        function setShippingLocation(lat, lng, label, placeId, addr) {
+            if (shippingLatField) shippingLatField.value = Number(lat).toFixed(6);
+            if (shippingLngField) shippingLngField.value = Number(lng).toFixed(6);
+            if (shippingPlaceIdField) shippingPlaceIdField.value = placeId || `${Number(lat).toFixed(6)},${Number(lng).toFixed(6)}`;
+            if (label && shippingAddressField) shippingAddressField.value = label;
+            if (label) addRecentLocation(label);
+            if (addr) {
+                const city = addr.city || addr.town || addr.village || addr.county || addr.state;
+                const postcode = addr.postcode || addr.postal_code;
+                if (cityField && city) cityField.value = city;
+                if (postalCodeField && postcode) postalCodeField.value = postcode;
+            }
+            if (shippingMarker && shippingMap) {
+                shippingMarker.setLatLng([lat, lng]);
+                shippingMap.setView([lat, lng], 15);
+            }
+            if (label) updateDeliveryFeeEstimate(label);
+        }
+
+        const deliveryFeeEl = document.getElementById('deliveryFeeValue');
+        const totalEl = document.getElementById('checkoutTotalValue');
+        const baseTotal = parseFloat('{{ cart.get_total_price|floatformat:2 }}') || 0;
+        let feeTimer = null;
+
+        function setFeeText(text, totalValue) {
+            if (deliveryFeeEl) deliveryFeeEl.textContent = text;
+            if (totalEl && typeof totalValue === 'number') {
+                totalEl.textContent = `KSh ${totalValue.toFixed(2)}`;
+            }
+        }
+
+        async function updateDeliveryFeeEstimate(address) {
+            if (!address || !address.trim()) return;
+            const payload = { shipping_address: address.trim() };
+            if (deliveryFeeEl) deliveryFeeEl.textContent = 'Calculating...';
+            try {
+                const res = await fetch("{% url 'checkout_delivery_fee' %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || ''
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    if (err?.error === 'missing_store_location') {
+                        const stores = (err.stores || []).join(', ');
+                        showToast(`Delivery fee unavailable. Missing store locations: ${stores}`, 'warning');
+                        return;
+                    }
+                    throw new Error('fee_failed');
+                }
+                const data = await res.json();
+                const fee = parseFloat(data.delivery_fee || '0');
+                const total = parseFloat(data.total || (baseTotal + fee).toFixed(2));
+                setFeeText(`KSh ${fee.toFixed(2)}`, total);
+                if (Array.isArray(data.notes) && data.notes.length) {
+                    data.notes.forEach(note => {
+                        if (note) showToast(note, 'info');
+                    });
+                }
+            } catch (e) {
+                setFeeText('Calculated at checkout', baseTotal);
+            }
+        }
+
+        async function resolveAddressToLocation(address) {
+            if (!address || !address.trim()) return;
+            if ((shippingLatField?.value && shippingLngField?.value) || (shippingPlaceIdField?.value)) return;
+            try {
+                const results = await fetchNominatim(address.trim());
+                if (results && results.length) {
+                    const item = results[0];
+                    setShippingLocation(item.lat, item.lon, item.display_name, item.place_id, item.address || null);
+                }
+            } catch (e) {}
+        }
+
+        if (shippingAddressField) {
+            shippingAddressField.addEventListener('input', () => {
+                const currentValue = shippingAddressField.value || '';
+                if (currentValue !== lastShippingAddress) {
+                    lastShippingAddress = currentValue;
+                    if (cityField) cityField.value = '';
+                    if (postalCodeField) postalCodeField.value = '';
+                }
+                clearTimeout(feeTimer);
+                feeTimer = setTimeout(() => {
+                    updateDeliveryFeeEstimate(shippingAddressField.value);
+                }, 500);
+            });
+            shippingAddressField.addEventListener('blur', () => {
+                updateDeliveryFeeEstimate(shippingAddressField.value);
+                resolveAddressToLocation(shippingAddressField.value);
+            });
+            shippingAddressField.addEventListener('focus', () => {
+                refreshShippingMap();
+            });
+        }
+
+        function renderSuggestions(items) {
+            if (!suggestionsEl) return;
+            suggestionsEl.innerHTML = "";
+            if (!items.length) {
+                suggestionsEl.style.display = "none";
+                return;
+            }
+            items.forEach(item => {
+                const row = document.createElement("div");
+                row.className = "location-suggestion-item";
+                row.textContent = item.display_name || item.name || item.label || '';
+                row.addEventListener("click", async () => {
+                    const label = item.display_name || item.name || item.label || '';
+                    if (item.lat != null && item.lon != null) {
+                        setShippingLocation(item.lat, item.lon, label, item.place_id, item.address || null);
+                    } else {
+                        try {
+                            const resolved = await fetchNominatim(label);
+                            const pick = resolved && resolved.length ? resolved[0] : null;
+                            if (pick) {
+                                setShippingLocation(pick.lat, pick.lon, pick.display_name, pick.place_id, pick.address || null);
+                            } else {
+                                if (shippingAddressField) shippingAddressField.value = label;
+                            }
+                        } catch (e) {
+                            if (shippingAddressField) shippingAddressField.value = label;
+                        }
+                    }
+                    suggestionsEl.style.display = "none";
+                });
+                suggestionsEl.appendChild(row);
+            });
+            suggestionsEl.style.display = "block";
+        }
+
+        function filterHomabay(results) {
+            return (results || []).filter(r => {
+                const name = (r.display_name || '').toLowerCase();
+                return (
+                    name.includes('homa bay') ||
+                    name.includes('homabay') ||
+                    name.includes('ndhiwa') ||
+                    name.includes('kendu') ||
+                    name.includes('mbita') ||
+                    name.includes('oyugis') ||
+                    name.includes('rodi') ||
+                    name.includes('suba') ||
+                    name.includes('rangwe')
+                );
+            });
+        }
+
+        async function fetchNominatim(query) {
+            const viewbox = '34.0,-0.1,35.2,-1.1';
+            const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&addressdetails=1&countrycodes=ke&viewbox=${viewbox}&bounded=1&q=${encodeURIComponent(query)}`;
+            const res = await fetch(url, { headers: { "Accept": "application/json" } });
+            if (!res.ok) return [];
+            const data = await res.json();
+            return filterHomabay(data);
+        }
+
+        async function fetchReverseGeocode(lat, lng) {
+            try {
+                const url = `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`;
+                const res = await fetch(url, { headers: { "Accept": "application/json" } });
+                if (!res.ok) return null;
+                const data = await res.json();
+                return data || null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function localHomabayMatches(query) {
+            const q = (query || '').toLowerCase().trim();
+            const recent = getRecentLocations().map(label => ({ display_name: `${label}, Homa Bay County` }));
+            const landmarkBase = HOMABAY_LANDMARKS.length ? HOMABAY_LANDMARKS : [];
+            const landmarkMatches = !q
+                ? landmarkBase.slice(0, 8).map(label => ({ display_name: `${label}, Homa Bay County` }))
+                : landmarkBase.filter(l => l.toLowerCase().includes(q)).slice(0, 8).map(label => ({ display_name: `${label}, Homa Bay County` }));
+            if (!q) return mergeSuggestions(
+                recent,
+                HOMABAY_LOCATIONS.slice(0, 8).map(l => ({
+                display_name: `${l.name}, Homa Bay County`,
+                lat: l.lat,
+                lon: l.lon,
+                place_id: `local_${l.name.replace(/\s+/g, '_')}`,
+                address: l.lat != null && l.lon != null ? { town: 'Homa Bay', county: 'Homa Bay', postcode: '40300' } : null
+            })),
+            landmarkMatches
+            );
+            return mergeSuggestions(
+                HOMABAY_LOCATIONS
+                    .filter(l => l.name.toLowerCase().includes(q))
+                    .slice(0, 8)
+                    .map(l => ({
+                        display_name: `${l.name}, Homa Bay County`,
+                        lat: l.lat,
+                        lon: l.lon,
+                        place_id: `local_${l.name.replace(/\s+/g, '_')}`,
+                        address: l.lat != null && l.lon != null ? { town: 'Homa Bay', county: 'Homa Bay', postcode: '40300' } : null
+                    })),
+                mergeSuggestions(landmarkMatches, recent)
+            );
+        }
+
+        function mergeSuggestions(primary, fallback) {
+            const seen = new Set();
+            const merged = [];
+            [...(primary || []), ...(fallback || [])].forEach(item => {
+                const key = `${(item.display_name || item.name || '').toLowerCase()}_${item.lat || ''}_${item.lon || ''}`;
+                if (seen.has(key)) return;
+                seen.add(key);
+                merged.push(item);
+            });
+            return merged;
+        }
+
+        function setupShippingAutocomplete() {
+            if (!shippingAddressField || !suggestionsEl) return;
+            let debounce;
+            loadHomabayLandmarks();
+            shippingAddressField.addEventListener("input", () => {
+                const q = shippingAddressField.value.trim();
+                clearTimeout(debounce);
+                if (q.length < 2) {
+                    renderSuggestions(localHomabayMatches(q));
+                    return;
+                }
+                debounce = setTimeout(async () => {
+                    let results = [];
+                    try {
+                        results = await fetchNominatim(q);
+                    } catch (e) {
+                        results = [];
+                    }
+                    const local = localHomabayMatches(q);
+                    renderSuggestions(mergeSuggestions(results, local));
+                }, 300);
+            });
+            shippingAddressField.addEventListener('focus', () => {
+                if (!shippingAddressField.value.trim()) {
+                    renderSuggestions(localHomabayMatches(''));
+                }
+            });
+        }
+
+        function initCheckoutMap() {
+            if (!shippingAddressField || !shippingMapEl || !window.L) return;
+            if (shippingMapEl.dataset.initialized === '1') return;
+            const hasCoords = shippingLatField?.value && shippingLngField?.value;
+            const initialLat = hasCoords ? parseFloat(shippingLatField.value) : -0.5236;
+            const initialLng = hasCoords ? parseFloat(shippingLngField.value) : 34.4560;
+
+            shippingMap = L.map(shippingMapEl).setView([initialLat, initialLng], hasCoords ? 14 : 12);
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                maxZoom: 19,
+                attribution: "&copy; OpenStreetMap contributors"
+            }).addTo(shippingMap);
+            shippingMarker = L.marker([initialLat, initialLng]).addTo(shippingMap);
+            try {
+                const markers = document.getElementById('store_markers_json')
+                    ? JSON.parse(document.getElementById('store_markers_json').textContent || '[]')
+                    : [];
+                markers.forEach(s => {
+                    if (!s || s.lat == null || s.lng == null) return;
+                    L.circleMarker([s.lat, s.lng], {
+                        radius: 5,
+                        color: '#FF9E1F',
+                        weight: 2,
+                        fillColor: '#FF9E1F',
+                        fillOpacity: 0.7
+                    }).addTo(shippingMap).bindPopup(`${s.name}<br><small>${s.location || ''}</small>`);
+                });
+            } catch (e) {}
+            setTimeout(() => shippingMap.invalidateSize(), 200);
+            shippingMap.on("click", async (e) => {
+                let label = shippingAddressField?.value || "";
+                let addr = null;
+                try {
+                    const resolved = await fetchReverseGeocode(e.latlng.lat, e.latlng.lng);
+                    if (resolved?.display_name) label = resolved.display_name;
+                    if (resolved?.address) addr = resolved.address;
+                } catch (err) {}
+                setShippingLocation(e.latlng.lat, e.latlng.lng, label, "", addr);
+            });
+            shippingMapEl.dataset.initialized = '1';
+            shippingMapReady = true;
+        }
+
+        setupShippingAutocomplete();
+        const whenLeafletReady = (cb) => {
+            if (window.L) return cb();
+            setTimeout(() => whenLeafletReady(cb), 100);
+        };
+        whenLeafletReady(initCheckoutMap);
+
+        function refreshShippingMap() {
+            if (!shippingMapEl) return;
+            if (!shippingMapReady && window.L) {
+                initCheckoutMap();
+            }
+            if (shippingMap) {
+                setTimeout(() => shippingMap.invalidateSize(), 200);
+            }
+        }
+
+        async function requestDeviceLocationForShipping() {
+            if (!window.BaysokoGeo) {
+                showToast('Location services are unavailable in this browser.', 'error');
+                return;
+            }
+            try {
+                const loc = await window.BaysokoGeo.requestCurrentLocation();
+                const label = await window.BaysokoGeo.reverseGeocode(loc.lat, loc.lng);
+                if (label) {
+                    setShippingLocation(loc.lat, loc.lng, label, shippingPlaceIdField?.value || "");
+                    showToast('Using your current location for delivery.', 'success');
+                }
+            } catch (err) {
+                showToast('Location access is required to deliver to the right place. Please enable it in your browser settings and try again.', 'warning');
+            }
+        }
+
+        // Auto-suggest current location (if allowed) for shipping
+        if (window.BaysokoGeo && shippingAddressField && (!shippingAddressField.value || !shippingAddressField.value.trim())) {
+            requestDeviceLocationForShipping();
+        }
+
+        // Manual trigger for location permission / pinning
+        const locationButtons = Array.from(document.querySelectorAll('.use-device-location'));
+        locationButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                requestDeviceLocationForShipping();
+            });
+        });
         
         // ===== ALTERNATE SHIPPING TOGGLE WITH AJAX LOADING =====
         // Centralized handler for alternate shipping UI/state with smooth AJAX transitions
@@ -1245,6 +1761,7 @@
                 // Focus first input field for better UX
                 const firstInput = alternateShippingForm.querySelector('input:not([type="hidden"])');
                 if (firstInput) setTimeout(() => firstInput.focus(), 100);
+                refreshShippingMap();
                 
             } else {
                 // Show loading state
@@ -1278,6 +1795,7 @@
                 // Restore toggle opacity
                 if (toggleSwitch) toggleSwitch.style.opacity = '1';
                 showToast('Using your account details', 'info');
+                refreshShippingMap();
             }
         }
 
@@ -1367,6 +1885,11 @@
             if (!shippingAddress?.value?.trim()) errors.push('Shipping Address is required');
             if (!city?.value?.trim()) errors.push('City is required');
             if (!postalCode?.value?.trim()) errors.push('Postal Code is required');
+            const placeId = document.getElementById('id_shipping_place_id');
+            const hasLatLng = (document.getElementById('id_shipping_latitude')?.value && document.getElementById('id_shipping_longitude')?.value);
+            if (shippingAddress?.value?.trim() && placeId && !placeId.value && !hasLatLng) {
+                errors.push('Please select a valid location from the map suggestions.');
+            }
             
             // Check M-Pesa phone
             const mpesaPhone = checkoutForm?.querySelector('[name="mpesa_phone"]') || document.querySelector('[name="mpesa_phone"]');
@@ -1506,11 +2029,9 @@
         function validateForm() {
             let isValid = true;
             
-            // Always require shipping address, city, and postal code
+            // Always require shipping address
             const requiredFields = [
                 checkoutForm?.querySelector('[name="shipping_address"]'),
-                checkoutForm?.querySelector('[name="city"]'), 
-                checkoutForm?.querySelector('[name="postal_code"]'),
                 checkoutForm?.querySelector('[name="payment_method"]'),
                 checkoutForm?.querySelector('#terms') || checkoutForm?.querySelector('[name="terms_accepted"]')
             ];
@@ -1643,12 +2164,12 @@
 
             // Validate common fields
             const shippingAddress = checkoutForm.querySelector('textarea[name="shipping_address"]');
-            const city = checkoutForm.querySelector('input[name="city"]');
-            const postalCode = checkoutForm.querySelector('input[name="postal_code"]');
-
             if (!shippingAddress || !shippingAddress.value.trim()) errors.push('Shipping address is required');
-            if (!city || !city.value.trim()) errors.push('City is required');
-            if (!postalCode || !postalCode.value.trim()) errors.push('Postal code is required');
+            const placeId = document.getElementById('id_shipping_place_id');
+            const hasLatLng = (document.getElementById('id_shipping_latitude')?.value && document.getElementById('id_shipping_longitude')?.value);
+            if (shippingAddress && shippingAddress.value.trim() && placeId && !placeId.value && !hasLatLng) {
+                errors.push('Please select a valid location from the map suggestions.');
+            }
 
             // Validate payment method phone
             const mpesaPhone = checkoutForm.querySelector('input[name="mpesa_phone"]');
@@ -1755,23 +2276,22 @@
     window.addEventListener('ajaxPageLoaded', function(e){
         try { initializeCheckoutPage(); } catch(err) { console.warn('initializeCheckoutPage failed', err); }
     });
-        
-        // ===== WINDOW RESIZE HANDLER =====
-        let resizeTimeout;
-        window.addEventListener('resize', function() {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => {
-                // Adjust layout for mobile
-                if (window.innerWidth < 768) {
-                    document.querySelector('.order-summary-card')?.classList.remove('sticky');
-                }
-            }, 250);
-        });
-        
-        // Clean up session storage on page unload
-        window.addEventListener('beforeunload', function() {
-            sessionStorage.removeItem('selected_payment_method');
-        });
+
+    // ===== WINDOW RESIZE HANDLER =====
+    let resizeTimeout;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            // Adjust layout for mobile
+            if (window.innerWidth < 768) {
+                document.querySelector('.order-summary-card')?.classList.remove('sticky');
+            }
+        }, 250);
+    });
+
+    // Clean up session storage on page unload
+    window.addEventListener('beforeunload', function() {
+        sessionStorage.removeItem('selected_payment_method');
     });
 </script>
 {% endblock %}

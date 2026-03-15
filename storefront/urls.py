@@ -70,6 +70,8 @@ urlpatterns = [
     path('dashboard/monitor/store/<slug:slug>/withdraw/', views.request_withdrawal, name='request_withdrawal'),
     path('dashboard/verify-payout/<slug:slug>/', views.start_payout_verification, name='start_payout_verification'),
     path('mpesa/payout-verification-callback/', views.payout_verification_callback, name='payout_verification_callback'),
+    path('mpesa/b2c/result/', views.mpesa_b2c_result, name='mpesa_b2c_result'),
+    path('mpesa/b2c/timeout/', views.mpesa_b2c_timeout, name='mpesa_b2c_timeout'),
     
     # M-Pesa webhook
     path('mpesa/callback/', mpesa_webhook.mpesa_callback, name='mpesa_callback'),

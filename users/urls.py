@@ -66,4 +66,5 @@ urlpatterns = [
     path('settings/toggle-contact-info/', views.toggle_show_contact_info, name='toggle_contact_info'),
     path('settings/get/', views.get_user_settings, name='get_user_settings'),
     path('settings/update-notifications/', views.update_notification_settings, name='update_notifications'),
+    path('capture-location/', views.capture_location, name='capture_location'),
 ]

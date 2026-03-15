@@ -134,10 +134,10 @@ class OrderManager:
                 actor=confirming_user
             )
 
-            # Release escrow
-            order.escrow.status = 'released'
-            order.escrow.released_at = timezone.now()
-            order.escrow.save()
+            # Mark escrow ready for admin approval (do not release immediately)
+            if getattr(order, 'escrow', None):
+                order.escrow.ready_for_release = True
+                order.escrow.save()
 
             # Notify sellers
             for item in order.order_items.all():

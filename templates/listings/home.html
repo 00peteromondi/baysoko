@@ -3,6 +3,9 @@
 {% load crispy_forms_tags %}
 {% load humanize %}
 {% load cart_filters %}
+{% if store_markers_json %}
+{{ store_markers_json|json_script:"store_markers_json" }}
+{% endif %}
 
 {% block title %}Home - Baysoko Marketplace{% endblock %}
 
@@ -2008,6 +2011,155 @@
         border-top: 1px solid var(--border-color);
     }
 
+    /* Baysoko Affiliates Section */
+    .affiliate-section {
+        padding: var(--spacing-xxl) 0;
+        background: radial-gradient(circle at top, rgba(255,107,53,0.12), rgba(0,0,0,0)) , var(--bg-secondary);
+    }
+    .affiliate-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: var(--spacing-lg);
+        margin-top: var(--spacing-xl);
+    }
+    .affiliate-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        padding: var(--spacing-lg);
+        box-shadow: var(--shadow-sm);
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+        min-height: 220px;
+        position: relative;
+        overflow: hidden;
+    }
+    .affiliate-card::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(120deg, transparent, rgba(255,107,53,0.08), transparent);
+        opacity: 0;
+        transition: opacity 0.35s ease;
+        pointer-events: none;
+    }
+    .affiliate-card:hover::after {
+        opacity: 1;
+    }
+    .affiliate-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255,107,53,0.16);
+        color: var(--primary);
+        font-size: 1.2rem;
+    }
+    .affiliate-card h3 {
+        font-weight: 700;
+        font-size: 1.2rem;
+        margin-bottom: 0.25rem;
+    }
+    .affiliate-card p {
+        color: var(--text-secondary);
+        margin-bottom: 0;
+    }
+    .affiliate-actions {
+        margin-top: auto;
+        display: flex;
+        gap: var(--spacing-sm);
+        flex-wrap: wrap;
+    }
+
+    /* Stores Nearby */
+    .nearby-grid {
+        display: grid;
+        grid-template-columns: minmax(260px, 1.2fr) minmax(260px, 1fr);
+        gap: var(--spacing-lg);
+        align-items: stretch;
+    }
+    .nearby-grid.map-hidden {
+        grid-template-columns: 1fr;
+    }
+    .nearby-map {
+        min-height: 320px;
+        border-radius: 18px;
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+    }
+    .nearby-map.is-hidden {
+        display: none;
+    }
+    .nearby-list {
+        display: grid;
+        gap: 12px;
+        max-height: 320px;
+        overflow: auto;
+        padding-right: 6px;
+    }
+    .nearby-card {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        padding: 10px;
+        text-decoration: none;
+        color: inherit;
+        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .nearby-card:hover {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    .nearby-card-media img,
+    .nearby-card-fallback {
+        width: 54px;
+        height: 54px;
+        border-radius: 12px;
+        object-fit: cover;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.3rem;
+    }
+    .nearby-card-title {
+        font-weight: 700;
+        font-size: 0.95rem;
+    }
+    .nearby-card-subtitle {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+    .nearby-empty {
+        padding: 16px;
+        background: var(--bg-secondary);
+        border: 1px dashed var(--border-color);
+        border-radius: 14px;
+        text-align: center;
+        color: var(--text-secondary);
+    }
+    @media (max-width: 900px) {
+        .nearby-grid {
+            grid-template-columns: 1fr;
+        }
+        .nearby-map {
+            min-height: 260px;
+        }
+        .nearby-list {
+            max-height: unset;
+        }
+    }
+
     .blog-author-home {
         display: flex;
         align-items: center;
@@ -2455,19 +2607,42 @@
     /* Payment Methods */
     .payment-methods {
         display: flex;
-        flex-wrap: wrap;
-        gap: 1.5rem;
+        flex-direction: column;
+        gap: 0.5rem;
         justify-content: center;
         margin: 2rem 0;
+        padding: 2rem;
+        border-radius: var(--radius-lg);
+        background: linear-gradient(135deg, #0f9b4a 0%, #2ecc71 55%, #1abc9c 100%);
+        color: #fff;
+        text-align: center;
     }
     .payment-icon {
-        font-size: 2.5rem;
-        color: var(--text-secondary);
+        font-size: 3rem;
+        color: #fff;
         transition: var(--transition);
     }
     .payment-icon:hover {
-        color: var(--primary);
-        transform: scale(1.1);
+        color: #fff;
+        transform: translateY(-2px) scale(1.05);
+    }
+    .payment-methods .payment-title {
+        font-size: 1.4rem;
+        font-weight: 800;
+        letter-spacing: 0.2px;
+    }
+    .payment-methods .payment-subtitle {
+        font-size: 0.95rem;
+        opacity: 0.9;
+    }
+    .payment-methods .mpesa-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        background: rgba(0,0,0,0.18);
+        font-weight: 700;
     }
 
     /* Mobile App Banner */
@@ -3001,6 +3176,45 @@
             <button class="scroll-button right" id="storesScrollRight">
                 <i class="bi bi-chevron-right"></i>
             </button>
+        </div>
+    </div>
+</section>
+
+<!-- ===== NEW: STORES NEAR YOU ===== -->
+<section class="container-custom scroll-animate" id="nearbyStoresSection">
+    <div class="section-header">
+        <div>
+            <h2 class="section-title">Stores Near You</h2>
+            <p class="section-subtitle">Discover sellers close to your location</p>
+        </div>
+        <button class="btn btn-outline-primary btn-sm" id="nearbyMapToggle" type="button">
+            <i class="bi bi-map me-1"></i>Show Map
+        </button>
+    </div>
+    <div class="nearby-grid map-hidden" id="nearbyStoresGrid">
+        <div class="nearby-map is-hidden" id="nearbyStoresMap"></div>
+        <div class="nearby-list" id="nearbyStoresList">
+            {% for store in nearby_stores %}
+            <a href="{% url 'storefront:store_detail' store.slug %}" class="nearby-card"
+               data-lat="{{ store.location_latitude }}"
+               data-lng="{{ store.location_longitude }}"
+               data-name="{{ store.name }}"
+               data-location="{{ store.location|default:'' }}">
+                <div class="nearby-card-media">
+                    {% if store.logo %}
+                    <img src="{{ store.logo.url }}" alt="{{ store.name }}">
+                    {% else %}
+                    <div class="nearby-card-fallback"><i class="bi bi-shop"></i></div>
+                    {% endif %}
+                </div>
+                <div class="nearby-card-body">
+                    <div class="nearby-card-title">{{ store.name }}</div>
+                    <div class="nearby-card-subtitle">{{ store.location|default:"Location on map" }}</div>
+                </div>
+            </a>
+            {% empty %}
+            <div class="nearby-empty">No nearby stores yet. Check back soon.</div>
+            {% endfor %}
         </div>
     </div>
 </section>
@@ -3793,10 +4007,12 @@
         <h2 class="section-title">We Accept</h2>
     </div>
     <div class="payment-methods">
-        <i class="bi bi-phone payment-icon" title="M-Pesa"></i>
-        <i class="bi bi-credit-card payment-icon" title="Visa / Mastercard"></i>
-        <i class="bi bi-cash payment-icon" title="Cash on Delivery"></i>
-        <i class="bi bi-bank payment-icon" title="Bank Transfer"></i>
+        <div class="payment-title">We only accept M-Pesa</div>
+        <div class="payment-subtitle">Fast, secure payments with instant confirmation.</div>
+        <div class="mpesa-pill">
+            <i class="bi bi-phone payment-icon" title="M-Pesa"></i>
+            M-Pesa
+        </div>
     </div>
 </section>
 
@@ -3827,6 +4043,39 @@
                 <div class="countdown-item"><span class="countdown-value" id="campaign-seconds">00</span><span class="countdown-label">Secs</span></div>
             </div>
             <a href="{% url 'all-listings' %}?campaign=backtoschool" class="btn-custom btn-primary mt-3">Shop Now</a>
+        </div>
+    </div>
+</section>
+
+<!-- ===== NEW: BAYSOKO AFFILIATES ===== -->
+<section class="affiliate-section scroll-animate">
+    <div class="container-custom">
+        <div class="section-header">
+            <h2 class="section-title">Baysoko Affiliates</h2>
+            <p class="section-subtitle">Earn commissions by referring new buyers and sellers to Baysoko.</p>
+        </div>
+        <div class="affiliate-grid">
+            <div class="affiliate-card">
+                <div class="affiliate-icon"><i class="bi bi-link-45deg"></i></div>
+                <h3>Share your link</h3>
+                <p>Get a personal affiliate link and start earning whenever your referrals complete purchases.</p>
+                <div class="affiliate-actions">
+                    {% if user.is_authenticated %}
+                        <a href="{% url 'affiliates:dashboard' %}" class="btn-custom btn-primary">Open dashboard</a>
+                    {% else %}
+                        <a href="{% url 'login' %}" class="btn-custom btn-primary">Sign in to start</a>
+                    {% endif %}
+                    <a href="{% url 'affiliates:terms' %}" class="btn-custom btn-ghost">Program terms</a>
+                </div>
+            </div>
+            <div class="affiliate-card">
+                <div class="affiliate-icon"><i class="bi bi-graph-up"></i></div>
+                <h3>Track your earnings</h3>
+                <p>Monitor clicks, referrals, and payouts in real time from your affiliate dashboard.</p>
+                <div class="affiliate-actions">
+                    <a href="{% url 'affiliates:commissions' %}" class="btn-custom btn-secondary">View commissions</a>
+                </div>
+            </div>
         </div>
     </div>
 </section>
@@ -4669,6 +4918,135 @@
         // Initialize horizontal scrolling for all sections
         setupHorizontalScroll('categoriesScroll', 'categoriesScrollLeft', 'categoriesScrollRight');
         setupHorizontalScroll('storesScroll', 'storesScrollLeft', 'storesScrollRight');
+
+        // ===== Stores Nearby Map =====
+        const nearbySection = document.getElementById('nearbyStoresSection');
+        const mapEl = document.getElementById('nearbyStoresMap');
+        const nearbyCards = Array.from(document.querySelectorAll('.nearby-card'));
+        const mapToggleBtn = document.getElementById('nearbyMapToggle');
+        const nearbyGrid = document.getElementById('nearbyStoresGrid');
+        let mapLoaded = false;
+
+        function haversineKm(lat1, lng1, lat2, lng2) {
+            const toRad = (deg) => (deg * Math.PI) / 180;
+            const R = 6371;
+            const dLat = toRad(lat2 - lat1);
+            const dLng = toRad(lng2 - lng1);
+            const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        function whenLeafletReady(cb) {
+            if (window.L) return cb();
+            setTimeout(() => whenLeafletReady(cb), 100);
+        }
+
+        function initNearbyStoresMap(userLoc) {
+            if (!mapEl || !window.L) return;
+
+            const storePoints = nearbyCards.map(card => ({
+                card,
+                lat: parseFloat(card.dataset.lat),
+                lng: parseFloat(card.dataset.lng),
+                name: card.dataset.name
+            })).filter(p => !Number.isNaN(p.lat) && !Number.isNaN(p.lng));
+            let markersFallback = [];
+            try {
+                if (storePoints.length === 0 && document.getElementById('store_markers_json')) {
+                    markersFallback = JSON.parse(document.getElementById('store_markers_json').textContent || '[]');
+                }
+            } catch (e) {}
+
+            const center = userLoc || (storePoints[0] ? { lat: storePoints[0].lat, lng: storePoints[0].lng } : { lat: -0.5236, lng: 34.4560 });
+            const map = L.map(mapEl).setView([center.lat, center.lng], userLoc ? 12 : 11);
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                maxZoom: 19,
+                attribution: "&copy; OpenStreetMap contributors"
+            }).addTo(map);
+
+            if (storePoints.length === 0 && markersFallback.length === 0) {
+                setTimeout(() => map.invalidateSize(), 300);
+                return;
+            }
+
+            if (userLoc) {
+                L.marker([userLoc.lat, userLoc.lng]).addTo(map).bindPopup("You");
+                storePoints.forEach(p => {
+                    const distance = haversineKm(userLoc.lat, userLoc.lng, p.lat, p.lng);
+                    const subtitle = p.card.querySelector('.nearby-card-subtitle');
+                    if (subtitle) {
+                        subtitle.textContent = `${p.card.dataset.location || 'Nearby'} • ${distance.toFixed(1)} km away`;
+                    }
+                });
+                storePoints.sort((a, b) => {
+                    const da = haversineKm(userLoc.lat, userLoc.lng, a.lat, a.lng);
+                    const db = haversineKm(userLoc.lat, userLoc.lng, b.lat, b.lng);
+                    return da - db;
+                });
+                const list = document.getElementById('nearbyStoresList');
+                if (list) {
+                    storePoints.forEach(p => list.appendChild(p.card));
+                }
+            }
+
+            storePoints.forEach(p => {
+                L.marker([p.lat, p.lng]).addTo(map).bindPopup(p.name);
+            });
+            if (markersFallback.length) {
+                markersFallback.forEach(s => {
+                    if (s && s.lat != null && s.lng != null) {
+                        L.circleMarker([s.lat, s.lng], {
+                            radius: 5,
+                            color: '#FF9E1F',
+                            weight: 2,
+                            fillColor: '#FF9E1F',
+                            fillOpacity: 0.7
+                        }).addTo(map).bindPopup(`${s.name}<br><small>${s.location || ''}</small>`);
+                    }
+                });
+            }
+            setTimeout(() => map.invalidateSize(), 300);
+        }
+
+        function loadNearbyStoresMap() {
+            if (!mapEl || mapLoaded) return;
+            whenLeafletReady(() => {
+                if (window.BaysokoGeo) {
+                    window.BaysokoGeo.requestCurrentLocation()
+                        .then((loc) => { initNearbyStoresMap({ lat: loc.lat, lng: loc.lng }); mapLoaded = true; })
+                        .catch(() => { initNearbyStoresMap(null); mapLoaded = true; });
+                } else if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => { initNearbyStoresMap({ lat: pos.coords.latitude, lng: pos.coords.longitude }); mapLoaded = true; },
+                        () => { initNearbyStoresMap(null); mapLoaded = true; },
+                        { enableHighAccuracy: true, timeout: 6000 }
+                    );
+                } else {
+                    initNearbyStoresMap(null);
+                    mapLoaded = true;
+                }
+            });
+        }
+
+        if (mapToggleBtn && mapEl && nearbyGrid) {
+            mapToggleBtn.addEventListener('click', () => {
+                const isHidden = mapEl.classList.contains('is-hidden');
+                if (isHidden) {
+                    mapEl.classList.remove('is-hidden');
+                    nearbyGrid.classList.remove('map-hidden');
+                    mapToggleBtn.innerHTML = '<i class="bi bi-eye-slash me-1"></i>Hide Map';
+                    loadNearbyStoresMap();
+                } else {
+                    mapEl.classList.add('is-hidden');
+                    nearbyGrid.classList.add('map-hidden');
+                    mapToggleBtn.innerHTML = '<i class="bi bi-map me-1"></i>Show Map';
+                }
+            });
+        } else {
+            loadNearbyStoresMap();
+        }
         
         {% if not user.is_authenticated %}
         setupHorizontalScroll('stepsScroll', 'stepsScrollLeft', 'stepsScrollRight');

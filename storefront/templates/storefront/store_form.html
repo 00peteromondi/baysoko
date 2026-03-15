@@ -215,6 +215,60 @@
         border-radius: 8px;
     }
 
+    .delivery-map {
+        border-radius: 0.5rem;
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        overflow: hidden;
+    }
+
+    .location-suggestions {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        margin-top: 6px;
+        overflow: hidden;
+        display: none;
+        box-shadow: var(--shadow-sm);
+    }
+    .location-suggestion-item {
+        padding: 8px 10px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .location-suggestion-item:last-child {
+        border-bottom: none;
+    }
+    .location-suggestion-item:hover {
+        background: var(--bg-secondary);
+    }
+    .map-help {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-top: 0.5rem;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        padding: 0.5rem 0.75rem;
+    }
+    .map-help-text {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+    .map-help .btn-ghost {
+        border: 1px solid var(--border-color);
+        background: transparent;
+        color: var(--text-primary);
+        padding: 0.35rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
     /* Featured section */
     .featured-section {
         border-left: 4px solid var(--warning);
@@ -339,15 +393,6 @@
             </div>
         </div>
 
-        {% if messages %}
-            {% for message in messages %}
-            <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show py-1 small" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert"></button>
-            </div>
-            {% endfor %}
-        {% endif %}
-
         <form method="post" enctype="multipart/form-data" id="storeForm" novalidate>
             {% csrf_token %}
             {% if form.non_field_errors %}
@@ -371,6 +416,35 @@
                     <label for="{{ form.description.id_for_label }}" class="form-label required-field">Description</label>
                     {{ form.description|as_crispy_field }}
                     <div class="char-count" id="description-counter">0/2000</div>
+                </div>
+            </div>
+
+            <!-- Location -->
+            <div class="form-section-card">
+                <h3 class="section-title"><i class="bi bi-geo-alt"></i> Location</h3>
+                <div class="form-group">
+                    <label for="{{ form.location.id_for_label }}" class="form-label required-field">Store Location</label>
+                    {{ form.location|as_crispy_field }}
+                    <small class="text-muted">Pick your store location from the map.</small>
+                    {% if form.location.errors %}
+                        <div class="text-danger small mt-1">{{ form.location.errors.0 }}</div>
+                    {% endif %}
+                    {% if form.location_latitude.errors or form.location_longitude.errors or form.location_place_id.errors %}
+                        <div class="text-danger small mt-1">
+                            Please choose a location from the suggestions or map so we can save accurate coordinates.
+                        </div>
+                    {% endif %}
+                    <div class="location-suggestions" id="storeLocationSuggestions"></div>
+                </div>
+                {{ form.location_latitude }}
+                {{ form.location_longitude }}
+                {{ form.location_place_id }}
+                <div class="delivery-map mt-2" id="storeLocationMap" style="height: 220px;"></div>
+                <div class="map-help">
+                    <div class="map-help-text">
+                        Click on the map to drop a pin for your store. Location access helps buyers find you accurately.
+                    </div>
+                    <button type="button" class="btn-ghost use-device-location">Use my location</button>
                 </div>
             </div>
 
@@ -453,24 +527,6 @@
                 {% endif %}
             </div>
 
-            <!-- Payout -->
-            <div class="form-section-card">
-                <h3 class="section-title"><i class="bi bi-wallet2"></i> Payout</h3>
-                <div class="form-group">
-                    <label class="form-label">M‑Pesa Phone</label>
-                    {% if store.payout_verified %}
-                        <input type="text" class="form-control" value="{{ store.payout_phone }}" disabled>
-                        <small class="text-success">Verified</small>
-                    {% else %}
-                        <input type="text" class="form-control" id="payoutPhone" name="payout_phone" value="{{ store.payout_phone|default:'' }}" placeholder="2547XXXXXXXX">
-                        <form method="post" action="{% url 'storefront:start_payout_verification' store.slug %}" class="mt-1">
-                            {% csrf_token %}
-                            <input type="hidden" name="phone" id="verifyPhoneInput">
-                            <button class="btn btn-outline-primary btn-sm w-100" type="submit" onclick="document.getElementById('verifyPhoneInput').value = document.getElementById('payoutPhone').value;">Verify</button>
-                        </form>
-                    {% endif %}
-                </div>
-            </div>
             {% endif %}
 
             <!-- Actions -->
@@ -584,6 +640,156 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-});
-</script>
-{% endblock %}
+
+    // Leaflet + Nominatim for store location
+    const locationInput = document.getElementById("id_location");
+    const latInput = document.getElementById("id_location_latitude");
+    const lngInput = document.getElementById("id_location_longitude");
+    const placeIdInput = document.getElementById("id_location_place_id");
+    const mapEl = document.getElementById("storeLocationMap");
+    const suggestionsEl = document.getElementById("storeLocationSuggestions");
+    let storeMap = null;
+    let storeMarker = null;
+
+    function setStoreLocation(lat, lng, label, placeId) {
+        if (latInput) latInput.value = Number(lat).toFixed(6);
+        if (lngInput) lngInput.value = Number(lng).toFixed(6);
+        if (placeIdInput) placeIdInput.value = placeId || "";
+        if (label && locationInput) locationInput.value = label;
+        if (storeMarker) {
+            storeMarker.setLatLng([lat, lng]);
+            storeMap.setView([lat, lng], 15);
+        }
+    }
+
+    function renderSuggestions(items) {
+        if (!suggestionsEl) return;
+        suggestionsEl.innerHTML = "";
+        if (!items.length) {
+            suggestionsEl.style.display = "none";
+            return;
+        }
+        items.forEach(item => {
+            const row = document.createElement("div");
+            row.className = "location-suggestion-item";
+            row.textContent = item.display_name;
+            row.addEventListener("click", () => {
+                setStoreLocation(item.lat, item.lon, item.display_name, item.place_id);
+                suggestionsEl.style.display = "none";
+            });
+            suggestionsEl.appendChild(row);
+        });
+        suggestionsEl.style.display = "block";
+    }
+
+    function filterHomabay(results) {
+        return (results || []).filter(r => {
+            const name = (r.display_name || '').toLowerCase();
+            return name.includes('homa bay') || name.includes('homabay') || name.includes('ndhiwa');
+        });
+    }
+
+    async function fetchNominatim(query) {
+        const viewbox = '34.0,-0.1,35.2,-1.1';
+        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=ke&viewbox=${viewbox}&bounded=1&q=${encodeURIComponent(query)}`;
+        const res = await fetch(url, { headers: { "Accept": "application/json" } });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return filterHomabay(data);
+    }
+
+    async function fetchReverseGeocode(lat, lng) {
+        try {
+            const url = `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`;
+            const res = await fetch(url, { headers: { "Accept": "application/json" } });
+            if (!res.ok) return null;
+            const data = await res.json();
+            return data || null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function setupAutocomplete() {
+        if (!locationInput || !suggestionsEl) return;
+        let debounce;
+        locationInput.addEventListener("input", () => {
+            const q = locationInput.value.trim();
+            clearTimeout(debounce);
+            if (q.length < 3) {
+                suggestionsEl.style.display = "none";
+                return;
+            }
+            debounce = setTimeout(async () => {
+                const results = await fetchNominatim(q);
+                renderSuggestions(results);
+            }, 300);
+        });
+    }
+
+    function initStoreLocationMap() {
+        if (!mapEl || !window.L) return;
+        const hasCoords = latInput && lngInput && latInput.value && lngInput.value;
+        const initialLat = hasCoords ? parseFloat(latInput.value) : -0.5236;
+        const initialLng = hasCoords ? parseFloat(lngInput.value) : 34.4560;
+
+        storeMap = L.map(mapEl).setView([initialLat, initialLng], hasCoords ? 14 : 10);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: "&copy; OpenStreetMap contributors"
+        }).addTo(storeMap);
+        storeMarker = L.marker([initialLat, initialLng]).addTo(storeMap);
+        setTimeout(() => storeMap.invalidateSize(), 200);
+
+        storeMap.on("click", async (e) => {
+            let label = locationInput?.value || "";
+            let placeId = placeIdInput?.value || "";
+            try {
+                const resolved = await fetchReverseGeocode(e.latlng.lat, e.latlng.lng);
+                if (resolved?.display_name) label = resolved.display_name;
+                if (resolved?.place_id) placeId = String(resolved.place_id);
+            } catch (err) {}
+            setStoreLocation(e.latlng.lat, e.latlng.lng, label, placeId);
+        });
+    }
+
+    setupAutocomplete();
+    const whenLeafletReady = (cb) => {
+        if (window.L) return cb();
+        setTimeout(() => whenLeafletReady(cb), 100);
+    };
+    whenLeafletReady(initStoreLocationMap);
+
+    async function requestDeviceLocationForStore() {
+        if (!window.BaysokoGeo) {
+            showToast('Location services are unavailable in this browser.', 'error');
+            return;
+        }
+        try {
+            const loc = await window.BaysokoGeo.requestCurrentLocation();
+            const label = await window.BaysokoGeo.reverseGeocode(loc.lat, loc.lng);
+            if (label) {
+                setStoreLocation(loc.lat, loc.lng, label, placeIdInput?.value || "");
+                showToast('Using your current location for the store.', 'success');
+            }
+        } catch (err) {
+            showToast('Location access is required to place your store accurately. Please enable it in your browser settings and try again.', 'warning');
+        }
+    }
+
+    // Auto-suggest current location for store if empty
+    if (window.BaysokoGeo && locationInput && (!locationInput.value || !locationInput.value.trim())) {
+        requestDeviceLocationForStore();
+    }
+
+    // Manual trigger for location permission / pinning
+    const locationButtons = Array.from(document.querySelectorAll('.use-device-location'));
+    locationButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            requestDeviceLocationForStore();
+        });
+    });
+  });
+  </script>
+  {% endblock %}

@@ -23,4 +23,6 @@ def get_item(dictionary, key):
     # Try to convert key to string (since cart_items keys are strings)
     key_str = str(key)
     return dictionary.get(key_str)
+
+
     

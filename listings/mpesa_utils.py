@@ -24,6 +24,11 @@ class MpesaGateway:
         self.callback_url = getattr(settings, 'MPESA_CALLBACK_URL', '')
         self.environment = getattr(settings, 'MPESA_ENVIRONMENT', 'sandbox').lower()
         self.max_retries = getattr(settings, 'MPESA_MAX_RETRIES', 3)
+        self.b2c_shortcode = getattr(settings, 'MPESA_B2C_SHORTCODE', '') or self.business_shortcode
+        self.b2c_initiator_name = getattr(settings, 'MPESA_B2C_INITIATOR_NAME', '')
+        self.b2c_security_credential = getattr(settings, 'MPESA_B2C_SECURITY_CREDENTIAL', '')
+        self.b2c_result_url = getattr(settings, 'MPESA_B2C_RESULT_URL', '') or f"{getattr(settings, 'SITE_URL', '').rstrip('/')}/mpesa/b2c/result/"
+        self.b2c_timeout_url = getattr(settings, 'MPESA_B2C_TIMEOUT_URL', '') or f"{getattr(settings, 'SITE_URL', '').rstrip('/')}/mpesa/b2c/timeout/"
         
         # Validate environment setting
         if self.environment not in ['sandbox', 'production']:
@@ -280,6 +285,73 @@ class MpesaGateway:
             'response_description': 'Success. Request accepted for processing [SIMULATION]',
             'environment': self.environment
         }
+
+    def initiate_b2c_payout(self, phone, amount, remarks="Withdrawal", occasion=""):
+        """Initiate a B2C payout to the specified phone number.
+
+        Returns a dict with success status and references. If credentials are missing,
+        returns a simulated success response for development.
+        """
+        phone_number = self._normalize_phone(phone)
+
+        # If missing B2C credentials, simulate (dev-friendly)
+        if not self.has_valid_credentials or not self.b2c_initiator_name or not self.b2c_security_credential:
+            logger.info(f"[{self.environment.upper()}] Simulating M-Pesa B2C payout (missing B2C credentials)")
+            return {
+                'success': True,
+                'simulated': True,
+                'conversation_id': f"B2C-SIM-{int(datetime.now().timestamp())}",
+                'originator_conversation_id': f"ORIG-{int(datetime.now().timestamp())}",
+                'response_description': 'B2C payout simulated'
+            }
+
+        for attempt in range(self.max_retries):
+            try:
+                access_token = self.get_access_token()
+                if not access_token:
+                    return {'success': False, 'error': 'Could not authenticate with M-Pesa API'}
+
+                url = f"{self.base_url}/mpesa/b2c/v1/paymentrequest"
+                payload = {
+                    "InitiatorName": self.b2c_initiator_name,
+                    "SecurityCredential": self.b2c_security_credential,
+                    "CommandID": "BusinessPayment",
+                    "Amount": int(amount),
+                    "PartyA": self.b2c_shortcode,
+                    "PartyB": phone_number,
+                    "Remarks": str(remarks)[:100],
+                    "QueueTimeOutURL": self.b2c_timeout_url,
+                    "ResultURL": self.b2c_result_url,
+                    "Occasion": str(occasion)[:100] if occasion else ""
+                }
+
+                headers = {
+                    'Authorization': f'Bearer {access_token}',
+                    'Content-Type': 'application/json'
+                }
+
+                logger.info(f"[{self.environment.upper()}] Sending B2C payout request for {phone_number} (KSh {amount}) (attempt {attempt + 1})")
+                response = requests.post(url, json=payload, headers=headers, timeout=30, verify=True)
+                response_data = response.json()
+
+                if response.status_code == 200:
+                    return {
+                        'success': True,
+                        'conversation_id': response_data.get('ConversationID'),
+                        'originator_conversation_id': response_data.get('OriginatorConversationID'),
+                        'response_description': response_data.get('ResponseDescription'),
+                        'response_data': response_data
+                    }
+
+                error_msg = response_data.get('errorMessage', response_data)
+                logger.error(f"[{self.environment.upper()}] B2C payout failed: {error_msg}")
+                if attempt < self.max_retries - 1:
+                    continue
+                return {'success': False, 'error': error_msg}
+            except Exception as e:
+                if attempt < self.max_retries - 1:
+                    continue
+                return {'success': False, 'error': str(e)}
     
     def format_phone_number(self, phone_number):
         """Format phone number to 2547XXXXXXXX format (backward compatibility)"""

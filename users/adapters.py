@@ -87,8 +87,10 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
                     user.last_name = name_parts[1]
             if 'email' in extra_data and not user.email:
                 user.email = extra_data.get('email', '')
-            if not user.location:
-                user.location = 'Homabay'
+            if not user.location and request:
+                pending_location = (request.session.get('pending_location') or '').strip()
+                if pending_location:
+                    user.location = pending_location
         
         user.save()
         return user

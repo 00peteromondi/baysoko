@@ -67,22 +67,33 @@ from django.core.exceptions import ValidationError
 class StoreForm(forms.ModelForm):
     class Meta:
         model = Store
-        fields = ['name', 'slug', 'description', 'logo', 'cover_image']
+        fields = [
+            'name', 'slug', 'description', 'location',
+            'location_latitude', 'location_longitude', 'location_place_id',
+            'logo', 'cover_image'
+        ]
         widgets = {
             'description': forms.Textarea(attrs={'rows': 4, 'class': 'form-control'}),
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'slug': forms.TextInput(attrs={'class': 'form-control'}),
+            'location': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Search store location...'}),
+            'location_latitude': forms.HiddenInput(),
+            'location_longitude': forms.HiddenInput(),
+            'location_place_id': forms.HiddenInput(),
         }
     
     def __init__(self, *args, **kwargs):
         # Accept 'user' kwarg and remove it before calling parent
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        
+
         # Make logo and cover_image fields optional for editing
         if self.instance and self.instance.pk:
             self.fields['logo'].required = False
             self.fields['cover_image'].required = False
+            self.fields['location'].required = True
+        else:
+            self.fields['location'].required = True
             
         # Initialize these attributes
         self.can_be_featured = False
@@ -142,11 +153,20 @@ class StoreForm(forms.ModelForm):
     
     def clean(self):
         cleaned_data = super().clean()
-        
+
         # Ensure store owner can't change owner through form
         if self.instance and self.instance.pk and 'owner' in cleaned_data:
             del cleaned_data['owner']
-        
+
+        location = cleaned_data.get('location')
+        lat = cleaned_data.get('location_latitude')
+        lng = cleaned_data.get('location_longitude')
+        place_id = cleaned_data.get('location_place_id')
+        if not location or not str(location).strip():
+            raise ValidationError('Store location is required.')
+        if not (lat and lng and place_id):
+            raise ValidationError('Please select a valid store location from the map suggestions.')
+
         return cleaned_data
     
     def save(self, commit=True):

@@ -9,8 +9,12 @@ class CustomSocialSignupForm(SignupForm):
     first_name = forms.CharField(max_length=30, required=False, label='First Name')
     last_name = forms.CharField(max_length=30, required=False, label='Last Name')
     phone_number = forms.CharField(max_length=15, required=False, label='Phone Number')
-    location = forms.CharField(max_length=100, required=True, label='Location', 
-                              help_text="Your specific area in Homabay, e.g., Ndhiwa, Rodi Kopany")
+    location = forms.CharField(
+        max_length=100,
+        required=False,
+        label='Location',
+        help_text="Your specific area in Homabay, e.g., Ndhiwa, Rodi Kopany"
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -28,6 +32,16 @@ class CustomSocialSignupForm(SignupForm):
                 self._populate_from_facebook(extra_data)
             else:
                 self._populate_generic(extra_data)
+
+        # Pre-fill location from captured device data (if available)
+        try:
+            request = getattr(self, 'request', None)
+            if request:
+                pending_location = (request.session.get('pending_location') or '').strip()
+                if pending_location:
+                    self.fields['location'].initial = pending_location
+        except Exception:
+            pass
 
     def _populate_from_google(self, extra_data):
         """Populate form fields from Google OAuth data"""
@@ -76,7 +90,14 @@ class CustomSocialSignupForm(SignupForm):
         user.first_name = self.cleaned_data.get('first_name', '')
         user.last_name = self.cleaned_data.get('last_name', '')
         user.phone_number = self.cleaned_data.get('phone_number', '')
-        user.location = self.cleaned_data.get('location', 'Homabay')
+        location_value = (self.cleaned_data.get('location') or '').strip()
+        if not location_value:
+            try:
+                location_value = (request.session.get('pending_location') or '').strip()
+            except Exception:
+                location_value = ''
+        if location_value:
+            user.location = location_value
         user.save()
         
         return user

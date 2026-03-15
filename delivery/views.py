@@ -18,7 +18,7 @@ from django.db.models import Count, Sum, Avg, F, DurationField
 from django.db.models.functions import TruncDate
 from django.utils.timezone import make_aware
 from django.contrib import messages
-from django.contrib.auth.views import LoginView as AuthLoginView
+from django.contrib.auth.views import LoginView as AuthLoginView, LogoutView
 from django.contrib.auth import login as auth_login
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,8 @@ from .models import (
 from .forms import (
     DeliveryRequestForm, DeliveryPersonForm, DeliveryServiceForm,
     DeliveryZoneForm, DeliveryProofForm, DeliveryRouteForm,
-    DeliveryRatingForm, DeliveryTimeSlotForm, DeliveryPricingRuleForm
+    DeliveryRatingForm, DeliveryTimeSlotForm, DeliveryPricingRuleForm,
+    DeliveryUserCreationForm, DeliveryProfileForm
 )
 from .utils import calculate_delivery_fee, optimize_route, send_delivery_notification
 from .decorators import delivery_person_required, admin_required, seller_or_delivery_or_admin_required
@@ -131,7 +132,7 @@ def _get_deliveries_for_user(user, request=None):
 # ============================================================================
 
 @require_GET
-@login_required
+@login_required(login_url='delivery:login')
 def quick_stats(request):
     """Return quick stats for sidebar (AJAX)"""
     user = request.user
@@ -158,7 +159,7 @@ def quick_stats(request):
 
 
 @require_GET
-@login_required
+@login_required(login_url='delivery:login')
 def notification_count(request):
     """Return unread notification count (AJAX)"""
     count = DeliveryNotification.objects.filter(
@@ -198,7 +199,6 @@ def become_driver(request):
       username/email already exists, inform the user and attach the DeliveryPerson to that
       existing account.
     """
-    from django.contrib.auth.forms import UserCreationForm
     from django.contrib.auth import get_user_model, login
     User = get_user_model()
 
@@ -223,10 +223,15 @@ def become_driver(request):
                     send_driver_registration_notification(dp)
                 except Exception:
                     pass
+                try:
+                    request.session['delivery_auth'] = True
+                except Exception:
+                    pass
                 return redirect('delivery:driver_dashboard')
+            return render(request, 'delivery/driver_register.html', {'form': form, 'is_authenticated': True})
         else:
             # Anonymous: try to create a new user + delivery person
-            user_form = UserCreationForm(request.POST)
+            user_form = DeliveryUserCreationForm(request.POST)
             dp_form = DeliveryPersonForm(request.POST, request.FILES)
             existing_user = None
 
@@ -257,9 +262,11 @@ def become_driver(request):
                         send_driver_registration_notification(dp)
                     except Exception:
                         pass
-                    # Show a friendly info message if messages framework available
-                    messages.info(request, 'An existing Baysoko account was found; the driver profile has been attached to that account.')
-                    return redirect('delivery:driver_dashboard')
+                    # Inform and ask user to sign in
+                    messages.info(request, 'An existing Baysoko account was found and your driver profile was attached. Please sign in to continue.')
+                    login_url = reverse_lazy('delivery:login')
+                    next_url = reverse_lazy('delivery:driver_dashboard')
+                    return redirect(f"{login_url}?next={next_url}")
                 else:
                     # Render forms with errors
                     return render(request, 'delivery/driver_register.html', {'user_form': user_form, 'form': dp_form})
@@ -281,6 +288,10 @@ def become_driver(request):
                     pass
                 # Auto-login the new user
                 login(request, new_user)
+                try:
+                    request.session['delivery_auth'] = True
+                except Exception:
+                    pass
                 return redirect('delivery:driver_dashboard')
             else:
                 return render(request, 'delivery/driver_register.html', {'user_form': user_form, 'form': dp_form})
@@ -293,11 +304,16 @@ def become_driver(request):
             form = DeliveryPersonForm(initial=initial)
             return render(request, 'delivery/driver_register.html', {'form': form, 'is_authenticated': True})
         else:
-            user_form = UserCreationForm()
+            user_form = DeliveryUserCreationForm()
             import uuid
             initial = {'employee_id': f"D-{str(uuid.uuid4())[:8].upper()}"}
             form = DeliveryPersonForm(initial=initial)
             return render(request, 'delivery/driver_register.html', {'user_form': user_form, 'form': form, 'is_authenticated': False})
+
+
+def delivery_home(request):
+    """Landing page for the delivery app (unauthenticated)."""
+    return render(request, 'delivery/home.html')
 
 
 @require_GET
@@ -576,20 +592,16 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
     def dispatch(self, request, *args, **kwargs):
         user = request.user
-        # Allow admins and delivery persons
-        if user.is_staff or user.is_superuser or hasattr(user, 'delivery_person'):
-            return super().dispatch(request, *args, **kwargs)
-
-        # Allow only users who own at least one store
-        try:
-            from storefront.models import Store
-            if not Store.objects.filter(owner=user).exists():
-                messages.warning(request, 'Delivery system is for sellers and delivery personnel only.')
-                return redirect('order_list')
-        except Exception:
-            messages.warning(request, 'Delivery system is for sellers and delivery personnel only.')
-            return redirect('order_list')
-
+        if user.is_authenticated:
+            is_privileged = user.is_staff or user.is_superuser or hasattr(user, 'delivery_person')
+            if not is_privileged:
+                try:
+                    from storefront.models import Store
+                    if not Store.objects.filter(owner=user).exists():
+                        messages.info(request, 'Access to the delivery dashboard is limited. You can track deliveries from the delivery home page.')
+                        return redirect('delivery:home')
+                except Exception:
+                    return redirect('delivery:home')
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -654,6 +666,46 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             context['stores'] = []
             context['selected_store_id'] = None
 
+        # Nearest drivers panel (seller-only)
+        context['nearest_drivers'] = []
+        try:
+            if not (user.is_staff or user.is_superuser) and not hasattr(user, 'delivery_person'):
+                store_with_coords = Store.objects.filter(
+                    owner=user,
+                    location_latitude__isnull=False,
+                    location_longitude__isnull=False
+                ).first()
+                if store_with_coords:
+                    base_lat = float(store_with_coords.location_latitude)
+                    base_lng = float(store_with_coords.location_longitude)
+                    drivers = DeliveryPerson.objects.filter(
+                        is_available=True,
+                        current_latitude__isnull=False,
+                        current_longitude__isnull=False
+                    )
+                    def _haversine(lat1, lng1, lat2, lng2):
+                        from math import radians, sin, cos, sqrt, atan2
+                        R = 6371
+                        dlat = radians(lat2 - lat1)
+                        dlon = radians(lng2 - lng1)
+                        a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
+                        c = 2 * atan2(sqrt(a), sqrt(1 - a))
+                        return R * c
+                    ranked = []
+                    for d in drivers:
+                        dist = _haversine(base_lat, base_lng, float(d.current_latitude), float(d.current_longitude))
+                        ranked.append({
+                            'name': d.user.get_full_name() or d.user.username,
+                            'vehicle': d.get_vehicle_type_display(),
+                            'rating': d.rating,
+                            'distance_km': round(dist, 1),
+                        })
+                    ranked.sort(key=lambda x: x['distance_km'])
+                    context['nearest_drivers'] = ranked[:6]
+                    context['nearest_drivers_store'] = store_with_coords
+        except Exception:
+            context['nearest_drivers'] = []
+
         # Delivery person statistics
         if hasattr(user, 'delivery_person'):
             context['is_delivery_person'] = True
@@ -705,7 +757,24 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 class DeliveryLoginView(AuthLoginView):
     """Login view for delivery app that redirects to delivery dashboard by default."""
     template_name = 'delivery/login.html'
-    redirect_authenticated_user = True
+    redirect_authenticated_user = False
+
+    def dispatch(self, request, *args, **kwargs):
+        try:
+            if request.method == 'GET':
+                # Mark intent without forcing a logout (prevents session interruption during concurrent requests)
+                request.session['delivery_login_intent'] = True
+        except Exception:
+            pass
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        try:
+            self.request.session['delivery_auth'] = True
+        except Exception:
+            pass
+        return response
 
     def get_success_url(self):
         # Respect explicit next parameter when present
@@ -721,22 +790,100 @@ def delivery_register(request):
     Creates a Django `User`, logs them in and sends them to the delivery dashboard.
     This allows users who are not part of the main Baysoko app to manage standalone deliveries.
     """
-    from django.contrib.auth.forms import UserCreationForm
-
+    if request.method == 'GET':
+        # Mark intent without forcing a logout (prevents session interruption during concurrent requests)
+        try:
+            request.session['delivery_login_intent'] = True
+        except Exception:
+            pass
     if request.method == 'POST':
-        form = UserCreationForm(request.POST)
+        form = DeliveryUserCreationForm(request.POST)
         if form.is_valid():
             user = form.save()
             try:
                 auth_login(request, user)
+                request.session['delivery_auth'] = True
+                request.session.pop('delivery_login_intent', None)
             except Exception:
                 pass
             messages.success(request, 'Account created. You are now logged in.')
             return redirect('delivery:dashboard')
     else:
-        form = UserCreationForm()
+        form = DeliveryUserCreationForm()
 
     return render(request, 'delivery/register.html', {'form': form})
+
+
+class DeliveryLogoutView(LogoutView):
+    """Logout delivery users and clear delivery session flag."""
+    next_page = 'delivery:home'
+
+    def dispatch(self, request, *args, **kwargs):
+        try:
+            if 'delivery_auth' in request.session:
+                del request.session['delivery_auth']
+            if 'delivery_login_intent' in request.session:
+                del request.session['delivery_login_intent']
+        except Exception:
+            pass
+        return super().dispatch(request, *args, **kwargs)
+
+
+@login_required
+def delivery_profile_complete(request):
+    """Complete delivery app profile for non-driver users."""
+    user = request.user
+    if hasattr(user, 'delivery_person'):
+        return redirect('delivery:dashboard')
+
+    profile = getattr(user, 'delivery_profile', None)
+    if request.method == 'POST':
+        form = DeliveryProfileForm(request.POST, instance=profile)
+        if form.is_valid():
+            delivery_profile = form.save(commit=False)
+            delivery_profile.user = user
+            delivery_profile.save()
+            try:
+                if delivery_profile.phone_number and not getattr(user, 'phone_number', None):
+                    user.phone_number = delivery_profile.phone_number
+                    user.save(update_fields=['phone_number'])
+            except Exception:
+                pass
+            messages.success(request, 'Delivery profile updated.')
+            return redirect('delivery:dashboard')
+    else:
+        initial = {}
+        try:
+            if not profile:
+                if getattr(user, 'phone_number', None):
+                    initial['phone_number'] = user.phone_number
+                if getattr(user, 'location', None):
+                    initial['city'] = user.location
+        except Exception:
+            pass
+        form = DeliveryProfileForm(instance=profile, initial=initial)
+
+    # Pre-fill missing fields from social account data when available
+    try:
+        if not profile:
+            from allauth.socialaccount.models import SocialAccount
+            sa = SocialAccount.objects.filter(user=user).order_by('-last_login', '-date_joined', '-id').first()
+            if sa and isinstance(sa.extra_data, dict):
+                extra = sa.extra_data
+                if not getattr(user, 'first_name', '') and extra.get('given_name'):
+                    user.first_name = extra.get('given_name')
+                if not getattr(user, 'last_name', '') and extra.get('family_name'):
+                    user.last_name = extra.get('family_name')
+                if not getattr(user, 'email', '') and extra.get('email'):
+                    user.email = extra.get('email')
+                try:
+                    user.save(update_fields=['first_name', 'last_name', 'email'])
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    return render(request, 'delivery/profile_complete.html', {'form': form})
 
 def get_filtered_deliveries(user, request=None):
     """Module helper that delegates to _get_deliveries_for_user for external callers."""
@@ -1169,6 +1316,27 @@ class CreateDeliveryView(LoginRequiredMixin, CreateView):
         context['delivery_services'] = DeliveryService.objects.filter(is_active=True)
         context['delivery_zones'] = DeliveryZone.objects.filter(is_active=True)
 
+        # Nearby drivers (for seller assistance in picking closest driver)
+        try:
+            drivers_qs = DeliveryPerson.objects.filter(
+                is_available=True,
+                current_latitude__isnull=False,
+                current_longitude__isnull=False
+            )
+            context['nearby_drivers'] = [
+                {
+                    'id': d.id,
+                    'name': d.user.get_full_name() or d.user.username,
+                    'lat': float(d.current_latitude),
+                    'lng': float(d.current_longitude),
+                    'rating': float(d.rating or 0),
+                    'vehicle': d.get_vehicle_type_display(),
+                    'status': d.current_status,
+                } for d in drivers_qs
+            ]
+        except Exception:
+            context['nearby_drivers'] = []
+
         # Add API URLs for AJAX calls
         context['get_user_orders_url'] = reverse_lazy('delivery:get_user_orders')
         context['get_order_details_url'] = reverse_lazy('delivery:order_details')
@@ -1187,8 +1355,10 @@ class CreateDeliveryView(LoginRequiredMixin, CreateView):
             if default_store:
                 initial.update({
                     'pickup_name': default_store.name,
-                    'pickup_address': default_store.address if hasattr(default_store, 'address') else '',
-                    'pickup_phone': default_store.phone if hasattr(default_store, 'phone') else '',
+                    'pickup_address': default_store.location or '',
+                    'pickup_phone': default_store.payout_phone or getattr(user, 'phone_number', ''),
+                    'pickup_latitude': default_store.location_latitude,
+                    'pickup_longitude': default_store.location_longitude,
                     'pickup_email': user.email,
                 })
         except Exception:
@@ -1212,11 +1382,17 @@ class CreateDeliveryView(LoginRequiredMixin, CreateView):
         form.instance.tracking_number = f"DLV{timestamp}{unique_id}"
 
         # Calculate delivery fee
+        try:
+            distance_km = float(self.request.POST.get('distance_km') or 0) or None
+        except Exception:
+            distance_km = None
         delivery_fee = calculate_delivery_fee(
             weight=form.cleaned_data['package_weight'],
-            distance=None,
+            distance=distance_km,
             service_type=form.cleaned_data.get('delivery_service'),
-            zone=form.cleaned_data.get('delivery_zone')
+            zone=form.cleaned_data.get('delivery_zone'),
+            pickup_address=form.cleaned_data.get('pickup_address'),
+            recipient_address=form.cleaned_data.get('recipient_address')
         )
         form.instance.delivery_fee = delivery_fee
         form.instance.total_amount = delivery_fee
@@ -1227,6 +1403,8 @@ class CreateDeliveryView(LoginRequiredMixin, CreateView):
             'created_via': 'manual_form',
             'user_id': self.request.user.id,
         }
+        if distance_km:
+            form.instance.metadata['distance_km'] = distance_km
 
         # Attach store_id if available
         if self.request.POST.get('store_id'):
@@ -1239,6 +1417,12 @@ class CreateDeliveryView(LoginRequiredMixin, CreateView):
                     form.instance.metadata['store_id'] = user_stores.first().id
             except Exception:
                 pass
+
+        # External delivery payment requirement (non-marketplace)
+        if not form.instance.order_id and not getattr(self.request, 'is_seller', False):
+            form.instance.payment_status = 'pending'
+            form.instance.metadata['external_delivery'] = True
+            form.instance.metadata['requires_payment'] = True
 
         # Save the form
         response = super().form_valid(form)
@@ -1264,6 +1448,9 @@ class CreateDeliveryView(LoginRequiredMixin, CreateView):
         except Exception as e:
             logger.error(f"Error sending notification: {e}")
 
+        if isinstance(self.object.metadata, dict) and self.object.metadata.get('external_delivery') and self.object.payment_status != 'paid':
+            messages.warning(self.request, f"Delivery created. Payment of KSh {self.object.total_amount} is required before dispatch.")
+
         return response
 
 
@@ -1282,6 +1469,11 @@ class UpdateDeliveryStatusView(LoginRequiredMixin, UpdateView):
         self.object = self.get_object()
         old_status = self.object.status
         new_status = form.cleaned_data['status']
+
+        if isinstance(self.object.metadata, dict) and self.object.metadata.get('external_delivery'):
+            if self.object.payment_status != 'paid' and new_status not in ['pending', 'accepted', 'cancelled']:
+                messages.error(self.request, "Payment required before dispatching this delivery.")
+                return redirect(self.get_success_url())
 
         # Validate status transition
         valid_transitions = self.get_valid_transitions(old_status)
@@ -1605,12 +1797,64 @@ def track_delivery(request, tracking_number):
             except Exception:
                 pass
 
+    # Pull order items (role-based visibility)
+    order = None
+    visible_items = []
+    total_qty = 0
+    try:
+        if delivery.order_id:
+            oid = int(str(delivery.order_id).split('_')[-1])
+            order = Order.objects.filter(id=oid).first()
+    except Exception:
+        order = None
+
+    if order and request.user.is_authenticated:
+        items_qs = order.order_items.select_related('listing', 'listing__seller')
+        if request.user.is_staff or request.user.is_superuser:
+            visible_items = list(items_qs)
+        elif getattr(order, 'user', None) == request.user:
+            visible_items = list(items_qs)
+        else:
+            # seller view: only their items
+            visible_items = list(items_qs.filter(listing__seller=request.user))
+        try:
+            total_qty = sum(int(i.quantity or 0) for i in visible_items)
+        except Exception:
+            total_qty = 0
+
+    # Store markers for map (only stores with valid coordinates)
+    store_markers = []
+    try:
+        from storefront.models import Store
+        stores_qs = Store.objects.filter(
+            is_active=True,
+            location_latitude__isnull=False,
+            location_longitude__isnull=False
+        ).exclude(location_latitude='', location_longitude='')[:200]
+        for s in stores_qs:
+            try:
+                store_markers.append({
+                    'name': s.name,
+                    'location': s.location,
+                    'slug': s.slug,
+                    'lat': float(s.location_latitude),
+                    'lng': float(s.location_longitude),
+                })
+            except Exception:
+                continue
+    except Exception:
+        store_markers = []
+
     context = {
         'delivery': delivery,
         'status_history': status_history,
         'estimated_time': estimated_time,
         'show_details': True,  # Public can see basic info
         'can_confirm': can_confirm,
+        'order': order,
+        'order_items': visible_items,
+        'order_items_total_qty': total_qty,
+        'store_markers_json': json.dumps(store_markers),
     }
 
     return render(request, 'delivery/tracking.html', context)
@@ -2241,36 +2485,51 @@ def get_order_details(request, order_id):
         # Check permission
         user = request.user
         if not (user.is_staff or user.is_superuser):
+            if order.user_id == user.id:
+                pass
+            else:
             # Check if user owns a store that sold items in this order
-            try:
-                from storefront.models import Store
-                stores = Store.objects.filter(owner=user)
-                if not stores.exists():
+                try:
+                    from storefront.models import Store
+                    stores = Store.objects.filter(owner=user)
+                    if not stores.exists():
+                        return JsonResponse({'error': 'Access denied'}, status=403)
+
+                    # Check if order contains items from user's stores
+                    order_has_user_items = False
+                    for item in order.order_items.all():
+                        if hasattr(item.listing, 'store') and item.listing.store in stores:
+                            order_has_user_items = True
+                            break
+                        elif hasattr(item, 'product') and hasattr(item.product, 'store') and item.product.store in stores:
+                            order_has_user_items = True
+                            break
+
+                    if not order_has_user_items:
+                        return JsonResponse({'error': 'Access denied'}, status=403)
+                except Exception as e:
+                    logger.error(f"Permission check error: {e}")
                     return JsonResponse({'error': 'Access denied'}, status=403)
 
-                # Check if order contains items from user's stores
-                order_has_user_items = False
-                for item in order.order_items.all():
-                    if hasattr(item.listing, 'store') and item.listing.store in stores:
-                        order_has_user_items = True
-                        break
-                    elif hasattr(item, 'product') and hasattr(item.product, 'store') and item.product.store in stores:
-                        order_has_user_items = True
-                        break
-
-                if not order_has_user_items:
-                    return JsonResponse({'error': 'Access denied'}, status=403)
-            except Exception as e:
-                logger.error(f"Permission check error: {e}")
-                return JsonResponse({'error': 'Access denied'}, status=403)
-
-        # Calculate package weight
+        # Calculate package weight (seller-scoped if not admin)
         package_weight = 0.0
         package_items = []
+        seller_store_ids = set()
+        if not (user.is_staff or user.is_superuser):
+            try:
+                seller_store_ids = set(Store.objects.filter(owner=user).values_list('id', flat=True))
+            except Exception:
+                seller_store_ids = set()
 
         try:
             # Try order_items first
             for item in order.order_items.all():
+                if seller_store_ids:
+                    try:
+                        if hasattr(item.listing, 'store') and item.listing.store_id not in seller_store_ids and item.listing.seller_id != user.id:
+                            continue
+                    except Exception:
+                        pass
                 try:
                     weight = getattr(item.listing, 'weight', 1.0)
                     if weight:
@@ -2289,6 +2548,12 @@ def get_order_details(request, order_id):
                 cart_items = CartItem.objects.filter(order=order)
                 for item in cart_items:
                     try:
+                        if seller_store_ids:
+                            try:
+                                if hasattr(item.product, 'store') and item.product.store_id not in seller_store_ids:
+                                    continue
+                            except Exception:
+                                pass
                         weight = getattr(item.product, 'weight', 1.0)
                         item_weight = float(weight) * item.quantity
                         package_weight += item_weight
@@ -2303,6 +2568,21 @@ def get_order_details(request, order_id):
                 package_weight = 1.0
 
         # Prepare response data
+        pickup_name = ''
+        pickup_address = ''
+        pickup_lat = None
+        pickup_lng = None
+        try:
+            first_item = order.order_items.select_related('listing__store').first()
+            if first_item and first_item.listing and first_item.listing.store:
+                store = first_item.listing.store
+                pickup_name = store.name
+                pickup_address = store.location or ''
+                pickup_lat = float(store.location_latitude) if store.location_latitude else None
+                pickup_lng = float(store.location_longitude) if store.location_longitude else None
+        except Exception:
+            pass
+
         data = {
             'success': True,
             'order': {
@@ -2318,6 +2598,9 @@ def get_order_details(request, order_id):
                 'email': order.email or (order.user.email if order.user else ''),
                 'phone': order.phone_number or '',
                 'shipping_address': order.shipping_address or '',
+                'shipping_latitude': float(order.shipping_latitude) if order.shipping_latitude else None,
+                'shipping_longitude': float(order.shipping_longitude) if order.shipping_longitude else None,
+                'shipping_place_id': order.shipping_place_id or '',
                 'city': getattr(order, 'city', ''),
                 'state': getattr(order, 'state', ''),
                 'zip_code': getattr(order, 'zip_code', ''),
@@ -2329,8 +2612,10 @@ def get_order_details(request, order_id):
                 'total_value': float(order.total_price) if order.total_price else 0.0,
             },
             'pickup': {
-                'name': getattr(order, 'store_name', ''),
-                'address': getattr(order, 'store_address', ''),
+                'name': pickup_name or getattr(order, 'store_name', ''),
+                'address': pickup_address or getattr(order, 'store_address', ''),
+                'pickup_latitude': pickup_lat,
+                'pickup_longitude': pickup_lng,
             }
         }
 
@@ -2352,6 +2637,8 @@ def calculate_delivery_fee_api(request):
         service_id = data.get('service_id')
         zone_id = data.get('zone_id')
         distance = data.get('distance')
+        pickup_address = data.get('pickup_address')
+        recipient_address = data.get('recipient_address')
 
         service = None
         zone = None
@@ -2365,7 +2652,9 @@ def calculate_delivery_fee_api(request):
             weight=weight,
             service_type=service,
             zone=zone,
-            distance=distance
+            distance=distance,
+            pickup_address=pickup_address,
+            recipient_address=recipient_address
         )
 
         return JsonResponse({
@@ -2434,6 +2723,27 @@ def get_user_orders(request):
         ).order_by('-created_at')[:100]
 
         for order in pending_orders:
+            seller_items_qs = None
+            if not (user.is_staff or user.is_superuser):
+                try:
+                    from storefront.models import Store
+                    stores = Store.objects.filter(owner=user)
+                    if stores.exists():
+                        seller_items_qs = order.order_items.filter(
+                            Q(listing__store__in=stores) |
+                            Q(listing__seller=user)
+                        )
+                except Exception:
+                    seller_items_qs = None
+
+            if seller_items_qs is not None:
+                item_count = seller_items_qs.count()
+                seller_total = sum((i.price or 0) * (i.quantity or 0) for i in seller_items_qs)
+                total_amount = float(seller_total)
+            else:
+                item_count = order.order_items.count() if hasattr(order, 'order_items') else 0
+                total_amount = float(order.total_price) if order.total_price else 0.0
+
             orders.append({
                 'id': order.id,
                 'order_number': getattr(order, 'order_number', f"#{order.id}"),
@@ -2441,8 +2751,8 @@ def get_user_orders(request):
                                (order.user.get_full_name() if order.user else 'Anonymous'),
                 'customer_email': order.email or (order.user.email if order.user else ''),
                 'created_at': order.created_at.strftime('%Y-%m-%d %H:%M'),
-                'total_amount': float(order.total_price) if order.total_price else 0.0,
-                'item_count': order.order_items.count() if hasattr(order, 'order_items') else 0,
+                'total_amount': total_amount,
+                'item_count': item_count,
                 'status': getattr(order, 'status', 'pending'),
                 'shipping_address': order.shipping_address or '',
             })

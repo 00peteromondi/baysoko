@@ -31,6 +31,7 @@ urlpatterns = [
     path('cart/summary/', views.cart_summary, name='cart_summary'),
     path('listings/json/', views.all_listings_json, name='all_listings_json'),
     path('checkout/', views.checkout, name='checkout'),
+    path('checkout/delivery-fee/', views.checkout_delivery_fee, name='checkout_delivery_fee'),
     path('order/<int:order_id>/payment/', views.process_payment, name='process_payment'),
     path('orders/<int:order_id>/initiate-mpesa/', views.initiate_mpesa_payment, name='initiate_mpesa_payment'),
     path('order/<int:order_id>/check-payment-status/', views.check_payment_status, name='check_payment_status'),

@@ -1,59 +1,84 @@
-{% extends 'base.html' %}
-{% block content %}
-<h1>Seller Delivery Dashboard</h1>
+{% extends 'delivery/base.html' %}
+{% block title %}Seller Delivery Dashboard{% endblock %}
 
-<div>
-  <form method="get" class="inline-filters">
-    <input type="text" name="search" placeholder="Search deliveries" value="{{ search }}" />
-    <select name="status">
-      <option value="">All statuses</option>
-      {% for code,label in status_choices %}
-        <option value="{{ code }}" {% if filter_status==code %}selected{% endif %}>{{ label }}</option>
-      {% endfor %}
-    </select>
-    <button type="submit">Filter</button>
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Seller Delivery Dashboard</h1>
+    <p class="page-subtitle">Track and manage deliveries for your store orders.</p>
+  </div>
+</div>
+
+<div class="delivery-card mb-4">
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-md-5">
+      <label class="form-label">Search</label>
+      <input type="text" name="search" class="form-control" placeholder="Search deliveries" value="{{ search }}" />
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Status</label>
+      <select name="status" class="form-select">
+        <option value="">All statuses</option>
+        {% for code,label in status_choices %}
+          <option value="{{ code }}" {% if filter_status==code %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3 d-flex gap-2">
+      <button type="submit" class="btn btn-delivery w-100">Filter</button>
+      <a href="{% url 'delivery:seller_dashboard' %}" class="btn btn-delivery-outline w-100">Reset</a>
+    </div>
   </form>
 </div>
 
-<table class="table">
-  <thead>
-    <tr>
-      <th>Tracking</th>
-      <th>Order ID</th>
-      <th>Status</th>
-      <th>Recipient</th>
-      <th>Delivery Fee</th>
-      <th>Created</th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for d in deliveries %}
-      <tr>
-        <td>{{ d.tracking_number }}</td>
-        <td>{{ d.order_id }}</td>
-        <td>{{ d.get_status_display }}</td>
-        <td>{{ d.recipient_name }}<br>{{ d.recipient_phone }}</td>
-        <td>{{ d.delivery_fee }}</td>
-        <td>{{ d.created_at|date:"Y-m-d H:i" }}</td>
-        <td><a href="{% url 'delivery:delivery_detail' d.pk %}">View</a></td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="7">No deliveries found for your stores.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="delivery-card">
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Tracking</th>
+          <th>Order ID</th>
+          <th>Status</th>
+          <th>Recipient</th>
+          <th>Delivery Fee</th>
+          <th>Created</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in deliveries %}
+          <tr>
+            <td class="fw-semibold">{{ d.tracking_number }}</td>
+            <td>#{{ d.order_id }}</td>
+            <td><span class="status-badge status-{{ d.status }}">{{ d.get_status_display }}</span></td>
+            <td>{{ d.recipient_name }}<br><small class="text-muted">{{ d.recipient_phone }}</small></td>
+            <td>KSh {{ d.delivery_fee|floatformat:2 }}</td>
+            <td>{{ d.created_at|date:"Y-m-d H:i" }}</td>
+            <td><a href="{% url 'delivery:delivery_detail' d.pk %}" class="btn btn-delivery-outline btn-sm">View</a></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7" class="text-center text-muted py-4">No deliveries found for your stores.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 
 {% if is_paginated %}
-  <div class="pagination">
-    {% if page_obj.has_previous %}
-      <a href="?page={{ page_obj.previous_page_number }}">Previous</a>
-    {% endif %}
-    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-    {% if page_obj.has_next %}
-      <a href="?page={{ page_obj.next_page_number }}">Next</a>
-    {% endif %}
-  </div>
+  <nav class="mt-4">
+    <ul class="pagination justify-content-center">
+      {% if page_obj.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+        </li>
+      {% endif %}
+      <li class="page-item active"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+      {% if page_obj.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+        </li>
+      {% endif %}
+    </ul>
+  </nav>
 {% endif %}
-
 {% endblock %}

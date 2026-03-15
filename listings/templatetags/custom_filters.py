@@ -37,7 +37,7 @@ def mod(value, arg):
     """Returns the modulo of value and arg"""
     return value % arg
 
-@register.filter
+@register.filter(name='sub')
 def sub(value, arg):
     """Subtract arg from value"""
     return value - arg

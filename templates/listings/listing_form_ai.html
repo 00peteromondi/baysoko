@@ -786,6 +786,17 @@ function generateWithAI() {
     const title = document.getElementById('{{ form.title.id_for_label }}').value;
     const description = document.getElementById('{{ form.description.id_for_label }}').value;
     const category = document.getElementById('{{ form.category.id_for_label }}').value;
+    const priceEl = document.getElementById('{% if form.price %}{{ form.price.id_for_label }}{% else %}{% endif %}');
+    const conditionEl = document.getElementById('{% if form.condition %}{{ form.condition.id_for_label }}{% else %}{% endif %}');
+    const locationEl = document.getElementById('{% if form.location %}{{ form.location.id_for_label }}{% else %}{% endif %}');
+    const deliveryEl = document.getElementById('{% if form.delivery_option %}{{ form.delivery_option.id_for_label }}{% else %}{% endif %}');
+    const brandEl = document.getElementById('{% if form.brand %}{{ form.brand.id_for_label }}{% else %}{% endif %}');
+    const modelEl = document.getElementById('{% if form.model %}{{ form.model.id_for_label }}{% else %}{% endif %}');
+    const dimensionsEl = document.getElementById('{% if form.dimensions %}{{ form.dimensions.id_for_label }}{% else %}{% endif %}');
+    const weightEl = document.getElementById('{% if form.weight %}{{ form.weight.id_for_label }}{% else %}{% endif %}');
+    const colorEl = document.getElementById('{% if form.color %}{{ form.color.id_for_label }}{% else %}{% endif %}');
+    const materialEl = document.getElementById('{% if form.material %}{{ form.material.id_for_label }}{% else %}{% endif %}');
+    const metaEl = document.getElementById('{% if form.meta_description %}{{ form.meta_description.id_for_label }}{% else %}{% endif %}');
     
     if (!title.trim()) {
         alert('Please enter a title for AI to work with.');
@@ -807,7 +818,18 @@ function generateWithAI() {
         body: JSON.stringify({
             title: title,
             description: description,
-            category: category
+            category: category,
+            price: priceEl ? priceEl.value : '',
+            condition: conditionEl ? conditionEl.value : '',
+            location: locationEl ? locationEl.value : '',
+            delivery_option: deliveryEl ? deliveryEl.value : '',
+            brand: brandEl ? brandEl.value : '',
+            model: modelEl ? modelEl.value : '',
+            dimensions: dimensionsEl ? dimensionsEl.value : '',
+            weight: weightEl ? weightEl.value : '',
+            color: colorEl ? colorEl.value : '',
+            material: materialEl ? materialEl.value : '',
+            meta_description: metaEl ? metaEl.value : ''
         })
     })
     .then(response => response.json())
@@ -839,6 +861,12 @@ function generateWithAI() {
 function applyAISuggestions(suggestions) {
     // Apply suggestions to empty or minimal fields
     const fields = {
+        'title': { minLength: 5, maxLength: null },
+        'category': { minLength: 0, maxLength: null },
+        'price': { minLength: 0, maxLength: null },
+        'condition': { minLength: 0, maxLength: null },
+        'location': { minLength: 0, maxLength: null },
+        'delivery_option': { minLength: 0, maxLength: null },
         'description': { minLength: 50, maxLength: null },
         'brand': { minLength: 0, maxLength: null },
         'model': { minLength: 0, maxLength: null },
@@ -851,6 +879,12 @@ function applyAISuggestions(suggestions) {
     
     // Map of form field names to their rendered element IDs (safe for template rendering)
     const fieldIds = {
+        'title': '{{ form.title.id_for_label }}',
+        'category': '{{ form.category.id_for_label }}',
+        'price': '{% if form.price %}{{ form.price.id_for_label }}{% else %}{% endif %}',
+        'condition': '{% if form.condition %}{{ form.condition.id_for_label }}{% else %}{% endif %}',
+        'location': '{% if form.location %}{{ form.location.id_for_label }}{% else %}{% endif %}',
+        'delivery_option': '{% if form.delivery_option %}{{ form.delivery_option.id_for_label }}{% else %}{% endif %}',
         'description': '{{ form.description.id_for_label }}',
         'brand': '{% if form.brand %}{{ form.brand.id_for_label }}{% else %}{% endif %}',
         'model': '{% if form.model %}{{ form.model.id_for_label }}{% else %}{% endif %}',
@@ -861,6 +895,14 @@ function applyAISuggestions(suggestions) {
         'meta_description': '{% if form.meta_description %}{{ form.meta_description.id_for_label }}{% else %}{% endif %}'
     };
 
+    function shouldApplySelect(el) {
+        if (!el) return false;
+        const val = String(el.value || '').trim();
+        if (!val) return true;
+        if (el.selectedIndex === 0) return true;
+        return false;
+    }
+
     for (const [field, config] of Object.entries(fields)) {
         const elementId = fieldIds[field];
         if (!elementId) continue;
@@ -870,34 +912,46 @@ function applyAISuggestions(suggestions) {
             const suggestion = suggestions[field].toString().trim();
 
             // Apply suggestion if field is empty or below min length
-            if (!currentValue || 
+            if (
+                (!currentValue && element.tagName !== 'SELECT') ||
                 (config.minLength && currentValue.length < config.minLength) ||
-                (field === 'meta_description' && !currentValue)) {
-                element.value = suggestion;
+                (field === 'meta_description' && !currentValue) ||
+                (element.tagName === 'SELECT' && shouldApplySelect(element))
+            ) {
+                if (element.tagName === 'SELECT') {
+                    const opt = Array.from(element.options).find(o => o.value === suggestion);
+                    if (opt) {
+                        element.value = suggestion;
+                    } else {
+                        const optByText = Array.from(element.options).find(o => o.textContent.trim().toLowerCase() === suggestion.toLowerCase());
+                        if (optByText) element.value = optByText.value;
+                    }
+                } else {
+                    element.value = suggestion;
+                }
 
                 // Trigger change event for character counters
                 element.dispatchEvent(new Event('input'));
             }
         }
     }
+
+    // Apply category by AI category_id if available
+    try {
+        const catEl = document.getElementById(fieldIds.category);
+        if (catEl && suggestions.category_id && (!catEl.value || catEl.value === '' || catEl.selectedIndex === 0)) {
+            catEl.value = String(suggestions.category_id);
+            catEl.dispatchEvent(new Event('change'));
+        }
+    } catch (e) {}
     
-    // Apply condition if not set
+    // Backward compatibility: re-apply if select values exist
     const conditionSelect = document.getElementById('{{ form.condition.id_for_label }}');
-    if (conditionSelect && suggestions.condition && !conditionSelect.value) {
-        conditionSelect.value = suggestions.condition;
-    }
-    
-    // Apply delivery option if not set
+    if (conditionSelect && suggestions.condition && !conditionSelect.value) conditionSelect.value = suggestions.condition;
     const deliverySelect = document.getElementById('{{ form.delivery_option.id_for_label }}');
-    if (deliverySelect && suggestions.delivery_option && !deliverySelect.value) {
-        deliverySelect.value = suggestions.delivery_option;
-    }
-    
-    // Apply location if not set
+    if (deliverySelect && suggestions.delivery_option && !deliverySelect.value) deliverySelect.value = suggestions.delivery_option;
     const locationSelect = document.getElementById('{{ form.location.id_for_label }}');
-    if (locationSelect && suggestions.location && !locationSelect.value) {
-        locationSelect.value = suggestions.location;
-    }
+    if (locationSelect && suggestions.location && !locationSelect.value) locationSelect.value = suggestions.location;
 }
 
 function showCategorySuggestions(suggestions) {
@@ -953,5 +1007,25 @@ function showAIMessage(message, type) {
         setTimeout(() => alert.remove(), 150);
     }, 5000);
 }
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const locationSelect = document.getElementById('{{ form.location.id_for_label }}');
+    if (!locationSelect || locationSelect.value || !window.BaysokoGeo) return;
+    window.BaysokoGeo.requestCurrentLocation().then(async (loc) => {
+        const label = await window.BaysokoGeo.reverseGeocode(loc.lat, loc.lng);
+        if (!label) return;
+        const low = label.toLowerCase();
+        const match = Array.from(locationSelect.options).find(opt => {
+            const t = (opt.text || '').toLowerCase();
+            const v = (opt.value || '').toLowerCase();
+            return t && low.includes(t) || (v && low.includes(v));
+        });
+        if (match) {
+            locationSelect.value = match.value;
+            locationSelect.dispatchEvent(new Event('change'));
+        }
+    }).catch(() => {});
+});
 </script>
 {% endblock %}

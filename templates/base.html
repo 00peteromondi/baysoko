@@ -28,6 +28,19 @@
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Leaflet (Maps) -->
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin=""
+    />
+    <script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""
+        defer
+    ></script>
 
     <!-- Toast Notification Styles -->
     <style>
@@ -51,16 +64,35 @@
         }
 
         .pwa-install-banner {
-            position: sticky;
+            position: fixed;
             top: 0;
-            z-index: 1050;
+            left: 0;
+            right: 0;
+            z-index: 1200;
             background: linear-gradient(120deg, rgba(255,107,53,0.18), rgba(0,0,0,0.2));
             border-bottom: 1px solid rgba(255,107,53,0.35);
             backdrop-filter: blur(12px);
-            animation: pwaSlideDown 0.45s ease-out;
+            transform: translateY(-100%);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform 0.35s ease, opacity 0.35s ease;
+        }
+        :root {
+            --pwa-banner-height: 0px;
+        }
+        body.pwa-banner-visible .main-nav {
+            top: var(--pwa-banner-height);
+        }
+        body.pwa-banner-visible .main-content {
+            padding-top: calc(70px + var(--pwa-banner-height));
+        }
+        .pwa-install-banner.visible {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: auto;
         }
         .pwa-install-banner.hidden {
-            display: none;
+            display: block;
         }
         .pwa-install-inner {
             display: flex;
@@ -80,14 +112,69 @@
             align-items: center;
             gap: 10px;
         }
+        .pwa-install-banner.visible #pwaInstallBtn {
+            animation: pwaPulse 2.6s ease-in-out infinite;
+        }
         .pwa-close-btn {
-            background: transparent;
+            background: rgba(255,255,255,0.15);
             border: 0;
-            color: var(--text-muted);
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.8rem;
+        }
+        .pwa-close-btn .pwa-close-text {
+            font-weight: 600;
+        }
+        .pwa-close-btn.dont-show {
+            background: rgba(0,0,0,0.35);
+            color: #fff;
+        }
+        .offline-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .offline-modal.show {
+            display: flex;
+            animation: fadeIn 0.25s ease;
+        }
+        .offline-card {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,107,53,0.2);
+            border-radius: 18px;
+            padding: 20px;
+            max-width: 420px;
+            width: calc(100% - 32px);
+            box-shadow: var(--shadow-lg);
+        }
+        .offline-card h4 {
+            margin-bottom: 6px;
+        }
+        .offline-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+            justify-content: flex-end;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
         @keyframes pwaSlideDown {
             from { transform: translateY(-100%); opacity: 0; }
             to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes pwaPulse {
+            0%, 100% { transform: translateY(0); box-shadow: none; }
+            50% { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(255,107,53,0.25); }
         }
         @media (max-width: 768px) {
             .pwa-install-inner {
@@ -220,7 +307,7 @@
             top: 20px;
             right: 20px;
             z-index: 9999;
-            max-width: 383px; /* increased by 3px */
+            max-width: 520px;
             display: flex;
             flex-direction: column;
             gap: 0.75rem;
@@ -243,7 +330,7 @@
             padding: 0.6rem 1.2rem;
             color: white;
             font-size: 0.82rem; /* slightly reduced */
-            max-width: 323px; /* increased by 3px */
+            max-width: 520px;
         }
 
         .custom-toast i { font-size: 1rem; flex-shrink: 0; }
@@ -306,11 +393,18 @@
                 width: 100%;
                 padding: 0.85rem 0.9rem;
                 min-height: 56px;
+                font-size: 0.78rem;
             }
 
             .custom-toast i { font-size: 1.25rem; }
-            .custom-toast .fw-medium { font-size: 1rem; }
+            .custom-toast .fw-medium { font-size: 0.9rem; }
             .toast-progress-bar { height: 4px; }
+        }
+        @media (max-width: 576px) {
+            body.agent-open .toast-container {
+                top: 16px;
+                bottom: auto;
+            }
         }
     </style>
 
@@ -318,7 +412,7 @@
     <style>
         :root {
             /* Badge colors */
-            --badge-primary: #0d6efd;
+            --badge-primary: var(--primary);
             --badge-info: #0dcaf0;
             --badge-danger: #dc3545;
             --badge-warning: #ffc107;
@@ -1831,6 +1925,31 @@
     </style>
 </head>
 <body>
+    <div id="pwaInstallBanner" class="pwa-install-banner hidden">
+        <div class="pwa-install-inner container">
+            <div class="pwa-install-text">
+                <i class="bi bi-phone"></i>
+                <span>Install Baysoko for faster access and offline support.</span>
+            </div>
+            <div class="pwa-install-actions">
+                <button id="pwaInstallBtn" class="btn-custom btn-primary" type="button">Install</button>
+                <button id="pwaInstallClose" class="pwa-close-btn" type="button" aria-label="Close install banner">
+                    <span class="pwa-close-text">Not now</span>
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="offlineModal" class="offline-modal">
+        <div class="offline-card">
+            <h4>You are offline</h4>
+            <p class="text-muted mb-0">Some features need a connection. We will reconnect automatically.</p>
+            <div class="offline-actions">
+                <button id="offlineRetry" class="btn-custom btn-primary" type="button">Retry</button>
+                <button id="offlineClose" class="btn-custom btn-ghost" type="button">Dismiss</button>
+            </div>
+        </div>
+    </div>
     
     <!-- Theme Initialization -->
     <script>
@@ -2106,6 +2225,12 @@
                     </span>
                 </a>
             </li>
+            <li>
+                <a href="/delivery/" class="side-nav-link">
+                    <i class="bi bi-truck"></i>
+                    <span class="link-text">Delivery App</span>
+                </a>
+            </li>
             <li><a href="{% url 'profile' user.pk %}" class="side-nav-link">
                 <i class="bi bi-person"></i>
                 <span class="link-text">Profile</span>
@@ -2159,6 +2284,12 @@
                 <i class="bi bi-person-plus"></i>
                 <span class="link-text">Register</span>
             </a></li>
+            <li>
+                <a href="/delivery/" class="side-nav-link">
+                    <i class="bi bi-truck"></i>
+                    <span class="link-text">Delivery App</span>
+                </a>
+            </li>
             {% endif %}
         </ul>
     </aside>
@@ -2774,12 +2905,14 @@
                 sideNav.classList.add('expanded');
                 navOverlay.classList.add('active');
                 document.body.style.overflow = 'hidden';
+                document.body.classList.add('side-nav-open');
             }
 
             function closeSideNav() {
                 sideNav.classList.remove('expanded');
                 navOverlay.classList.remove('active');
                 document.body.style.overflow = '';
+                document.body.classList.remove('side-nav-open');
             }
 
             sideNavToggle.addEventListener('click', openSideNav);
@@ -3560,17 +3693,95 @@
     </script>
 
     {% endblock %}
-    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-    <script>
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    OneSignalDeferred.push(async function(OneSignal) {
-        await OneSignal.init({
-        appId: "a045aeba-3624-4edc-80d1-d165620699aa",
-        });
-    });
-    </script>
+ 
 
-    <!-- Include global AJAX handler -->
+      <script>
+          // ===== Baysoko Geo Helper (cached, opt-in geolocation) =====
+          window.BaysokoGeo = (function() {
+              const STORAGE_KEY = 'baysoko_geo';
+              const MAX_AGE_MIN = 24 * 60;
+
+              function getCachedLocation(maxAgeMin = MAX_AGE_MIN) {
+                  try {
+                      const raw = localStorage.getItem(STORAGE_KEY);
+                      if (!raw) return null;
+                      const data = JSON.parse(raw);
+                      if (!data || !data.lat || !data.lng || !data.ts) return null;
+                      const ageMin = (Date.now() - data.ts) / 60000;
+                      if (ageMin > maxAgeMin) return null;
+                      return { lat: data.lat, lng: data.lng, ts: data.ts };
+                  } catch (e) {
+                      return null;
+                  }
+              }
+
+              function saveLocation(lat, lng) {
+                  try {
+                      localStorage.setItem(STORAGE_KEY, JSON.stringify({ lat, lng, ts: Date.now() }));
+                  } catch (e) {}
+              }
+
+              function requestCurrentLocation(options = {}) {
+                  return new Promise((resolve, reject) => {
+                      const cached = getCachedLocation(options.maxAgeMin);
+                      if (cached && !options.force) return resolve(cached);
+                      if (!navigator.geolocation) return reject(new Error('geolocation_unavailable'));
+                      navigator.geolocation.getCurrentPosition(
+                          (pos) => {
+                              const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude, ts: Date.now() };
+                              saveLocation(loc.lat, loc.lng);
+                              resolve(loc);
+                          },
+                          (err) => reject(err),
+                          { enableHighAccuracy: true, timeout: 7000, maximumAge: 60000 }
+                      );
+                  });
+              }
+
+              async function ensurePermission(options = {}) {
+                  try {
+                      if (navigator.permissions && navigator.permissions.query) {
+                          const perm = await navigator.permissions.query({ name: 'geolocation' });
+                          if (perm.state === 'denied') {
+                              throw new Error('geolocation_denied');
+                          }
+                      }
+                  } catch (e) {
+                      // fall through to requestCurrentLocation (will error if denied)
+                  }
+                  return requestCurrentLocation(options);
+              }
+
+              async function reverseGeocode(lat, lng) {
+                  try {
+                      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&zoom=14&addressdetails=1`;
+                      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+                      const data = await res.json();
+                      return data?.display_name || null;
+                  } catch (e) {
+                      return null;
+                  }
+              }
+
+              return { getCachedLocation, requestCurrentLocation, ensurePermission, reverseGeocode };
+          })();
+      </script>
+      <script>
+          (function() {
+              let requested = false;
+              document.addEventListener('focusin', function(e) {
+                  const target = e.target;
+                  if (!target || requested) return;
+                  if (target.matches && target.matches('[data-geo-suggest]')) {
+                      requested = true;
+                      if (window.BaysokoGeo && window.BaysokoGeo.ensurePermission) {
+                          window.BaysokoGeo.ensurePermission().catch(() => {});
+                      }
+                  }
+              });
+          })();
+      </script>
+      <!-- Include global AJAX handler -->
     <script src="{% static 'js/global-ajax-handler.js' %}"></script>
 
     <!-- Include WebSocket-based notifications client (primary system) -->
@@ -3659,21 +3870,6 @@
             }
         })();
     </script>
-    <div id="pwaInstallBanner" class="pwa-install-banner hidden">
-        <div class="pwa-install-inner container">
-            <div class="pwa-install-text">
-                <i class="bi bi-phone"></i>
-                <span>Install Baysoko for faster access and offline support.</span>
-            </div>
-            <div class="pwa-install-actions">
-                <button id="pwaInstallBtn" class="btn-custom btn-primary" type="button">Install</button>
-                <button id="pwaInstallClose" class="pwa-close-btn" type="button" aria-label="Close install banner">
-                    <i class="bi bi-x-lg"></i>
-                </button>
-            </div>
-        </div>
-    </div>
-
     {% if user.is_authenticated %}
         <script>
             // Ensure theme state is authoritative and synced for all pages,
@@ -3709,17 +3905,70 @@
                 .catch((err) => console.warn('PWA service worker failed', err));
 
             let deferredPrompt = null;
+            let repromptTimer = null;
             const installBtn = document.getElementById('pwaInstallBtn');
             const banner = document.getElementById('pwaInstallBanner');
             const closeBtn = document.getElementById('pwaInstallClose');
-            const dismissedKey = 'baysoko_pwa_banner_dismissed';
+            const dismissedKey = 'baysoko_pwa_banner_dismissed_at';
+            const installedKey = 'baysoko_pwa_installed';
+            const dismissCountKey = 'baysoko_pwa_banner_dismiss_count';
+            const neverKey = 'baysoko_pwa_banner_never';
+            function applyBannerOffset(show) {
+                if (!banner) return;
+                const height = banner.offsetHeight || 0;
+                document.documentElement.style.setProperty('--pwa-banner-height', show ? `${height}px` : '0px');
+                document.body.classList.toggle('pwa-banner-visible', !!show);
+            }
+            function getDismissCount() {
+                try { return parseInt(localStorage.getItem(dismissCountKey) || '0', 10) || 0; } catch (e) { return 0; }
+            }
+            function updateCloseLabel() {
+                if (!closeBtn) return;
+                const count = getDismissCount();
+                const textEl = closeBtn.querySelector('.pwa-close-text');
+                if (count >= 2) {
+                    closeBtn.classList.add('dont-show');
+                    if (textEl) textEl.textContent = "Don't show this again";
+                } else {
+                    closeBtn.classList.remove('dont-show');
+                    if (textEl) textEl.textContent = 'Not now';
+                }
+            }
+            function showBanner() {
+                if (!banner) return;
+                banner.classList.remove('hidden');
+                banner.classList.add('visible');
+                applyBannerOffset(true);
+                updateCloseLabel();
+            }
+            function hideBanner() {
+                if (!banner) return;
+                banner.classList.remove('visible');
+                applyBannerOffset(false);
+            }
+            function scheduleReprompt() {
+                if (!deferredPrompt) return;
+                if (repromptTimer) clearTimeout(repromptTimer);
+                repromptTimer = setTimeout(() => {
+                    try {
+                        const dismissedAt = parseInt(localStorage.getItem(dismissedKey) || '0', 10);
+                        if (dismissedAt && (Date.now() - dismissedAt) < 1000 * 60 * 20) return;
+                    } catch (e) {}
+                    showBanner();
+                }, 1000 * 60 * 20);
+            }
+
             window.addEventListener('beforeinstallprompt', (event) => {
                 event.preventDefault();
                 deferredPrompt = event;
                 try {
-                    if (localStorage.getItem(dismissedKey) === '1') return;
+                    if (localStorage.getItem(installedKey)) return;
+                    if (localStorage.getItem(neverKey)) return;
+                    const dismissedAt = parseInt(localStorage.getItem(dismissedKey) || '0', 10);
+                    const cooldownMs = 1000 * 60 * 20;
+                    if (dismissedAt && (Date.now() - dismissedAt) < cooldownMs) return;
                 } catch (e) {}
-                if (banner) banner.classList.remove('hidden');
+                showBanner();
             });
             if (installBtn) {
                 installBtn.addEventListener('click', async () => {
@@ -3727,17 +3976,29 @@
                     deferredPrompt.prompt();
                     try { await deferredPrompt.userChoice; } catch (e) {}
                     deferredPrompt = null;
-                    if (banner) banner.classList.add('hidden');
+                    hideBanner();
                 });
             }
             if (closeBtn) {
                 closeBtn.addEventListener('click', () => {
-                    if (banner) banner.classList.add('hidden');
-                    try { localStorage.setItem(dismissedKey, '1'); } catch (e) {}
+                    hideBanner();
+                    try {
+                        localStorage.setItem(dismissedKey, String(Date.now()));
+                        const nextCount = getDismissCount() + 1;
+                        localStorage.setItem(dismissCountKey, String(nextCount));
+                        if (nextCount >= 3) {
+                            localStorage.setItem(neverKey, '1');
+                        }
+                    } catch (e) {}
+                    if (getDismissCount() < 3) scheduleReprompt();
                 });
             }
             window.addEventListener('appinstalled', () => {
-                if (banner) banner.classList.add('hidden');
+                hideBanner();
+                try { localStorage.setItem(installedKey, '1'); } catch (e) {}
+                try {
+                    fetch('/pwa/install/', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).catch(() => {});
+                } catch (e) {}
             });
         })();
     </script>
@@ -3746,11 +4007,13 @@
     <script>
         window.OneSignalDeferred = window.OneSignalDeferred || [];
         OneSignalDeferred.push(async function(OneSignal) {
+            const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
             await OneSignal.init({
                 appId: "{{ ONESIGNAL_APP_ID }}",
                 serviceWorkerPath: "/static/onesignal/OneSignalSDKWorker.js",
                 serviceWorkerUpdaterPath: "/static/onesignal/OneSignalSDKUpdaterWorker.js",
-                notifyButton: { enable: false }
+                notifyButton: { enable: false },
+                allowLocalhostAsSecureOrigin: isLocal
             });
             {% if user.is_authenticated %}
             try {
@@ -3764,5 +4027,64 @@
         });
     </script>
     {% endif %}
+    <script>
+        (function() {
+            const modal = document.getElementById('offlineModal');
+            const retry = document.getElementById('offlineRetry');
+            const close = document.getElementById('offlineClose');
+            const dismissedKey = 'baysoko_offline_dismissed_at';
+            const cooldownMs = 1000 * 60 * 5;
+            function canShow() {
+                if (!modal) return false;
+                if (navigator.onLine) return false;
+                try {
+                    const dismissedAt = parseInt(localStorage.getItem(dismissedKey) || '0', 10);
+                    if (dismissedAt && (Date.now() - dismissedAt) < cooldownMs) return false;
+                } catch (e) {}
+                return true;
+            }
+            function show() { if (canShow()) modal.classList.add('show'); }
+            function hide() { if (modal) modal.classList.remove('show'); }
+            if (navigator.onLine === false) show();
+            window.addEventListener('offline', show);
+            window.addEventListener('online', hide);
+            if (retry) retry.addEventListener('click', () => location.reload());
+            if (close) close.addEventListener('click', () => {
+                try { localStorage.setItem(dismissedKey, String(Date.now())); } catch (e) {}
+                hide();
+            });
+        })();
+    </script>
+    <script>
+        (function() {
+            async function captureDeviceLocation() {
+                if (!window.BaysokoGeo) return;
+                try {
+                    const loc = await window.BaysokoGeo.requestCurrentLocation();
+                    const label = await window.BaysokoGeo.reverseGeocode(loc.lat, loc.lng);
+                    if (!label) return;
+                    const csrf = (document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || '';
+                    await fetch("{% url 'capture_location' %}", {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+                        body: JSON.stringify({ location: label, lat: loc.lat, lng: loc.lng })
+                    });
+                } catch (e) {}
+            }
+
+            document.addEventListener('DOMContentLoaded', () => {
+                const links = document.querySelectorAll('.js-capture-location');
+                if (!links.length) return;
+                links.forEach(link => {
+                    link.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        const href = link.getAttribute('href');
+                        await captureDeviceLocation();
+                        if (href) window.location.href = href;
+                    });
+                });
+            });
+        })();
+    </script>
 </body>
 </html>

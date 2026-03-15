@@ -137,6 +137,63 @@
     .search-input {
         padding-left: 3rem;
     }
+
+    .delivery-map {
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        overflow: hidden;
+    }
+
+    .location-suggestions {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        margin-top: 6px;
+        overflow: hidden;
+        display: none;
+        box-shadow: var(--shadow-sm);
+    }
+    .location-suggestion-item {
+        padding: 8px 10px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .location-suggestion-item:last-child {
+        border-bottom: none;
+    }
+    .location-suggestion-item:hover {
+        background: var(--bg-secondary);
+    }
+    .map-help {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-top: 0.75rem;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        padding: 0.5rem 0.75rem;
+    }
+    .map-help-text {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+    .map-help .btn-ghost {
+        border: 1px solid var(--border-color);
+        background: transparent;
+        color: var(--text-primary);
+        padding: 0.35rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .map-help .btn-ghost + .btn-ghost {
+        margin-left: 0.35rem;
+    }
 </style>
 {% endblock %}
 
@@ -145,8 +202,8 @@
     <div class="col-lg-10 mx-auto">
         <div class="card">
             <div class="card-header">
-                <h3 class="mb-0"><i class="fas fa-plus-circle me-2 text-primary"></i>Create New Delivery</h3>
-                <p class="text-muted mb-0">Select an order below or fill the form manually</p>
+                <h3 class="page-title mb-1"><i class="fas fa-plus-circle me-2 text-primary"></i>Create New Delivery</h3>
+                <p class="page-subtitle">Select an order below or fill the form manually</p>
             </div>
             <div class="card-body">
                 <!-- Order Selection Section -->
@@ -178,10 +235,10 @@
                         </div>
                         
                         <div class="mt-3 text-center">
-                            <button type="button" class="btn btn-outline-primary" onclick="refreshOrders()">
+                            <button type="button" class="btn btn-delivery-outline" onclick="refreshOrders()">
                                 <i class="fas fa-sync-alt me-1"></i> Refresh Orders
                             </button>
-                            <button type="button" class="btn btn-outline-secondary ms-2" onclick="clearOrderSelection()">
+                            <button type="button" class="btn btn-delivery-outline ms-2" onclick="clearOrderSelection()">
                                 <i class="fas fa-times me-1"></i> Clear Selection
                             </button>
                         </div>
@@ -202,6 +259,7 @@
                     
                     <!-- Hidden order_id field -->
                     <input type="hidden" name="order_id" id="id_order_id" value="">
+                    <input type="hidden" name="distance_km" id="id_distance_km" value="">
                     
                     <!-- Pickup Information -->
                     <div class="form-section">
@@ -225,8 +283,10 @@
                                     {% for store in request.stores %}
                                     <option value="{{ store.id }}" 
                                             data-name="{{ store.name }}"
-                                            data-address="{{ store.address|default:'' }}"
-                                            data-phone="{{ store.phone|default:'' }}">
+                                            data-address="{{ store.location|default:'' }}"
+                                            data-phone="{{ store.payout_phone|default:'' }}"
+                                            data-lat="{{ store.location_latitude|default:'' }}"
+                                            data-lng="{{ store.location_longitude|default:'' }}">
                                         {{ store.name }}
                                     </option>
                                     {% endfor %}
@@ -234,6 +294,7 @@
                             </div>
                         </div>
                         {{ form.pickup_address|as_crispy_field }}
+                        <div class="location-suggestions" id="pickupAddressSuggestions"></div>
                         <div class="row">
                             <div class="col-md-6">
                                 {{ form.pickup_latitude|as_crispy_field }}
@@ -262,6 +323,7 @@
                             </div>
                         </div>
                         {{ form.recipient_address|as_crispy_field }}
+                        <div class="location-suggestions" id="recipientAddressSuggestions"></div>
                         <div class="row">
                             <div class="col-md-6">
                                 {{ form.recipient_latitude|as_crispy_field }}
@@ -270,6 +332,17 @@
                                 {{ form.recipient_longitude|as_crispy_field }}
                             </div>
                         </div>
+                        <div class="delivery-map mt-2" id="deliveryRouteMap" style="height: 240px;"></div>
+                        <div class="map-help">
+                            <div class="map-help-text">
+                                Click on the map to drop pickup and recipient pins. Location access is critical for accurate delivery.
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <button type="button" class="btn-ghost use-device-location" data-target="pickup">Use my location for pickup</button>
+                                <button type="button" class="btn-ghost use-device-location" data-target="recipient">Use my location for recipient</button>
+                            </div>
+                        </div>
+                        <div class="small text-muted mt-2" id="nearbyDrivers"></div>
                     </div>
                     
                     <!-- Package Information -->
@@ -361,12 +434,18 @@
                     </div>
                     
                     <!-- Form Actions -->
+                    {% if not is_seller %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        External deliveries require payment before dispatch. Your delivery will remain pending until payment is confirmed.
+                    </div>
+                    {% endif %}
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <a href="{% url 'delivery:dashboard' %}" class="btn btn-secondary">
                                 <i class="fas fa-arrow-left me-1"></i> Back to Dashboard
                             </a>
-                            <button type="button" class="btn btn-outline-primary ms-2" onclick="fillSampleData()">
+                            <button type="button" class="btn btn-delivery-outline ms-2" onclick="fillSampleData()">
                                 <i class="fas fa-vial me-1"></i> Sample Data
                             </button>
                         </div>
@@ -431,6 +510,7 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ nearby_drivers|json_script:"nearbyDriversData" }}
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
     // Global variables
@@ -458,10 +538,287 @@
     {% else %}
         []
     {% endif %};
+
+    const nearbyDrivers = JSON.parse(document.getElementById('nearbyDriversData').textContent);
+
+    let deliveryMap = null;
+    let pickupMarker = null;
+    let recipientMarker = null;
+    let routeLine = null;
+
+    function haversineKm(lat1, lng1, lat2, lng2) {
+        const toRad = (deg) => (deg * Math.PI) / 180;
+        const R = 6371;
+        const dLat = toRad(lat2 - lat1);
+        const dLng = toRad(lng2 - lng1);
+        const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
+    function updateNearbyDrivers(pickupLat, pickupLng) {
+        const container = document.getElementById('nearbyDrivers');
+        if (!container || !pickupLat || !pickupLng || !nearbyDrivers.length) return;
+
+        const ranked = nearbyDrivers
+            .map(d => ({
+                ...d,
+                distance: haversineKm(pickupLat, pickupLng, d.lat, d.lng)
+            }))
+            .sort((a, b) => a.distance - b.distance)
+            .slice(0, 3);
+
+        container.innerHTML = ranked.length
+            ? `<strong>Closest drivers:</strong> ` + ranked.map(d =>
+                `${d.name} (${d.vehicle}) • ${d.distance.toFixed(1)} km`
+            ).join(' · ')
+            : '';
+    }
+
+    function updateRouteLine() {
+        if (!deliveryMap || !pickupMarker || !recipientMarker) return;
+        const p = pickupMarker.getLatLng();
+        const r = recipientMarker.getLatLng();
+        if (!p || !r) return;
+        if (routeLine) {
+            routeLine.setLatLngs([p, r]);
+        } else {
+            routeLine = L.polyline([p, r], { color: '#06D6A0', weight: 4, opacity: 0.8 }).addTo(deliveryMap);
+        }
+    }
+
+    function setPickupLocation(lat, lng, label) {
+        const pickupLatField = document.getElementById('id_pickup_latitude');
+        const pickupLngField = document.getElementById('id_pickup_longitude');
+        const pickupField = document.getElementById('id_pickup_address');
+        if (pickupLatField) pickupLatField.value = Number(lat).toFixed(6);
+        if (pickupLngField) pickupLngField.value = Number(lng).toFixed(6);
+        if (label && pickupField) pickupField.value = label;
+        if (pickupMarker && deliveryMap) {
+            pickupMarker.setLatLng([lat, lng]);
+            deliveryMap.setView([lat, lng], 14);
+        }
+        updateNearbyDrivers(lat, lng);
+        updateRouteLine();
+        updateDistanceAndFee();
+    }
+
+    function setRecipientLocation(lat, lng, label) {
+        const recipLatField = document.getElementById('id_recipient_latitude');
+        const recipLngField = document.getElementById('id_recipient_longitude');
+        const recipField = document.getElementById('id_recipient_address');
+        if (recipLatField) recipLatField.value = Number(lat).toFixed(6);
+        if (recipLngField) recipLngField.value = Number(lng).toFixed(6);
+        if (label && recipField) recipField.value = label;
+        if (recipientMarker && deliveryMap) {
+            recipientMarker.setLatLng([lat, lng]);
+            deliveryMap.setView([lat, lng], 14);
+        }
+        updateRouteLine();
+        updateDistanceAndFee();
+    }
+
+    function updateDistanceAndFee() {
+        const pickupLat = parseFloat(document.getElementById('id_pickup_latitude')?.value || '');
+        const pickupLng = parseFloat(document.getElementById('id_pickup_longitude')?.value || '');
+        const recipLat = parseFloat(document.getElementById('id_recipient_latitude')?.value || '');
+        const recipLng = parseFloat(document.getElementById('id_recipient_longitude')?.value || '');
+        const distanceField = document.getElementById('id_distance_km');
+
+        if (!Number.isNaN(pickupLat) && !Number.isNaN(pickupLng) && !Number.isNaN(recipLat) && !Number.isNaN(recipLng)) {
+            const dist = haversineKm(pickupLat, pickupLng, recipLat, recipLng);
+            if (distanceField) distanceField.value = dist.toFixed(2);
+            calculateFee();
+        }
+    }
+
+    function renderSuggestions(list, targetEl, onSelect) {
+        if (!targetEl) return;
+        targetEl.innerHTML = "";
+        if (!list.length) {
+            targetEl.style.display = "none";
+            return;
+        }
+        list.forEach(item => {
+            const row = document.createElement("div");
+            row.className = "location-suggestion-item";
+            row.textContent = item.display_name;
+            row.addEventListener("click", () => {
+                onSelect(item);
+                targetEl.style.display = "none";
+            });
+            targetEl.appendChild(row);
+        });
+        targetEl.style.display = "block";
+    }
+
+    function filterHomabay(results) {
+        return (results || []).filter(r => {
+            const name = (r.display_name || '').toLowerCase();
+            return name.includes('homa bay') || name.includes('homabay') || name.includes('ndhiwa');
+        });
+    }
+
+    let HOMABAY_LANDMARKS = [];
+    const LANDMARKS_KEY = 'baysoko_recent_locations';
+
+    async function loadHomabayLandmarks() {
+        if (HOMABAY_LANDMARKS.length) return HOMABAY_LANDMARKS;
+        try {
+            const res = await fetch("{% static 'data/homabay_landmarks.json' %}", { cache: 'force-cache' });
+            if (res.ok) {
+                const data = await res.json();
+                HOMABAY_LANDMARKS = Array.isArray(data?.landmarks) ? data.landmarks : [];
+            }
+        } catch (e) {}
+        return HOMABAY_LANDMARKS;
+    }
+
+    function getRecentLocations() {
+        try {
+            const raw = localStorage.getItem(LANDMARKS_KEY);
+            const list = raw ? JSON.parse(raw) : [];
+            return Array.isArray(list) ? list : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function addRecentLocation(label) {
+        if (!label || typeof label !== 'string') return;
+        try {
+            const list = getRecentLocations();
+            const cleaned = label.trim();
+            if (!cleaned) return;
+            const deduped = [cleaned, ...list.filter(l => l.toLowerCase() !== cleaned.toLowerCase())].slice(0, 5);
+            localStorage.setItem(LANDMARKS_KEY, JSON.stringify(deduped));
+        } catch (e) {}
+    }
+
+    function localMatches(query) {
+        const q = (query || '').toLowerCase().trim();
+        const recent = getRecentLocations().map(label => ({ display_name: `${label}, Homa Bay County` }));
+        const matches = !q
+            ? HOMABAY_LANDMARKS.slice(0, 10)
+            : HOMABAY_LANDMARKS.filter(l => l.toLowerCase().includes(q)).slice(0, 10);
+        const locals = matches.map(label => ({ display_name: `${label}, Homa Bay County` }));
+        return [...recent, ...locals].slice(0, 10);
+    }
+
+    async function fetchNominatim(query) {
+        const viewbox = '34.0,-0.1,35.2,-1.1';
+        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=ke&viewbox=${viewbox}&bounded=1&q=${encodeURIComponent(query)}`;
+        const res = await fetch(url, { headers: { "Accept": "application/json" } });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return filterHomabay(data);
+    }
+
+    async function fetchReverseGeocode(lat, lng) {
+        try {
+            const url = `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`;
+            const res = await fetch(url, { headers: { "Accept": "application/json" } });
+            if (!res.ok) return null;
+            const data = await res.json();
+            return data || null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function setupAutocomplete(inputId, suggestionsId, onSelect) {
+        const input = document.getElementById(inputId);
+        const suggestions = document.getElementById(suggestionsId);
+        if (!input || !suggestions) return;
+        let debounce;
+        loadHomabayLandmarks();
+        input.addEventListener("input", () => {
+            const q = input.value.trim();
+            clearTimeout(debounce);
+            if (q.length < 2) {
+                renderSuggestions(localMatches(q), suggestions, async (item) => {
+                    if (item.lat != null && item.lon != null) return onSelect(item);
+                    const resolved = await fetchNominatim(item.display_name || '');
+                    if (resolved && resolved.length) return onSelect(resolved[0]);
+                });
+                return;
+            }
+            debounce = setTimeout(async () => {
+                const results = await fetchNominatim(q);
+                const merged = [...results, ...localMatches(q)];
+                renderSuggestions(merged.slice(0, 12), suggestions, async (item) => {
+                    if (item.lat != null && item.lon != null) return onSelect(item);
+                    const resolved = await fetchNominatim(item.display_name || '');
+                    if (resolved && resolved.length) return onSelect(resolved[0]);
+                });
+            }, 300);
+        });
+    }
+
+    function initDeliveryRouteMap() {
+        const pickupLatField = document.getElementById('id_pickup_latitude');
+        const pickupLngField = document.getElementById('id_pickup_longitude');
+        const recipLatField = document.getElementById('id_recipient_latitude');
+        const recipLngField = document.getElementById('id_recipient_longitude');
+        const mapEl = document.getElementById('deliveryRouteMap');
+        if (!mapEl || !window.L) return;
+
+        const hasPickup = pickupLatField?.value && pickupLngField?.value;
+        const hasRecip = recipLatField?.value && recipLngField?.value;
+        const center = hasPickup
+            ? [parseFloat(pickupLatField.value), parseFloat(pickupLngField.value)]
+            : (hasRecip ? [parseFloat(recipLatField.value), parseFloat(recipLngField.value)] : [-0.5236, 34.4560]);
+
+        deliveryMap = L.map(mapEl).setView(center, hasPickup || hasRecip ? 12 : 10);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: "&copy; OpenStreetMap contributors"
+        }).addTo(deliveryMap);
+        setTimeout(() => deliveryMap.invalidateSize(), 200);
+
+        pickupMarker = L.marker(center).addTo(deliveryMap);
+        recipientMarker = L.marker(center).addTo(deliveryMap);
+
+        if (hasPickup) {
+            pickupMarker.setLatLng([parseFloat(pickupLatField.value), parseFloat(pickupLngField.value)]);
+            updateNearbyDrivers(parseFloat(pickupLatField.value), parseFloat(pickupLngField.value));
+        }
+        if (hasRecip) {
+            recipientMarker.setLatLng([parseFloat(recipLatField.value), parseFloat(recipLngField.value)]);
+        }
+        updateRouteLine();
+
+        deliveryMap.on("click", async (e) => {
+            let label = '';
+            try {
+                const resolved = await fetchReverseGeocode(e.latlng.lat, e.latlng.lng);
+                if (resolved?.display_name) label = resolved.display_name;
+            } catch (err) {}
+            if (!pickupLatField.value || !pickupLngField.value) {
+                setPickupLocation(e.latlng.lat, e.latlng.lng, label);
+            } else {
+                setRecipientLocation(e.latlng.lat, e.latlng.lng, label);
+            }
+        });
+
+        setupAutocomplete('id_pickup_address', 'pickupAddressSuggestions', (item) => {
+            setPickupLocation(item.lat, item.lon, item.display_name);
+            addRecentLocation(item.display_name);
+        });
+        setupAutocomplete('id_recipient_address', 'recipientAddressSuggestions', (item) => {
+            setRecipientLocation(item.lat, item.lon, item.display_name);
+            addRecentLocation(item.display_name);
+        });
+    }
     
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function() {
         console.log('Initializing delivery creation form...');
+        const pickupField = document.getElementById('id_pickup_address');
+        const recipientField = document.getElementById('id_recipient_address');
+        if (pickupField) pickupField.setAttribute('data-geo-suggest', '1');
+        if (recipientField) recipientField.setAttribute('data-geo-suggest', '1');
         
         // Use pending orders from server context if available
         if (pendingOrdersData.length > 0) {
@@ -487,6 +844,46 @@
         
         // Set default estimated delivery time (tomorrow)
         setDefaultDeliveryTime();
+
+        const whenLeafletReady = (cb) => {
+            if (window.L) return cb();
+            setTimeout(() => whenLeafletReady(cb), 100);
+        };
+        whenLeafletReady(initDeliveryRouteMap);
+
+        async function requestDeviceLocationForDelivery(target) {
+            if (!window.BaysokoGeo) {
+                showToast('Location services are unavailable in this browser.', 'error');
+                return;
+            }
+            try {
+                const loc = await window.BaysokoGeo.requestCurrentLocation();
+                const label = await window.BaysokoGeo.reverseGeocode(loc.lat, loc.lng);
+                if (!label) return;
+                if (target === 'recipient') {
+                    setRecipientLocation(loc.lat, loc.lng, label);
+                } else {
+                    setPickupLocation(loc.lat, loc.lng, label);
+                }
+                showToast('Using your current location for delivery.', 'success');
+            } catch (err) {
+                showToast('Location access is required to deliver accurately. Please enable it in your browser settings and try again.', 'warning');
+            }
+        }
+
+        // Auto-suggest pickup location from current device location (if empty)
+        if (window.BaysokoGeo && pickupField && (!pickupField.value || !pickupField.value.trim())) {
+            requestDeviceLocationForDelivery('pickup');
+        }
+
+        // Manual trigger for location permission / pinning
+        document.querySelectorAll('.use-device-location').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const target = btn.getAttribute('data-target') || 'pickup';
+                requestDeviceLocationForDelivery(target);
+            });
+        });
     });
     
     // Load orders from API
@@ -667,6 +1064,13 @@
         document.getElementById('id_recipient_email').value = data.customer.email || '';
         document.getElementById('id_recipient_phone').value = data.customer.phone || '';
         document.getElementById('id_recipient_address').value = data.customer.shipping_address || '';
+        if (data.customer.shipping_latitude && data.customer.shipping_longitude) {
+            setRecipientLocation(Number(data.customer.shipping_latitude), Number(data.customer.shipping_longitude), data.customer.shipping_address || '');
+        }
+
+        if (data.pickup && data.pickup.pickup_latitude && data.pickup.pickup_longitude) {
+            setPickupLocation(Number(data.pickup.pickup_latitude), Number(data.pickup.pickup_longitude), data.pickup.address || '');
+        }
         
         // Package Information
         document.getElementById('id_package_weight').value = data.package.weight || '';
@@ -723,6 +1127,11 @@
                     document.getElementById('id_pickup_name').value = selectedOption.dataset.name || '';
                     document.getElementById('id_pickup_address').value = selectedOption.dataset.address || '';
                     document.getElementById('id_pickup_phone').value = selectedOption.dataset.phone || '';
+                    if (selectedOption.dataset.lat && selectedOption.dataset.lng) {
+                        const lat = parseFloat(selectedOption.dataset.lat);
+                        const lng = parseFloat(selectedOption.dataset.lng);
+                        setPickupLocation(lat, lng, selectedOption.dataset.address || '');
+                    }
                     
                     // Add autofill badge
                     addAutofillBadges();
@@ -748,6 +1157,9 @@
         const weight = parseFloat(document.getElementById('id_package_weight').value) || 0;
         const service = document.getElementById('id_delivery_service').value;
         const zone = document.getElementById('id_delivery_zone').value;
+        const distance = parseFloat(document.getElementById('id_distance_km')?.value || '0') || 0;
+        const pickupAddress = document.getElementById('id_pickup_address')?.value || '';
+        const recipientAddress = document.getElementById('id_recipient_address')?.value || '';
         
         if (weight > 0 && service) {
             try {
@@ -764,7 +1176,10 @@
                     body: JSON.stringify({
                         weight: weight,
                         service_id: service,
-                        zone_id: zone
+                        zone_id: zone,
+                        distance: distance,
+                        pickup_address: pickupAddress,
+                        recipient_address: recipientAddress
                     })
                 });
                 
@@ -989,3 +1404,4 @@
     }
 </script>
 {% endblock %}
+

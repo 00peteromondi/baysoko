@@ -66,6 +66,34 @@ class AffiliateCommission(models.Model):
         ordering = ['-created_at']
 
 
+class AffiliateSubscriptionCommission(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('paid', 'Paid'),
+        ('canceled', 'Canceled'),
+    ]
+    TYPE_CHOICES = [
+        ('subscription', 'Subscription'),
+        ('bonus', 'Bonus'),
+    ]
+
+    affiliate = models.ForeignKey(AffiliateProfile, on_delete=models.CASCADE, related_name='subscription_commissions')
+    subscription = models.ForeignKey('storefront.Subscription', on_delete=models.CASCADE, related_name='affiliate_commissions')
+    payment = models.OneToOneField('storefront.MpesaPayment', on_delete=models.SET_NULL, null=True, blank=True, related_name='affiliate_subscription_commission')
+    referred_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='affiliate_subscription_referrals')
+    commission_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='subscription')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    rate = models.DecimalField(max_digits=5, decimal_places=4)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
 class AffiliatePayout(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -78,6 +106,10 @@ class AffiliatePayout(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     reference = models.CharField(max_length=64, blank=True)
     notes = models.TextField(blank=True)
+    phone = models.CharField(max_length=15, blank=True)
+    mpesa_reference = models.CharField(max_length=100, blank=True)
+    mpesa_status = models.CharField(max_length=20, blank=True)
+    mpesa_response = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     paid_at = models.DateTimeField(null=True, blank=True)
 

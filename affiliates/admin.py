@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils import timezone
 from django.db.models import Sum
-from .models import AffiliateProfile, AffiliateClick, AffiliateAttribution, AffiliateCommission, AffiliatePayout
+from .models import AffiliateProfile, AffiliateClick, AffiliateAttribution, AffiliateCommission, AffiliateSubscriptionCommission, AffiliatePayout
 
 
 @admin.register(AffiliateProfile)
@@ -55,3 +55,10 @@ class AffiliatePayoutAdmin(admin.ModelAdmin):
     list_display = ('affiliate', 'amount', 'status', 'reference', 'created_at', 'paid_at')
     search_fields = ('affiliate__user__username', 'reference')
     list_filter = ('status', 'created_at')
+
+
+@admin.register(AffiliateSubscriptionCommission)
+class AffiliateSubscriptionCommissionAdmin(admin.ModelAdmin):
+    list_display = ('affiliate', 'subscription', 'commission_type', 'amount', 'rate', 'status', 'created_at')
+    search_fields = ('affiliate__user__username', 'subscription__store__name')
+    list_filter = ('status', 'commission_type', 'created_at')

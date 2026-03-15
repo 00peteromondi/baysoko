@@ -30,25 +30,11 @@ def admin_required(view_func):
 
 
 def seller_or_delivery_or_admin_required(view_func):
-    """Decorator to ensure the user is a store owner (seller), delivery person, or admin."""
+    """Decorator to ensure the user is authenticated (delivery app is open to all users)."""
     @wraps(view_func)
     def _wrapped(request, *args, **kwargs):
         if not request.user.is_authenticated:
             return user_passes_test(lambda u: False)(view_func)(request, *args, **kwargs)
-        # Admins allowed
-        if request.user.is_staff or request.user.is_superuser:
-            return view_func(request, *args, **kwargs)
-        # Delivery personnel allowed
-        if hasattr(request.user, 'delivery_person'):
-            return view_func(request, *args, **kwargs)
-        # Store owners allowed
-        try:
-            from storefront.models import Store
-            if Store.objects.filter(owner=request.user).exists():
-                return view_func(request, *args, **kwargs)
-        except Exception:
-            pass
-
-        return HttpResponseForbidden('Access to delivery system is restricted to sellers and delivery personnel')
+        return view_func(request, *args, **kwargs)
 
     return _wrapped

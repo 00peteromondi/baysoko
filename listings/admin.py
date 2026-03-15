@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import Category, Listing
+from django.utils import timezone
+from .models import Category, Listing, Escrow
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
@@ -25,6 +26,29 @@ class ListingAdmin(admin.ModelAdmin):
     list_filter = ['category', 'location', 'is_sold', 'date_created']
     search_fields = ['title', 'description']
     date_hierarchy = 'date_created'
+
+
+@admin.register(Escrow)
+class EscrowAdmin(admin.ModelAdmin):
+    list_display = ['order', 'amount', 'status', 'ready_for_release', 'approved_by', 'approved_at', 'released_at', 'created_at']
+    list_filter = ['status', 'ready_for_release', 'approved_at']
+    search_fields = ['order__id', 'order__user__username']
+    actions = ['approve_escrow_release']
+
+    def approve_escrow_release(self, request, queryset):
+        approved = 0
+        skipped = 0
+        for escrow in queryset:
+            if escrow.can_approve_release():
+                ok = escrow.approve_release(approved_by=request.user)
+                if ok:
+                    approved += 1
+                else:
+                    skipped += 1
+            else:
+                skipped += 1
+        self.message_user(request, f"Escrow approvals completed. Approved: {approved}, Skipped: {skipped}")
+    approve_escrow_release.short_description = "Approve escrow release (delivered + OTP + proof)"
 
 from django.contrib import admin
 from .models import Order

@@ -1,180 +1,796 @@
-{% extends 'delivery/base.html' %}
+<!-- users/templates/users/login.html -->
+{% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Login - Delivery Management{% endblock %}
+{% block title %}Login - Baysoko Delivery{% endblock %}
+
+{% block navbar %}{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== GLOBAL RESET ===== */
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+    .main-nav, .bottom-nav, .side-nav, footer.footer, .site-footer, .footer {
+        display: none !important;
+    }
+    .main-content {
+        padding: 0 !important;
+        min-height: 100vh;
+        overflow: visible;
+    }
+
+    /* ===== MAIN CONTAINER ===== */
+    .login-container {
+        position: relative;
+        display: flex;
+        height: 100vh;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        background: var(--bg-primary);
+        overflow: hidden;
+    }
+
+    /* ===== RAINING ICONS BACKGROUND ===== */
+    .rain-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    .rain-icon {
+        position: absolute;
+        color: rgba(255, 255, 255, 0.25);
+        font-size: 2rem;
+        opacity: 0;
+        animation: bounce-rain linear infinite;
+        will-change: transform;
+        user-select: none;
+    }
+
+    @keyframes bounce-rain {
+        0% {
+            transform: translateY(-20vh) translateX(0) rotate(0deg);
+            opacity: 0.3;
+        }
+        60% {
+            transform: translateY(70vh) translateX(10px) rotate(180deg);
+            opacity: 0.7;
+        }
+        80% {
+            transform: translateY(60vh) translateX(5px) rotate(240deg);
+            opacity: 0.7;
+        }
+        100% {
+            transform: translateY(100vh) translateX(20px) rotate(360deg);
+            opacity: 0;
+        }
+    }
+
+    /* LEFT: Login Form */
+    .form-section {
+        flex: 0 0 480px;
+        background: rgba(var(--bg-primary-rgb), 0.7);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 2rem 2.5rem;
+        z-index: 2;
+        box-shadow: 4px 0 30px rgba(0, 0, 0, 0.15);
+        border-right: 1px solid var(--border-color);
+        min-height: 100vh;
+        height: auto;
+        overflow-y: auto;
+        backdrop-filter: blur(4px);
+    }
+    .form-section::-webkit-scrollbar {
+        width: 0;
+        background: transparent;
+    }
+
+    /* Form Header */
+    .form-header {
+        text-align: center;
+        margin-bottom: 0.5rem;
+        margin-top: 0.2rem;
+        animation: fadeInDown 0.8s ease-out;
+    }
+    .switch-banner {
+        margin: 0 0 0.9rem;
+        padding: 0.75rem 0.9rem;
+        border-radius: var(--radius-lg);
+        background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.12), rgba(var(--primary-rgb), 0.03));
+        border: 1px solid rgba(var(--primary-rgb), 0.25);
+        color: var(--text-primary);
+        font-size: 0.85rem;
+        display: flex;
+        gap: 0.6rem;
+        align-items: flex-start;
+        animation: fadeInDown 0.6s ease-out;
+    }
+    .switch-banner i {
+        color: var(--primary);
+        font-size: 1rem;
+        margin-top: 2px;
+    }
+    .switch-banner strong {
+        color: var(--primary);
+    }
+    .switch-banner .small-note {
+        color: var(--text-secondary);
+        font-size: 0.78rem;
+        margin-top: 0.2rem;
+        display: block;
+    }
+    .form-logo {
+        width: 60px;
+        height: 60px;
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 0.8rem;
+        box-shadow: 0 8px 16px rgba(255, 107, 53, 0.3);
+    }
+    .form-logo i {
+        font-size: 1.8rem;
+        color: white;
+    }
+    .form-title {
+        font-size: 1.8rem;
+        font-weight: 800;
+        margin-bottom: 0.2rem;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .form-subtitle {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+    }
+
+    /* Social Login */
+    .social-login-section {
+        margin-bottom: 0.3rem;
+    }
+    .social-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+        margin-bottom: 1rem;
+    }
+    .social-btn-google {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        background: transparent;
+        color: #FF6B35;
+        border: 2px solid transparent;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-size: 15px;
+        font-weight: 500;
+        text-decoration: none;
+        transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .social-btn-google:hover {
+        border-color: #FF6B35;
+        box-shadow: 0 4px 12px rgba(255,107,53,0.2);
+    }
+    .social-btn-google::before {
+        content: '';
+        width: 18px;
+        height: 18px;
+        background-image: url('https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg');
+        background-size: contain;
+        background-repeat: no-repeat;
+    }
+    .divider {
+        display: flex;
+        align-items: center;
+        margin: 1rem 0;
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+    }
+    .divider::before, .divider::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--border-color);
+    }
+    .divider span {
+        padding: 0 0.8rem;
+    }
+
+    /* Form Groups */
+    .form-group-modern {
+        margin-bottom: 1rem;
+    }
+    .form-label-modern {
+        display: block;
+        margin-bottom: 0.2rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .input-modern {
+        width: 100%;
+        padding: 0.6rem 0.8rem;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 0.9rem;
+        transition: all 0.3s ease;
+        outline: none;
+    }
+    .input-modern:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.2);
+    }
+    .input-group-modern {
+        position: relative;
+    }
+    .password-toggle {
+        position: absolute;
+        right: 0.8rem;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        cursor: pointer;
+        padding: 0.2rem;
+    }
+
+    /* Form Options */
+    .form-options {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.2rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .remember-me {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        font-size: 0.9rem;
+    }
+    .checkbox-modern {
+        width: 18px;
+        height: 18px;
+        border: 2px solid var(--border-color);
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg-primary);
+        flex-shrink: 0;
+    }
+    .checkbox-modern.checked {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+    }
+    .checkbox-modern i {
+        font-size: 0.7rem;
+        opacity: 0;
+    }
+    .checkbox-modern.checked i {
+        opacity: 1;
+    }
+    .forgot-password {
+        color: var(--primary);
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+
+    /* Submit Button */
+    .btn-modern {
+        padding: 0.8rem 1.2rem;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        border: none;
+        cursor: pointer;
+        width: 100%;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+        font-size: 0.95rem;
+        transition: all 0.3s;
+    }
+    .btn-modern:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(255, 107, 53, 0.5);
+    }
+
+    /* Register Link */
+    .register-link {
+        text-align: center;
+        margin-top: 1.2rem;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+    }
+    .register-link a {
+        color: var(--primary);
+        font-weight: 700;
+        text-decoration: none;
+    }
+
+    /* Trust Indicators */
+    .trust-indicators {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        margin-top: 0.8rem;
+        padding: 0.6rem 0.5rem;
+        background: rgba(var(--primary-rgb), 0.03);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+    }
+    .trust-item {
+        text-align: center;
+    }
+    .trust-icon {
+        font-size: 1.1rem;
+        color: var(--primary);
+        margin-bottom: 0.1rem;
+    }
+    .trust-text {
+        font-size: 0.6rem;
+        color: var(--text-secondary);
+        font-weight: 600;
+    }
+
+    /* ===== RIGHT COLUMN: VERTICAL CAROUSEL ===== */
+    .creative-section {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+        background: transparent;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 0.5rem;
+        z-index: 2;
+        height: 100vh;
+    }
+
+    .marketplace-heading {
+        text-align: center;
+        margin-bottom: 0.5rem;
+        z-index: 3;
+    }
+    .marketplace-heading h2 {
+        font-size: 2.2rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin: 0;
+        line-height: 1.2;
+        text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .marketplace-heading p {
+        color: var(--text-secondary);
+        font-size: 1rem;
+        margin-top: 0.2rem;
+        letter-spacing: 1px;
+        text-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+
+    .carousel-vertical {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        max-width: 550px;
+        height: 500px;
+        overflow: hidden;
+        border-radius: var(--radius-xl);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    }
+    .carousel-track {
+        position: relative;
+        height: 100%;
+    }
+    .carousel-slide {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.5rem;
+        opacity: 0;
+        transform: scale(0.96);
+        transform-origin: center center;
+        transition: opacity 0.32s cubic-bezier(0.2,0,0,1), transform 0.32s cubic-bezier(0.2,0,0,1);
+        box-sizing: border-box;
+    }
+    .carousel-slide.active {
+        opacity: 1;
+        transform: scale(1);
+    }
+    .card-floating {
+        background: rgba(var(--bg-primary-rgb), 0.2);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: var(--radius-xl);
+        padding: 1.2rem;
+        color: white;
+        box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+        width: 100%;
+        max-width: 450px;
+        text-align: center;
+        animation: glowPulse 4s infinite alternate;
+        overflow: hidden;
+        backdrop-filter: blur(8px);
+    }
+    @keyframes glowPulse {
+        0% { box-shadow: 0 15px 30px rgba(0,0,0,0.2); }
+        100% { box-shadow: 0 15px 50px rgba(255,107,53,0.4); }
+    }
+    .card-floating h3 {
+        font-size: 1.6rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .card-floating p {
+        font-size: 0.9rem;
+        opacity: 0.9;
+        margin-bottom: 1rem;
+        color: var(--text-secondary);
+    }
+    .card-floating .icon-large {
+        font-size: 2.5rem;
+        color: var(--secondary);
+        margin-bottom: 0.8rem;
+    }
+    .card-floating img {
+        max-width: 100%;
+        border-radius: var(--radius-md);
+        max-height: 220px;
+        object-fit: cover;
+        display: block;
+        margin: 0.6rem auto 0;
+        pointer-events: none;
+    }
+
+    .carousel-indicators {
+        display: none !important;
+    }
+
+    .animated-footer-desktop {
+        position: absolute;
+        bottom: 15px;
+        align-self: center;
+        z-index: 10;
+        font-size: 0.7rem;
+        color: rgba(255,255,255,0.7);
+        background: rgba(0,0,0,0.2);
+        padding: 0.3rem 0.8rem;
+        border-radius: 50px;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+    .animated-footer-mobile {
+        display: none;
+        text-align: center;
+        margin-top: 1rem;
+        font-size: 0.7rem;
+        color: var(--text-secondary);
+        background: transparent;
+        border-top: none;
+    }
+    .animated-footer-desktop a, .animated-footer-mobile a {
+        color: inherit;
+        text-decoration: none;
+        margin: 0 0.2rem;
+        font-weight: 600;
+    }
+
+    @keyframes fadeInDown {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 1024px) {
+        .form-section { flex: 0 0 400px; padding: 1.5rem; }
+        .carousel-vertical { height: 450px; }
+        .marketplace-heading h2 { font-size: 2rem; }
+    }
+    @media (max-width: 768px) {
+        .login-container {
+            flex-direction: column;
+            overflow-y: auto;
+            height: auto;
+            min-height: 100vh;
+        }
+        .form-section, .creative-section {
+            height: auto;
+            min-height: 50vh;
+            flex: none;
+            width: 100%;
+            overflow-y: visible;
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        .form-section {
+            order: 2;
+            padding: 1.5rem 1rem;
+        }
+        .creative-section {
+            order: 1;
+            padding: 1rem 0.5rem;
+            min-height: 50vh;
+        }
+        .carousel-vertical {
+            height: 40vh;
+            max-height: 350px;
+        }
+        .card-floating img { max-height: 120px; }
+        .animated-footer-desktop { display: none; }
+        .animated-footer-mobile { display: block; }
+        .form-title { font-size: 1.6rem; }
+        .form-logo { width: 50px; height: 50px; }
+        .form-logo i { font-size: 1.5rem; }
+        .trust-indicators { gap: 0.5rem; }
+    }
+    @media (max-width: 480px) {
+        .form-section { padding: 1rem; }
+        .form-title { font-size: 1.4rem; }
+        .form-subtitle { font-size: 0.8rem; }
+        .input-modern { padding: 0.7rem; }
+        .btn-modern { padding: 0.7rem; }
+        .card-floating { padding: 1rem; }
+        .card-floating h3 { font-size: 1.4rem; }
+        .card-floating p { font-size: 0.8rem; }
+    }
+
+    :root {
+        --bg-primary-rgb: 255, 255, 255;
+        --primary-rgb: 255, 107, 53;
+    }
+    [data-theme="dark"] {
+        --bg-primary-rgb: 18, 18, 18;
+        --primary-rgb: 255, 107, 53;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center align-items-center min-vh-75">
-    <div class="col-md-6 col-lg-5">
-        <div class="card shadow-lg">
-            <div class="card-body p-5">
-                <!-- Logo -->
-                <div class="text-center mb-4">
-                    <div class="mb-3">
-                        <i class="fas fa-truck fa-3x text-primary"></i>
-                    </div>
-                    <h2 class="mb-1">Delivery Management</h2>
-                    <p class="text-muted">Sign in to your account</p>
-                </div>
-                
-                <!-- Login Form -->
-                <form method="post" action="{% url 'delivery:login' %}">
-                    {% csrf_token %}
-                    
-                    {% if form.errors %}
-                    <div class="alert alert-danger">
-                        <i class="fas fa-exclamation-circle"></i>
-                        Invalid username or password. Please try again.
-                    </div>
-                    {% endif %}
-                    
-                    {% if next %}
-                        {% if user.is_authenticated %}
-                        <div class="alert alert-warning">
-                            Your account doesn't have access to this page. Please login with an account that has access.
-                        </div>
-                        {% else %}
-                        <div class="alert alert-info">
-                            Please login to access this page.
-                        </div>
-                        {% endif %}
-                    {% endif %}
-                    
-                    <div class="mb-3">
-                        <label for="id_username" class="form-label">Username or Email</label>
-                        <div class="input-group">
-                            <span class="input-group-text">
-                                <i class="fas fa-user"></i>
-                            </span>
-                            <input type="text" name="username" id="id_username" 
-                                   class="form-control" placeholder="Enter username or email" 
-                                   required autofocus>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="id_password" class="form-label">Password</label>
-                        <div class="input-group">
-                            <span class="input-group-text">
-                                <i class="fas fa-lock"></i>
-                            </span>
-                            <input type="password" name="password" id="id_password" 
-                                   class="form-control" placeholder="Enter password" required>
-                            <button class="btn btn-outline-secondary" type="button" 
-                                    onclick="togglePassword()">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3 form-check">
-                        <input type="checkbox" class="form-check-input" id="rememberMe">
-                        <label class="form-check-label" for="rememberMe">Remember me</label>
-                        <a href="#" class="float-end">Forgot password?</a>
-                    </div>
-                    
-                    <button type="submit" class="btn btn-primary w-100 mb-3">
-                        <i class="fas fa-sign-in-alt"></i> Sign In
-                    </button>
-                    
-                    <input type="hidden" name="next" value="{{ next }}">
-                </form>
-                
-                <div class="text-center mt-4">
-                    <p class="text-muted">Don't have an account? 
-                        {% if request.GET.next %}
-                        <a href="{% url 'delivery:register' %}?next={{ request.GET.next }}">Sign up</a>
-                        {% else %}
-                        <a href="{% url 'delivery:register' %}">Sign up</a>
-                        {% endif %}
-                    </p>
-                </div>
-                
-                <hr class="my-4">
-                
-                <!-- Driver Login -->
-                <div class="text-center">
-                    <p class="text-muted mb-2">Are you a delivery driver?</p>
-                    <a href="{% url 'delivery:driver_register' %}" class="btn btn-outline-success">
-                        <i class="fas fa-truck"></i> Driver Register
-                    </a>
+<div class="login-container">
+    <!-- RAINING ICONS BACKGROUND -->
+    <div class="rain-container" id="rainContainer"></div>
+
+    <!-- LEFT: Login Form -->
+    <div class="form-section">
+        {% if request.user.is_authenticated and not request.session.delivery_auth %}
+            <div class="switch-banner" role="alert">
+                <i class="bi bi-info-circle"></i>
+                <div>
+                    You are currently signed in to the <strong>Baysoko Marketplace</strong>.
+                    Continue here to sign in to the <strong>Delivery</strong> app.
+                    <span class="small-note">Your marketplace session will remain separate.</span>
                 </div>
             </div>
-            
-            <div class="card-footer text-center py-3">
-                <small class="text-muted">
-                    &copy; {% now "Y" %} Baysoko Delivery Management System
-                </small>
+        {% endif %}
+        <div class="form-header">
+            <div class="form-logo">
+                <i class="bi bi-person-badge"></i>
+            </div>
+            <h1 class="form-title">Welcome Back</h1>
+            <p class="form-subtitle">Sign in to your delivery account</p>
+        </div>
+
+        <!-- Django messages (if any) -->
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert" style="font-size:0.8rem; padding:0.5rem;">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        {% if form.errors %}
+            <div class="alert alert-danger" style="font-size:0.8rem; padding:0.5rem;">
+                Invalid username or password. Please try again.
+            </div>
+        {% endif %}
+
+        <div class="social-login-section">
+            <div class="social-buttons">
+                <a href="{% url 'google_login' %}?next=/delivery/dashboard/" class="social-btn-google js-capture-location" data-no-ajax>
+                    Continue with Google
+                </a>
             </div>
         </div>
-        
-        <!-- Login Help -->
-        <div class="text-center mt-4">
-            <div class="alert alert-light">
-                <small class="text-muted">
-                    <i class="fas fa-info-circle"></i>
-                    Need help? Contact support at 
-                    <a href="mailto:support@baysoko.com">support@baysoko.com</a>
-                </small>
+        <div class="divider"><span>or sign in with email</span></div>
+
+        <!-- Login Form -->
+        <form method="post" id="loginForm" novalidate data-no-ajax action="{% url 'delivery:login' %}">
+            {% csrf_token %}
+            <div class="form-group-modern">
+                <label class="form-label-modern">Email or Username *</label>
+                <input type="text" name="username" class="input-modern" id="id_username" required autofocus value="{{ form.username.value|default_if_none:'' }}">
             </div>
+            <div class="form-group-modern">
+                <label class="form-label-modern">Password *</label>
+                <div class="input-group-modern">
+                    <input type="password" name="password" class="input-modern" id="id_password" required>
+                    <button type="button" class="password-toggle" data-target="id_password">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-options">
+                <div class="remember-me" id="rememberMe">
+                    <div class="checkbox-modern" id="rememberCheckbox"><i class="bi bi-check"></i></div>
+                    <span>Remember me</span>
+                    <input type="checkbox" name="remember" id="rememberInput" style="display:none;">
+                </div>
+                <span class="forgot-password">Forgot password? Contact support.</span>
+            </div>
+
+            <button type="submit" class="btn-modern" id="submitButton">
+                <i class="bi bi-box-arrow-in-right"></i> Sign In
+            </button>
+            <input type="hidden" name="next" value="{{ next|default:'' }}">
+        </form>
+
+        <div class="register-link">
+            New to Baysoko Delivery? <a href="{% url 'delivery:register' %}">Create an account</a>
+            <span class="d-block mt-2">Want to be a driver? <a href="{% url 'delivery:driver_register' %}">Register as a driver</a></span>
+        </div>
+
+        <div class="trust-indicators">
+            <div class="trust-item"><i class="bi bi-shield-check trust-icon"></i><div class="trust-text">SSL Secure</div></div>
+            <div class="trust-item"><i class="bi bi-lock trust-icon"></i><div class="trust-text">Privacy First</div></div>
+            <div class="trust-item"><i class="bi bi-award trust-icon"></i><div class="trust-text">Verified</div></div>
+        </div>
+
+        <!-- Mobile footer -->
+        <div class="animated-footer-mobile">
+            © 2026 Baysoko Delivery. <a href="#">Privacy</a> • <a href="#">Terms</a>
+        </div>
+    </div>
+
+    <!-- RIGHT: Creative Carousel -->
+    <div class="creative-section">
+        <div class="marketplace-heading">
+            <h2>Baysoko Delivery</h2>
+            <p>Fast, trackable, and secure deliveries</p>
+        </div>
+        <div class="carousel-vertical">
+            <div class="carousel-track" id="carouselTrack">
+                <div class="carousel-slide">
+                    <div class="card-floating">
+                        <i class="bi bi-shield-check icon-large"></i>
+                        <h3>Safe & Secure</h3>
+                        <p>Verified drivers and secure delivery flow.</p>
+                        <img src="https://images.unsplash.com/photo-1563013544-824ae1b704d3?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80" alt="Secure">
+                    </div>
+                </div>
+                <div class="carousel-slide">
+                    <div class="card-floating">
+                        <i class="bi bi-truck icon-large"></i>
+                        <h3>Fast Delivery</h3>
+                        <p>Reliable dispatch and live tracking.</p>
+                        <img src="https://imgs.search.brave.com/e8md7E90wCHLK_XJtODBp-Y6dTEdd24hgLqPkVGLeuM/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly90aHVt/YnMuZHJlYW1zdGlt/ZS5jb20vYi9icmVh/ZC1kZWxpdmVyeS10/cnVjay1wYXJrZWQt/bWFuYXNzYXMtdmly/Z2luaWEtdXNhLTM5/ODQ2ODA3MS5qcGc" alt="Delivery">
+                    </div>
+                </div>
+                <div class="carousel-slide">
+                    <div class="card-floating">
+                        <i class="bi bi-chat-dots icon-large"></i>
+                        <h3>Live Updates</h3>
+                        <p>Track status changes in real time.</p>
+                        <img src="https://imgs.search.brave.com/hpZzo-XLMrz_BH6ECBQ5OWNJzxoqUoOdkUWkGFidmAk/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly90NC5m/dGNkbi5uZXQvanBn/LzA2LzA5LzkxLzM3/LzM2MF9GXzYwOTkx/Mzc2Nl9EWWE5aTRh/cWhwYWlKV2xjcFB3/bHNyZVh5N2I4Rmxh/cC5qcGc" alt="Chat">
+                    </div>
+                </div>
+                <div class="carousel-slide">
+                    <div class="card-floating">
+                        <i class="bi bi-graph-up icon-large"></i>
+                        <h3>Operational Insights</h3>
+                        <p>Measure delivery performance easily.</p>
+                        <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80" alt="Analytics">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Desktop footer -->
+        <div class="animated-footer-desktop">
+            © 2026 Baysoko Delivery. <a href="#">Privacy</a> • <a href="#">Terms</a> • <a href="#">Sitemap</a>
         </div>
     </div>
 </div>
 
-{% block extra_js %}
-<script>
-    function togglePassword() {
-        const passwordField = document.getElementById('id_password');
-        const toggleIcon = event.currentTarget.querySelector('i');
-        
-        if (passwordField.type === 'password') {
-            passwordField.type = 'text';
-            toggleIcon.classList.remove('fa-eye');
-            toggleIcon.classList.add('fa-eye-slash');
-        } else {
-            passwordField.type = 'password';
-            toggleIcon.classList.remove('fa-eye-slash');
-            toggleIcon.classList.add('fa-eye');
-        }
-    }
-    
-    // Auto-focus on username field
-    document.addEventListener('DOMContentLoaded', function() {
-        document.getElementById('id_username').focus();
-    });
-    
-    // Handle Enter key for form submission
-    document.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && !e.target.matches('button, a')) {
-            const form = document.querySelector('form');
-            if (form) {
-                const submitButton = form.querySelector('button[type="submit"]');
-                if (submitButton) {
-                    submitButton.click();
-                }
-            }
-        }
-    });
-</script>
+<!-- Global message container -->
+<div id="globalMessageContainer" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
 
-<style>
-    .min-vh-75 {
-        min-height: 75vh;
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const rainContainer = document.getElementById('rainContainer');
+    const icons = ['bi-truck', 'bi-geo-alt', 'bi-clock', 'bi-box', 'bi-shield-check', 'bi-chat-dots'];
+    if (rainContainer) {
+        for (let i = 0; i < 40; i++) {
+            const icon = document.createElement('i');
+            icon.classList.add('bi', icons[Math.floor(Math.random() * icons.length)], 'rain-icon');
+            icon.style.left = `${Math.random() * 100}vw`;
+            icon.style.animationDuration = `${4 + Math.random() * 3}s`;
+            icon.style.animationDelay = `${Math.random() * 2}s`;
+            icon.style.fontSize = `${1 + Math.random() * 2}rem`;
+            rainContainer.appendChild(icon);
+        }
     }
-    
-    .card {
-        border: none;
-        border-radius: 15px;
+
+    const track = document.getElementById('carouselTrack');
+    const slides = document.querySelectorAll('.carousel-slide');
+    if (track && slides.length) {
+        let currentIndex = 0;
+        const carousel = document.querySelector('.carousel-vertical');
+        setInterval(() => {
+            currentIndex = (currentIndex + 1) % slides.length;
+            const offset = -currentIndex * (carousel.clientHeight);
+            track.style.transform = `translateY(${offset}px)`;
+        }, 4200);
     }
-    
-    .input-group-text {
-        background: #f8f9fa;
-        border-right: none;
+
+    document.querySelectorAll('.password-toggle').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const target = document.getElementById(this.dataset.target);
+            const icon = this.querySelector('i');
+            if (!target) return;
+            if (target.type === 'password') {
+                target.type = 'text';
+                icon.classList.replace('bi-eye', 'bi-eye-slash');
+            } else {
+                target.type = 'password';
+                icon.classList.replace('bi-eye-slash', 'bi-eye');
+            }
+        });
+    });
+
+    const rememberMe = document.getElementById('rememberMe');
+    const rememberCheckbox = document.getElementById('rememberCheckbox');
+    const rememberInput = document.getElementById('rememberInput');
+    if (rememberMe && rememberCheckbox && rememberInput) {
+        rememberMe.addEventListener('click', () => {
+            rememberInput.checked = !rememberInput.checked;
+            rememberCheckbox.classList.toggle('active', rememberInput.checked);
+        });
+        if (localStorage.getItem('rememberMe') === 'true') {
+            rememberInput.checked = true;
+            rememberCheckbox.classList.add('active');
+        }
     }
-    
-    .form-control:focus {
-        border-color: #3498db;
-        box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
-    }
-</style>
+});
+</script>
 {% endblock %}
-{% endblock %}
+
+

@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 from datetime import timedelta
@@ -11,8 +11,29 @@ from django.core.exceptions import ValidationError
 from .models import (
     DeliveryRequest, DeliveryPerson, DeliveryService, DeliveryZone,
     DeliveryProof, DeliveryRating, DeliveryTimeSlot, DeliveryPricingRule,
-    DeliveryPackageType
+    DeliveryPackageType, DeliveryProfile
 )
+
+
+class DeliveryUserCreationForm(UserCreationForm):
+    first_name = forms.CharField(max_length=150, required=True)
+    last_name = forms.CharField(max_length=150, required=True)
+    email = forms.EmailField(required=True)
+
+    class Meta(UserCreationForm.Meta):
+        model = get_user_model()
+        fields = ('first_name', 'last_name', 'username', 'email', 'password1', 'password2')
+
+
+class DeliveryProfileForm(forms.ModelForm):
+    class Meta:
+        model = DeliveryProfile
+        fields = ['phone_number', 'address', 'city']
+        widgets = {
+            'phone_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '0712345678'}),
+            'address': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Street, Building, Landmark'}),
+            'city': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'City'}),
+        }
 
 
 class DeliveryRequestForm(forms.ModelForm):
@@ -155,7 +176,7 @@ class DeliveryPersonForm(forms.ModelForm):
         # Add Bootstrap classes
         for field_name, field in self.fields.items():
             if field_name != 'verification_document':
-                field.widget.attrs.update({'class': 'form-control'})
+                field.widget.attrs.update({'class': 'form-control input-modern'})
     
     def clean_phone(self):
         phone = self.cleaned_data.get('phone')

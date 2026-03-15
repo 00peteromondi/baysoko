@@ -20,6 +20,7 @@
 
     /* Attachment preview styles (blurred loader, central X) */
     #attachmentsPreview { display:flex; gap:10px; flex-wrap:wrap; }
+    #attachmentsPreview:empty { display: none; }
     .preview-item { position:relative; width:120px; height:120px; overflow:hidden; border-radius:10px; }
     .preview-item .attachment-image { width:100%; height:100%; background-size:cover; background-position:center; display:flex; align-items:center; justify-content:center; }
     .preview-item .attachment-image.loading { filter: blur(8px) saturate(0.9); position:relative; }
@@ -142,6 +143,12 @@
     body.chat-active .main-nav,
     body.chat-active .bottom-nav,
     body.chat-active .footer {
+        display: none !important;
+    }
+
+    /* Hide floating agent widget inside inbox view */
+    body.inbox-view .agent-widget-floating,
+    body.inbox-view .agent-proactive-bubble {
         display: none !important;
     }
 
@@ -2161,6 +2168,8 @@ let attachments = [];
 let temporaryMessages = new Map();
 let otherIsTyping = false;
 let otherTypingName = '';
+let currentParticipantIsAssistant = false;
+let assistantTypingTimeout = null;
 let tempIdCounter = 0;
 let galleryImages = [];
 let galleryIndex = 0;
@@ -2580,6 +2589,9 @@ function filterRelevantAssistantItems(items, text, promptContext) {
     if (/\b(subscription|subscriptions|plan|plans|billing|renew|upgrade|downgrade|cancel subscription|payment option)\b/.test(contextText)) {
         return [...items.filter(it => it && ['subscription', 'subscription_plan', 'store'].includes(it.type)), ...actionItems].slice(0, 6);
     }
+    if (/\b(affiliate|affiliates|referral|referrals|commission|commissions|payout|payouts)\b/.test(contextText)) {
+        return [...items.filter(it => it && it.type === 'affiliate'), ...actionItems].slice(0, 6);
+    }
     if (/\b(order|orders|track|delivery)\b/.test(contextText)) {
         return [...items.filter(it => it && it.type === 'order'), ...actionItems].slice(0, 6);
     }
@@ -2831,12 +2843,14 @@ function renderGroupedConversations(groups) {
             else if (g.last_message_status === 'read') iconClass = 'bi-check2-all status-read';
             statusIcon = `<i class="bi ${iconClass} message-status-icon"></i>`;
         }
+        const isAssistantParticipant = (g.is_assistant === true) || (/assistant/i.test(String(g.participant_name || ''))) || (g.participant_role === 'assistant');
         html += `
         <div class="conversation-item" data-participant-id="${g.participant_id}"
              data-participant-name="${escapeHtml(g.participant_name)}"
              data-participant-avatar="${avatar}"
              data-is-online="${isOnline}"
-             data-last-seen="${g.last_seen || ''}">
+             data-last-seen="${g.last_seen || ''}"
+             data-is-assistant="${isAssistantParticipant}">
             <div class="conversation-avatar">
                 <img src="${avatar}" class="avatar-img">
                 <div class="online-status ${isOnline ? 'online' : ''}"></div>
@@ -2872,12 +2886,14 @@ function renderArchivedConversations() {
     let html = '';
     archivedConversations.forEach(g => {
         const avatar = g.participant_avatar || 'https://placehold.co/200x200/c2c2c2/1f1f1f?text=User';
+        const isAssistantParticipant = (g.is_assistant === true) || (/assistant/i.test(String(g.participant_name || ''))) || (g.participant_role === 'assistant');
         html += `
         <div class="conversation-item archived" data-participant-id="${g.participant_id}"
              data-participant-name="${escapeHtml(g.participant_name)}"
              data-participant-avatar="${avatar}"
              data-is-online="false"
-             data-last-seen="${g.last_seen || ''}">
+             data-last-seen="${g.last_seen || ''}"
+             data-is-assistant="${isAssistantParticipant}">
             <div class="conversation-avatar">
                 <img src="${avatar}" class="avatar-img">
                 <div class="online-status"></div>
@@ -2946,6 +2962,8 @@ async function openUnifiedConversation(dataset) {
     currentParticipantAvatar = dataset.participantAvatar;
     currentParticipantIsOnline = dataset.isOnline === 'true';
     currentParticipantLastSeen = dataset.lastSeen || null;
+    currentParticipantIsAssistant = String(dataset.isAssistant || '').toLowerCase() === 'true'
+        || /assistant/i.test(String(dataset.participantName || ''));
 
     if (isNaN(pid)) return;
 
@@ -2993,6 +3011,10 @@ async function openUnifiedConversation(dataset) {
     replyingTo = null;
     hideReplyPreview();
     otherIsTyping = false;
+    if (assistantTypingTimeout) {
+        clearTimeout(assistantTypingTimeout);
+        assistantTypingTimeout = null;
+    }
     const batchActionsBarEl = document.getElementById('batchActionsBar');
     if (batchActionsBarEl) batchActionsBarEl.classList.remove('active');
 
@@ -3063,6 +3085,13 @@ async function fetchUnifiedMessages(participantId) {
                     });
                     allMessages.push(...newMsgs);
                     lastMessageId = Math.max(...newMsgs.map(m => m.id));
+                    if (currentParticipantIsAssistant && newMsgs.some(m => isAssistantMessage(m) && m.sender_id !== window.currentUserId)) {
+                        otherIsTyping = false;
+                        if (assistantTypingTimeout) {
+                            clearTimeout(assistantTypingTimeout);
+                            assistantTypingTimeout = null;
+                        }
+                    }
                     try { loadGroupedConversations(); updateTotalUnreadCount(); } catch (e) { console.warn('refresh grouped convs failed', e); }
                 }
             }
@@ -3379,6 +3408,13 @@ function formatStructuredMessage(d, shouldSyncCart) {
                 if (it.status) metaHtml += `<span><i class="bi bi-info-circle"></i> ${escapeHtml(it.status)}</span>`;
                 if (compactReason) metaHtml += `<span><i class="bi bi-lightbulb"></i> ${escapeHtml(compactReason)}</span>`;
                 actionsHtml = it.url ? `<a href="${it.url}" class="agent-action-link" target="_blank">Manage</a>` : '';
+            } else if (it.type === 'affiliate') {
+                if (it.code) metaHtml += `<span><i class="bi bi-person-badge"></i> Code: ${escapeHtml(it.code)}</span>`;
+                if (compactReason) metaHtml += `<span><i class="bi bi-lightbulb"></i> ${escapeHtml(compactReason)}</span>`;
+                actionsHtml = it.url ? `<a href="${it.url}" class="agent-action-link" target="_blank">Open</a>` : '';
+                if (it.link) {
+                    actionsHtml += ` <button class="agent-action-add" onclick="navigator.clipboard.writeText('${escapeHtml(String(it.link)).replace(/'/g, '&#039;')}')">Copy link</button>`;
+                }
             } else if (it.type === 'action_suggestion') {
                 actionsHtml = it.url ? `<a href="${it.url}" class="agent-action-link" target="_blank">Open</a>` : '';
             }
@@ -3585,6 +3621,17 @@ async function sendMessage() {
     temporaryMessages.set(tempId, tempMessage);
     renderMessages();
 
+    if (currentParticipantIsAssistant) {
+        otherIsTyping = true;
+        otherTypingName = 'Baysoko Assistant';
+        renderMessages();
+        if (assistantTypingTimeout) clearTimeout(assistantTypingTimeout);
+        assistantTypingTimeout = setTimeout(() => {
+            otherIsTyping = false;
+            renderMessages();
+        }, 15000);
+    }
+
     // Build FormData for server
     const formData = new FormData();
     formData.append('participant_id', currentParticipantId);
@@ -3619,6 +3666,13 @@ async function sendMessage() {
                 incomingAnimatedMessageIds.add(String(aiMsg.id));
                 lastMessageId = Math.max(lastMessageId, aiMsg.id);
             }
+            if (currentParticipantIsAssistant) {
+                otherIsTyping = false;
+                if (assistantTypingTimeout) {
+                    clearTimeout(assistantTypingTimeout);
+                    assistantTypingTimeout = null;
+                }
+            }
             // Remove temporary message from display
             temporaryMessages.delete(tempId);
             renderMessages();
@@ -3629,6 +3683,13 @@ async function sendMessage() {
                 failedMsg.status = 'failed';
                 renderMessages();
             }
+            if (currentParticipantIsAssistant) {
+                otherIsTyping = false;
+                if (assistantTypingTimeout) {
+                    clearTimeout(assistantTypingTimeout);
+                    assistantTypingTimeout = null;
+                }
+            }
             showToast('Failed to send message', 'error');
         }
     } catch (e) {
@@ -3637,6 +3698,13 @@ async function sendMessage() {
         if (failedMsg) {
             failedMsg.status = 'failed';
             renderMessages();
+        }
+        if (currentParticipantIsAssistant) {
+            otherIsTyping = false;
+            if (assistantTypingTimeout) {
+                clearTimeout(assistantTypingTimeout);
+                assistantTypingTimeout = null;
+            }
         }
         showToast('Error sending message', 'error');
     } finally {
@@ -4375,6 +4443,7 @@ function handleMessageUpdate(data) {
 
 // ========== INITIALIZATION ==========
 document.addEventListener('DOMContentLoaded', () => {
+    document.body.classList.add('inbox-view');
     window.currentUserId = {{ request.user.id|default:"null" }};
 
     loadOnlineUsers();

@@ -78,3 +78,27 @@ def manifest(request):
             return HttpResponse(fh.read(), content_type='application/manifest+json')
     except Exception:
         return HttpResponse('', content_type='application/manifest+json', status=500)
+
+
+@csrf_exempt
+def pwa_install_event(request):
+    """Record a best-effort PWA install event."""
+    try:
+        if request.method != 'POST':
+            return JsonResponse({'ok': False}, status=405)
+        payload = {
+            'user_id': getattr(request.user, 'id', None) if getattr(request, 'user', None) and request.user.is_authenticated else None,
+            'user_agent': request.META.get('HTTP_USER_AGENT', ''),
+            'ip': request.META.get('REMOTE_ADDR', ''),
+        }
+        try:
+            log_dir = os.path.join(settings.BASE_DIR, 'logs')
+            os.makedirs(log_dir, exist_ok=True)
+            log_file = os.path.join(log_dir, 'pwa_installs.log')
+            with open(log_file, 'a', encoding='utf-8') as fh:
+                fh.write(json.dumps(payload, ensure_ascii=False) + '\n')
+        except Exception:
+            pass
+        return JsonResponse({'ok': True})
+    except Exception:
+        return JsonResponse({'ok': False}, status=500)
