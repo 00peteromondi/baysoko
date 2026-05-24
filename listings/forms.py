@@ -263,14 +263,18 @@ class ListingForm(forms.ModelForm):
                     # Backward-compatible path for old listings whose store text no longer maps cleanly.
                     cleaned_data['location'] = existing_location
                 else:
-                    self.add_error('location', 'Store location must match a known listing location. Update the store location to proceed.')
+                    # Do not block sellers from creating listings because a
+                    # store location does not map cleanly to the legacy
+                    # location choices. Fall back to a safe default while the
+                    # actual store text remains on the storefront.
+                    cleaned_data['location'] = next(iter(valid_choices), 'HB_Town')
             elif store and not getattr(store, 'location', None):
                 if submitted_location in valid_choices:
                     cleaned_data['location'] = submitted_location
                 elif existing_location in valid_choices:
                     cleaned_data['location'] = existing_location
                 else:
-                    self.add_error('location', 'Store location is missing. Update the store location to proceed.')
+                    cleaned_data['location'] = next(iter(valid_choices), 'HB_Town')
         except Exception:
             pass
 

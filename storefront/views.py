@@ -370,40 +370,9 @@ def store_create(request):
                 # Automatically assign Free plan semantics (no DB Subscription required)
                 # Inform user via Django messages, create an in-app notification, and send email.
                 try:
-                    from notifications.utils import create_notification, NotificationService
-                    # In-app notification
-                    try:
-                        create_notification(
-                            recipient=request.user,
-                            notification_type='store_created',
-                            title='Store Created',
-                            message=f'Your store "{store.name}" was created and is on the Free plan.',
-                            sender=None,
-                            related_object_id=store.id,
-                            related_content_type='store',
-                            action_url=store.get_absolute_url(),
-                            action_text='View Store'
-                        )
-                    except Exception:
-                        pass
-
-                    # Email notification via NotificationService for nicer HTML email
-                    try:
-                        email_context = {
-                            'user': request.user,
-                            'store': store,
-                            'store_url': request.build_absolute_uri(store.get_absolute_url()),
-                        }
-                        NotificationService.send_email(
-                            to_email=request.user.email,
-                            subject=f'Your store "{store.name}" has been created',
-                            template_name='emails/store_created.html',
-                            context=email_context
-                        )
-                    except Exception:
-                        pass
+                    from notifications.utils import notify_store_created
+                    notify_store_created(request.user, store)
                 except Exception:
-                    # If notifications app missing or other errors occur, continue gracefully
                     pass
 
                 messages.success(request, 'Store created successfully! Your store is now on the Free plan.')
@@ -606,7 +575,7 @@ def product_create(request, store_slug):
     user_stores = Store.objects.filter(owner=request.user)
 
     if request.method == 'POST':
-        form = ListingForm(request.POST, request.FILES)
+        form = ListingForm(request.POST, request.FILES, user=request.user)
         if form.is_valid():
             listing = form.save(commit=False)
             listing.seller = request.user
@@ -650,7 +619,7 @@ def product_create(request, store_slug):
                 messages.success(request, 'Listing created successfully')
             return redirect('storefront:store_detail', slug=store.slug)
     else:
-        form = ListingForm()
+        form = ListingForm(user=request.user)
 
     # Render using the same template as the generic ListingCreateView so users see the identical "Sell Item" form
     categories = Category.objects.filter(is_active=True)
@@ -683,7 +652,7 @@ def product_edit(request, pk):
                     messages.info(request, 'No main image to remove.')
             return redirect('storefront:product_edit', pk=product.pk)
 
-        form = ListingForm(request.POST, request.FILES, instance=product)
+        form = ListingForm(request.POST, request.FILES, instance=product, user=request.user)
         if form.is_valid():
             listing = form.save(commit=False)
             
@@ -754,7 +723,7 @@ def product_edit(request, pk):
                 if errors:
                     messages.error(request, f"{field}: {errors[0]}")
     else:
-        form = ListingForm(instance=product)
+        form = ListingForm(instance=product, user=request.user)
     
     # Add categories for form and editing flag
     context = {

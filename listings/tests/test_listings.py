@@ -1,9 +1,25 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from listings.models import Category, Listing
+from storefront.models import Store
 
-
+@override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])
 class ListingCreatePermissionTests(TestCase):
+    def create_verified_user(self, username, password='testpass'):
+        User = get_user_model()
+        return User.objects.create_user(
+            username=username,
+            password=password,
+            email=f'{username}@example.com',
+            phone_number='+254700000000',
+            location='Homa Bay Town',
+            email_verified=True,
+            phone_verified=True,
+            is_verified=True,
+        )
+
     def test_anonymous_user_redirects_to_login(self):
         """Anonymous users should be redirected to login with next param."""
         url = reverse('listing-create')
@@ -15,11 +31,9 @@ class ListingCreatePermissionTests(TestCase):
 
     def test_authenticated_user_gets_listing_create(self):
         """Logged-in users can access the listing create page."""
-        User = get_user_model()
-        user = User.objects.create_user(username='seller1', password='testpass')
+        user = self.create_verified_user('seller1')
         self.client.login(username='seller1', password='testpass')
         # Ensure the user has a store so the view allows access
-        from storefront.models import Store
         Store.objects.create(owner=user, name='Seller1 Store', slug='seller1-store')
         url = reverse('listing-create')
         resp = self.client.get(url)
@@ -27,13 +41,10 @@ class ListingCreatePermissionTests(TestCase):
 
     def test_category_schemas_include_group_fallback(self):
         """The create view should deliver schemas for child categories via their group."""
-        User = get_user_model()
-        user = User.objects.create_user(username='seller3', password='pass3')
+        user = self.create_verified_user('seller3', password='pass3')
         self.client.login(username='seller3', password='pass3')
-        from storefront.models import Store
         Store.objects.create(owner=user, name='Store3', slug='store3')
 
-        from .models import Category
         group_key = 'services2'
         parent_schema = {'fields': [{'name': 'foo', 'label': 'Foo', 'required': False, 'type': 'text'}]}
         parent = Category.objects.create(name='ServicesGroup', schema_group=group_key, fields_schema=parent_schema)
@@ -48,14 +59,11 @@ class ListingCreatePermissionTests(TestCase):
 
     def test_listing_form_group_schema_fallback(self):
         """A category without its own schema should inherit fields from its group."""
-        from .forms import ListingForm
-        from .models import Category, Listing
+        from listings.forms import ListingForm
         import json
 
-        User = get_user_model()
-        user = User.objects.create_user(username='seller2', password='pass')
+        user = self.create_verified_user('seller2', password='pass')
         # create a store for the user to satisfy store requirement
-        from storefront.models import Store
         store = Store.objects.create(owner=user, name='Store2', slug='store2')
 
         # define a group key and schema on the parent
@@ -77,9 +85,41 @@ class ListingCreatePermissionTests(TestCase):
             'store': str(store.id),
             'dynamic_fields': json.dumps({'consultation_length': '30'})
         }
-        form = ListingForm(data=data, user=user)
+        image = SimpleUploadedFile('listing.jpg', b'filecontent', content_type='image/jpeg')
+        form = ListingForm(data=data, files={'image': image}, user=user)
         self.assertTrue(form.is_valid(), msg=form.errors.as_json())
         self.assertEqual(form.cleaned_data['dynamic_fields']['consultation_length'], '30')
+
+    def test_invalid_listing_post_returns_full_context_and_field_errors(self):
+        user = self.create_verified_user('seller4', password='pass4')
+        self.client.login(username='seller4', password='pass4')
+        store = Store.objects.create(owner=user, name='Store4', slug='store4')
+        category = Category.objects.create(name='Stationery')
+
+        response = self.client.post(
+            reverse('listing-create'),
+            data={
+                'title': '',
+                'description': '',
+                'price': '',
+                'category': str(category.id),
+                'location': Listing.HOMABAY_LOCATIONS[0][0],
+                'condition': '',
+                'delivery_option': '',
+                'stock': '',
+                'store': str(store.id),
+                'dynamic_fields': '{}',
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('form', response.context)
+        self.assertIn('categories', response.context)
+        self.assertIn('stores', response.context)
+        self.assertTrue(response.context['form'].errors)
+        self.assertContains(response, 'Please fix the highlighted fields before saving your listing.')
+        self.assertContains(response, 'Title')
+        self.assertContains(response, 'Description')
 
 
 

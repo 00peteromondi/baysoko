@@ -984,6 +984,8 @@ class Payment(models.Model):
         a receipt number. The DB column is NOT NULL, so coerce None to an
         empty string and store a string representation for debugging.
         """
+        if self.status == 'completed':
+            return
         self.status = 'completed'
         # Ensure we never write NULL into the non-nullable DB column
         if transaction_id is None:
@@ -996,6 +998,20 @@ class Payment(models.Model):
 
         # Mark order as paid
         self.order.mark_as_paid()
+
+        try:
+            from notifications.utils import notify_order_paid, notify_payment_received
+
+            notify_order_paid(self.order.user, self.order)
+            seen_sellers = set()
+            for order_item in self.order.order_items.select_related('listing__seller'):
+                seller = getattr(order_item.listing, 'seller', None)
+                if not seller or seller.pk in seen_sellers:
+                    continue
+                seen_sellers.add(seller.pk)
+                notify_payment_received(seller, self.order.user, self.order)
+        except Exception:
+            logger.exception('Failed sending payment completion notifications for order %s', self.order_id)
 
         # If there is an escrow record attached to the order and it's held,
         # ensure the escrow object references are consistent. Do NOT release here;

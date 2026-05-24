@@ -13,38 +13,14 @@ def listing_post_save(sender, instance, created, **kwargs):
     """Create in-app notification when a listing is created or updated."""
     try:
         # Import here to avoid circular imports
-        from notifications.utils import create_notification
+        from notifications.utils import notify_listing_saved
 
         recipient = getattr(instance, 'seller', None) or getattr(instance, 'owner', None)
         if not recipient:
             # Nothing to notify
             return
 
-        listing_url = ''
-        try:
-            listing_url = reverse('listing-detail', args=[instance.pk])
-        except Exception:
-            listing_url = f'/listing/{instance.pk}/'
-
-        if created:
-            title = 'Listing Created'
-            message = f'Your listing "{instance.title}" was created successfully.'
-            notification_type = 'listing_created'
-        else:
-            title = 'Listing Updated'
-            message = f'Your listing "{instance.title}" was updated successfully.'
-            notification_type = 'listing_updated'
-
-        create_notification(
-            recipient=recipient,
-            notification_type=notification_type,
-            title=title,
-            message=message,
-            related_object_id=instance.pk,
-            related_content_type='listing',
-            action_url=listing_url,
-            action_text='View Listing'
-        )
+        notify_listing_saved(recipient, instance, created=created)
         logger.info(f"Created notification for listing {instance.pk} (created={created})")
     except Exception as e:
         logger.exception('Failed to create listing notification: %s', e)
@@ -66,19 +42,10 @@ from .models import Listing, Review
 @receiver(post_save, sender=Listing)
 def listing_saved(sender, instance, created, **kwargs):
     try:
-        if not render_and_send:
-            return
-        ctx = {
-            'listing': instance,
-            'user': instance.seller,
-            'site_url': getattr(settings, 'SITE_URL', ''),
-        }
-        if created:
-            subject = f'Your listing "{instance.title}" has been created'
-            render_and_send('emails/listing_created.html', 'emails/listing_created.txt', ctx, subject, [instance.seller.email])
-        else:
-            subject = f'Your listing "{instance.title}" was updated'
-            render_and_send('emails/listing_edited.html', 'emails/listing_edited.txt', ctx, subject, [instance.seller.email])
+        # Listing create/update notifications are now centralized in
+        # notifications.utils.notify_listing_saved so SMS, email, and in-app
+        # alerts stay in sync without duplicate sends.
+        return
     except Exception:
         logger.exception('Error sending listing saved email')
 

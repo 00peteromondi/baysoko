@@ -126,6 +126,14 @@ CLOUDINARY_URL = os.environ.get('CLOUDINARY_URL', '')
 BREVO_API_KEY = config('BREVO_API_KEY', default='')
 BREVO_SMS_SENDER = config('BREVO_SMS_SENDER', default='Baysoko')
 BREVO_SMS_ENABLED = config('BREVO_SMS_ENABLED', default=False, cast=bool)
+SMS_PROVIDER = config('SMS_PROVIDER', default='twilio')
+TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='')
+TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='')
+TWILIO_FROM_NUMBER = config('TWILIO_FROM_NUMBER', default='')
+TWILIO_MESSAGING_SERVICE_SID = config('TWILIO_MESSAGING_SERVICE_SID', default='')
+TWILIO_SMS_ENABLED = config('TWILIO_SMS_ENABLED', default=False, cast=bool)
+SMS_MAX_ATTEMPTS = config('SMS_MAX_ATTEMPTS', default=3, cast=int)
+SMS_BACKOFF_BASE = config('SMS_BACKOFF_BASE', default=1, cast=int)
 BREVO_SENDER_EMAIL = config('BREVO_SENDER_EMAIL', default='')
 BREVO_SENDER_NAME = config('BREVO_SENDER_NAME', default='Baysoko')
 CELERY_TASK_ALWAYS_EAGER = config('CELERY_TASK_ALWAYS_EAGER', default=False, cast=bool)
@@ -625,7 +633,7 @@ GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')
 
 # Delivery notification settings
 ENABLE_EMAIL_NOTIFICATIONS = config('ENABLE_EMAIL_NOTIFICATIONS', default=True, cast=bool)
-ENABLE_SMS_NOTIFICATIONS = config('ENABLE_SMS_NOTIFICATIONS', default=False, cast=bool)
+ENABLE_SMS_NOTIFICATIONS = config('ENABLE_SMS_NOTIFICATIONS', default=True, cast=bool)
 # E-commerce platform configuration
 ECOMMERCE_PLATFORM_NAME = config('ECOMMERCE_PLATFORM_NAME', default='Baysoko')
 ECOMMERCE_WEBHOOK_URL = config(

@@ -4,7 +4,8 @@ from django.core.exceptions import ValidationError
 from .models import Order, OrderItem, Activity
 from notifications.utils import (
     notify_order_shipped, notify_delivery_assigned,
-    notify_delivery_confirmed, create_notification
+    notify_delivery_confirmed, create_notification, notify_order_status_update,
+    notify_delivery_status, notify_order_delivered
 )
 from .dispute_utils import DisputeManager
 
@@ -172,6 +173,10 @@ class OrderManager:
                 order,
                 notes.get('tracking_number') if notes else None
             )
+            sellers = {item.listing.seller for item in order.order_items.select_related('listing__seller') if getattr(item.listing, 'seller', None)}
+            for seller in sellers:
+                notify_delivery_status(seller, order, f'Order #{order.id} has been marked as shipped. Keep tracking fulfilment and buyer delivery progress.')
+            notify_order_status_update(order.user, order, 'shipped')
 
         elif new_status == 'delivered':
             # Notify all sellers
@@ -181,6 +186,8 @@ class OrderManager:
                     order.user,
                     order
                 )
+            notify_order_delivered(order.user, order)
+            notify_order_status_update(order.user, order, 'delivered')
 
         elif new_status == 'disputed':
             # Notify all parties
@@ -190,9 +197,18 @@ class OrderManager:
             for recipient in recipients:
                 create_notification(
                     recipient=recipient,
-                    notification_type='dispute',
+                    notification_type='system',
                     title='Order Disputed',
                     message=f'Order #{order.id} has been marked as disputed',
                     related_object_id=order.id,
                     related_content_type='order'
                 )
+        elif new_status in {'paid', 'cancelled'}:
+            notify_order_status_update(order.user, order, new_status)
+            sellers = {item.listing.seller for item in order.order_items.select_related('listing__seller') if getattr(item.listing, 'seller', None)}
+            for seller in sellers:
+                seller_message = (
+                    f'Order #{order.id} has been {new_status}. '
+                    + ('Please stop fulfilment and review the order.' if new_status == 'cancelled' else 'The buyer payment is confirmed.')
+                )
+                notify_delivery_status(seller, order, seller_message)

@@ -1137,8 +1137,9 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
         if selected_store:
             # Ensure the selected store belongs to the current user
             if selected_store.owner != self.request.user:
-                messages.error(self.request, "Invalid store selection.")
-                return render(self.request, 'listings/listing_form.html', {'form': form, 'categories': Category.objects.filter(is_active=True), 'stores': Store.objects.filter(owner=self.request.user)})
+                form.add_error('store', 'Please select one of your own stores for this listing.')
+                messages.error(self.request, "Please fix the highlighted errors and try again.")
+                return self.render_to_response(self.get_context_data(form=form), status=400)
             user_store = selected_store
 
         # If plan does not allow more listings, show upgrade prompt
@@ -1166,8 +1167,7 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
                 if isinstance(e, cloud_ex.BadRequest) or ('Stale request' in str(e)):
                     logger.exception('Cloudinary BadRequest during listing create: %s', e)
                     messages.error(self.request, 'Image upload failed due to a timestamp mismatch with the image service. Please check your server clock or retry. If the problem persists, contact support.')
-                    context = self.get_context_data(form=form)
-                    return render(self.request, 'listings/listing_form.html', context)
+                    return self.render_to_response(self.get_context_data(form=form), status=400)
             except Exception:
                 # fall through to generic error handling
                 pass
@@ -1318,6 +1318,13 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
         except Exception:
             logger.exception('Failed to broadcast listing_created')
         return response
+
+    def form_invalid(self, form):
+        try:
+            messages.error(self.request, "Please fix the highlighted fields before saving your listing.")
+        except Exception:
+            pass
+        return self.render_to_response(self.get_context_data(form=form), status=400)
 
     def post(self, request, *args, **kwargs):
         """Handle AI-prefill before saving when user requests AI assistance."""
@@ -3397,9 +3404,6 @@ def mpesa_callback(request):
                 
                 if mpesa_receipt_number:
                     payment.mark_as_completed(mpesa_receipt_number)
-                    
-                    # Notify all sellers in the order
-                    _notify_sellers_after_payment(payment.order)
                     
                     # Create activity log
                     Activity.objects.create(

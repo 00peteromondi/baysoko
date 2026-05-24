@@ -191,7 +191,7 @@ def send_delivery_notification(delivery, notification_type, recipient=None, cont
         'notification_type': notification_type,
     })
     
-    # Email notification
+    # Email/SMS/in-app notification
     if recipient and hasattr(recipient, 'email') and recipient.email:
         try:
             subject = f"Delivery Update: {delivery.tracking_number}"
@@ -209,6 +209,14 @@ def send_delivery_notification(delivery, notification_type, recipient=None, cont
                     send_mail(subject=subject, message=plain_message, html_message=html_message, from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[recipient.email], fail_silently=True)
                 except Exception:
                     logger.exception('Failed to send delivery notification email via fallback')
+
+            try:
+                from notifications.utils import notify_delivery_status
+                order = getattr(delivery, 'order', None)
+                if order:
+                    notify_delivery_status(recipient, order, plain_message)
+            except Exception:
+                logger.exception('Failed to send delivery status notification')
             
             # Create notification record
             from .models import DeliveryNotification

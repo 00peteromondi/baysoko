@@ -253,6 +253,23 @@
     .upload-card:hover {
         border-color: var(--accent);
     }
+    .upload-card.is-invalid {
+        border-color: var(--danger);
+        background: rgba(var(--danger-rgb, 220, 53, 69), 0.06);
+    }
+    .form-control.is-invalid,
+    .form-select.is-invalid {
+        border-color: var(--danger);
+        box-shadow: 0 0 0 3px rgba(var(--danger-rgb, 220, 53, 69), 0.12);
+    }
+    .error-feedback {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        margin-top: 0.35rem;
+        font-size: 0.8rem;
+        color: var(--danger);
+    }
     .upload-icon {
         font-size: 1.8rem;
         color: var(--accent);
@@ -508,7 +525,13 @@
             <ul class="m-0 ps-3">
                 {% for field, errs in form.errors.items %}
                     {% for err in errs %}
-                        <li class="text-danger small">{{ field }}: {{ err }}</li>
+                        <li class="text-danger small">
+                            {% if field == '__all__' %}
+                                General: {{ err }}
+                            {% else %}
+                                {{ field|title }}: {{ err }}
+                            {% endif %}
+                        </li>
                     {% endfor %}
                 {% endfor %}
             </ul>
@@ -528,18 +551,24 @@
                 <div class="form-group full-width">
                     <label for="{{ form.title.id_for_label }}" class="form-label required-field"><i class="bi bi-card-text me-1"></i>Title</label>
                     <input type="text" name="{{ form.title.name }}" id="{{ form.title.id_for_label }}"
-                           class="form-control" value="{{ form.title.value|default:'' }}"
+                           class="form-control {% if form.title.errors %}is-invalid{% endif %}" value="{{ form.title.value|default:'' }}"
                            placeholder="e.g., iPhone 13 Pro Max" maxlength="200" required>
                     <div class="char-count" id="title-counter">0/200</div>
+                    {% if form.title.errors %}
+                        <div class="error-feedback"><i class="bi bi-exclamation-circle me-1"></i>{{ form.title.errors.0 }}</div>
+                    {% endif %}
                 </div>
                 <div class="form-group">
                     <label for="{{ form.category.id_for_label }}" class="form-label required-field"><i class="bi bi-list me-1"></i>Category</label>
-                    <select name="{{ form.category.name }}" id="{{ form.category.id_for_label }}" class="form-select" required>
+                    <select name="{{ form.category.name }}" id="{{ form.category.id_for_label }}" class="form-select {% if form.category.errors %}is-invalid{% endif %}" required>
                         <option value="">Choose</option>
                         {% for cat in categories %}
                             <option value="{{ cat.id }}" {% if form.category.value == cat.id or form.instance.category_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>
                         {% endfor %}
                     </select>
+                    {% if form.category.errors %}
+                        <div class="error-feedback"><i class="bi bi-exclamation-circle me-1"></i>{{ form.category.errors.0 }}</div>
+                    {% endif %}
                 </div>
                 <!-- Hidden input to hold JSON for dynamic fields -->
                 <input type="hidden" name="dynamic_fields" id="id_dynamic_fields" value="{}">
@@ -570,21 +599,27 @@
                 {% endwith %}
                 <div class="form-group">
                     <label for="{{ form.condition.id_for_label }}" class="form-label required-field"><i class="bi bi-sliders me-1"></i>Condition</label>
-                    <select name="{{ form.condition.name }}" id="{{ form.condition.id_for_label }}" class="form-select" required>
+                    <select name="{{ form.condition.name }}" id="{{ form.condition.id_for_label }}" class="form-select {% if form.condition.errors %}is-invalid{% endif %}" required>
                         <option value="">Select</option>
                         {% for val, text in form.condition.field.choices %}{% if val %}
                             <option value="{{ val }}" {% if form.condition.value == val or form.instance.condition == val %}selected{% endif %}>{{ text }}</option>
                         {% endif %}{% endfor %}
                     </select>
+                    {% if form.condition.errors %}
+                        <div class="error-feedback"><i class="bi bi-exclamation-circle me-1"></i>{{ form.condition.errors.0 }}</div>
+                    {% endif %}
                 </div>
                 <!-- Store field (shared partial) -->
                 {% include 'listings/_store_field.html' %}
                 <div class="form-group full-width">
                     <label for="{{ form.description.id_for_label }}" class="form-label required-field"><i class="bi bi-card-text me-1"></i>Description</label>
                     <textarea name="{{ form.description.name }}" id="{{ form.description.id_for_label }}"
-                              class="form-control" rows="3" maxlength="2000" required
+                              class="form-control {% if form.description.errors %}is-invalid{% endif %}" rows="3" maxlength="2000" required
                               placeholder="Describe your item...">{{ form.description.value|default:form.instance.description|default:'' }}</textarea>
                     <div class="char-count" id="description-counter">0/2000</div>
+                    {% if form.description.errors %}
+                        <div class="error-feedback"><i class="bi bi-exclamation-circle me-1"></i>{{ form.description.errors.0 }}</div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -737,9 +772,12 @@
                     <div class="price-input-wrapper">
                         <span class="price-prefix">KSh</span>
                         <input type="number" name="{{ form.price.name }}" id="{{ form.price.id_for_label }}"
-                               class="form-control" value="{{ form.price.value|default:form.instance.price|default:'' }}"
+                               class="form-control {% if form.price.errors %}is-invalid{% endif %}" value="{{ form.price.value|default:form.instance.price|default:'' }}"
                                placeholder="0.00" min="0" step="0.01" required>
                     </div>
+                    {% if form.price.errors %}
+                        <div class="error-feedback"><i class="bi bi-exclamation-circle me-1"></i>{{ form.price.errors.0 }}</div>
+                    {% endif %}
                 </div>
                 <!-- Pricing dynamic fields (server-side rendered if present) -->
                 <div class="form-group full-width" id="pricing-dynamic-fields" style="display:none;">
@@ -788,8 +826,11 @@
                 <div class="form-group">
                     <label for="{{ form.stock.id_for_label }}" class="form-label required-field"><i class="bi bi-box-seam me-1"></i>Stock</label>
                     <input type="number" name="{{ form.stock.name }}" id="{{ form.stock.id_for_label }}"
-                           class="form-control" value="{{ form.stock.value|default:form.instance.stock|default:'1' }}"
+                           class="form-control {% if form.stock.errors %}is-invalid{% endif %}" value="{{ form.stock.value|default:form.instance.stock|default:'1' }}"
                            min="1" required>
+                    {% if form.stock.errors %}
+                        <div class="error-feedback"><i class="bi bi-exclamation-circle me-1"></i>{{ form.stock.errors.0 }}</div>
+                    {% endif %}
                 </div>
                 <div class="form-group">
                     <label class="form-label required-field"><i class="bi bi-geo-alt me-1"></i>Location</label>
@@ -814,12 +855,15 @@
                 </div>
                 <div class="form-group">
                     <label for="{{ form.delivery_option.id_for_label }}" class="form-label required-field"><i class="bi bi-truck me-1"></i>Delivery</label>
-                    <select name="{{ form.delivery_option.name }}" id="{{ form.delivery_option.id_for_label }}" class="form-select" required>
+                    <select name="{{ form.delivery_option.name }}" id="{{ form.delivery_option.id_for_label }}" class="form-select {% if form.delivery_option.errors %}is-invalid{% endif %}" required>
                         <option value="">Choose</option>
                         {% for val, text in form.delivery_option.field.choices %}{% if val %}
                             <option value="{{ val }}" {% if form.delivery_option.value == val or form.instance.delivery_option == val %}selected{% endif %}>{{ text }}</option>
                         {% endif %}{% endfor %}
                     </select>
+                    {% if form.delivery_option.errors %}
+                        <div class="error-feedback"><i class="bi bi-exclamation-circle me-1"></i>{{ form.delivery_option.errors.0 }}</div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -846,7 +890,7 @@
                     </div>
                 </div>
                 {% endif %}
-                <div class="upload-card" id="main-image-upload-area">
+                <div class="upload-card {% if form.image.errors %}is-invalid{% endif %}" id="main-image-upload-area">
                     <div class="upload-icon"><i class="bi bi-cloud-arrow-up"></i></div>
                     <div class="upload-title">Upload Main Photo</div>
                     <div class="upload-subtitle">Drag or click</div>
@@ -855,6 +899,9 @@
                         <i class="bi bi-folder2-open"></i> Choose
                     </button>
                 </div>
+                {% if form.image.errors %}
+                    <div class="error-feedback mt-2"><i class="bi bi-exclamation-circle me-1"></i>{{ form.image.errors.0 }}</div>
+                {% endif %}
                 <div class="preview-grid" id="main-image-preview"></div>
             </div>
 
@@ -944,8 +991,21 @@ document.addEventListener('DOMContentLoaded', function() {
         const raw = document.getElementById('listingFormErrors');
         if (raw && raw.textContent && window.showToast) {
             const data = JSON.parse(raw.textContent || '{}');
+            const shown = new Set();
             Object.keys(data || {}).forEach(key => {
-                (data[key] || []).forEach(msg => showToast(`${key}: ${msg}`, 'error'));
+                const label = key === '__all__'
+                    ? 'General'
+                    : ((document.querySelector(`[name="${key}"]`)?.closest('.form-group')?.querySelector('.form-label')?.textContent || key)
+                        .replace(/\s+/g, ' ')
+                        .replace(/\*/g, '')
+                        .trim());
+                (data[key] || []).forEach(msg => {
+                    const toastText = `${label}: ${msg}`;
+                    if (!shown.has(toastText)) {
+                        shown.add(toastText);
+                        showToast(toastText, 'error');
+                    }
+                });
             });
         }
     } catch (e) {}

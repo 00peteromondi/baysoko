@@ -176,22 +176,14 @@ class PlanPermissions:
 
     @classmethod
     def can_create_listing(cls, user, store=None):
-        """Check if user can create additional listings"""
-        limits = cls.get_plan_limits(user, store)
-        from listings.models import Listing
-        if store:
-            current_listings = Listing.objects.filter(seller=user, store=store).count()
-        else:
-            current_listings = Listing.objects.filter(seller=user).count()
-        max_products = limits.get('max_products')
-        # None indicates unlimited products
-        if max_products is None:
-            return True
-        try:
-            return current_listings < int(max_products)
-        except Exception:
-            # If invalid limit, be conservative and allow up to global free limit of 5
-            return current_listings < 5
+        """
+        Core selling should not be blocked by subscription limits.
+
+        Plans still control advanced capabilities like analytics, bulk tools,
+        AI, API access, and white-label functionality, but basic listing
+        creation must stay available so sellers can operate their business.
+        """
+        return bool(user and getattr(user, 'is_authenticated', False))
 
     @classmethod
     def get_visible_stores(cls, user):
@@ -223,15 +215,6 @@ class PlanPermissions:
             listings = Listing.objects.filter(seller=user, store=store, is_active=True).order_by('-created_at')
         else:
             listings = Listing.objects.filter(seller=user, is_active=True).order_by('-date_created')
-
-        max_products = limits.get('max_products')
-        if max_products is None:
-            return listings
-        try:
-            if listings.count() > int(max_products):
-                return listings[:int(max_products)]
-        except Exception:
-            pass
 
         return listings
 

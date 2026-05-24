@@ -235,13 +235,14 @@ class StoreForm(forms.ModelForm):
             del cleaned_data['owner']
 
         location = cleaned_data.get('location')
-        lat = cleaned_data.get('location_latitude')
-        lng = cleaned_data.get('location_longitude')
-        place_id = cleaned_data.get('location_place_id')
         if not location or not str(location).strip():
             raise ValidationError('Store location is required.')
-        if not (lat and lng and place_id):
-            raise ValidationError('Please select a valid store location from the map suggestions.')
+
+        # Do not hard-block store creation when geocoding data is unavailable.
+        # Sellers should still be able to open and operate a store using a
+        # manually entered location string.
+        if not cleaned_data.get('location_place_id'):
+            cleaned_data['location_place_id'] = ''
 
         return cleaned_data
     
