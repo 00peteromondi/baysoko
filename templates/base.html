@@ -1,0 +1,4691 @@
+{% load static humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <script>
+        (function() {
+            const searchParams = new URLSearchParams(window.location.search);
+            const userAgent = navigator.userAgent || '';
+            const isAndroidShell = searchParams.get('source') === 'android_app'
+                || /\bBaysokoAndroidApp\b/i.test(userAgent)
+                || !!window.Capacitor
+                || /\bwv\b/i.test(userAgent);
+            if (isAndroidShell) {
+                document.documentElement.classList.add('android-shell');
+                document.documentElement.style.setProperty('--android-safe-top', 'env(safe-area-inset-top, 0px)');
+                document.documentElement.style.setProperty('--android-safe-bottom', 'env(safe-area-inset-bottom, 0px)');
+            }
+        })();
+    </script>
+    {% if user.is_authenticated %}
+    <meta name="current-user-id" content="{{ user.id }}">
+    <script>
+        // Set global variables for JavaScript
+        window.currentUserId = {{ user.id|default:"null" }};
+        {% if conversation %}
+            window.conversationId = {{ conversation.id|default:"null" }};
+            window.participantName = "{{ conversation.participants.all.0.get_full_name|default:conversation.participants.all.0.username|escapejs }}";
+        {% endif %}
+    </script>
+    {% endif %}
+    <title>Baysoko - {% block title %}Local Marketplace{% endblock %}</title>
+   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' width='16' height='16' fill='%23FF6B35'><path d='M3.707 6.464l-1.95 1.95a.5.5 0 0 0 0 .707l4.5 4.5a.5.5 0 0 0 .707 0l1.95-1.95 3.195 3.195a.5.5 0 0 0 .707 0l4.5-4.5a.5.5 0 0 0 0-.707l-1.95-1.95L12.536 3.707a.5.5 0 0 0-.707 0l-4.5 4.5-4.5-4.5a.5.5 0 0 0-.707 0zm-.873 5.938L7.5 17.07l4.67-4.668 3.808 3.807a1.5 1.5 0 0 1 0 2.122l-4.5 4.5a1.5 1.5 0 0 1-2.122 0l-4.5-4.5a1.5 1.5 0 0 1 0-2.122z'/></svg>">    
+    <link rel="manifest" href="{% url 'manifest' %}">
+    <meta name="theme-color" content="#ff6b35">
+    <link rel="apple-touch-icon" href="{% static 'icons/icon-192x192.png' %}">
+    <!-- Modern Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Leaflet (Maps) -->
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="anonymous"
+    />
+    <script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin="anonymous"
+        defer
+    ></script>
+
+    <script>
+        /* Helper: add a resilient base tile layer with fallback providers.
+           Usage: call `addBaseTileLayer(map)` after creating a Leaflet map instance.
+        */
+        function addBaseTileLayer(map) {
+            if (!map || typeof L === 'undefined') return null;
+            if (map._baseTileLayer) return map._baseTileLayer;
+
+            const providers = [
+                { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap contributors' },
+                { url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap contributors, HOT' },
+                { url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap contributors & CartoDB' }
+            ];
+
+            let idx = 0;
+
+            function setLayer(i) {
+                if (map._baseTileLayer) {
+                    try { map.removeLayer(map._baseTileLayer); } catch (e) {}
+                    map._baseTileLayer = null;
+                }
+                const p = providers[i] || providers[0];
+                const layer = L.tileLayer(p.url, { 
+                    maxZoom: 19, 
+                    attribution: p.attr,
+                    crossOrigin: 'anonymous',
+                    tileSize: 256,
+                    zoomOffset: 0
+                });
+                layer.addTo(map);
+                map._baseTileLayer = layer;
+
+                layer.on('tileerror', function () {
+                    if (i < providers.length - 1) {
+                        setLayer(i + 1);
+                    } else {
+                        // show a small notice once
+                        if (!map._tileErrorNotice) {
+                            const notice = L.control({ position: 'topright' });
+                            notice.onAdd = function () {
+                                const div = L.DomUtil.create('div', 'tile-error-notice');
+                                div.innerHTML = '<div class="alert alert-warning m-2 p-2">Map tiles unavailable — using alternate provider where possible.</div>';
+                                return div;
+                            };
+                            notice.addTo(map);
+                            map._tileErrorNotice = notice;
+                        }
+                    }
+                });
+            }
+
+            setLayer(0);
+            return map._baseTileLayer;
+        }
+    </script>
+
+    <!-- Toast Notification Styles -->
+    <style>
+        /* Hide footer when chat is active on mobile */
+        @media (max-width: 992px) {
+            body.chat-active footer,
+            body.chat-active .site-footer {
+                display: none !important;
+            }
+            
+            /* Prevent body scrolling when chat is open */
+            body.chat-active {
+                overflow: hidden;
+                height: 100vh;
+            }
+        }
+        
+        /* Add safe area inset for iOS notch */
+        .safe-area-top {
+            padding-top: env(safe-area-inset-top);
+        }
+        html.android-shell {
+            background: #0f1115;
+            overscroll-behavior-y: none;
+            scrollbar-width: none;
+        }
+        html.android-shell::-webkit-scrollbar,
+        body.android-shell::-webkit-scrollbar {
+            width: 0;
+            height: 0;
+        }
+        body.android-shell {
+            min-height: 100vh;
+            min-height: 100dvh;
+            background:
+                radial-gradient(circle at top, rgba(255,107,53,0.14), transparent 28%),
+                linear-gradient(180deg, #0f1115 0%, #121826 100%);
+            overscroll-behavior-y: none;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            padding-bottom: max(14px, env(safe-area-inset-bottom));
+        }
+        body.android-shell .main-nav {
+            top: 0 !important;
+            padding-top: calc(var(--android-safe-top, 0px) + 6px);
+            min-height: calc(68px + var(--android-safe-top, 0px));
+            background: linear-gradient(180deg, rgba(17,24,39,0.96), rgba(17,24,39,0.86));
+            backdrop-filter: blur(18px);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 14px 30px rgba(0,0,0,0.2);
+        }
+        body.android-shell .main-content {
+            padding-top: calc(78px + var(--android-safe-top, 0px)) !important;
+            padding-bottom: calc(18px + var(--android-safe-bottom, 0px));
+        }
+        body.android-shell .mobile-bottom-nav,
+        body.android-shell .bottom-navbar,
+        body.android-shell .delivery-bottom-nav {
+            padding-bottom: max(10px, env(safe-area-inset-bottom));
+            background: rgba(15, 17, 21, 0.96);
+            backdrop-filter: blur(18px);
+            transition: transform 0.22s ease, opacity 0.22s ease;
+        }
+        body.android-shell.android-keyboard-open .mobile-bottom-nav,
+        body.android-shell.android-keyboard-open .bottom-navbar,
+        body.android-shell.android-keyboard-open .delivery-bottom-nav {
+            transform: translateY(120%);
+            opacity: 0;
+            pointer-events: none;
+        }
+        body.android-shell .chat-widget,
+        body.android-shell .chat-toggle,
+        body.android-shell .floating-chat-btn,
+        body.android-shell .floating-action-btn {
+            bottom: calc(16px + var(--android-safe-bottom, 0px));
+        }
+        body.android-shell.android-keyboard-open .chat-widget,
+        body.android-shell.android-keyboard-open .chat-toggle,
+        body.android-shell.android-keyboard-open .floating-chat-btn,
+        body.android-shell.android-keyboard-open .floating-action-btn {
+            opacity: 0;
+            pointer-events: none;
+        }
+        body.android-shell input,
+        body.android-shell select,
+        body.android-shell textarea,
+        body.android-shell button,
+        body.android-shell a {
+            touch-action: manipulation;
+        }
+        body.android-shell .main-content,
+        body.android-shell .container,
+        body.android-shell .modal-card,
+        body.android-shell .card,
+        body.android-shell form {
+            scroll-margin-top: calc(var(--android-safe-top, 0px) + 88px);
+        }
+        body.android-shell .android-native-file-input {
+            border-radius: 18px;
+        }
+        body.android-shell .android-native-share {
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+        body.android-shell .android-native-share:active {
+            transform: scale(0.96);
+            box-shadow: 0 10px 24px rgba(255,107,53,0.18);
+        }
+        body.android-shell .android-native-input-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        body.android-shell .android-native-input-actions .android-native-pill {
+            border: none;
+            border-radius: 999px;
+            padding: 10px 16px;
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: #fff;
+            background: linear-gradient(135deg, #ff6b35 0%, #e55a2b 100%);
+            box-shadow: 0 10px 22px rgba(255, 107, 53, 0.22);
+        }
+        body.android-shell .android-native-input-actions .android-native-pill.secondary {
+            background: rgba(255,255,255,.08);
+            color: #e5e7eb;
+            box-shadow: none;
+            border: 1px solid rgba(255,255,255,.08);
+        }
+        body.android-shell .android-native-offline-banner {
+            position: fixed;
+            left: 16px;
+            right: 16px;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+            z-index: 11000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 16px;
+            border-radius: 18px;
+            background: rgba(15, 23, 42, 0.94);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,.08);
+            box-shadow: 0 18px 36px rgba(0,0,0,.28);
+            transform: translateY(140%);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform .24s ease, opacity .24s ease;
+        }
+        body.android-shell .android-native-offline-banner.visible {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        body.android-shell .android-native-offline-banner__icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            display: grid;
+            place-items: center;
+            background: rgba(255,107,53,.16);
+            color: #ffb39a;
+            font-size: 1rem;
+            flex: 0 0 auto;
+        }
+        body.android-shell .android-native-offline-banner__title {
+            font-weight: 700;
+            font-size: .95rem;
+            margin-bottom: 2px;
+        }
+        body.android-shell .android-native-offline-banner__text {
+            font-size: .83rem;
+            color: rgba(255,255,255,.72);
+            line-height: 1.35;
+        }
+        body.android-shell a[target="_blank"][href*="baysoko.up.railway.app"] {
+            target-name: current;
+        }
+
+        .pwa-install-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1200;
+            background: linear-gradient(120deg, rgba(255,107,53,0.18), rgba(0,0,0,0.2));
+            border-bottom: 1px solid rgba(255,107,53,0.35);
+            backdrop-filter: blur(12px);
+            transform: translateY(-100%);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform 0.35s ease, opacity 0.35s ease;
+        }
+        :root {
+            --pwa-banner-height: 0px;
+        }
+        body.pwa-banner-visible .main-nav {
+            top: var(--pwa-banner-height);
+        }
+        body.pwa-banner-visible .main-content {
+            padding-top: calc(70px + var(--pwa-banner-height));
+        }
+        .pwa-install-banner.visible {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .pwa-install-banner.hidden {
+            display: block;
+        }
+        .pwa-install-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 10px 16px;
+        }
+        .pwa-install-text {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 600;
+        }
+        .pwa-install-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .pwa-install-banner.visible #pwaInstallBtn {
+            animation: pwaPulse 2.6s ease-in-out infinite;
+        }
+        .pwa-close-btn {
+            background: rgba(255,255,255,0.15);
+            border: 0;
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.8rem;
+        }
+        .pwa-close-btn .pwa-close-text {
+            font-weight: 600;
+        }
+        .pwa-close-btn.dont-show {
+            background: rgba(0,0,0,0.35);
+            color: #fff;
+        }
+        .offline-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .offline-modal.show {
+            display: flex;
+            animation: fadeIn 0.25s ease;
+        }
+        .offline-card {
+            background: var(--card-bg);
+            border: 1px solid rgba(255,107,53,0.2);
+            border-radius: 18px;
+            padding: 20px;
+            max-width: 420px;
+            width: calc(100% - 32px);
+            box-shadow: var(--shadow-lg);
+        }
+        .offline-card h4 {
+            margin-bottom: 6px;
+        }
+        .offline-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+            justify-content: flex-end;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes pwaSlideDown {
+            from { transform: translateY(-100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes pwaPulse {
+            0%, 100% { transform: translateY(0); box-shadow: none; }
+            50% { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(255,107,53,0.25); }
+        }
+        @media (max-width: 768px) {
+            .pwa-install-inner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .pwa-install-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+    </style>
+    <script>
+        /**
+         * LEGACY POLLING CODE - KEPT FOR BACKWARD COMPATIBILITY
+         * 
+         * The new WebSocket-based notifications system (notifications-client.js) 
+         * is now the primary method. This polling fallback is retained for:
+         * - Browsers that don't support WebSocket
+         * - When WebSocket connection fails
+         * - Graceful degradation
+         * 
+         * The new system automatically handles the fallback to polling.
+         */
+        (function() {
+            // This legacy code is now disabled by default
+            // The new WebSocket client in notifications-client.js handles everything
+            
+            const LEGACY_POLLING_ENABLED = false; // Set to true if you need to force polling
+            
+            if (!LEGACY_POLLING_ENABLED) {
+                console.log('[Notifications] Using new WebSocket-based system (polling disabled)');
+                return;
+            }
+
+            // Original polling code (kept for reference, but disabled)
+            const endpoint = '{% url "notifications" %}';
+            const shownKey = 'baysoko_shown_notifications_v1';
+            const pollInterval = 30000; // 30s
+
+            function getShown() {
+                try { return JSON.parse(localStorage.getItem(shownKey) || '[]'); } catch(e) { return []; }
+            }
+            function markShown(id) {
+                const arr = getShown();
+                if (!arr.includes(id)) { arr.push(id); localStorage.setItem(shownKey, JSON.stringify(arr)); }
+            }
+
+            function truncate(text, n=140){ return text && text.length>n ? text.slice(0,n-1)+'…' : text; }
+
+            function showNotifToast(n) {
+                const container = document.querySelector('.toast-container') || (() => { const c=document.createElement('div'); c.className='toast-container'; document.body.appendChild(c); return c; })();
+                const typeMap = {
+                    'system':'primary','order_update':'info','payment_success':'success','payment_failed':'error','review':'info','new_order':'info'
+                };
+                const cls = 'toast-'+(typeMap[n.type]||'info');
+                const div = document.createElement('div');
+                div.className = `custom-toast ${cls} custom-toast-notif`;
+                div.innerHTML = `<i class="bi ${n.type==='payment_failed' || n.type==='error' ? 'bi-exclamation-triangle-fill':'bi-bell-fill'}"></i><div class="fw-medium">${n.title}</div><div style="opacity:.92; font-size:0.85rem; margin-left:.5rem;">${truncate(n.message,120)}</div><div class="toast-progress-bar" style="animation-duration:4s"></div>`;
+                container.appendChild(div);
+                // remove after 4s
+                setTimeout(()=>{ div.style.animation='slideOutRight 0.28s'; setTimeout(()=>div.remove(),280); }, 4000);
+            }
+
+            async function poll() {
+                if (!window.currentUserId) return;
+                try {
+                    const res = await fetch(endpoint, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    const notifications = data.notifications || [];
+                    const shown = getShown();
+                    notifications.reverse(); // oldest first
+                    for (const n of notifications) {
+                        if (!shown.includes(n.id)) {
+                            showNotifToast(n);
+                            markShown(n.id);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Notification poll failed', e);
+                }
+            }
+
+            // initial run and interval
+            setTimeout(poll, 1500);
+            setInterval(poll, pollInterval);
+        })();
+    </script>
+
+    <!-- Global spinner used by AJAX buttons -->
+    <style>
+        .custom-spinner {
+            display: inline-block;
+            position: relative;
+            width: 1rem;
+            height: 1rem;
+            vertical-align: middle;
+            border-radius: 50%;
+            color: inherit; /* inherit the color of surrounding text */
+            animation: spin-dots 1s linear infinite;
+        }
+        .custom-spinner::after {
+            content: '';
+            display: block;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 1.5px dotted currentColor;
+            opacity: 0.95;
+        }
+        .custom-spinner::before {
+            content: '';
+            position: absolute;
+            width: 0.18rem;
+            height: 0.18rem;
+            background: currentColor;
+            border-radius: 50%;
+            top: -0.09rem;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        @keyframes spin-dots { to { transform: rotate(360deg); } }
+        .text-white { color: #fff !important; }
+    </style>
+    <style>
+        /* Toast container: desktop -> top-right; mobile -> centered bottom */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 520px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            pointer-events: none; /* allow clicks through container; toasts themselves accept pointer-events */
+        }
+
+        .toast-container .custom-toast { pointer-events: auto; }
+
+        .custom-toast {
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            overflow: hidden;
+            margin: 0;
+            animation: slideInRight 0.28s cubic-bezier(.2,.9,.2,1);
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1.2rem;
+            color: white;
+            font-size: 0.82rem; /* slightly reduced */
+            max-width: 520px;
+        }
+
+        .custom-toast i { font-size: 1rem; flex-shrink: 0; }
+        .custom-toast .fw-medium { font-size: 0.8rem; line-height: 1.12; word-break: break-word; }
+        .custom-toast .btn-close { opacity: 0.9; filter: drop-shadow(0 1px 0 rgba(0,0,0,0.12)); }
+
+        /* Progress/countdown bar at bottom of toast (compact) */
+        .toast-progress-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background: rgba(255,255,255,0.9);
+            transform-origin: left;
+            animation: toast-countdown linear forwards;
+            width: 100%;
+        }
+
+        /* Ensure good contrast on all toast variants */
+        .toast-success .toast-progress-bar,
+        .toast-error .toast-progress-bar,
+        .toast-warning .toast-progress-bar,
+        .toast-info .toast-progress-bar,
+        .toast-primary .toast-progress-bar { opacity: 0.95; }
+
+        @keyframes toast-countdown { from { width: 100%; } to { width: 0%; } }
+
+        /* Toast palettes (solid for consistency with login/register inline toasts) */
+        .toast-success { background: #06D6A0; }
+        .toast-error   { background: #EF476F; }
+        .toast-warning { background: #FF9E1F; }
+        .toast-info    { background: #118AB2; }
+        .toast-primary { background: var(--primary); }
+
+        /* Entrance/exit animations */
+        @keyframes slideInRight {
+            from { transform: translateX(14px); opacity: 0; }
+            to   { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOutRight {
+            from { transform: translateX(0); opacity: 1; }
+            to   { transform: translateX(14px); opacity: 0; }
+        }
+
+        /* Responsive: make toasts centered and full-width on small screens */
+        @media (max-width: 576px) {
+            .toast-container {
+                top: auto;
+                bottom: 80px;
+                left: 50%;
+                right: auto;
+                transform: translateX(-50%);
+                width: calc(100% - 32px);
+                max-width: calc(100% - 32px);
+                align-items: center;
+                padding: 0 8px;
+            }
+
+            .custom-toast {
+                width: 100%;
+                padding: 0.85rem 0.9rem;
+                min-height: 56px;
+                font-size: 0.78rem;
+            }
+
+            .custom-toast i { font-size: 1.25rem; }
+            .custom-toast .fw-medium { font-size: 0.9rem; }
+            .toast-progress-bar { height: 4px; }
+        }
+        @media (max-width: 576px) {
+            body.agent-open .toast-container {
+                top: 16px;
+                bottom: auto;
+            }
+        }
+    </style>
+
+    <!-- PROFESSIONAL BADGE SYSTEM -->
+    <style>
+        :root {
+            /* Badge colors */
+            --badge-primary: var(--primary);
+            --badge-info: #0dcaf0;
+            --badge-danger: #dc3545;
+            --badge-warning: #ffc107;
+            --badge-success: #198754;
+            
+            /* Badge sizing */
+            --badge-size-sm: 18px;
+            --badge-size-md: 20px;
+            --badge-size-lg: 22px;
+            
+            /* Badge font */
+            --badge-font-sm: 0.65rem;
+            --badge-font-md: 0.75rem;
+            --badge-font-lg: 0.8rem;
+        }
+
+        /* Hide footer for logged-in users */
+        body.logged-in .footer { display: none !important; }
+
+        /* Unified badge base */
+        .unified-count-badge {
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: center;
+            min-width: var(--badge-size-sm);
+            height: var(--badge-size-sm);
+            padding: 0 4px;
+            border-radius: 999px;
+            font-size: var(--badge-font-sm);
+            font-weight: 700;
+            line-height: 1;
+            color: white !important;
+            background-color: var(--badge-primary);
+            vertical-align: middle;
+            border: 2px solid var(--bg-primary);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s ease;
+        }
+
+        /* Badge colors */
+        .unified-count-badge.bg-primary,
+        .unified-count-badge.cart-badge {
+            background-color: var(--badge-primary) !important;
+        }
+        
+        .unified-count-badge.bg-info,
+        .unified-count-badge.messages-badge {
+            background-color: var(--badge-info) !important;
+        }
+        
+        .unified-count-badge.bg-danger,
+        .unified-count-badge.notifications-badge {
+            background-color: var(--badge-danger) !important;
+        }
+        
+        .unified-count-badge.bg-warning {
+            background-color: var(--badge-warning) !important;
+            color: #000 !important;
+        }
+        
+        .unified-count-badge.bg-success {
+            background-color: var(--badge-success) !important;
+        }
+
+        /* Different badge sizes */
+        .unified-count-badge.badge-sm {
+            min-width: 16px;
+            height: 16px;
+            font-size: 0.6rem;
+            padding: 0 3px;
+        }
+        
+        .unified-count-badge.badge-md {
+            min-width: var(--badge-size-md);
+            height: var(--badge-size-md);
+            font-size: var(--badge-font-md);
+            padding: 0 5px;
+        }
+        
+        .unified-count-badge.badge-lg {
+            min-width: var(--badge-size-lg);
+            height: var(--badge-size-lg);
+            font-size: var(--badge-font-lg);
+            padding: 0 6px;
+        }
+
+        /* Hide empty badges */
+        .unified-count-badge:empty,
+        .unified-count-badge[data-count="0"],
+        .unified-count-badge[data-count="0"]:not(.always-visible) {
+            display: none !important;
+        }
+
+        /* Pulse animation for new notifications */
+        @keyframes badgePulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        .unified-count-badge.pulse {
+            animation: badgePulse 0.5s ease 2;
+        }
+
+        /* Desktop specific styling */
+        @media (min-width: 993px) {
+            /* Desktop badges in dropdowns */
+            .dropdown-item .unified-count-badge {
+                position: static;
+                margin-left: 0.5rem;
+                border: none;
+                box-shadow: none;
+            }
+            
+            /* Cart badge in header - keep original style */
+            .cart-header-link .cart-count-badge {
+                position: static !important;
+                display: inline-flex !important;
+                width: 20px;
+                height: 20px;
+                margin: 0 4px;
+                font-size: 0.75rem;
+                border: none !important;
+                box-shadow: none !important;
+                background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+            }
+        }
+
+        /* Mobile specific styling */
+        @media (max-width: 992px) {
+            /* Mobile top navigation badges */
+            .mobile-actions .unified-count-badge {
+                position: absolute !important;
+                top: 2px !important;
+                right: 2px !important;
+                z-index: 10;
+                min-width: 18px !important;
+                height: 18px !important;
+                font-size: 0.7rem !important;
+                border-width: 2px !important;
+            }
+            
+            /* Mobile bottom navigation badges */
+            .bottom-nav-link .unified-count-badge {
+                position: absolute !important;
+                top: 2px !important;
+                right: 50% !important;
+                margin-right: -20px !important;
+                transform: translateX(50%) !important;
+                min-width: 16px !important;
+                height: 16px !important;
+                font-size: 0.65rem !important;
+                border-width: 1.5px !important;
+            }
+            
+            /* Side navigation badges on mobile */
+            .side-nav-link .unified-count-badge {
+                position: absolute;
+                top: 12px;
+                right: 12px;
+                min-width: 18px;
+                height: 18px;
+                font-size: 0.7rem;
+            }
+            
+            /* Ensure mobile badges are always visible when they have content */
+            .mobile-actions .unified-count-badge:not(:empty) {
+                display: inline-flex !important;
+            }
+        }
+
+        /* Side navigation badges */
+        .side-nav-link .unified-count-badge {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 1;
+        }
+
+        /* Always hide hidden badges */
+        .unified-count-badge.d-none {
+            display: none !important;
+        }
+    </style>
+
+    <!-- Modern Design System -->
+    <style>
+        :root {
+            /* Vibrant E-commerce Color Palette */
+            --primary: #FF6B35;      /* Vibrant Orange */
+            --primary-dark: #E55A2B;
+            --secondary: #FFD166;    /* Golden Yellow */
+            --accent: #06D6A0;       /* Teal Green */
+            --accent-dark: #05B88A;
+            --info: #118AB2;         /* Bright Blue */
+            --warning: #FF9E1F;      /* Amber */
+            --danger: #EF476F;       /* Pink-Red */
+            --success: #06D6A0;      /* Green */
+            
+            /* Neutral Colors */
+            --dark: #073B4C;
+            --light: #F8F9FA;
+            --gray-100: #F8F9FA;
+            --gray-200: #E9ECEF;
+            --gray-300: #DEE2E6;
+            --gray-400: #CED4DA;
+            --gray-500: #ADB5BD;
+            --gray-600: #6C757D;
+            --gray-700: #495057;
+            --gray-800: #343A40;
+            --gray-900: #212529;
+
+            /* Spacing System */
+            --spacing-xs: 0.5rem;
+            --spacing-sm: 1rem;
+            --spacing-md: 1.5rem;
+            --spacing-lg: 2rem;
+            --spacing-xl: 3rem;
+            --spacing-xxl: 4rem;
+
+            /* Typography */
+            --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+
+            /* Border Radius */
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+            --radius-full: 50%;
+
+            /* Transitions */
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-fast: all 0.15s ease-out;
+            --transition-slow: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+
+            /* Shadows */
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+            --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.16);
+            --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.2);
+
+            /* Initial theme (light) */
+            --bg-primary: #FFFFFF;
+            --bg-secondary: #F8F9FA;
+            --bg-tertiary: #FFFFFF;
+            --text-primary: #212529;
+            --text-secondary: #6C757D;
+            --text-tertiary: #ADB5BD;
+            --border-color: #DEE2E6;
+            --card-bg: #FFFFFF;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #121212;
+            --bg-secondary: #1E1E1E;
+            --bg-tertiary: #2D2D2D;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B0B0B0;
+            --text-tertiary: #808080;
+            --border-color: #404040;
+            --card-bg: #1E1E1E;
+            --shadow-color: rgba(0, 0, 0, 0.3);
+        }
+
+        /* Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            font-size: 16px;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+            transition: var(--transition);
+            min-width: 320px;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: var(--font-heading);
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        /* Modern Container */
+        .container-custom {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-md);
+            width: 100%;
+        }
+
+        /* Enhanced Navigation */
+        .main-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-primary);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-color);
+            z-index: 1000;
+            height: 70px;
+            transition: var(--transition);
+        }
+
+        .main-nav.hidden {
+            transform: translateY(-100%);
+        }
+
+        .nav-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-md);
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            font-family: var(--font-heading);
+            font-weight: 800;
+            font-size: 1.8rem;
+            color: var(--primary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            transition: var(--transition);
+        }
+
+        .logo:hover {
+            color: var(--primary-dark);
+        }
+
+        .nav-items {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-lg);
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .nav-link {
+            color: var(--text-primary);
+            text-decoration: none;
+            font-weight: 500;
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--radius-md);
+            transition: var(--transition-fast);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .nav-link::before {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--primary);
+            transition: var(--transition);
+        }
+
+        .nav-link:hover::before {
+            width: 100%;
+        }
+
+        .nav-link.active {
+            color: var(--primary);
+        }
+
+        /* Search Bar - Enhanced for all screens */
+        .search-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            flex: 1;
+            max-width: 500px;
+            margin: 0 var(--spacing-md);
+        }
+
+        .search-input {
+            width: 100%;
+            height: 44px;
+            padding: 0 50px 0 20px;
+            border: 1px solid var(--border-color) !important;
+            border-radius: var(--radius-md);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: var(--transition);
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            right: 15px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: var(--spacing-xs);
+            border-radius: var(--radius-full);
+            transition: var(--transition);
+            z-index: 2;
+        }
+
+        .search-icon:hover {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        /* Mobile Search - Full width takeover */
+        @media (max-width: 768px) {
+            .search-container.mobile-active {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 70px;
+                background: var(--bg-primary);
+                margin: 0;
+                padding: 0 var(--spacing-md);
+                z-index: 1001;
+                max-width: none;
+            }
+            
+            .search-container.mobile-active .search-input {
+                width: 100%;
+            }
+            
+            .search-container:not(.mobile-active) {
+                display: none;
+            }
+            
+            .mobile-search-toggle {
+                display: block !important;
+            }
+        }
+
+        .mobile-search-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 1.2rem;
+            padding: var(--spacing-sm);
+            border-radius: var(--radius-lg);
+            transition: var(--transition);
+        }
+
+        .mobile-search-toggle:hover {
+            background: var(--bg-secondary);
+        }
+
+        /* Modern Buttons */
+        .btn-custom {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-xs);
+            padding: 8px 16px;
+            border: none !important;
+            border-radius: var(--radius-lg);
+            font-weight: 600;
+            text-decoration: none;
+            transition: var(--transition);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            font-size: 1rem;
+            min-height: 44px;
+            border-color: transparent !important;
+        }
+
+        .btn-custom::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: var(--transition-slow);
+        }
+
+        .btn-custom:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            color: white;
+            background: var(--primary-dark);
+        }
+
+        .btn-secondary {
+            background: var(--secondary);
+            color: var(--dark);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-secondary:hover {
+            background: #FFC44D;
+            color: var(--dark);
+        }
+
+        .btn-accent {
+            background: var(--accent);
+            color: white;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-accent:hover {
+            background: var(--accent-dark);
+            color: white;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-ghost:hover {
+            background: var(--bg-secondary);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        /* Side Navigation - Enhanced for all screens */
+        .side-nav {
+            position: fixed;
+            top: 0;
+            left: -80px;
+            width: 80px;
+            height: 100vh;
+            background: var(--bg-primary);
+            box-shadow: var(--shadow-xl);
+            z-index: 1001;
+            transition: var(--transition);
+            padding: var(--spacing-xl) 0;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .side-nav.expanded {
+            width: 320px;
+            left: 0;
+        }
+
+        .side-nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            /* Slightly reduce spacing to match compact side-nav */
+            margin-bottom: calc(var(--spacing-xl) - 10px);
+            padding: 0 var(--spacing-lg) calc(var(--spacing-md) - 10px);
+            border-bottom: 1px solid var(--border-color);
+            min-height: 50px;
+        }
+
+        .side-nav-logo {
+            font-family: var(--font-heading);
+            font-weight: 800;
+            font-size: 1.5rem;
+            color: var(--primary);
+            white-space: nowrap;
+            opacity: 0;
+            transition: var(--transition);
+        }
+
+        .side-nav.expanded .side-nav-logo {
+            opacity: 1;
+        }
+
+        .side-nav-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: var(--text-primary);
+            cursor: pointer;
+            padding: var(--spacing-xs);
+            border-radius: var(--radius-full);
+            transition: var(--transition-fast);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .side-nav.expanded .side-nav-close {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .side-nav-close:hover {
+            background: var(--bg-secondary);
+        }
+
+        .side-nav-links {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .side-nav-link {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-md);
+            /* Reduce vertical padding by ~10px while preserving horizontal spacing */
+            padding: calc(var(--spacing-md) - 10px) var(--spacing-lg);
+            color: var(--text-primary);
+            text-decoration: none;
+            border-radius: 0;
+            transition: var(--transition-fast);
+            position: relative;
+            /* Reduce min-height by 10px to keep visual density */
+            min-height: 50px;
+            white-space: nowrap;
+        }
+
+        .side-nav-link:hover {
+            background: var(--bg-secondary);
+        }
+
+        .side-nav-link.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .side-nav-link .link-text {
+            opacity: 0;
+            transition: var(--transition);
+        }
+
+        .side-nav.expanded .side-nav-link .link-text {
+            opacity: 1;
+        }
+
+        .side-nav-link .bi {
+            font-size: 1.3rem;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        /* Bottom Navigation for Mobile */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border-color);
+            z-index: 1000;
+            padding: var(--spacing-sm);
+            display: none;
+        }
+
+        .bottom-nav-items {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .bottom-nav-link {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-decoration: none;
+            color: var(--text-primary);
+            padding: var(--spacing-xs);
+            border-radius: var(--radius-md);
+            transition: var(--transition-fast);
+            flex: 1;
+            text-align: center;
+            position: relative;
+            min-height: 60px;
+            justify-content: center;
+        }
+
+        .bottom-nav-link.active {
+            color: var(--primary);
+        }
+
+        .bottom-nav-icon {
+            font-size: 1.2rem;
+            margin-bottom: 4px;
+        }
+
+        .bottom-nav-label {
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+
+        /* Overlay for side nav */
+        .nav-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: var(--transition);
+        }
+
+        .nav-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Main Content Area */
+        .main-content {
+            padding-top: 70px;
+            padding-bottom: 80px;
+            min-height: 100vh;
+            transition: var(--transition);
+        }
+
+        .side-nav.expanded ~ .main-content,
+        .side-nav.expanded ~ .bottom-nav {
+            margin-left: 80px;
+        }
+
+        /* Modern Cards */
+        .card-custom {
+            background: var(--card-bg);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            box-shadow: var(--shadow-sm);
+            transition: var(--transition);
+            border: 1px solid var(--border-color);
+        }
+
+        .card-custom:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        /* Loading Animation */
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .floating {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        /* Footer */
+        .footer {
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            padding: var(--spacing-xl) 0;
+            margin-top: var(--spacing-xl);
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-md);
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--spacing-xl);
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .footer-section h3 {
+            font-size: 1.2rem;
+            margin-bottom: var(--spacing-md);
+            color: var(--text-primary);
+        }
+
+        .footer-links {
+            list-style: none;
+            padding: 0;
+        }
+
+        .footer-link {
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .footer-link a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: var(--transition-fast);
+        }
+
+        .footer-link a:hover {
+            color: var(--primary);
+        }
+
+        .footer-bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: var(--spacing-lg);
+            border-top: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .footer-social {
+            display: flex;
+            gap: var(--spacing-md);
+        }
+
+        .social-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: var(--transition-fast);
+        }
+
+        .social-link:hover {
+            color: var(--primary);
+        }
+
+        /* Cart Header Styles */
+        .cart-header-link {
+            position: relative;
+            padding: 0.5rem 0.75rem;
+        }
+
+        .cart-header-link .cart-text {
+            display: inline-flex;
+            align-items: center;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .cart-label {
+            margin-right: 0.25rem;
+        }
+
+        .cart-count-badge {
+            position: static;
+            display: inline-flex;
+            width: 20px;
+            height: 20px;
+            margin: 0 4px;
+            font-size: 0.75rem;
+        }
+
+        .cart-total, .cart-empty-text {
+            font-weight: 700;
+            color: var(--primary);
+            background: rgba(255, 107, 53, 0.1);
+            padding: 0.25rem 0.5rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            margin-left: 0.5rem;
+        }
+
+        /* Global Cart Message Styling */
+        .global-cart-message {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            z-index: 9999;
+            animation: slideInRight 0.3s ease-out;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            max-width: 300px;
+        }
+
+        .global-cart-message.success {
+            background: var(--success);
+            color: white;
+        }
+
+        .global-cart-message.danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        /* Theme Toggle */
+        .theme-toggle {
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            cursor: pointer;
+            padding: var(--spacing-sm);
+            border-radius: var(--radius-full);
+            transition: var(--transition-fast);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .theme-toggle:hover {
+            background: var(--bg-secondary);
+        }
+
+        /* Side Navigation Section */
+        .side-nav-section {
+            margin-top: var(--spacing-md);
+            border-top: 1px solid var(--border-color);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1200px) {
+            .side-nav.expanded ~ .main-content,
+            .side-nav.expanded ~ .bottom-nav {
+                margin-left: 0;
+            }
+            .mobile-actions {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                /* Ensure actions remain on a single row and can scroll when overflowing */
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                padding: 2px 0;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: thin;
+            }
+
+            .mobile-actions .btn-custom {
+                -webkit-tap-highlight-color: transparent;
+                transition: background-color 0.2s ease, transform 0.1s ease;
+            }
+            
+            .mobile-actions .btn-custom:active {
+                background: var(--primary) !important;
+                color: white !important;
+                transform: scale(0.97);
+            }
+            
+            .mobile-actions .btn-custom.loading {
+                background: var(--primary-dark) !important;
+                color: white !important;
+                pointer-events: none;
+            }
+        
+            /* Provide a subtle thumb for webkit browsers */
+            .mobile-actions::-webkit-scrollbar {
+                height: 6px;
+            }
+
+            .mobile-actions::-webkit-scrollbar-thumb {
+                background: rgba(0,0,0,0.08);
+                border-radius: 999px;
+            }
+
+            .mobile-actions .btn-custom i {
+                margin: 0;
+                color: var(--primary);
+            }
+
+            .mobile-actions .theme-toggle {
+                padding: 8px;
+                color: var(--primary) !important;
+            }
+
+            .mobile-actions .dropdown-toggle::after {
+                display: none;
+            }
+
+            .dropdown-menu {
+                min-width: 200px;
+                z-index: 3;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-items {
+                display: none;
+            }
+            
+            .bottom-nav {
+                display: block;
+            }
+            
+            .side-nav {
+                width: 280px;
+                left: -280px;
+            }
+            
+            .side-nav.expanded {
+                width: 280px;
+            }
+            
+            .container-custom {
+                padding: 0 var(--spacing-sm);
+            }
+
+            .footer-grid {
+                grid-template-columns: 1fr;
+                gap: var(--spacing-lg);
+            }
+
+            .footer-bottom {
+                flex-direction: column;
+                gap: var(--spacing-md);
+                text-align: center;
+            }
+            
+            .side-nav-link .link-text {
+                opacity: 1;
+            }
+            
+            .side-nav-logo {
+                opacity: 1;
+            }
+            
+            .side-nav-close {
+                opacity: 1;
+                pointer-events: all;
+            }
+
+            /* Mobile Navigation Optimizations */
+            .nav-content {
+                padding: 0 12px;
+            }
+
+            .logo span {
+                display: none;
+            }
+
+            .logo i {
+                margin-right: 0;
+            }
+
+            .nav-right-actions {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .mobile-actions {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                /* Ensure actions remain on a single row and can scroll when overflowing */
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                padding: 2px 0;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: thin;
+            }
+
+            .mobile-actions .btn-custom {
+                -webkit-tap-highlight-color: transparent;
+                transition: background-color 0.2s ease, transform 0.1s ease;
+            }
+            
+            .mobile-actions .btn-custom:active {
+                background: var(--primary) !important;
+                color: white !important;
+                transform: scale(0.97);
+            }
+            
+            .mobile-actions .btn-custom.loading {
+                background: var(--primary-dark) !important;
+                color: white !important;
+                pointer-events: none;
+            }
+        
+            /* Provide a subtle thumb for webkit browsers */
+            .mobile-actions::-webkit-scrollbar {
+                height: 6px;
+            }
+
+            .mobile-actions::-webkit-scrollbar-thumb {
+                background: rgba(0,0,0,0.08);
+                border-radius: 999px;
+            }
+
+            .mobile-actions .btn-custom i {
+                margin: 0;
+                color: var(--primary);
+            }
+
+            .mobile-actions .theme-toggle {
+                padding: 8px;
+                color: var(--primary);
+            }
+
+            .mobile-actions .dropdown-toggle::after {
+                display: none;
+            }
+
+            .dropdown-menu {
+                min-width: 200px;
+                z-index: 3;
+            }
+        }
+
+        @media (max-width: 430px) {
+            html {
+                font-size: 14px;
+            }
+            
+            .main-nav {
+                height: 60px;
+            }
+            
+            .main-content {
+                padding-top: 60px;
+                padding-bottom: 70px;
+            }
+            
+            .logo {
+                font-size: 1.5rem;
+            }
+            
+            .side-nav {
+                width: 100%;
+                left: -100%;
+            }
+            
+            .side-nav.expanded {
+                width: 100%;
+            }
+            
+            .bottom-nav {
+                padding: var(--spacing-xs);
+            }
+            
+            .bottom-nav-label {
+                font-size: 0.65rem;
+            }
+            
+            .container-custom {
+                padding: 0 var(--spacing-sm);
+            }
+
+            /* Extra Small Mobile Optimizations */
+            .mobile-actions {
+                gap: 4px;
+            }
+
+            .mobile-actions .btn-custom {
+                padding: 6px;
+            }
+
+            .mobile-actions .theme-toggle {
+                padding: 6px;
+            }
+
+            .mobile-search-toggle {
+                padding: 6px;
+            }
+        }
+
+        @media (max-width: 320px) {
+            html {
+                font-size: 13px;
+            }
+            
+            .container-custom {
+                padding: 0 var(--spacing-xs);
+            }
+            
+            .btn-custom {
+                padding: var(--spacing-xs) var(--spacing-md);
+                font-size: 0.9rem;
+            }
+            
+            .side-nav-link {
+                padding: var(--spacing-sm) var(--spacing-md);
+            }
+
+            /* Ultra Small Mobile Optimizations */
+            .mobile-actions {
+                gap: 3px;
+            }
+
+            .mobile-actions .btn-custom {
+                padding: 4px 6px;
+                font-size: 0.85rem;
+            }
+
+            .logo {
+                font-size: 1.3rem;
+            }
+
+            .nav-content {
+                padding: 0 8px;
+            }
+        }
+
+        /* Enhanced Animations */
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .animate-slide-up {
+            animation: slideInUp 0.6s ease-out;
+        }
+
+        .animate-slide-left {
+            animation: slideInLeft 0.6s ease-out;
+        }
+
+        .animate-slide-right {
+            animation: slideInRight 0.6s ease-out;
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        .animate-scale-in {
+            animation: scaleIn 0.6s ease-out;
+        }
+
+        /* Scroll animations */
+        .scroll-animate {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .scroll-animate.animated {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .text-muted {
+            color: var(--text-secondary) !important;
+        }
+
+        /* Dropdown menu theme compatibility */
+        .dropdown-menu {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .dropdown-item {
+            color: var(--text-primary);
+            transition: var(--transition-fast);
+        }
+
+        .dropdown-item:hover,
+        .dropdown-item:focus {
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        .dropdown-divider {
+            border-color: var(--border-color);
+        }
+
+        .badge.bg-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+        }
+
+        .badge.bg-warning {
+            background: linear-gradient(135deg, var(--warning) 0%, #e68900 100%) !important;
+        }
+
+        .badge.bg-secondary {
+            background: linear-gradient(135deg, var(--gray-600) 0%, var(--gray-700) 100%) !important;
+        }
+        .breadcrumb-item.active {
+            color: var(--primary) !important;
+        }
+        .breadcrumb {
+            background: var(--bg-secondary);
+            padding: 10px 12px;
+            border-radius: var(--radius-md);
+            margin-bottom: 16px;
+            border: 1px solid var(--border-color);
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+            font-size: 12px;
+        }
+        
+        .breadcrumb-item a {
+            text-decoration: none;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+        }
+    </style>
+
+    <!-- Replace broken /media/ images with placeholder to avoid visible 404s -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function(){
+            const placeholder = '{% static "images/placeholder.png" %}';
+            // Delegate: handle errors on images (covers images added later too)
+            document.body.addEventListener('error', function(e){
+                const tgt = e.target;
+                if (tgt && tgt.tagName === 'IMG') {
+                    try {
+                        const src = tgt.getAttribute('src') || '';
+                        if (src.startsWith('/media/') || src.includes('/media/')) {
+                            if (tgt.dataset._fallback !== '1') {
+                                tgt.dataset._fallback = '1';
+                                tgt.src = placeholder;
+                            }
+                        }
+                    } catch (err) { /* swallow */ }
+                }
+            }, true);
+        });
+    </script>
+
+    <style>
+        /* Thin, branded scrollbar: small width, primary orange thumb, transparent track */
+        :root {
+            --scrollbar-thumb: var(--primary);
+            --scrollbar-track: transparent;
+            --scrollbar-width: 2px;
+        }
+
+        html {
+            scrollbar-width: thin;
+            scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+        }
+
+        /* WebKit browsers */
+        *::-webkit-scrollbar {
+            width: var(--scrollbar-width);
+            height: var(--scrollbar-width);
+            background: var(--scrollbar-track);
+        }
+        *::-webkit-scrollbar-track {
+            background: var(--scrollbar-track);
+        }
+        *::-webkit-scrollbar-thumb {
+            background-color: var(--scrollbar-thumb);
+            border-radius: 999px;
+            border: 1px solid transparent;
+            background-clip: padding-box;
+        }
+        *::-webkit-scrollbar-thumb:hover {
+            background-color: var(--primary-dark);
+        }
+
+        /* Global small toasts used by login/register */
+        #globalMessageContainer .global-message {
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            margin-bottom: 0.5rem;
+            animation: slideInRight 0.3s;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            max-width: 320px;
+        }
+        #globalMessageContainer .global-success { background: #06D6A0; }
+        #globalMessageContainer .global-danger  { background: #EF476F; }
+        #globalMessageContainer .global-info    { background: #118AB2; }
+    </style>
+
+    <style>
+        /* Ensure unified count badges are hidden when zero.
+           This covers empty badges and badges with data-count="0".
+        */
+        .unified-count-badge:empty,
+        .unified-count-badge[data-count="0"],
+        .unified-count-badge[data-count="0"]:not(.always-visible) {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+    <style>
+        /* Compact spacing overrides: reduce vertical spacing between sections by ~80% */
+        .horizontal-scroll-section,
+        .featured-section,
+        .ad-section,
+        .stats-section,
+        section {
+            padding-top: 1rem !important;
+            padding-bottom: 1rem !important;
+        }
+
+        /* Reduce section header spacing */
+        .section-header {
+            margin-bottom: 0.4rem !important;
+            padding-bottom: 0 !important;
+        }
+
+        .section-title { margin-bottom: 0.2rem !important; }
+        .section-subtitle { margin-top: 0 !important; margin-bottom: 0.4rem !important; }
+
+        /* Reduce common in-section vertical paddings/margins by ~50% */
+        .horizontal-scroll-section .scroll-content,
+        .container-custom .listings-grid,
+        .listing-card .listing-content,
+        .store-card .store-description,
+        .featured-section .listings-grid {
+            gap: calc(var(--spacing-lg, 24px) * 0.5) !important;
+            padding-top: calc(var(--spacing-md, 16px) * 0.5) !important;
+            padding-bottom: calc(var(--spacing-md, 16px) * 0.5) !important;
+        }
+
+        /* Tighter listing internals */
+        .listing-content { padding: 0.6rem !important; }
+        .listing-meta { margin-bottom: 0.25rem !important; }
+        .listing-store { margin-bottom: 0.25rem !important; }
+
+        /* Ensure category badges have consistent icon + styling across site */
+        .listing-category-badge,
+        .listing-category {
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            backdrop-filter: blur(16px);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+    </style>
+</head>
+<body>
+    <div id="pwaInstallBanner" class="pwa-install-banner hidden">
+        <div class="pwa-install-inner container">
+            <div class="pwa-install-text">
+                <i class="bi bi-phone"></i>
+                <span>Install Baysoko for faster access and offline support.</span>
+            </div>
+            <div class="pwa-install-actions">
+                <button id="pwaInstallBtn" class="btn-custom btn-primary" type="button">Install</button>
+                <button id="pwaInstallClose" class="pwa-close-btn" type="button" aria-label="Close install banner">
+                    <span class="pwa-close-text">Not now</span>
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="offlineModal" class="offline-modal">
+        <div class="offline-card">
+            <h4>You are offline</h4>
+            <p class="text-muted mb-0">Some features need a connection. We will reconnect automatically.</p>
+            <div class="offline-actions">
+                <button id="offlineRetry" class="btn-custom btn-primary" type="button">Retry</button>
+                <button id="offlineClose" class="btn-custom btn-ghost" type="button">Dismiss</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Theme Initialization -->
+    <script>
+        (function() {
+            const storedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', storedTheme);
+        })();
+    </script>
+
+    <!-- Toast Container for Notifications -->
+    <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Navigation Overlay -->
+    <div class="nav-overlay" id="navOverlay"></div>
+
+    <!-- Top Navigation -->
+    <nav class="main-nav" id="mainNav">
+        <div class="nav-content">
+            <!-- Left Section -->
+            <div class="d-flex align-items-center gap-3">
+                <button class="btn-custom btn-ghost d-lg-none" id="sideNavToggle">
+                    <i class="bi bi-list"></i>
+                </button>
+                <button class="btn-custom btn-ghost d-none d-lg-flex" id="sideNavToggleDesktop">
+                    <i class="bi bi-list"></i>
+                </button>
+                <a href="{% url 'home' %}" class="logo">
+                    <i class="bi bi-gem"></i>
+                    <span class="d-none d-md-inline">Baysoko</span>
+                </a>
+            </div>
+
+            <!-- Center Section - Search -->
+            <div class="search-container" id="searchContainer">
+                <input type="text" class="search-input" id="searchInput" placeholder="Search products, brands, categories...">
+                <button class="search-icon" id="searchButton">
+                    <i class="bi bi-search"></i>
+                </button>
+            </div>
+
+            <!-- Right Section -->
+            <div class="nav-right-actions">
+                <!-- Mobile Search Toggle -->
+                <button class="mobile-search-toggle d-lg-none" id="mobileSearchToggle">
+                    <i class="bi bi-search"></i>
+                </button>
+                
+                <!-- Mobile Actions Container -->
+                <div class="mobile-actions d-lg-none">
+                    <!-- Cart for Mobile -->
+                    {% if user.is_authenticated %}
+                    <a href="{% url 'view_cart' %}" class="btn-custom btn-ghost position-relative" aria-label="View cart">
+                        <i class="bi bi-cart3"></i>
+                        <span id="mobileCartBadge" 
+                              class="unified-count-badge cart-badge badge-sm" 
+                              data-count="{{ cart_item_count|default:0 }}">
+                            {{ cart_item_count|default:0 }}
+                        </span>
+                    </a>
+
+                    <!-- Messages for Mobile -->
+                    <a href="{% url 'inbox' %}" class="btn-custom btn-ghost position-relative" aria-label="Messages">
+                        <i class="bi bi-chat-dots"></i>
+                        <span id="mobileMessagesBadge" 
+                              class="unified-count-badge messages-badge badge-sm" 
+                              data-count="{{ unread_messages_count|default:0 }}">
+                            {{ unread_messages_count|default:0 }}
+                        </span>
+                    </a>
+
+                    <!-- Notifications for Mobile -->
+                    <a href="{% url 'notifications' %}" class="btn-custom btn-ghost position-relative" aria-label="Notifications">
+                        <i class="bi bi-bell"></i>
+                        <span id="mobileNotificationsBadge" 
+                              class="unified-count-badge notifications-badge badge-sm" 
+                              data-count="{{ unread_notifications_count|default:0 }}">
+                            {{ unread_notifications_count|default:0 }}
+                        </span>
+                    </a>
+                    {% endif %}
+                    <!-- Theme Toggle -->
+                    <button class="theme-toggle" id="themeToggleMobile">
+                        <i class="bi bi-sun" id="themeIconMobile"></i>
+                    </button>
+                </div>
+
+                <!-- Desktop Actions -->
+                <div class="d-none d-lg-flex align-items-center gap-3">
+                    <!-- Cart with total -->
+                    {% if user.is_authenticated %}
+                    <a href="{% url 'view_cart' %}" class="btn-custom btn-ghost position-relative cart-header-link" aria-label="View cart">
+                        <i class="bi bi-cart3"></i>
+                        <span class="cart-text">
+                            <span class="cart-label">Cart</span>
+                            <span id="desktopCartBadge" 
+                                  class="cart-count-badge unified-count-badge cart-badge" 
+                                  data-count="{{ cart_item_count|default:0 }}">
+                                {{ cart_item_count|default:0 }}
+                            </span>
+                            {% if cart_item_count and cart_item_count > 0 %}
+                            <span class="cart-total">KSh {{ cart_total|floatformat:2|intcomma }}</span>
+                            {% else %}
+                            <span class="cart-empty-text">KSh 0</span>
+                            {% endif %}
+                        </span>
+                    </a>
+                    {% endif %}
+                    <!-- Theme Toggle -->
+                    <button class="theme-toggle" id="themeToggleDesktop">
+                        <i class="bi bi-sun" id="themeIconDesktop"></i>
+                    </button>
+
+                    {% if user.is_authenticated %}
+                    <!-- User Menu -->
+                    <div class="dropdown">
+                        <button class="btn-custom btn-ghost dropdown-toggle d-flex align-items-center" type="button" id="userMenu" data-bs-toggle="dropdown">
+                            <img src="{{ user.get_profile_picture_url }}" alt="{{ user.username }}" style="width:32px;height:32px;object-fit:cover;border-radius:50%;margin-right:.5rem;" loading="lazy">
+                            <span>
+                                {% if user.first_name %}
+                                    {{ user.first_name }}
+                                {% else %}
+                                    {{ user.username|truncatechars:15 }}
+                                {% endif %}
+                            </span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{% url 'profile' user.pk %}"><i class="bi bi-person me-2"></i>Profile</a></li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'view_cart' %}">
+                                    <i class="bi bi-cart3 me-2"></i>Cart 
+                                    <span id="dropdownCartBadge" 
+                                          class="unified-count-badge cart-badge badge-sm ms-2" 
+                                          data-count="{{ cart_item_count|default:0 }}">
+                                        {{ cart_item_count|default:0 }}
+                                    </span>
+                                </a>
+                            </li>
+                            <li><a class="dropdown-item" href="{% url 'order_list' %}"><i class="bi bi-bag me-2"></i>Orders</a></li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'inbox' %}">
+                                    <i class="bi bi-chat-dots me-2"></i>Messages
+                                    <span id="dropdownMessagesBadge" 
+                                          class="unified-count-badge messages-badge badge-sm ms-2" 
+                                          data-count="{{ unread_messages_count|default:0 }}">
+                                        {{ unread_messages_count|default:0 }}
+                                    </span>
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'notifications' %}">
+                                    <i class="bi bi-bell me-2"></i>Notifications
+                                    <span id="dropdownNotificationsBadge" 
+                                          class="unified-count-badge notifications-badge badge-sm ms-2" 
+                                          data-count="{{ unread_notifications_count|default:0 }}">
+                                        {{ unread_notifications_count|default:0 }}
+                                    </span>
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'affiliates:dashboard' %}">
+                                    <i class="bi bi-people me-2"></i>Affiliate Dashboard
+                                </a>
+                            </li>
+                            
+                            <!-- Subscription Management -->
+                            {% with user_stores=user_stores %}
+                                {% if user_stores %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{% url 'storefront:seller_dashboard' %}"><i class="bi bi-speedometer2 me-2"></i>Seller Dashboard</a></li>
+                                    {% for store in user_stores|slice:":2" %}
+                                        <li><a class="dropdown-item" href="{% url 'storefront:subscription_manage' slug=store.slug %}">
+                                            <i class="bi bi-award me-2"></i>{{ store.name|truncatechars:15 }}
+                                            {% if store.plan_price %}
+                                                <small class="text-muted ms-2">{{ store.plan_price }}</small>
+                                            {% endif %}
+                                            <span class="badge {{ store.plan_badge_class }} ms-2" title="{{ store.plan|title }}{% if store.is_trialing_plan %} (Trial){% endif %}">
+                                                {% if store.plan == 'free' %}F{% elif store.plan == 'basic' %}B{% elif store.plan == 'premium' %}P{% elif store.plan == 'enterprise' %}E{% else %}{{ store.plan|slice:":1"|upper }}{% endif %}{% if store.is_trialing_plan %}*{% endif %}
+                                            </span>
+                                        </a></li>
+                                    {% endfor %}
+                                    {% if user_stores.count > 2 %}
+                                        <li><a class="dropdown-item" href="{% url 'storefront:seller_dashboard' %}"><i class="bi bi-three-dots me-2"></i>More stores...</a></li>
+                                    {% endif %}
+                                {% endif %}
+                            {% endwith %}
+                            
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form method="post" action="{% url 'logout' %}" class="no-ajax">
+                                    {% csrf_token %}
+                                    <button class="dropdown-item text-danger" type="submit"><i class="bi bi-box-arrow-right me-2"></i>Logout</button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
+                    {% else %}
+                    <!-- Auth Buttons -->
+                    <a href="{% url 'login' %}" class="btn-custom btn-ghost no-ajax">Sign In</a>
+                    <a href="{% url 'register' %}" class="btn-custom btn-primary">Get Started</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Side Navigation -->
+    <aside class="side-nav" id="sideNav">
+        <div class="side-nav-header">
+            <div class="side-nav-logo">
+                <i class="bi bi-gem"></i>
+                Baysoko
+            </div>
+            <button class="side-nav-close" id="sideNavClose">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+
+        <ul class="side-nav-links">
+            <li><a href="{% url 'home' %}" class="side-nav-link active">
+                <i class="bi bi-house"></i>
+                <span class="link-text">Home</span>
+            </a></li>
+            <li><a href="{% url 'all-listings' %}" class="side-nav-link">
+                <i class="bi bi-grid"></i>
+                <span class="link-text">Browse Listings</span>
+            </a></li>
+            <li><a href="{% url 'storefront:store_list' %}" class="side-nav-link">
+                <i class="bi bi-shop"></i>
+                <span class="link-text">Stores</span>
+            </a></li>
+            <li><a href="{% url 'blog:post-list' %}" class="side-nav-link">
+                <i class="bi bi-newspaper"></i>
+                <span class="link-text">Blog</span>
+            </a></li>
+            
+            {% if user.is_authenticated %}
+            <li><a href="{% url 'listing-create' %}" class="side-nav-link">
+                <i class="bi bi-plus-circle"></i>
+                <span class="link-text">Sell Item</span>
+            </a></li>
+            <li><a href="{% url 'view_cart' %}" class="side-nav-link">
+                <i class="bi bi-cart3"></i>
+                <span class="link-text">Shopping Cart</span>
+                <span id="sideNavCartBadge" 
+                      class="unified-count-badge cart-badge" 
+                      data-count="{{ cart_item_count|default:0 }}">
+                    {{ cart_item_count|default:0 }}
+                </span>
+            </a></li>
+            <li><a href="{% url 'order_list' %}" class="side-nav-link">
+                <i class="bi bi-bag"></i>
+                <span class="link-text">My Orders</span>
+            </a></li>
+            <li>
+                <a href="{% url 'inbox' %}" class="side-nav-link">
+                    <i class="bi bi-chat-dots"></i>
+                    <span class="link-text">Messages</span>
+                    <span id="sideNavMessagesBadge" 
+                          class="unified-count-badge messages-badge" 
+                          data-count="{{ unread_messages_count|default:0 }}">
+                        {{ unread_messages_count|default:0 }}
+                    </span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'notifications' %}" class="side-nav-link">
+                    <i class="bi bi-bell"></i>
+                    <span class="link-text">Notifications</span>
+                    <span id="sideNavNotificationsBadge" 
+                          class="unified-count-badge notifications-badge" 
+                          data-count="{{ unread_notifications_count|default:0 }}">
+                        {{ unread_notifications_count|default:0 }}
+                    </span>
+                </a>
+            </li>
+            <li>
+                <a href="/delivery/" class="side-nav-link">
+                    <i class="bi bi-truck"></i>
+                    <span class="link-text">Delivery App</span>
+                </a>
+            </li>
+            <li><a href="{% url 'profile' user.pk %}" class="side-nav-link">
+                <i class="bi bi-person"></i>
+                <span class="link-text">Profile</span>
+            </a></li>
+            
+            <!-- Seller Dashboard and Analytics -->
+            <li><a href="{% url 'storefront:seller_dashboard' %}" class="side-nav-link">
+                <i class="bi bi-speedometer2"></i>
+                <span class="link-text">Seller Dashboard</span>
+            </a></li>
+
+            <!-- Subscription Management -->
+            {% with user_stores=user_stores %}
+                {% if user_stores %}
+                    <li class="side-nav-section">
+                        <small class="text-muted px-3 py-2 d-block">My Stores</small>
+                    </li>
+                    {% for store in user_stores %}
+                        <li>
+                            <a href="{% url 'storefront:subscription_manage' slug=store.slug %}" class="side-nav-link">
+                                <i class="bi bi-shop"></i>
+                                <span class="link-text">{{ store.name|truncatechars:15 }}</span>
+                                <span class="badge {{ store.plan_badge_class }}" title="{{ store.plan|title }}{% if store.is_trialing_plan %} (Trial){% endif %}">
+                                    {% if store.plan == 'free' %}F{% elif store.plan == 'basic' %}B{% elif store.plan == 'premium' %}P{% elif store.plan == 'enterprise' %}E{% else %}{{ store.plan|slice:":1"|upper }}{% endif %}{% if store.is_trialing_plan %}*{% endif %}
+                                </span>
+                            </a>
+                        </li>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <li><a href="{% url 'favorites' %}" class="side-nav-link">
+                <i class="bi bi-heart"></i>
+                <span class="link-text">Favorites</span>
+            </a></li>
+            <li>
+                <a href="#" class="side-nav-link text-danger no-ajax" id="logoutLink">
+                    <i class="bi bi-box-arrow-right"></i>
+                    <span class="link-text">Logout</span>
+                </a>
+                <form method="post" action="{% url 'logout' %}" id="logoutForm" class="d-none no-ajax">
+                    {% csrf_token %}
+                </form>
+            </li>
+            {% else %}
+            <li><a href="{% url 'login' %}" class="side-nav-link">
+                <i class="bi bi-box-arrow-in-right"></i>
+                <span class="link-text">Login</span>
+            </a></li>
+            <li><a href="{% url 'register' %}" class="side-nav-link">
+                <i class="bi bi-person-plus"></i>
+                <span class="link-text">Register</span>
+            </a></li>
+            <li>
+                <a href="/delivery/" class="side-nav-link">
+                    <i class="bi bi-truck"></i>
+                    <span class="link-text">Delivery App</span>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </aside>
+
+    <!-- Bottom Navigation for Mobile -->
+    <nav class="bottom-nav">
+        <ul class="bottom-nav-items">
+            <li>
+                <a href="{% url 'home' %}" class="bottom-nav-link active">
+                    <i class="bi bi-house bottom-nav-icon"></i>
+                    <span class="bottom-nav-label">Home</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'all-listings' %}" class="bottom-nav-link">
+                    <i class="bi bi-grid bottom-nav-icon"></i>
+                    <span class="bottom-nav-label">Browse</span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'view_cart' %}" class="bottom-nav-link position-relative">
+                    <i class="bi bi-cart3 bottom-nav-icon"></i>
+                    <span class="bottom-nav-label">Cart</span>
+                    <span id="bottomNavCartBadge" 
+                          class="unified-count-badge cart-badge badge-sm" 
+                          data-count="{{ cart_item_count|default:0 }}">
+                        {{ cart_item_count|default:0 }}
+                    </span>
+                </a>
+            </li>
+            {% if user.is_authenticated %}
+            <li>
+                <a href="{% url 'inbox' %}" class="bottom-nav-link position-relative">
+                    <i class="bi bi-chat-dots bottom-nav-icon"></i>
+                    <span class="bottom-nav-label">Messages</span>
+                    <span id="bottomNavMessagesBadge" 
+                          class="unified-count-badge messages-badge badge-sm" 
+                          data-count="{{ unread_messages_count|default:0 }}">
+                        {{ unread_messages_count|default:0 }}
+                    </span>
+                </a>
+            </li>
+            <li>
+                <a href="{% url 'profile' user.pk %}" class="bottom-nav-link">
+                    <i class="bi bi-person bottom-nav-icon"></i>
+                    <span class="bottom-nav-label">Profile</span>
+                </a>
+            </li>
+            {% else %}
+            <li>
+                <a href="{% url 'login' %}" class="bottom-nav-link">
+                    <i class="bi bi-box-arrow-in-right bottom-nav-icon"></i>
+                    <span class="bottom-nav-label">Login</span>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container-custom">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-grid">
+                <div class="footer-section">
+                    <h3>About Baysoko</h3>
+                    <p class="text-muted">Baysoko is your local marketplace connecting buyers and sellers in Homabay County. Discover amazing deals and grow your business with us.</p>
+                    <div class="d-flex gap-3 mt-3">
+                        <a href="#" class="social-link"><i class="bi bi-facebook"></i></a>
+                        <a href="#" class="social-link"><i class="bi bi-twitter"></i></a>
+                        <a href="#" class="social-link"><i class="bi bi-instagram"></i></a>
+                        <a href="#" class="social-link"><i class="bi bi-linkedin"></i></a>
+                    </div>
+                </div>
+                
+                <div class="footer-section">
+                    <h3>Quick Links</h3>
+                    <ul class="footer-links">
+                        <li class="footer-link"><a href="{% url 'home' %}">Home</a></li>
+                        <li class="footer-link"><a href="{% url 'all-listings' %}">All Listings</a></li>
+                        <li class="footer-link"><a href="{% url 'storefront:store_list' %}">Stores</a></li>
+                        <li class="footer-link"><a href="{% url 'blog:post-list' %}">Blog</a></li>
+                        <li class="footer-link"><a href="#">About Us</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h3>For Sellers</h3>
+                    <ul class="footer-links">
+                        <li class="footer-link"><a href="{% url 'storefront:store_create' %}">Create Store</a></li>
+                        <li class="footer-link"><a href="{% url 'listing-create' %}">Sell Item</a></li>
+                        <li class="footer-link"><a href="{% url 'storefront:seller_dashboard' %}">Seller Dashboard</a></li>
+                        <li class="footer-link"><a href="{% url 'storefront:seller_analytics' %}">Analytics</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer-section">
+                    <h3>Support</h3>
+                    <ul class="footer-links">
+                        <li class="footer-link"><a href="#">Help Center</a></li>
+                        <li class="footer-link"><a href="#">Contact Us</a></li>
+                        <li class="footer-link"><a href="#">Privacy Policy</a></li>
+                        <li class="footer-link"><a href="#">Terms of Service</a></li>
+                        <li class="footer-link"><a href="#">FAQs</a></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <div class="footer-copyright">
+                    &copy; 2026 Baysoko Marketplace. All rights reserved.
+                </div>
+                <div class="footer-legal">
+                    <a href="#" class="text-muted me-3">Privacy</a>
+                    <a href="#" class="text-muted me-3">Terms</a>
+                    <a href="#" class="text-muted">Sitemap</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Modern JavaScript -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // ============================================
+            // BADGE MANAGEMENT SYSTEM
+            // ============================================
+            
+            // Centralized Badge Manager
+            window.BadgeManager = (function() {
+                const badgeTypes = {
+                    cart: {
+                        selector: '.cart-badge',
+                        ids: ['mobileCartBadge', 'desktopCartBadge', 'dropdownCartBadge', 
+                              'sideNavCartBadge', 'bottomNavCartBadge'],
+                        color: 'cart-badge',
+                        pulseOnUpdate: false
+                    },
+                    messages: {
+                        selector: '.messages-badge',
+                        ids: ['mobileMessagesBadge', 'desktopMessagesBadge', 'dropdownMessagesBadge',
+                              'sideNavMessagesBadge', 'bottomNavMessagesBadge'],
+                        color: 'messages-badge',
+                        pulseOnUpdate: true
+                    },
+                    notifications: {
+                        selector: '.notifications-badge',
+                        ids: ['mobileNotificationsBadge', 'desktopNotificationsBadge', 'dropdownNotificationsBadge',
+                              'sideNavNotificationsBadge', 'bottomNavNotificationsBadge'],
+                        color: 'notifications-badge',
+                        pulseOnUpdate: true
+                    }
+                };
+
+                // Store original title without count prefix
+                const originalTitle = document.title.replace(/^\(\d+\)\s*/, '');
+
+                function setBadgeCount(badge, count) {
+                    if (!badge) return;
+                    
+                    const isZero = count === 0 || count === '0';
+                    const isEmpty = badge.textContent === '' || badge.textContent === '0';
+                    
+                    // Update count
+                    badge.textContent = count;
+                    badge.setAttribute('data-count', count);
+                    
+                    // Show/hide based on count
+                    if (isZero) {
+                        badge.style.display = 'none';
+                    } else {
+                        badge.style.display = 'inline-flex';
+
+                        // Add pulse animation for new notifications/messages
+                        if ((badge.classList.contains('messages-badge') || 
+                             badge.classList.contains('notifications-badge')) && 
+                            !isEmpty && count > 0) {
+                            badge.classList.add('pulse');
+                            setTimeout(() => badge.classList.remove('pulse'), 1000);
+                        }
+                    }
+
+                    // Do not hide parent anchors when count is zero; only hide the badge itself.
+                    // This preserves mobile action buttons while keeping UI consistent.
+                }
+
+                return {
+                    // Update all badges of a specific type
+                    update(type, count) {
+                        const config = badgeTypes[type];
+                        if (!config) return;
+                        
+                                // Prevent noisy repeated updates: if count unchanged, skip
+                                if (this._lastCounts === undefined) this._lastCounts = {};
+                                if (this._lastCounts[type] !== undefined && this._lastCounts[type] === count) return;
+                                this._lastCounts[type] = count;
+
+                                // Update by ID
+                                config.ids.forEach(id => {
+                                    const badge = document.getElementById(id);
+                                    setBadgeCount(badge, count);
+                                });
+                        
+                        // Update by selector (for any other badges with same class)
+                        document.querySelectorAll(config.selector).forEach(badge => {
+                            if (!config.ids.includes(badge.id)) {
+                                setBadgeCount(badge, count);
+                            }
+                        });
+
+                        // Update document title for messages
+                        if (type === 'messages') {
+                            if (count > 0) {
+                                document.title = `(${count}) ${originalTitle}`;
+                            } else {
+                                document.title = originalTitle;
+                            }
+                        }
+
+                        // Dispatch global event
+                        document.dispatchEvent(new CustomEvent('badgeUpdated', {
+                            detail: { type, count }
+                        }));
+                        
+                        console.log(`BadgeManager: Updated ${type} to ${count}`);
+
+                        // If count is zero, also fire a zero-count event for other consumers
+                        if (count === 0) {
+                            document.dispatchEvent(new CustomEvent('badgeZero', { detail: { type } }));
+                        }
+                    },
+                    
+                    // Get count for a badge type
+                    getCount(type) {
+                        const badge = document.querySelector(`${badgeTypes[type]?.selector}`);
+                        return badge ? parseInt(badge.getAttribute('data-count') || '0') : 0;
+                    },
+                    
+                    // Initialize badges from server data
+                    initialize() {
+                        // Cart
+                        const cartCount = {% if cart_item_count %}{{ cart_item_count }}{% else %}0{% endif %};
+                        this.update('cart', cartCount);
+                        
+                        // Messages
+                        const messagesCount = {% if unread_messages_count %}{{ unread_messages_count }}{% else %}0{% endif %};
+                        this.update('messages', messagesCount);
+                        
+                        // Notifications
+                        const notificationsCount = {% if unread_notifications_count %}{{ unread_notifications_count }}{% else %}0{% endif %};
+                        this.update('notifications', notificationsCount);
+                        
+                        console.log('BadgeManager initialized');
+                    },
+                    
+                    getOriginalTitle() { return originalTitle; }
+                };
+            })();
+
+            // ============================================
+            // POLLING SYSTEM
+            // ============================================
+            
+            let pollingIntervals = {};
+            let errorCounts = {
+                messages: 0,
+                notifications: 0
+            };
+            const MAX_RETRY_DELAY = 60000;
+            const BASE_RETRY_DELAY = 10000;
+            
+            // Unified polling function
+            async function pollEndpoint(url, type) {
+                if (!window.currentUserId) return null;
+                
+                try {
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0'
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    errorCounts[type] = 0; // Reset error count on success
+                    return data;
+                } catch (error) {
+                    console.error(`Error polling ${type}:`, error);
+                    errorCounts[type]++;
+                    
+                    // Exponential backoff with jitter
+                    const backoffDelay = Math.min(
+                        BASE_RETRY_DELAY * Math.pow(2, errorCounts[type]) + Math.random() * 2000,
+                        MAX_RETRY_DELAY
+                    );
+                    
+                    console.log(`${type} polling failed, retrying in ${Math.round(backoffDelay/1000)}s...`);
+                    
+                    // Schedule retry
+                    setTimeout(() => {
+                        if (pollingIntervals[type]) {
+                            startPolling(type);
+                        }
+                    }, backoffDelay);
+                    
+                    return null;
+                }
+            }
+            
+            // Messages polling
+            async function pollMessages() {
+                {% if user.is_authenticated %}
+                const data = await pollEndpoint('{% url "unread-messages-count" %}', 'messages');
+                if (data) {
+                    // Support both { count } and legacy { unread_messages_count }
+                    const newCount = (data.count !== undefined) ? data.count : (data.unread_messages_count || 0);
+                    const currentCount = window.BadgeManager.getCount('messages');
+                    if (currentCount !== newCount) {
+                        window.BadgeManager.update('messages', newCount);
+                    }
+
+                    // Update per-conversation unread badges if provided
+                    if (Array.isArray(data.conversations) && data.conversations.length > 0) {
+                        try {
+                            data.conversations.forEach(conv => {
+                                const convEl = document.querySelector(`.conversation-item[data-conversation-id="${conv.id}"]`);
+                                const preview = convEl?.querySelector('.conversation-preview');
+                                const existing = convEl?.querySelector('.conversation-unread');
+                                if (convEl && preview) {
+                                    if (conv.unread_count > 0) {
+                                        if (existing) existing.textContent = conv.unread_count;
+                                        else {
+                                            const badge = document.createElement('div');
+                                            badge.className = 'conversation-unread';
+                                            badge.textContent = conv.unread_count;
+                                            preview.appendChild(badge);
+                                        }
+                                    } else if (existing) {
+                                        existing.remove();
+                                    }
+                                }
+                            });
+                        } catch (e) { console.warn('Error updating per-conversation counts', e); }
+                    }
+                }
+                {% endif %}
+            }
+
+            // Notifications polling
+            async function pollNotifications() {
+                {% if user.is_authenticated %}
+                const data = await pollEndpoint('{% url "unread-notification-count" %}', 'notifications');
+                if (data) {
+                    // Server may return { unread_count } or legacy { unread_notifications_count }
+                    const newCount = (data.unread_count !== undefined) ? data.unread_count : (data.unread_notifications_count || 0);
+                    const currentCount = window.BadgeManager.getCount('notifications');
+                    if (currentCount !== newCount) {
+                        window.BadgeManager.update('notifications', newCount);
+                    }
+                }
+                {% endif %}
+            }
+            
+            // Start polling for a specific type
+            function startPolling(type) {
+                const intervals = {
+                    messages: 10000, // 10 seconds
+                    notifications: 15000 // 15 seconds
+                };
+                
+                if (pollingIntervals[type]) {
+                    clearInterval(pollingIntervals[type]);
+                }
+                
+                // Initial poll
+                if (type === 'messages') pollMessages();
+                if (type === 'notifications') pollNotifications();
+                
+                // Set up interval
+                pollingIntervals[type] = setInterval(() => {
+                    if (type === 'messages') pollMessages();
+                    if (type === 'notifications') pollNotifications();
+                }, intervals[type]);
+                
+                console.log(`${type} polling started`);
+            }
+            
+            // Stop all polling
+            function stopPolling() {
+                Object.values(pollingIntervals).forEach(interval => {
+                    if (interval) clearInterval(interval);
+                });
+                pollingIntervals = {};
+            }
+            
+            // ============================================
+            // INITIALIZATION
+            // ============================================
+            
+            // Initialize BadgeManager
+            // (Badge elements are expected to be rendered by templates; keep initialization simple)
+            window.BadgeManager.initialize();
+            
+            // Start polling if user is authenticated
+            {% if user.is_authenticated %}
+            startPolling('messages');
+            startPolling('notifications');
+            
+            // Restart polling when page becomes visible
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden) {
+                    if (!pollingIntervals.messages) startPolling('messages');
+                    if (!pollingIntervals.notifications) startPolling('notifications');
+                }
+            });
+            
+            // Restart polling when coming back online
+            window.addEventListener('online', function() {
+                console.log('Back online, restarting polling');
+                if (!pollingIntervals.messages) startPolling('messages');
+                if (!pollingIntervals.notifications) startPolling('notifications');
+            });
+            
+            // Manual refresh functions
+            window.refreshMessagesCount = pollMessages;
+            window.refreshNotificationsCount = pollNotifications;
+            
+            // Add real-time hooks: update badges immediately on events, then reconcile via polling
+            document.addEventListener('newMessageReceived', function(e) {
+                try {
+                    const delta = (e && e.detail && e.detail.count) ? parseInt(e.detail.count) : 1;
+                    // Optimistically increment messages badge
+                    try {
+                        const current = window.BadgeManager.getCount('messages') || 0;
+                        window.BadgeManager.update('messages', current + delta);
+                    } catch (err) { console.warn('BadgeManager immediate increment failed', err); }
+
+                    // Reconcile with server shortly after
+                    setTimeout(() => { if (window.refreshMessagesCount) window.refreshMessagesCount(); }, 500);
+                } catch (err) { console.warn(err); }
+            });
+
+            // Show toast when new messages arrive via real-time event
+            document.addEventListener('newMessageReceived', function(e) {
+                try {
+                    const sender = e && e.detail && (e.detail.from_name || e.detail.sender_name || e.detail.user || e.detail.from) ? (e.detail.from_name || e.detail.sender_name || e.detail.user || e.detail.from) : null;
+                    const title = sender ? `New message from ${sender}` : 'New message received';
+                    if (window.showToast) showToast(title, 'info', 4000);
+                } catch (err) { console.warn('Failed showing new message toast', err); }
+            });
+
+            document.addEventListener('messagesRead', function(e) {
+                try {
+                    const removed = (e && e.detail && e.detail.removed) ? parseInt(e.detail.removed) : 0;
+                    if (removed > 0) {
+                        try {
+                            const current = window.BadgeManager.getCount('messages') || 0;
+                            window.BadgeManager.update('messages', Math.max(0, current - removed));
+                        } catch (err) { console.warn('BadgeManager optimistic decrement failed', err); }
+                    }
+
+                    // Reconcile with server
+                    setTimeout(() => { if (window.refreshMessagesCount) window.refreshMessagesCount(); }, 500);
+                } catch (err) { console.warn(err); }
+            });
+
+            document.addEventListener('notificationReceived', function(e) {
+                try {
+                    const delta = (e && e.detail && e.detail.count) ? parseInt(e.detail.count) : 1;
+                    try {
+                        const current = window.BadgeManager.getCount('notifications') || 0;
+                        window.BadgeManager.update('notifications', current + delta);
+                    } catch (err) { console.warn('BadgeManager immediate notifications increment failed', err); }
+
+                    setTimeout(() => { if (window.refreshNotificationsCount) window.refreshNotificationsCount(); }, 500);
+                } catch (err) { console.warn(err); }
+            });
+
+            // Show toast for incoming notifications if payload includes title/message
+            document.addEventListener('notificationReceived', function(e) {
+                try {
+                    const detail = e && e.detail ? e.detail : {};
+                    const title = detail.title || detail.message || (detail.count ? `You have ${detail.count} new notifications` : null);
+                    if (title && window.showToast) showToast(title, 'primary', 4500);
+                } catch (err) { console.warn('Failed showing notification toast', err); }
+            });
+
+            // Add logged-in body class so footer can be hidden via CSS
+            {% if user.is_authenticated %}
+            document.body.classList.add('logged-in');
+            {% endif %}
+            {% endif %}
+            
+            // ============================================
+            // EXISTING FUNCTIONALITY
+            // ============================================
+            
+            // Toast notification system
+            window.showToast = function(message, type = 'info', duration = 5000) {
+                const toastContainer = document.getElementById('toastContainer');
+                if (!toastContainer) return;
+
+                const toast = document.createElement('div');
+                // Include the Bootstrap 'toast' class so the Toast plugin recognizes the element
+                toast.className = `toast custom-toast toast-${type}`;
+                toast.setAttribute('role', 'alert');
+                toast.setAttribute('aria-live', 'assertive');
+                toast.setAttribute('aria-atomic', 'true');
+
+                const iconMap = {
+                    'success': 'check-circle-fill',
+                    'error': 'exclamation-circle-fill',
+                    'warning': 'exclamation-triangle-fill',
+                    'info': 'info-circle-fill',
+                    'primary': 'info-circle-fill'
+                };
+
+                toast.innerHTML = `
+                    <div class="d-flex align-items-center p-3">
+                        <i class="bi bi-${iconMap[type] || 'info-circle-fill'} fs-4 me-3"></i>
+                        <div class="flex-grow-1">
+                            <div class="fw-medium">${message}</div>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white ms-3" aria-label="Close"></button>
+                    </div>
+                    <div class="toast-progress-bar" style="animation-duration: ${duration}ms;"></div>
+                `;
+
+                toastContainer.appendChild(toast);
+
+                // Initialize Bootstrap toast
+                const bsToast = new bootstrap.Toast(toast, {
+                    autohide: true,
+                    delay: duration
+                });
+
+                // Wire up close button to hide the toast reliably
+                const closeBtn = toast.querySelector('.btn-close');
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', (ev) => {
+                        try { bsToast.hide(); } catch (err) { /* swallow */ }
+                    });
+                }
+
+                bsToast.show();
+
+                // Remove from DOM after hidden
+                toast.addEventListener('hidden.bs.toast', () => {
+                    try { toast.remove(); } catch (err) { /* swallow */ }
+                });
+
+                // Return instance so callers can hide() if they want
+                return bsToast;
+            };
+            
+            // Convert Django messages to toasts
+            const djangoMessages = [
+                {% for msg in messages %}
+                { 
+                    message: "{{ msg|escapejs }}", 
+                    tags: "{{ msg.tags }}" 
+                }{% if not forloop.last %},{% endif %}
+                {% endfor %}
+            ];
+            
+            const mapDjangoTag = (tags) => {
+                if (!tags) return 'info';
+                if (tags.indexOf('error') !== -1 || tags.indexOf('danger') !== -1) return 'error';
+                if (tags.indexOf('warning') !== -1) return 'warning';
+                if (tags.indexOf('success') !== -1) return 'success';
+                if (tags.indexOf('info') !== -1) return 'info';
+                return 'info';
+            };
+            
+            setTimeout(() => {
+                djangoMessages.forEach(msg => {
+                    const type = mapDjangoTag(msg.tags);
+                    showToast(msg.message, type);
+                });
+            }, 300);
+            
+            // Update showGlobalCartMessage to use new toast system
+            const originalShowGlobalCartMessage = window.showGlobalCartMessage;
+            window.showGlobalCartMessage = function(message, type = 'success') {
+                if (type === 'danger') type = 'error';
+                showToast(message, type);
+            };
+
+            // Side Navigation Toggle
+            const sideNav = document.getElementById('sideNav');
+            const sideNavToggle = document.getElementById('sideNavToggle');
+            const sideNavToggleDesktop = document.getElementById('sideNavToggleDesktop');
+            const sideNavClose = document.getElementById('sideNavClose');
+            const navOverlay = document.getElementById('navOverlay');
+
+            function openSideNav() {
+                sideNav.classList.add('expanded');
+                navOverlay.classList.add('active');
+                document.body.style.overflow = 'hidden';
+                document.body.classList.add('side-nav-open');
+            }
+
+            function closeSideNav() {
+                sideNav.classList.remove('expanded');
+                navOverlay.classList.remove('active');
+                document.body.style.overflow = '';
+                document.body.classList.remove('side-nav-open');
+            }
+
+            sideNavToggle.addEventListener('click', openSideNav);
+            sideNavToggleDesktop.addEventListener('click', openSideNav);
+            sideNavClose.addEventListener('click', closeSideNav);
+            navOverlay.addEventListener('click', closeSideNav);
+
+            // Logout functionality
+            const logoutLink = document.getElementById('logoutLink');
+            const logoutForm = document.getElementById('logoutForm');
+            
+            if (logoutLink && logoutForm) {
+                logoutLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    logoutForm.submit();
+                });
+            }
+
+            // Theme Toggle
+            const themeToggleMobile = document.getElementById('themeToggleMobile');
+            const themeIconMobile = document.getElementById('themeIconMobile');
+            const themeToggleDesktop = document.getElementById('themeToggleDesktop');
+            const themeIconDesktop = document.getElementById('themeIconDesktop');
+
+            function toggleTheme() {
+                const currentTheme = document.documentElement.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                
+                document.documentElement.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                
+                const newIconClass = newTheme === 'dark' ? 'bi bi-moon' : 'bi bi-sun';
+                if (themeIconMobile) themeIconMobile.className = newIconClass;
+                if (themeIconDesktop) themeIconDesktop.className = newIconClass;
+                
+                // Show toast notification
+                showToast(`Switched to ${newTheme} mode`, 'info', 2000);
+            }
+
+            // Attach listeners idempotently to avoid double-binding (prevents unexpected behaviour)
+            try {
+                if (themeToggleMobile && !themeToggleMobile.dataset.themeInited) {
+                    themeToggleMobile.addEventListener('click', toggleTheme);
+                    themeToggleMobile.dataset.themeInited = '1';
+                }
+                if (themeToggleDesktop && !themeToggleDesktop.dataset.themeInited) {
+                    themeToggleDesktop.addEventListener('click', toggleTheme);
+                    themeToggleDesktop.dataset.themeInited = '1';
+                }
+            } catch (e) { console.warn('Theme toggle init failed', e); }
+
+            // Initialize theme icons
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const iconClass = currentTheme === 'dark' ? 'bi bi-moon' : 'bi bi-sun';
+            if (themeIconMobile) themeIconMobile.className = iconClass;
+            if (themeIconDesktop) themeIconDesktop.className = iconClass;
+
+            // Mobile Search Toggle
+            const mobileSearchToggle = document.getElementById('mobileSearchToggle');
+            const searchContainer = document.getElementById('searchContainer');
+            const searchInput = document.getElementById('searchInput');
+            
+            if (mobileSearchToggle && searchContainer) {
+                mobileSearchToggle.addEventListener('click', function() {
+                    searchContainer.classList.add('mobile-active');
+                    searchInput.focus();
+                });
+                
+                // Close mobile search when clicking outside
+                document.addEventListener('click', function(e) {
+                    if (!searchContainer.contains(e.target) && !mobileSearchToggle.contains(e.target)) {
+                        searchContainer.classList.remove('mobile-active');
+                    }
+                });
+            }
+
+            // Search functionality
+            searchInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    const query = this.value.trim();
+                    if (query) {
+                        window.location.href = `{% url 'all-listings' %}?q=${encodeURIComponent(query)}`;
+                    }
+                }
+            });
+
+            // Bottom Navigation Active State
+            const currentPath = window.location.pathname;
+            const bottomNavLinks = document.querySelectorAll('.bottom-nav-link');
+            
+            bottomNavLinks.forEach(link => {
+                const href = link.getAttribute('href');
+                if (currentPath === href || (currentPath === '/' && href === '{% url "home" %}')) {
+                    link.classList.add('active');
+                } else {
+                    link.classList.remove('active');
+                }
+            });
+
+            // Side Navigation Active State
+            const sideNavLinks = document.querySelectorAll('.side-nav-link');
+            sideNavLinks.forEach(link => {
+                const href = link.getAttribute('href');
+                if (currentPath === href || (currentPath === '/' && href === '{% url "home" %}')) {
+                    link.classList.add('active');
+                } else {
+                    link.classList.remove('active');
+                }
+            });
+
+            // Add floating animation to elements with .floating class
+            const floatingElements = document.querySelectorAll('.floating');
+            floatingElements.forEach((el, index) => {
+                el.style.animationDelay = `${index * 0.2}s`;
+            });
+
+            // Scroll animations
+            const scrollElements = document.querySelectorAll('.scroll-animate');
+            
+            const elementInView = (el, dividend = 1) => {
+                const elementTop = el.getBoundingClientRect().top;
+                return (
+                    elementTop <= (window.innerHeight || document.documentElement.clientHeight) / dividend
+                );
+            };
+            
+            const displayScrollElement = (element) => {
+                element.classList.add('animated');
+            };
+            
+            const handleScrollAnimation = () => {
+                scrollElements.forEach((el) => {
+                    if (elementInView(el, 1.25)) {
+                        displayScrollElement(el);
+                    }
+                });
+            };
+            
+            window.addEventListener('scroll', () => {
+                handleScrollAnimation();
+            });
+            
+            // Initial check
+            handleScrollAnimation();
+
+            // Navbar hide/show on scroll for mobile
+            let lastScrollTop = 0;
+            const mainNav = document.getElementById('mainNav');
+            const scrollThreshold = 100;
+
+            window.addEventListener('scroll', function() {
+                if (window.innerWidth < 768) {
+                    let scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                    
+                    if (scrollTop > lastScrollTop && scrollTop > scrollThreshold) {
+                        // Scroll down
+                        mainNav.classList.add('hidden');
+                    } else {
+                        // Scroll up
+                        mainNav.classList.remove('hidden');
+                    }
+                    
+                    lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
+                }
+            }, false);
+
+            // Prevent horizontal scrolling
+            window.addEventListener('scroll', function() {
+                if (window.scrollX !== 0) {
+                    window.scrollTo(0, window.scrollY);
+                }
+            });
+
+            // Ensure body doesn't overflow horizontally
+            function checkHorizontalScroll() {
+                if (document.body.scrollWidth > window.innerWidth) {
+                    document.body.style.overflowX = 'hidden';
+                }
+            }
+
+            checkHorizontalScroll();
+            window.addEventListener('resize', checkHorizontalScroll);
+            
+            // Global Cart Update Handler
+            function handleGlobalCartUpdate(itemCount, total) {
+                const safeCount = Number.isFinite(Number(itemCount)) ? Math.max(0, Number(itemCount)) : 0;
+                const safeTotal = Number.isFinite(Number(total)) ? Math.max(0, Number(total)) : 0;
+                // Update BadgeManager
+                window.BadgeManager.update('cart', safeCount);
+                
+                // Update cart totals in header
+                let cartTotalElements = document.querySelectorAll('.cart-total');
+                if (!cartTotalElements.length) {
+                    document.querySelectorAll('.cart-header-link .cart-text').forEach(wrapper => {
+                        const totalEl = document.createElement('span');
+                        totalEl.className = 'cart-total';
+                        totalEl.style.display = 'none';
+                        wrapper.appendChild(totalEl);
+                    });
+                    cartTotalElements = document.querySelectorAll('.cart-total');
+                }
+                cartTotalElements.forEach(element => {
+                    if (safeCount > 0) {
+                        element.textContent = `KSh ${safeTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                        element.style.display = 'inline';
+                    } else {
+                        element.style.display = 'none';
+                    }
+                });
+                
+                // Update cart empty text
+                const cartEmptyElements = document.querySelectorAll('.cart-empty-text');
+                cartEmptyElements.forEach(element => {
+                    element.textContent = 'KSh 0';
+                    element.style.display = safeCount > 0 ? 'none' : 'inline';
+                });
+                
+                // Dispatch event for cart page to update
+                document.dispatchEvent(new CustomEvent('globalCartUpdated', {
+                    detail: { itemCount: safeCount, total: safeTotal }
+                }));
+                
+                console.log('Global cart updated:', { itemCount: safeCount, total: safeTotal });
+            }
+            
+            // Listen for cart update events from any page
+            document.addEventListener('cartUpdated', function(event) {
+                const detail = event.detail || {};
+                const itemCount = detail.itemCount;
+                const total = detail.total;
+                handleGlobalCartUpdate(itemCount, total);
+            });
+            
+            // Initialize cart on page load
+            const initialCartCount = parseInt("{{ cart_item_count|default:0 }}");
+            const initialCartTotal = parseFloat("{{ cart_total|default:0 }}");
+            
+            if (!isNaN(initialCartCount) && !isNaN(initialCartTotal)) {
+                handleGlobalCartUpdate(initialCartCount, initialCartTotal);
+            }
+            
+            // CSRF token helper
+            window.getCookie = function(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            };
+
+            // Enhanced add-to-cart functionality for product pages
+            const addToCartForms = document.querySelectorAll('form.add-to-cart-form');
+            
+            addToCartForms.forEach(form => {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const formData = new FormData(this);
+                    const url = this.action;
+                    const submitBtn = this.querySelector('button[type="submit"]');
+                    const originalText = submitBtn?.innerHTML;
+                    
+                    // Show loading state
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Adding...';
+                    }
+                    
+                    fetch(url, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken'),
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('Add to cart response:', data);
+                        
+                        if (data.success) {
+                            // Update cart globally
+                            document.dispatchEvent(new CustomEvent('cartUpdated', {
+                                detail: { 
+                                    itemCount: data.cart_item_count || data.item_count || 0, 
+                                    total: data.cart_total || 0 
+                                }
+                            }));
+                            
+                            // Show success message using new toast system
+                            if (window.showToast) {
+                                window.showToast(data.message || 'Added to cart successfully', 'success');
+                            }
+                        } else {
+                            // Show error using new toast system
+                            if (window.showToast) {
+                                window.showToast(data.error || 'Failed to add to cart', 'error');
+                            }
+                            
+                            // Redirect if needed
+                            if (data.redirect_url) {
+                                setTimeout(() => {
+                                    window.location.href = data.redirect_url;
+                                }, 1500);
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Add to cart error:', error);
+                        if (window.showToast) {
+                            window.showToast('Error adding to cart', 'error');
+                        }
+                    })
+                    .finally(() => {
+                        // Reset button
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                            submitBtn.innerHTML = originalText;
+                        }
+                    });
+                });
+            });
+            
+            // Handle add-to-cart buttons (if not using forms)
+            const addToCartButtons = document.querySelectorAll('.add-to-cart-btn:not([form])');
+            
+            addToCartButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const listingId = this.dataset.listingId;
+                    if (!listingId) return;
+                    
+                    const url = `/cart/add/${listingId}/`;
+                    
+                    fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken'),
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            document.dispatchEvent(new CustomEvent('cartUpdated', {
+                                detail: { 
+                                    itemCount: data.cart_item_count || 0, 
+                                    total: data.cart_total || 0 
+                                }
+                            }));
+                            
+                            if (window.showToast) {
+                                window.showToast(data.message || 'Added to cart successfully', 'success');
+                            }
+                        } else {
+                            if (window.showToast) {
+                                window.showToast(data.error || 'Failed to add to cart', 'error');
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Add to cart error:', error);
+                        if (window.showToast) {
+                            window.showToast('Error adding to cart', 'error');
+                        }
+                    });
+                });
+            });
+
+            // Mobile actions: delegate loading UI to the global AJAX handler.
+            // The global handler exposes `window.UIHelpers.setButtonLoading` which
+            // will insert the spinner and swap the icon on small screens while
+            // preserving button layout and accessibility attributes.
+            (function() {
+                const mobileActionsContainer = document.querySelector('.mobile-actions');
+                if (!mobileActionsContainer) return;
+
+                mobileActionsContainer.addEventListener('click', function(e) {
+                    const btn = e.target.closest('.btn-custom, a, button');
+                    if (!btn) return;
+
+                    // Don't apply the global spinner to theme toggles (desktop or mobile)
+                    if (btn.classList.contains('theme-toggle') || btn.id === 'themeToggleMobile' || btn.id === 'themeToggleDesktop' || (btn.closest && btn.closest('.theme-toggle'))) {
+                        return;
+                    }
+
+                    // If there's already a spinner or loading marker, skip
+                    if (btn.dataset.originalHtml || btn.classList.contains('loading')) return;
+
+                    // Only intercept and show the global spinner for AJAX-style controls.
+                    // - Allow normal <a> navigation to proceed (no spinner) unless explicitly marked
+                    //   with `data-ajax="true"` or `ajax-link` class.
+                    // - For <button> elements, only apply spinner when they indicate async work
+                    //   via `data-ajax`, `data-action="ajax"`, or known classes like `action-cart`.
+                    const tag = (btn.tagName || '').toUpperCase();
+                    const isMarkedAjax = btn.dataset && (btn.dataset.ajax === 'true' || btn.dataset.action === 'ajax');
+                    const isAjaxClass = btn.classList.contains('ajax-link') || btn.classList.contains('ajax') || btn.classList.contains('action-cart') || btn.classList.contains('add-to-cart-btn');
+
+                    if (tag === 'A' && !isMarkedAjax && !isAjaxClass) {
+                        // Let normal link navigation (including anchors) proceed without spinner.
+                        return;
+                    }
+
+                    if (tag === 'BUTTON' || tag === 'INPUT') {
+                        if (!isMarkedAjax && !isAjaxClass) {
+                            // Not an AJAX button — skip spinner to preserve instant feedback and theming.
+                            return;
+                        }
+                    }
+
+                    try {
+                        if (window.UIHelpers && typeof window.UIHelpers.setButtonLoading === 'function') {
+                            // Ensure the icon/spinner will be visible by forcing
+                            // button text/icon color to white while spinner present.
+                            try { btn.style.color = '#fff'; } catch (e) {}
+                            window.UIHelpers.setButtonLoading(btn, 'Please wait');
+
+                            // Keep spinner/icon color enforced while spinner exists
+                            const watcher = setInterval(() => {
+                                const spinner = btn.__btnSpinner || btn.querySelector('.custom-spinner');
+                                if (spinner) {
+                                    try { spinner.style.color = '#fff'; } catch (e) {}
+                                }
+
+                                // If spinner was removed, clean up
+                                if (!btn.__btnSpinner && !btn.querySelector('.custom-spinner')) {
+                                    try { btn.style.color = ''; } catch (e) {}
+                                    clearInterval(watcher);
+                                }
+                            }, 120);
+                        } else {
+                            // Fallback: minimal visual cue for marked AJAX controls
+                            btn.classList.add('loading');
+                            try{ btn.style.color = '#fff'; }catch(e){}
+                            setTimeout(() => {
+                                btn.classList.remove('loading');
+                                try{ btn.style.color = ''; }catch(e){}
+                            }, 1500);
+                        }
+                    } catch (err) {
+                        console.warn('Error invoking global spinner', err);
+                    }
+                }, true);
+            })();
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            const sideNav = document.getElementById('sideNav');
+            const navOverlay = document.getElementById('navOverlay');
+            
+            if (window.innerWidth >= 768 && sideNav.classList.contains('expanded')) {
+                sideNav.classList.remove('expanded');
+                navOverlay.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        });
+    </script>
+    
+    {% block extra_js %}
+    <!-- ============================================
+    GLOBAL CART & FAVORITE MANAGEMENT SCRIPT
+    This script handles cart and favorite buttons consistently across all pages
+    ============================================ -->
+
+    <script>
+    // ============================================
+    // GLOBAL STATE MANAGEMENT
+    // ============================================
+
+    // Cart state
+    window.cartState = {
+        itemCount: {% if cart_item_count %}{{ cart_item_count }}{% else %}0{% endif %},
+        total: {% if cart_total %}{{ cart_total }}{% else %}0{% endif %},
+        isUpdating: false
+    };
+
+    // Favorite state management
+    window.favoriteStates = new Map();
+    let pendingFavoriteUpdates = new Set();
+
+    // User authentication state
+    window.userAuthenticated = {% if user.is_authenticated %}true{% else %}false{% endif %};
+
+    // ============================================
+    // UTILITY FUNCTIONS
+    // ============================================
+
+    // Get CSRF token
+    window.getCookie = function(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    };
+
+    // ============================================
+    // CART MANAGEMENT FUNCTIONS
+    // ============================================
+
+    // Add to cart function
+    window.addToCart = async function(listingId, quantity = 1) {
+        if (!window.userAuthenticated) {
+            showToast('Please login to add items to cart', 'error');
+            return { success: false, error: 'Authentication required' };
+        }
+        
+        if (window.cartState.isUpdating) {
+            return { success: false, error: 'Cart is already updating' };
+        }
+        
+        window.cartState.isUpdating = true;
+        
+        try {
+            const response = await fetch(`/cart/add/${listingId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ quantity: quantity })
+            });
+            
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Update global cart display
+                document.dispatchEvent(new CustomEvent('cartUpdated', {
+                    detail: { 
+                        itemCount: data.cart_item_count || data.item_count || window.cartState.itemCount + 1,
+                        total: data.cart_total || window.cartState.total
+                    }
+                }));
+                
+                showToast(data.message || 'Added to cart!', 'success');
+                return { success: true, data: data };
+            } else {
+                showToast(data.error || 'Failed to add to cart', 'error');
+                return { success: false, error: data.error };
+            }
+        } catch (error) {
+            console.error('Add to cart error:', error);
+            showToast('Error adding to cart. Please try again.', 'error');
+            return { success: false, error: error.message };
+        } finally {
+            window.cartState.isUpdating = false;
+        }
+    };
+
+    // Remove from cart function
+    window.removeFromCart = async function(listingId) {
+        if (!window.userAuthenticated) {
+            showToast('Please login to manage cart', 'error');
+            return { success: false, error: 'Authentication required' };
+        }
+        
+        if (window.cartState.isUpdating) {
+            return { success: false, error: 'Cart is already updating' };
+        }
+        
+        window.cartState.isUpdating = true;
+        
+        try {
+            const response = await fetch(`/cart/remove/${listingId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                document.dispatchEvent(new CustomEvent('cartUpdated', {
+                    detail: { 
+                        itemCount: data.cart_item_count || 0,
+                        total: data.cart_total || 0
+                    }
+                }));
+                
+                showToast(data.message || 'Removed from cart', 'success');
+                return { success: true, data: data };
+            } else {
+                showToast(data.error || 'Failed to remove from cart', 'error');
+                return { success: false, error: data.error };
+            }
+        } catch (error) {
+            console.error('Remove from cart error:', error);
+            showToast('Error removing from cart. Please try again.', 'error');
+            return { success: false, error: error.message };
+        } finally {
+            window.cartState.isUpdating = false;
+        }
+    };
+
+    // ============================================
+    // INITIALIZATION
+    // ============================================
+
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Initializing global cart and favorite handlers');
+        
+        // Initialize favorite states from page data (user_favorites is a list of ids)
+        {% if user.is_authenticated and user_favorites %}
+        {% for fav in user_favorites %}
+        try {
+            window.favoriteStates.set("{{ fav }}", { liked: true, count: 0 });
+        } catch(e) { console.warn('favoriteStates init failed for', "{{ fav }}", e); }
+        {% endfor %}
+        {% endif %}
+        
+        // Event delegation for dynamic content
+        document.addEventListener('click', function(event) {
+            // Cart buttons
+            if (event.target.closest('.action-cart, .add-to-cart-btn, .remove-from-cart-btn, .update-cart-btn')) {
+                const button = event.target.closest('.action-cart, .add-to-cart-btn, .remove-from-cart-btn, .update-cart-btn');
+                if (button) {
+                    const listingId = button.getAttribute('data-listing-id');
+                    if (listingId) {
+                        event.preventDefault();
+                        window.addToCart(listingId, 1);
+                    }
+                }
+            }
+        });
+        
+        console.log('Global cart and favorite handlers loaded');
+    });
+
+    // ============================================
+    // PUBLIC API FOR OTHER SCRIPTS
+    // ============================================
+
+    // Make functions globally available
+    window.GlobalCart = {
+        add: window.addToCart,
+        remove: window.removeFromCart,
+        getState: () => ({ ...window.cartState })
+    };
+
+    window.GlobalFavorites = {
+        getState: (listingId) => window.favoriteStates.get(listingId),
+        getAllStates: () => new Map(window.favoriteStates)
+    };
+
+    console.log('Global cart and favorite handlers loaded');
+    </script>
+
+    <script>
+    // Mirror desktop cart badge to top/bottom nav badges
+    (function() {
+        function findDesktopBadge() {
+            const selectors = [
+                '#desktopCartBadge',
+                '#cartBadgeDesktop',
+                '.desktop-cart-badge',
+                '.cart-badge-desktop',
+                '[data-cart-badge="desktop"]',
+                '.cart-badge'
+            ];
+            for (const s of selectors) {
+                const el = document.querySelector(s);
+                if (el) return el;
+            }
+            return null;
+        }
+
+        function findTargetBadges() {
+            const targets = new Set();
+            const selectors = [
+                '#topCartBadge',
+                '.top-nav-cart-badge',
+                '[data-cart-badge="top"]',
+                '#bottomCartBadge',
+                '.bottom-nav-cart-badge',
+                '[data-cart-badge="bottom"]',
+                '.mobile-cart-badge',
+                '.unified-cart-badge'
+            ];
+            selectors.forEach(s => {
+                document.querySelectorAll(s).forEach(el => targets.add(el));
+            });
+            // include any element with data-cart-target attribute
+            document.querySelectorAll('[data-cart-target]').forEach(el => targets.add(el));
+            return Array.from(targets);
+        }
+
+        function readCountFrom(el) {
+            if (!el) return 0;
+            const attr = el.getAttribute('data-count') || el.getAttribute('data-cart-count') || el.dataset.count || el.dataset.cartCount;
+            if (attr != null) {
+                const n = parseInt(attr, 10);
+                return isNaN(n) ? 0 : n;
+            }
+            const txt = (el.textContent || '').trim();
+            const n = parseInt(txt.replace(/[^0-9]/g,''), 10);
+            return isNaN(n) ? 0 : n;
+        }
+
+        function writeCountTo(el, count) {
+            if (!el) return;
+            try {
+                // set attributes used by other scripts
+                el.setAttribute('data-count', String(count));
+                el.dataset.count = String(count);
+            } catch (e) {}
+            // update visible text
+            if ('textContent' in el) {
+                el.textContent = count > 0 ? String(count) : '';
+            }
+            // hide only the badge element when zero
+            el.style.display = count > 0 ? '' : 'none';
+        }
+
+        function mirrorOnce() {
+            const desktop = findDesktopBadge();
+            if (!desktop) return;
+            const targets = findTargetBadges();
+            const cnt = readCountFrom(desktop);
+            targets.forEach(t => writeCountTo(t, cnt));
+        }
+
+        function observeDesktop() {
+            const desktop = findDesktopBadge();
+            if (!desktop) return null;
+            const obs = new MutationObserver(() => {
+                mirrorOnce();
+            });
+            obs.observe(desktop, { childList: true, subtree: true, characterData: true, attributes: true });
+            return obs;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // initial mirror
+            mirrorOnce();
+
+            // observe mutations on desktop badge
+            const observer = observeDesktop();
+
+            // also listen for global cartUpdated events (fired when cart API returns)
+            document.addEventListener('cartUpdated', function(e) {
+                // if event carries count, apply it; otherwise read from desktop
+                const count = (e && e.detail && (e.detail.itemCount || e.detail.itemCount === 0)) ? e.detail.itemCount : null;
+                if (count != null) {
+                    findTargetBadges().forEach(t => writeCountTo(t, count));
+                } else {
+                    mirrorOnce();
+                }
+            });
+
+            // also mirror when window.addEventListener('load') in case desktop badge set later
+            window.addEventListener('load', function() {
+                mirrorOnce();
+            });
+        });
+    })();
+    </script>
+
+    {% endblock %}
+ 
+
+      <script>
+          // ===== Baysoko Geo Helper (cached, opt-in geolocation) =====
+          window.BaysokoGeo = (function() {
+              const STORAGE_KEY = 'baysoko_geo';
+              const MAX_AGE_MIN = 24 * 60;
+
+              function getCachedLocation(maxAgeMin = MAX_AGE_MIN) {
+                  try {
+                      const raw = localStorage.getItem(STORAGE_KEY);
+                      if (!raw) return null;
+                      const data = JSON.parse(raw);
+                      if (!data || !data.lat || !data.lng || !data.ts) return null;
+                      const ageMin = (Date.now() - data.ts) / 60000;
+                      if (ageMin > maxAgeMin) return null;
+                      return { lat: data.lat, lng: data.lng, ts: data.ts };
+                  } catch (e) {
+                      return null;
+                  }
+              }
+
+              function saveLocation(lat, lng) {
+                  try {
+                      localStorage.setItem(STORAGE_KEY, JSON.stringify({ lat, lng, ts: Date.now() }));
+                  } catch (e) {}
+              }
+
+              function requestCurrentLocation(options = {}) {
+                  return new Promise((resolve, reject) => {
+                      const cached = getCachedLocation(options.maxAgeMin);
+                      if (cached && !options.force) return resolve(cached);
+                      if (!navigator.geolocation) return reject(new Error('geolocation_unavailable'));
+                      navigator.geolocation.getCurrentPosition(
+                          (pos) => {
+                              const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude, ts: Date.now() };
+                              saveLocation(loc.lat, loc.lng);
+                              resolve(loc);
+                          },
+                          (err) => reject(err),
+                          { enableHighAccuracy: true, timeout: 7000, maximumAge: 60000 }
+                      );
+                  });
+              }
+
+              async function ensurePermission(options = {}) {
+                  try {
+                      if (navigator.permissions && navigator.permissions.query) {
+                          const perm = await navigator.permissions.query({ name: 'geolocation' });
+                          if (perm.state === 'denied') {
+                              throw new Error('geolocation_denied');
+                          }
+                      }
+                  } catch (e) {
+                      // fall through to requestCurrentLocation (will error if denied)
+                  }
+                  return requestCurrentLocation(options);
+              }
+
+              async function reverseGeocode(lat, lng) {
+                  try {
+                      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&zoom=14&addressdetails=1`;
+                      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+                      const data = await res.json();
+                      return data?.display_name || null;
+                  } catch (e) {
+                      return null;
+                  }
+              }
+
+              return { getCachedLocation, requestCurrentLocation, ensurePermission, reverseGeocode };
+          })();
+      </script>
+      <script>
+          (function() {
+              let requested = false;
+              document.addEventListener('focusin', function(e) {
+                  const target = e.target;
+                  if (!target || requested) return;
+                  if (target.matches && target.matches('[data-geo-suggest]')) {
+                      requested = true;
+                      if (window.BaysokoGeo && window.BaysokoGeo.ensurePermission) {
+                          window.BaysokoGeo.ensurePermission().catch(() => {});
+                      }
+                  }
+              });
+          })();
+      </script>
+      <!-- Include global AJAX handler -->
+    <script src="{% static 'js/global-ajax-handler.js' %}"></script>
+
+    <!-- Include WebSocket-based notifications client (primary system) -->
+    <!-- Handles real-time push via WebSocket with automatic fallback to polling -->
+    <script src="{% static 'js/notifications-client.js' %}"></script>
+    <script>
+        // Remove empty/zero-count unified badges from the DOM to avoid
+        // leaving inert elements that pollers or CSS may still target.
+        // NOTE: preserve badges that have an `id` so centralized JS can
+        // update them later (e.g. mobile/desktop header badges).
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                document.querySelectorAll('.unified-count-badge').forEach(function(b) {
+                    // If badge has an id, keep it so runtime scripts can target it
+                    if (b.id) return;
+                    var count = b.getAttribute('data-count');
+                    var text = (b.textContent || '').trim();
+                    if (count === '0' || (count === null && text === '')) {
+                        // Remove the node entirely
+                        b.remove();
+                    }
+                });
+            } catch (e) {
+                console.warn('Badge cleanup failed', e);
+            }
+        });
+    </script>
+        {% if request.session.welcome_toast %}
+        {{ request.session.welcome_toast|json_script:"welcome_toast" }}
+        <script>
+            document.addEventListener('DOMContentLoaded', function(){
+                try {
+                    var toast = JSON.parse(document.getElementById('welcome_toast').textContent);
+                    if (typeof showImmediateToast === 'function') {
+                        showImmediateToast(toast);
+                    } else if (window.NotificationsClient && window.NotificationsClient.start) {
+                        // try after a short delay to allow client to register
+                        setTimeout(function(){ if (typeof showImmediateToast === 'function') showImmediateToast(toast); }, 600);
+                    }
+
+                    // Clear server-side session welcome_toast via POST
+                    fetch('{% url "clear_welcome_toast" %}', { method: 'POST', headers: { 'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || '' } }).catch(function(e){/*best-effort*/});
+                } catch (e) {
+                    console.warn('Could not display welcome toast', e);
+                }
+            });
+        </script>
+        {% endif %}
+    <script>
+        (function(){
+            if (!window.currentUserId) return;
+            try {
+                var proto = location.protocol === 'https:' ? 'wss' : 'ws';
+                var wsUrl = proto + '://' + location.host + '/ws/cart/' + window.currentUserId + '/';
+                var socket = new WebSocket(wsUrl);
+
+                socket.addEventListener('open', function() {
+                    try { socket.send(JSON.stringify({ action: 'get_summary' })); } catch(e){}
+                });
+
+                socket.addEventListener('message', function(ev) {
+                    try {
+                        var data = JSON.parse(ev.data || '{}');
+                        if (data && data.type === 'cart_summary' && data.payload) {
+                            var p = data.payload;
+                            var itemCount = (p.cart_item_count != null) ? p.cart_item_count : (p.cartItemCount || 0);
+                            var total = (p.cart_total != null) ? p.cart_total : (p.cartTotal || 0);
+                            // Dispatch events so existing listeners update UI
+                            document.dispatchEvent(new CustomEvent('cartUpdated', { detail: { itemCount: itemCount, total: total, payload: p } }));
+                            document.dispatchEvent(new CustomEvent('globalCartUpdated', { detail: { itemCount: itemCount, total: total } }));
+                        }
+                    } catch (e) {}
+                });
+
+                socket.addEventListener('close', function() {
+                    // try an AJAX fallback once after close
+                    setTimeout(function() {
+                        fetch('/cart/summary/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ if(!r.ok) return; return r.json(); }).then(function(data){ if(data){ document.dispatchEvent(new CustomEvent('cartUpdated',{ detail: { itemCount: data.cart_item_count||0, total: data.cart_total||0, payload: data } })); } }).catch(function(){});
+                    }, 500);
+                });
+
+                socket.addEventListener('error', function(){ try{ socket.close(); }catch(e){} });
+            } catch (e) {
+                // fallback to AJAX if WS construction fails
+                try { fetch('/cart/summary/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ if(!r.ok) return; return r.json(); }).then(function(data){ if(data){ document.dispatchEvent(new CustomEvent('cartUpdated',{ detail: { itemCount: data.cart_item_count||0, total: data.cart_total||0, payload: data } })); } }).catch(function(){}); } catch (ee) {}
+            }
+        })();
+    </script>
+    {% if user.is_authenticated %}
+        <script>
+            // Ensure theme state is authoritative and synced for all pages,
+            // including authenticated views that load extra widgets.
+            (function(){
+                try {
+                    const stored = localStorage.getItem('theme') || 'light';
+                    const applied = document.documentElement.getAttribute('data-theme') || 'light';
+                    if (applied !== stored) {
+                        document.documentElement.setAttribute('data-theme', stored);
+                    }
+
+                    // Update header toggle icons if present
+                    const iconMobile = document.getElementById('themeIconMobile');
+                    const iconDesktop = document.getElementById('themeIconDesktop');
+                    const cls = stored === 'dark' ? 'bi bi-moon' : 'bi bi-sun';
+                    if (iconMobile) iconMobile.className = cls;
+                    if (iconDesktop) iconDesktop.className = cls;
+
+                    // Broadcast theme change for any widgets (chat, etc.) to react
+                    window.dispatchEvent(new CustomEvent('themeChanged', { detail: { theme: stored } }));
+                } catch (e) { console.warn('Theme sync failed', e); }
+            })();
+        </script>
+        {% include 'includes/agent_widget.html' %}
+        <script src="{% static 'js/agent_widget.js' %}"></script>
+    {% endif %}
+        <script>
+        (function() {
+            if (!('serviceWorker' in navigator)) return;
+            navigator.serviceWorker.register("{% url 'service_worker' %}")
+                .then(() => console.log('PWA service worker registered'))
+                .catch((err) => console.warn('PWA service worker failed', err));
+
+            let deferredPrompt = null;
+            let repromptTimer = null;
+            const installBtn = document.getElementById('pwaInstallBtn');
+            const installTriggers = Array.from(document.querySelectorAll('[data-pwa-install-trigger]'));
+            const banner = document.getElementById('pwaInstallBanner');
+            const closeBtn = document.getElementById('pwaInstallClose');
+            const searchParams = new URLSearchParams(window.location.search);
+            const userAgent = navigator.userAgent || '';
+            const isAndroidShell = searchParams.get('source') === 'android_app'
+                || /\bBaysokoAndroidApp\b/i.test(userAgent)
+                || !!window.Capacitor
+                || /\bwv\b/i.test(userAgent);
+            const dismissedKey = 'baysoko_pwa_banner_dismissed_at';
+            const installedKey = 'baysoko_pwa_installed';
+            const dismissCountKey = 'baysoko_pwa_banner_dismiss_count';
+            const neverKey = 'baysoko_pwa_banner_never';
+            if (isAndroidShell) {
+                if (banner) banner.classList.remove('visible');
+                if (banner) banner.classList.add('hidden');
+                document.documentElement.classList.add('android-shell');
+                document.body.classList.add('android-shell');
+                const cap = window.Capacitor || null;
+                const browserPlugin = cap?.Plugins?.Browser;
+                const appPlugin = cap?.Plugins?.App;
+                const networkPlugin = cap?.Plugins?.Network;
+                const cameraPlugin = cap?.Plugins?.Camera;
+                const localNotificationsPlugin = cap?.Plugins?.LocalNotifications;
+                const baysokoNativePlugin = cap?.Plugins?.BaysokoNative;
+                const googleAuthPlugin = (baysokoNativePlugin && typeof baysokoNativePlugin.googleSignIn === 'function')
+                    ? baysokoNativePlugin
+                    : cap?.Plugins?.GoogleAuth;
+                const googleNativeSigninUrl = "{% url 'google_native_signin' %}";
+                const googleClientId = "{{ GOOGLE_ANDROID_CLIENT_ID|escapejs }}";
+                const googleWebClientId = "{{ GOOGLE_OAUTH_CLIENT_ID|escapejs }}";
+                const googlePreferredClientId = googleWebClientId || googleClientId;
+
+                const getCsrfToken = () => {
+                    const match = document.cookie.match(/csrftoken=([^;]+)/);
+                    return match ? decodeURIComponent(match[1]) : '';
+                };
+
+                const showOfflineBanner = (() => {
+                    let bannerEl = null;
+                    let onlineTimer = null;
+                    return function(isOnline) {
+                        if (!bannerEl) {
+                            bannerEl = document.createElement('div');
+                            bannerEl.className = 'android-native-offline-banner';
+                            bannerEl.innerHTML = `
+                                <div class="android-native-offline-banner__icon"><i class="bi bi-wifi-off"></i></div>
+                                <div>
+                                    <div class="android-native-offline-banner__title">Connection lost</div>
+                                    <div class="android-native-offline-banner__text">Baysoko will keep the current screen open and reconnect automatically.</div>
+                                </div>
+                            `;
+                            document.body.appendChild(bannerEl);
+                        }
+                        clearTimeout(onlineTimer);
+                        if (!isOnline) {
+                            bannerEl.querySelector('.android-native-offline-banner__icon i').className = 'bi bi-wifi-off';
+                            bannerEl.querySelector('.android-native-offline-banner__title').textContent = 'Connection lost';
+                            bannerEl.querySelector('.android-native-offline-banner__text').textContent = 'Baysoko will keep the current screen open and reconnect automatically.';
+                            bannerEl.classList.add('visible');
+                            return;
+                        }
+                        bannerEl.querySelector('.android-native-offline-banner__icon i').className = 'bi bi-wifi';
+                        bannerEl.querySelector('.android-native-offline-banner__title').textContent = 'Back online';
+                        bannerEl.querySelector('.android-native-offline-banner__text').textContent = 'Everything is synced again.';
+                        bannerEl.classList.add('visible');
+                        onlineTimer = setTimeout(() => bannerEl.classList.remove('visible'), 2200);
+                    };
+                })();
+
+                const dataUrlToFile = async (dataUrl, filename) => {
+                    const response = await fetch(dataUrl);
+                    const blob = await response.blob();
+                    return new File([blob], filename, { type: blob.type || 'image/jpeg' });
+                };
+
+                const assignFileToInput = (input, file) => {
+                    const transfer = new DataTransfer();
+                    transfer.items.add(file);
+                    input.files = transfer.files;
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                };
+
+                async function pickNativePhoto(input, source) {
+                    if (!cameraPlugin?.getPhoto) {
+                        input.click();
+                        return;
+                    }
+                    try {
+                        const photo = await cameraPlugin.getPhoto({
+                            source,
+                            resultType: 'dataUrl',
+                            quality: 88,
+                            allowEditing: false,
+                            correctOrientation: true,
+                            saveToGallery: false
+                        });
+                        if (!photo?.dataUrl) return;
+                        const extension = (photo.format || 'jpeg').replace('jpg', 'jpeg');
+                        const file = await dataUrlToFile(photo.dataUrl, `baysoko-${source}.${extension}`);
+                        assignFileToInput(input, file);
+                    } catch (error) {
+                        console.warn('Android native photo picker failed', error);
+                    }
+                }
+
+                function enhanceAndroidFileInputs() {
+                    document.querySelectorAll('input[type="file"]').forEach((input) => {
+                        try {
+                            input.classList.add('android-native-file-input');
+                            if (input.dataset.androidEnhanced === '1') return;
+                            input.dataset.androidEnhanced = '1';
+                            const accept = (input.getAttribute('accept') || '').toLowerCase();
+                            if (!accept.includes('image') || input.hasAttribute('multiple')) {
+                                if (accept.includes('image/*') && !input.hasAttribute('multiple')) {
+                                    input.setAttribute('capture', 'environment');
+                                }
+                                return;
+                            }
+
+                            const actions = document.createElement('div');
+                            actions.className = 'android-native-input-actions';
+                            actions.innerHTML = `
+                                <button type="button" class="android-native-pill" data-source="camera"><i class="bi bi-camera-fill me-1"></i>Camera</button>
+                                <button type="button" class="android-native-pill secondary" data-source="photos"><i class="bi bi-images me-1"></i>Gallery</button>
+                            `;
+                            actions.querySelectorAll('button').forEach((btn) => {
+                                btn.addEventListener('click', (event) => {
+                                    event.preventDefault();
+                                    pickNativePhoto(input, btn.dataset.source);
+                                });
+                            });
+                            input.insertAdjacentElement('afterend', actions);
+                        } catch (e) {}
+                    });
+                }
+
+                async function bootstrapLocalNotifications() {
+                    if (!localNotificationsPlugin) return;
+                    try {
+                        await localNotificationsPlugin.requestPermissions();
+                        if (localNotificationsPlugin.createChannel) {
+                            await localNotificationsPlugin.createChannel({
+                                id: 'baysoko-notifications',
+                                name: 'Baysoko notifications',
+                                importance: 4,
+                                description: 'Marketplace updates, orders, offers and app alerts.',
+                                visibility: 1,
+                                vibration: true,
+                                lights: true,
+                                lightColor: '#FF6B35',
+                            });
+                            await localNotificationsPlugin.createChannel({
+                                id: 'baysoko-messages',
+                                name: 'Baysoko messages',
+                                importance: 5,
+                                description: 'Messages and conversation activity.',
+                                visibility: 1,
+                                vibration: true,
+                                lights: true,
+                                lightColor: '#FF6B35',
+                            });
+                        }
+                        if (!window.__baysokoLocalNotificationsBound && localNotificationsPlugin.addListener) {
+                            window.__baysokoLocalNotificationsBound = true;
+                            localNotificationsPlugin.addListener('localNotificationActionPerformed', (event) => {
+                                const data = event?.notification?.extra || {};
+                                if (data.url) {
+                                    window.location.href = data.url;
+                                }
+                            });
+                        }
+                    } catch (error) {
+                        console.warn('Local notifications bootstrap failed', error);
+                    }
+                }
+
+                async function bootstrapNativeGoogle() {
+                    if (!googlePreferredClientId) return;
+                    if (window.__baysokoNativeGoogleReady) return;
+                    try {
+                        if (!googleAuthPlugin?.initialize) {
+                            window.__baysokoNativeGoogleReady = true;
+                            return;
+                        }
+                        await googleAuthPlugin.initialize({
+                            clientId: googlePreferredClientId,
+                            serverClientId: googleWebClientId || googlePreferredClientId,
+                            scopes: ['profile', 'email'],
+                            grantOfflineAccess: false,
+                        });
+                        window.__baysokoNativeGoogleReady = true;
+                    } catch (error) {
+                        console.warn('Native Google bootstrap failed', error);
+                    }
+                }
+
+                async function performNativeGoogleAuth(action) {
+                    if (!googleAuthPlugin?.signIn) {
+                        return false;
+                    }
+                    try {
+                        await bootstrapNativeGoogle();
+                        const result = googleAuthPlugin?.googleSignIn
+                            ? await googleAuthPlugin.googleSignIn({ clientId: googlePreferredClientId })
+                            : await googleAuthPlugin.signIn();
+                        const idToken =
+                            result?.authentication?.idToken
+                            || result?.idToken
+                            || result?.serverAuthCode
+                            || '';
+                        if (!idToken) {
+                            throw new Error('Google native sign-in did not return an ID token.');
+                        }
+                        const response = await fetch(googleNativeSigninUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCsrfToken(),
+                            },
+                            credentials: 'same-origin',
+                            body: JSON.stringify({
+                                action,
+                                id_token: idToken,
+                            }),
+                        });
+                        const data = await response.json().catch(() => ({}));
+                        if (!response.ok || !data?.success) {
+                            throw new Error(data?.message || 'Google sign-in could not be completed.');
+                        }
+                        window.location.href = data.redirect_url || '/';
+                        return true;
+                    } catch (error) {
+                        console.warn('Native Google auth failed', error);
+                        if (window.showToast) {
+                            window.showToast(error?.message || 'Google sign-in could not be completed right now.', 'error', 4000);
+                        }
+                        return false;
+                    }
+                }
+
+                window.BaysokoAndroidApp = {
+                    isShell: true,
+                    notify: async function(payload) {
+                        if (!localNotificationsPlugin?.schedule) return;
+                        try {
+                            await bootstrapLocalNotifications();
+                            const notificationId = Math.abs(String(payload.id || Date.now()).split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0)) % 2147483000;
+                            await localNotificationsPlugin.schedule({
+                                notifications: [{
+                                    id: notificationId,
+                                    title: payload.title || 'Baysoko',
+                                    body: payload.body || '',
+                                    channelId: payload.channelId || 'baysoko-notifications',
+                                    smallIcon: 'ic_stat_baysoko',
+                                    iconColor: '#FF6B35',
+                                    extra: { url: payload.url || '/' }
+                                }]
+                            });
+                        } catch (error) {
+                            console.warn('Local notification delivery failed', error);
+                        }
+                    },
+                    setBadgeCounts: function(counts) {
+                        const total = (parseInt(counts?.notifications || 0, 10) || 0) + (parseInt(counts?.messages || 0, 10) || 0);
+                        document.body.dataset.androidUnreadTotal = String(total);
+                    },
+                    googleSignIn: performNativeGoogleAuth,
+                    enhanceFileInputs: enhanceAndroidFileInputs,
+                    showOfflineState: showOfflineBanner,
+                };
+
+                if (appPlugin?.addListener && !window.__baysokoAppUrlOpenBound) {
+                    window.__baysokoAppUrlOpenBound = true;
+                    appPlugin.addListener('appUrlOpen', ({ url }) => {
+                        if (!url) return;
+                        const normalized = String(url);
+                        if (!normalized.includes('baysoko.up.railway.app')) return;
+                        try { browserPlugin?.close?.(); } catch (e) {}
+                        if (window.location.href !== normalized) {
+                            window.location.href = normalized;
+                        }
+                    });
+                }
+                if (window.visualViewport && !window.__baysokoKeyboardBound) {
+                    window.__baysokoKeyboardBound = true;
+                    const refreshKeyboardState = () => {
+                        const viewport = window.visualViewport;
+                        if (!viewport) return;
+                        const keyboardOpen = (window.innerHeight - viewport.height) > 160;
+                        document.body.classList.toggle('android-keyboard-open', keyboardOpen);
+                    };
+                    window.visualViewport.addEventListener('resize', refreshKeyboardState);
+                    window.visualViewport.addEventListener('scroll', refreshKeyboardState);
+                    document.addEventListener('focusin', (event) => {
+                        const target = event.target;
+                        if (!(target instanceof HTMLElement)) return;
+                        if (!target.matches('input, textarea, select, [contenteditable="true"]')) return;
+                        setTimeout(() => {
+                            try {
+                                target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+                            } catch (e) {}
+                        }, 180);
+                    });
+                    refreshKeyboardState();
+                }
+                if (networkPlugin?.getStatus) {
+                    networkPlugin.getStatus().then((status) => {
+                        if (status && status.connected === false) {
+                            showOfflineBanner(false);
+                        }
+                    }).catch(() => {});
+                    if (networkPlugin.addListener && !window.__baysokoNetworkBound) {
+                        window.__baysokoNetworkBound = true;
+                        networkPlugin.addListener('networkStatusChange', (status) => {
+                            showOfflineBanner(!!status?.connected);
+                        });
+                    }
+                }
+                bootstrapLocalNotifications();
+                bootstrapNativeGoogle();
+                document.addEventListener('DOMContentLoaded', function() {
+                    document.querySelectorAll('a[href*="/accounts/google/login/"], a[href*="/accounts/google/connect/"]').forEach((link) => {
+                        try {
+                            const url = new URL(link.href, window.location.origin);
+                            url.searchParams.set('source', 'android_app');
+                            url.searchParams.set('shell', 'capacitor');
+                            link.href = url.toString();
+                            link.dataset.androidOauth = '1';
+                            link.setAttribute('target', '_self');
+                            link.setAttribute('rel', 'noopener');
+                        } catch (e) {}
+                    });
+                    document.querySelectorAll('a[data-android-oauth="1"]').forEach((link) => {
+                        link.addEventListener('click', async (event) => {
+                            event.preventDefault();
+                            const action = link.href.includes('/connect/') ? 'connect' : 'register';
+                            const nativeWorked = await performNativeGoogleAuth(action);
+                            if (nativeWorked) return;
+                            if (!browserPlugin?.open) {
+                                window.location.href = link.href;
+                                return;
+                            }
+                            try {
+                                await browserPlugin.open({
+                                    url: link.href,
+                                    presentationStyle: 'fullscreen'
+                                });
+                            } catch (e) {
+                                window.location.href = link.href;
+                            }
+                        });
+                    });
+                    document.querySelectorAll('a[target="_blank"]').forEach((link) => {
+                        try {
+                            const href = link.getAttribute('href') || '';
+                            if (href.startsWith('/') || href.includes('baysoko.up.railway.app')) {
+                                link.setAttribute('target', '_self');
+                                link.setAttribute('rel', 'noopener');
+                            }
+                        } catch (e) {}
+                    });
+                    enhanceAndroidFileInputs();
+                    document.querySelectorAll('[data-action="share"], .reel-share, .social-share-btn, .listing-reel-action').forEach((btn) => {
+                        btn.classList.add('android-native-share');
+                    });
+                });
+                return;
+            }
+            function applyBannerOffset(show) {
+                if (!banner) return;
+                const height = banner.offsetHeight || 0;
+                document.documentElement.style.setProperty('--pwa-banner-height', show ? `${height}px` : '0px');
+                document.body.classList.toggle('pwa-banner-visible', !!show);
+            }
+            function getDismissCount() {
+                try { return parseInt(localStorage.getItem(dismissCountKey) || '0', 10) || 0; } catch (e) { return 0; }
+            }
+            function updateCloseLabel() {
+                if (!closeBtn) return;
+                const count = getDismissCount();
+                const textEl = closeBtn.querySelector('.pwa-close-text');
+                if (count >= 2) {
+                    closeBtn.classList.add('dont-show');
+                    if (textEl) textEl.textContent = "Don't show this again";
+                } else {
+                    closeBtn.classList.remove('dont-show');
+                    if (textEl) textEl.textContent = 'Not now';
+                }
+            }
+            function showBanner() {
+                if (!banner) return;
+                banner.classList.remove('hidden');
+                banner.classList.add('visible');
+                applyBannerOffset(true);
+                updateCloseLabel();
+            }
+            function hideBanner() {
+                if (!banner) return;
+                banner.classList.remove('visible');
+                applyBannerOffset(false);
+            }
+            function scheduleReprompt() {
+                if (!deferredPrompt) return;
+                if (repromptTimer) clearTimeout(repromptTimer);
+                repromptTimer = setTimeout(() => {
+                    try {
+                        const dismissedAt = parseInt(localStorage.getItem(dismissedKey) || '0', 10);
+                        if (dismissedAt && (Date.now() - dismissedAt) < 1000 * 60 * 5) return;
+                    } catch (e) {}
+                    showBanner();
+                }, 1000 * 60 * 5);
+            }
+
+            window.addEventListener('beforeinstallprompt', (event) => {
+                event.preventDefault();
+                deferredPrompt = event;
+                try {
+                    localStorage.removeItem(installedKey);
+                    if (localStorage.getItem(neverKey)) return;
+                    const dismissedAt = parseInt(localStorage.getItem(dismissedKey) || '0', 10);
+                    const cooldownMs = 1000 * 60 * 5;
+                    if (dismissedAt && (Date.now() - dismissedAt) < cooldownMs) return;
+                } catch (e) {}
+                showBanner();
+            });
+            async function handleInstallPrompt() {
+                if (!deferredPrompt) {
+                    showBanner();
+                    return;
+                }
+                deferredPrompt.prompt();
+                try { await deferredPrompt.userChoice; } catch (e) {}
+                deferredPrompt = null;
+                hideBanner();
+            }
+            if (installBtn) {
+                installBtn.addEventListener('click', async () => {
+                    await handleInstallPrompt();
+                });
+            }
+            installTriggers.forEach((trigger) => {
+                trigger.addEventListener('click', async () => {
+                    await handleInstallPrompt();
+                });
+            });
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => {
+                    hideBanner();
+                    try {
+                        localStorage.setItem(dismissedKey, String(Date.now()));
+                        const nextCount = getDismissCount() + 1;
+                        localStorage.setItem(dismissCountKey, String(nextCount));
+                        if (nextCount >= 3) {
+                            localStorage.setItem(neverKey, '1');
+                        }
+                    } catch (e) {}
+                    if (getDismissCount() < 3) scheduleReprompt();
+                });
+            }
+            window.addEventListener('appinstalled', () => {
+                hideBanner();
+                try { localStorage.setItem(installedKey, '1'); } catch (e) {}
+                try {
+                    fetch('/pwa/install/', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).catch(() => {});
+                } catch (e) {}
+            });
+        })();
+    </script>
+    {% if ONESIGNAL_APP_ID %}
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.js" defer></script>
+    <script>
+        window.OneSignalDeferred = window.OneSignalDeferred || [];
+        OneSignalDeferred.push(async function(OneSignal) {
+            const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+            await OneSignal.init({
+                appId: "{{ ONESIGNAL_APP_ID }}",
+                serviceWorkerPath: "/static/onesignal/OneSignalSDKWorker.js",
+                serviceWorkerUpdaterPath: "/static/onesignal/OneSignalSDKUpdaterWorker.js",
+                notifyButton: { enable: false },
+                allowLocalhostAsSecureOrigin: isLocal
+            });
+            {% if user.is_authenticated %}
+            try {
+                await OneSignal.login("{{ user.id }}");
+            } catch (e) {}
+            {% else %}
+            try {
+                await OneSignal.logout();
+            } catch (e) {}
+            {% endif %}
+        });
+    </script>
+    {% endif %}
+    <script>
+        (function() {
+            const modal = document.getElementById('offlineModal');
+            const retry = document.getElementById('offlineRetry');
+            const close = document.getElementById('offlineClose');
+            const dismissedKey = 'baysoko_offline_dismissed_at';
+            const cooldownMs = 1000 * 60 * 5;
+            function canShow() {
+                if (!modal) return false;
+                if (navigator.onLine) return false;
+                try {
+                    const dismissedAt = parseInt(localStorage.getItem(dismissedKey) || '0', 10);
+                    if (dismissedAt && (Date.now() - dismissedAt) < cooldownMs) return false;
+                } catch (e) {}
+                return true;
+            }
+            function show() { if (canShow()) modal.classList.add('show'); }
+            function hide() { if (modal) modal.classList.remove('show'); }
+            if (navigator.onLine === false) show();
+            window.addEventListener('offline', show);
+            window.addEventListener('online', hide);
+            if (retry) retry.addEventListener('click', () => location.reload());
+            if (close) close.addEventListener('click', () => {
+                try { localStorage.setItem(dismissedKey, String(Date.now())); } catch (e) {}
+                hide();
+            });
+        })();
+    </script>
+    <script>
+        (function() {
+            async function captureDeviceLocation() {
+                if (!window.BaysokoGeo) return;
+                try {
+                    const loc = await window.BaysokoGeo.requestCurrentLocation();
+                    const label = await window.BaysokoGeo.reverseGeocode(loc.lat, loc.lng);
+                    if (!label) return;
+                    const csrf = (document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || '';
+                    await fetch("{% url 'capture_location' %}", {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+                        body: JSON.stringify({ location: label, lat: loc.lat, lng: loc.lng })
+                    });
+                } catch (e) {}
+            }
+
+            document.addEventListener('DOMContentLoaded', () => {
+                const links = document.querySelectorAll('.js-capture-location');
+                if (!links.length) return;
+                links.forEach(link => {
+                    link.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        const href = link.getAttribute('href');
+                        await captureDeviceLocation();
+                        if (href) window.location.href = href;
+                    });
+                });
+            });
+        })();
+    </script>
+</body>
+</html>

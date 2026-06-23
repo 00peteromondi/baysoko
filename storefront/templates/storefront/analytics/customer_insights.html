@@ -1,0 +1,550 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Customer Insights - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== CUSTOMER INSIGHTS SPECIFIC STYLES ===== */
+    .insights-header {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .insights-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #06d6a0, #4cc9f0);
+    }
+
+    .insights-title {
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .insights-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
+    /* ===== METRICS GRID ===== */
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .metric-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+        text-align: center;
+    }
+
+    .metric-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .metric-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: var(--info);
+        opacity: 0.3;
+    }
+
+    .metric-icon {
+        font-size: 24px;
+        margin-bottom: 12px;
+        color: var(--info);
+        background: rgba(23, 162, 184, 0.1);
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 16px;
+    }
+
+    .metric-value {
+        font-size: 24px;
+        font-weight: 800;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+    }
+
+    .metric-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0;
+    }
+
+    /* ===== DATA SECTION CARDS ===== */
+    .data-section {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+        transition: all 0.3s ease;
+    }
+
+    .data-section:hover {
+        box-shadow: var(--shadow-md);
+        border-color: var(--info);
+    }
+
+    .section-header {
+        margin-bottom: 20px;
+        border-bottom: 2px solid var(--border-color);
+        padding-bottom: 12px;
+    }
+
+    .section-title {
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+
+    .section-subtitle {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    /* ===== ENHANCED TABLES ===== */
+    .enhanced-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        border-radius: var(--radius);
+        overflow: hidden;
+    }
+
+    .enhanced-table thead {
+        background: var(--bg-secondary);
+    }
+
+    .enhanced-table th {
+        padding: 16px;
+        text-align: left;
+        font-weight: 700;
+        color: var(--text-primary);
+        border-bottom: 2px solid var(--border-color);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+    }
+
+    .enhanced-table td {
+        padding: 16px;
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: middle;
+    }
+
+    .enhanced-table tbody tr {
+        transition: all 0.2s ease;
+    }
+
+    .enhanced-table tbody tr:hover {
+        background: var(--bg-secondary);
+        transform: translateX(4px);
+    }
+
+    /* ===== BADGES AND TAGS ===== */
+    .customer-tag {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+    .tag-repeat {
+        background: rgba(40, 167, 69, 0.1);
+        color: var(--success);
+        border: 1px solid rgba(40, 167, 69, 0.3);
+    }
+
+    .tag-new {
+        background: rgba(23, 162, 184, 0.1);
+        color: var(--info);
+        border: 1px solid rgba(23, 162, 184, 0.3);
+    }
+
+    /* ===== LOADING STATES ===== */
+    .loading-container {
+        padding: 60px 20px;
+        text-align: center;
+    }
+
+    .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid var(--border-color);
+        border-top-color: var(--info);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .metrics-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .enhanced-table {
+            display: block;
+            overflow-x: auto;
+        }
+        
+        .data-section {
+            padding: 16px;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .metrics-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .enhanced-table th,
+        .enhanced-table td {
+            padding: 12px 8px;
+        }
+    }
+     .breadcrumb {
+        background: var(--bg-secondary);
+        padding: 10px 12px;
+        border-radius: var(--radius-md);
+        margin-bottom: 16px;
+        border: 1px solid var(--border-color);
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        font-size: 12px;
+    }
+    
+    .breadcrumb-item a {
+        text-decoration: none;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+    }
+    
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-custom py-3">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}"><i class="bi bi-house"></i> Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'storefront:seller_dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Customer Insights</li>
+        </ol>
+    </nav>
+
+    <!-- Header -->
+    <div class="insights-header">
+        <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
+            <div>
+                <h1 class="insights-title">Customer Insights</h1>
+                <p class="insights-subtitle">Demographics, repeat customers and locations</p>
+            </div>
+            <div>
+                {% include 'storefront/partials/period_selector.html' %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="ci-loading" class="loading-container">
+        <div class="loading-spinner"></div>
+        <p class="text-muted">Loading customer insights...</p>
+    </div>
+
+    <!-- Content (Initially Hidden) -->
+    <div id="ci-content" style="display:none">
+        <!-- Metrics Overview -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-icon">
+                    <i class="bi bi-people"></i>
+                </div>
+                <div class="metric-value" id="ci-total-customers">—</div>
+                <div class="metric-label">Total Customers</div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-icon" style="background: rgba(40, 167, 69, 0.1); color: var(--success);">
+                    <i class="bi bi-arrow-repeat"></i>
+                </div>
+                <div class="metric-value" id="ci-repeat-customers">—</div>
+                <div class="metric-label">Repeat Customers</div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-icon" style="background: rgba(255, 193, 7, 0.1); color: var(--warning);">
+                    <i class="bi bi-cash-coin"></i>
+                </div>
+                <div class="metric-value" id="ci-avg-value">—</div>
+                <div class="metric-label">Average Customer Value</div>
+            </div>
+        </div>
+
+        <!-- Top Spenders Section -->
+        <div class="data-section">
+            <div class="section-header">
+                <h3 class="section-title">Top Spenders</h3>
+                <p class="section-subtitle">Your highest-value customers by total spending</p>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="enhanced-table">
+                    <thead>
+                        <tr>
+                            <th>Customer</th>
+                            <th>Orders</th>
+                            <th>Total Spent</th>
+                            <th>Last Purchase</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ci-top-spenders">
+                        <!-- Data will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="mt-3 text-end">
+                <small class="text-muted">Data updates in real-time</small>
+            </div>
+        </div>
+
+        <!-- Customer Locations Section -->
+        <div class="data-section">
+            <div class="section-header">
+                <h3 class="section-title">Customer Locations</h3>
+                <p class="section-subtitle">Geographic distribution of your customer base</p>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="enhanced-table">
+                    <thead>
+                        <tr>
+                            <th>City</th>
+                            <th>Customers</th>
+                            <th>Orders</th>
+                            <th>Revenue</th>
+                            <th>Avg. Order Value</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ci-locations">
+                        <!-- Data will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="mt-3 d-flex justify-content-between align-items-center">
+                <small class="text-muted">Showing top 10 locations by revenue</small>
+                <button class="btn-custom btn-outline btn-sm" id="export-locations">
+                    <i class="bi bi-download me-1"></i>Export
+                </button>
+            </div>
+        </div>
+
+        <!-- Customer Segmentation (Placeholder for future enhancement) -->
+        <div class="data-section">
+            <div class="section-header">
+                <h3 class="section-title">Customer Segmentation</h3>
+                <p class="section-subtitle">Coming soon: Advanced customer segmentation</p>
+            </div>
+            <div class="text-center py-4">
+                <div class="metric-icon" style="background: rgba(108, 117, 125, 0.1); color: var(--secondary); margin-bottom: 16px;">
+                    <i class="bi bi-clock-history"></i>
+                </div>
+                <p class="text-muted mb-0">Advanced segmentation features coming soon</p>
+                <small class="text-muted">Track customer behavior patterns and preferences</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadCustomerInsights() {
+    const loading = document.getElementById('ci-loading');
+    const content = document.getElementById('ci-content');
+
+    try {
+        // Show loading animation
+        loading.style.display = 'block';
+        content.style.display = 'none';
+
+        const res = await fetch('/storefront/api/analytics/customer-insights/', { 
+            credentials: 'same-origin' 
+        });
+        
+        if (!res.ok) throw new Error('Failed to load analytics');
+        
+        const data = await res.json();
+
+        // Update metrics cards
+        document.getElementById('ci-total-customers').textContent = 
+            data.data.total_customers ? data.data.total_customers.toLocaleString() : '0';
+        
+        document.getElementById('ci-repeat-customers').textContent = 
+            data.data.repeat_customers ? data.data.repeat_customers.toLocaleString() : '0';
+        
+        // Safely coerce avg_customer_value to a Number before formatting.
+        (function(){
+            const raw = data?.data?.avg_customer_value;
+            const num = raw == null ? NaN : Number(raw);
+            const formatter = new Intl.NumberFormat(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            const formatted = Number.isFinite(num) ? formatter.format(num) : '0.00';
+            document.getElementById('ci-avg-value').textContent = 'KSh ' + formatted;
+        })();
+
+        // Populate top spenders table
+        const spendersTbody = document.getElementById('ci-top-spenders');
+        spendersTbody.innerHTML = '';
+        
+        (data.data.top_spenders || []).forEach((s, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="store-icon" style="background: rgba(108, 117, 125, 0.1);">
+                            <i class="bi bi-person"></i>
+                        </div>
+                        <div>
+                            <strong>${s.user__username || 'Anonymous'}</strong>
+                            ${s.order_count > 1 ? '<span class="customer-tag tag-repeat ms-2">Repeat</span>' : '<span class="customer-tag tag-new ms-2">New</span>'}
+                        </div>
+                    </div>
+                </td>
+                <td><strong>${s.order_count || 0}</strong></td>
+                <td><strong class="text-success">KSh ${Number(s.total_spent || 0).toLocaleString()}</strong></td>
+                <td><small class="text-muted">Recently</small></td>
+            `;
+            spendersTbody.appendChild(tr);
+        });
+
+        // Populate locations table
+        const locationsTbody = document.getElementById('ci-locations');
+        locationsTbody.innerHTML = '';
+        
+        (data.data.customer_locations || []).forEach((l, index) => {
+            const avgValue = l.total_revenue && l.order_count ? 
+                (l.total_revenue / l.order_count).toFixed(2) : 0;
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-geo-alt text-info"></i>
+                        <strong>${l.city || 'Unknown'}</strong>
+                    </div>
+                </td>
+                <td>${l.customer_count ? l.customer_count.toLocaleString() : '0'}</td>
+                <td>${l.order_count ? l.order_count.toLocaleString() : '0'}</td>
+                <td><strong>KSh ${Number(l.total_revenue || 0).toLocaleString()}</strong></td>
+                <td><span class="text-muted">KSh ${Number(avgValue).toLocaleString()}</span></td>
+            `;
+            locationsTbody.appendChild(tr);
+        });
+
+        // Add empty state if no data
+        if ((data.data.top_spenders || []).length === 0) {
+            spendersTbody.innerHTML = `
+                <tr>
+                    <td colspan="4" class="text-center py-4">
+                        <div class="text-muted">
+                            <i class="bi bi-people display-4 opacity-50 mb-2"></i>
+                            <p>No customer data available</p>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+
+        // Show content with animation
+        loading.style.display = 'none';
+        content.style.opacity = '0';
+        content.style.transform = 'translateY(20px)';
+        content.style.display = 'block';
+        
+        setTimeout(() => {
+            content.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+            content.style.opacity = '1';
+            content.style.transform = 'translateY(0)';
+        }, 100);
+
+    } catch (err) {
+        loading.innerHTML = `
+            <div class="text-danger">
+                <i class="bi bi-exclamation-triangle display-4"></i>
+                <p class="mt-2">Error loading customer insights</p>
+                <button class="btn-custom btn-outline btn-sm mt-2" onclick="loadCustomerInsights()">
+                    <i class="bi bi-arrow-clockwise"></i> Retry
+                </button>
+            </div>
+        `;
+        console.error('Customer insights error:', err);
+    }
+}
+
+// Export functionality
+document.getElementById('export-locations')?.addEventListener('click', function() {
+    alert('Export feature coming soon!');
+});
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', loadCustomerInsights);
+
+// Refresh data periodically (every 5 minutes)
+setInterval(() => {
+    if (!document.hidden) {
+        loadCustomerInsights();
+    }
+}, 300000);
+</script>
+{% endblock %}

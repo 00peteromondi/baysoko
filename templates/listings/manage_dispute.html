@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container py-4">
+    <h2>Manage Dispute - Order #{{ order.id }}</h2>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Dispute Details</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Order Date:</strong> {{ order.created_at|date:"F j, Y" }}</p>
+                    <p><strong>Total Amount:</strong> KSh {{ order.total_price }}</p>
+                    <p><strong>Dispute Created:</strong> {{ order.status_changed_at|date:"F j, Y" }}</p>
+                    <p><strong>Reason:</strong> {{ order.dispute_reason }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Buyer:</strong> {{ order.user.get_full_name }}</p>
+                    <p><strong>Seller(s):</strong>
+                        {% for item in order.order_items.all %}
+                            {{ item.listing.seller.get_full_name }}{% if not forloop.last %}, {% endif %}
+                        {% endfor %}
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-3">
+                <h6>Dispute Description:</h6>
+                <p>{{ order.dispute_description }}</p>
+            </div>
+
+            {% if order.dispute_evidence.all %}
+            <div class="mt-3">
+                <h6>Evidence:</h6>
+                <div class="row">
+                    {% for evidence in order.dispute_evidence.all %}
+                    <div class="col-md-3 mb-3">
+                        <a href="{{ evidence.file.url }}" target="_blank">
+                            {% if evidence.is_image %}
+                                <img src="{{ evidence.file.url }}" class="img-fluid" alt="Evidence">
+                            {% else %}
+                                <i class="bi bi-file-earmark-text"></i> {{ evidence.filename }}
+                            {% endif %}
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if user.is_staff %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Mediation Actions</h5>
+            
+            <form method="post" action="{% url 'mediate_dispute' order.id %}">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="mediator_notes" class="form-label">Mediation Notes</label>
+                    <textarea class="form-control" id="mediator_notes" name="mediator_notes" rows="3" required></textarea>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="proposed_solution" class="form-label">Proposed Solution</label>
+                    <textarea class="form-control" id="proposed_solution" name="proposed_solution" rows="2" required></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-info">Add Mediation Note</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Resolve Dispute</h5>
+            
+            <form method="post" action="{% url 'resolve_dispute' order.id %}">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="resolution" class="form-label">Resolution</label>
+                    <select class="form-select" id="resolution" name="resolution" required>
+                        <option value="">Select resolution...</option>
+                        <option value="refund">Issue Refund</option>
+                        <option value="release">Release Payment to Seller</option>
+                        <option value="partial_refund">Partial Refund</option>
+                    </select>
+                </div>
+
+                <div class="mb-3" id="refund_amount_group" style="display: none;">
+                    <label for="refund_amount" class="form-label">Refund Amount (KSh)</label>
+                    <input type="number" class="form-control" id="refund_amount" name="refund_amount" step="0.01" min="0" max="{{ order.total_price }}">
+                </div>
+
+                <div class="mb-3">
+                    <label for="seller_penalty" class="form-label">Seller Penalty (KSh)</label>
+                    <input type="number" class="form-control" id="seller_penalty" name="seller_penalty" step="0.01" min="0">
+                    <div class="form-text">Optional penalty amount to be deducted from seller's future payouts.</div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Resolve Dispute</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% block extra_js %}
+<script>
+    document.getElementById('resolution').addEventListener('change', function() {
+        const refundGroup = document.getElementById('refund_amount_group');
+        refundGroup.style.display = 
+            (this.value === 'refund' || this.value === 'partial_refund') 
+            ? 'block' 
+            : 'none';
+    });
+</script>
+{% endblock %}
+
+{% endblock %}

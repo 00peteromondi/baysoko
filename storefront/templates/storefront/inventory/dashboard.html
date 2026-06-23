@@ -1,0 +1,917 @@
+<!-- storefront/templates/storefront/inventory/dashboard.html -->
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Inventory Dashboard - {{ store.name }}{% endblock %}
+
+{% block extra_css %}
+    {% include 'storefront/partials/breadcrumb_css.html' %}
+<style>
+    /* ===== INVENTORY DASHBOARD STYLES ===== */
+    .inventory-header {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .inventory-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--primary-dark), #7c3aed);
+    }
+
+    .inventory-title {
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .inventory-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
+    /* ===== INVENTORY METRICS ===== */
+    .inventory-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    @media (min-width: 768px) {
+        .inventory-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+
+    .inventory-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+        text-align: center;
+    }
+
+    .inventory-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .inventory-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: var(--primary);
+        opacity: 0.3;
+    }
+
+    .inventory-icon {
+        font-size: 24px;
+        margin-bottom: 12px;
+        color: var(--primary);
+        background: rgba(255, 107, 53, 0.1);
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 16px;
+    }
+
+    .inventory-value {
+        font-size: 24px;
+        font-weight: 800;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+    }
+
+    .inventory-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+    }
+
+    /* ===== QUICK ACTIONS ===== */
+    .actions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 16px;
+        margin-bottom: 30px;
+    }
+
+    .action-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        text-align: center;
+        text-decoration: none !important;
+        color: var(--text-primary) !important;
+        display: block;
+    }
+
+    .action-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+        text-decoration: none;
+    }
+
+    .action-icon {
+        font-size: 20px;
+        color: white;
+        background: var(--primary);
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 12px;
+    }
+
+    .action-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+    }
+
+    .action-desc {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-bottom: 0;
+    }
+
+    /* ===== INVENTORY CHARTS ===== */
+    .inventory-charts {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 24px;
+        margin-bottom: 30px;
+    }
+
+    @media (min-width: 992px) {
+        .inventory-charts {
+            grid-template-columns: 2fr 1fr;
+        }
+    }
+
+    .inventory-chart-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        height: 100%;
+    }
+
+    .inventory-chart-card:hover {
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+    }
+
+    .inventory-chart-header {
+        margin-bottom: 20px;
+    }
+
+    .inventory-chart-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+
+    .inventory-chart-subtitle {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    .inventory-chart-canvas {
+        position: relative;
+        height: 300px;
+        width: 100%;
+    }
+
+    /* ===== STOCK HEALTH ===== */
+    .health-item {
+        margin-bottom: 20px;
+    }
+
+    .health-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .health-label {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .health-value {
+        font-size: 16px;
+        font-weight: 800;
+    }
+
+    .health-progress {
+        height: 8px;
+        background: var(--bg-secondary);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .health-progress-bar {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+
+    /* ===== CATEGORY DISTRIBUTION ===== */
+    .category-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+    }
+
+    .category-item {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        border: 1px solid var(--border-color);
+    }
+
+    .category-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+
+    .category-name {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .category-count {
+        font-size: 11px;
+        font-weight: 700;
+        color: white;
+        background: var(--primary);
+        padding: 2px 8px;
+        border-radius: 10px;
+    }
+
+    .category-progress {
+        height: 4px;
+        background: var(--bg-tertiary);
+        border-radius: 2px;
+        overflow: hidden;
+        margin-top: 8px;
+    }
+
+    .category-progress-bar {
+        height: 100%;
+        background: var(--primary);
+        border-radius: 2px;
+    }
+
+    .inventory-copilot {
+        background: linear-gradient(135deg, rgba(7, 59, 76, 0.98) 0%, rgba(17, 138, 178, 0.96) 100%);
+        color: white;
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-md);
+        margin-bottom: 24px;
+    }
+
+    .inventory-copilot-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        gap: 16px;
+    }
+
+    .inventory-copilot h3 {
+        font-size: 1.1rem;
+        font-weight: 800;
+        margin-bottom: 8px;
+    }
+
+    .inventory-copilot p {
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .inventory-copilot-metrics {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .inventory-copilot-metric,
+    .inventory-copilot-item {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 14px;
+        padding: 12px 14px;
+    }
+
+    .inventory-copilot-metric-value {
+        display: block;
+        font-size: 1rem;
+        font-weight: 800;
+        margin-bottom: 4px;
+    }
+
+    .inventory-copilot-metric-label {
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.72);
+    }
+
+    .inventory-copilot-items {
+        display: grid;
+        gap: 10px;
+    }
+
+    @media (max-width: 768px) {
+        .inventory-copilot-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* ===== STOCK MOVEMENTS ===== */
+    .movements-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 30px;
+        scrollbar-width: thin;
+        scrollbar-color: var(--primary) transparent;
+    }
+
+    .movements-header {
+        background: var(--bg-secondary);
+        padding: 20px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .movements-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 0;
+    }
+
+    .movements-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .movements-table th {
+        background: var(--bg-secondary);
+        padding: 12px 16px;
+        text-align: left;
+        font-weight: 700;
+        color: var(--text-primary);
+        border-bottom: 2px solid var(--border-color);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .movements-table td {
+        padding: 16px;
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: middle;
+    }
+
+    .movements-table tbody tr {
+        transition: all 0.2s ease;
+    }
+
+    .movements-table tbody tr:hover {
+        background: var(--bg-secondary);
+    }
+
+    .movement-badge {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .badge-sale {
+        background: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+        border: 1px solid rgba(40, 167, 69, 0.3);
+    }
+
+    .badge-purchase {
+        background: rgba(0, 123, 255, 0.1);
+        color: #007bff;
+        border: 1px solid rgba(0, 123, 255, 0.3);
+    }
+
+    .badge-adjustment {
+        background: rgba(255, 193, 7, 0.1);
+        color: #ffc107;
+        border: 1px solid rgba(255, 193, 7, 0.3);
+    }
+
+    /* ===== EMPTY STATES ===== */
+    .empty-inventory {
+        padding: 40px 20px;
+        text-align: center;
+    }
+
+    .empty-icon {
+        font-size: 48px;
+        color: var(--text-tertiary);
+        margin-bottom: 16px;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .inventory-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .actions-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .movements-table {
+            display: block;
+            overflow-x: auto;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .inventory-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .actions-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .inventory-charts {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-custom py-3">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}"><i class="bi bi-house"></i> Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'storefront:seller_dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Inventory Dashboard</li>
+        </ol>
+    </nav>
+    <!-- Header -->
+    <div class="inventory-header">
+        <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
+            <div>
+                <h1 class="inventory-title">Inventory Dashboard</h1>
+                <p class="inventory-subtitle">Manage your store inventory and stock levels</p>
+            </div>
+            <div class="btn-group">
+                <a href="{% url 'storefront:adjust_stock' slug=store.slug %}" class="btn-custom btn-primary">
+                    <i class="bi bi-plus-circle me-2"></i>Adjust Stock
+                </a>
+                <a href="{% url 'storefront:bulk_stock_update' slug=store.slug %}" class="btn-custom btn-outline text-primary">
+                    <i class="bi bi-arrow-up-down me-2"></i>Bulk Update
+                </a>
+                <a href="{% url 'storefront:seller_dashboard' %}" class="btn-custom btn-outline-primary">
+                    <i class="bi bi-arrow-left-circle me-2"></i>Back to Seller Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inventory Metrics -->
+    <div class="inventory-grid">
+        <div class="inventory-card">
+            <div class="inventory-icon" style="background: rgba(255, 107, 53, 0.12); color: var(--primary-dark);">
+                <i class="bi bi-box-seam"></i>
+            </div>
+            <div class="inventory-value">{{ total_products|intcomma }}</div>
+            <div class="inventory-label">Total Products</div>
+        </div>
+        
+        <div class="inventory-card">
+            <div class="inventory-icon" style="background: rgba(245, 158, 11, 0.1); color: var(--warning);">
+                <i class="bi bi-exclamation-triangle"></i>
+            </div>
+            <div class="inventory-value">{{ low_stock_items|intcomma }}</div>
+            <div class="inventory-label">Low Stock</div>
+        </div>
+        
+        <div class="inventory-card">
+            <div class="inventory-icon" style="background: rgba(239, 68, 68, 0.1); color: var(--danger);">
+                <i class="bi bi-x-circle"></i>
+            </div>
+            <div class="inventory-value">{{ out_of_stock_items|intcomma }}</div>
+            <div class="inventory-label">Out of Stock</div>
+        </div>
+        
+        <div class="inventory-card">
+            <div class="inventory-icon" style="background: rgba(16, 185, 129, 0.1); color: var(--success);">
+                <i class="bi bi-currency-dollar"></i>
+            </div>
+            <div class="inventory-value">KSh {{ stock_value|floatformat:0|intcomma }}</div>
+            <div class="inventory-label">Stock Value</div>
+        </div>
+    </div>
+
+    {% if seller_ai %}
+    <section class="inventory-copilot" id="ai-copilot">
+        <div class="inventory-copilot-grid">
+            <div>
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="badge rounded-pill text-bg-warning">Premium / Enterprise</span>
+                    <span class="small text-white-50">Baysoko AI Copilot</span>
+                </div>
+                <h3>AI inventory guidance for {{ store.name }}</h3>
+                <p>{{ seller_ai.summary }}</p>
+                <div class="inventory-copilot-metrics">
+                    {% for metric in seller_ai.metrics %}
+                    <div class="inventory-copilot-metric">
+                        <span class="inventory-copilot-metric-value">{{ metric.value }}</span>
+                        <span class="inventory-copilot-metric-label">{{ metric.label }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="inventory-copilot-items">
+                {% for priority in seller_ai.priorities %}
+                <div class="inventory-copilot-item">
+                    <strong>{{ priority.title }}</strong>
+                    <p class="mb-0 mt-1">{{ priority.detail }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Quick Actions -->
+    <div class="actions-grid">
+        <a href="{% url 'storefront:inventory_list' slug=store.slug %}" class="action-card">
+            <div class="action-icon" style="background: var(--primary-dark);">
+                <i class="bi bi-list-ul"></i>
+            </div>
+            <div class="action-title">View All Products</div>
+            <p class="action-desc">Browse and manage inventory</p>
+        </a>
+        
+        <a href="{% url 'storefront:inventory_alerts' slug=store.slug %}" class="action-card">
+            <div class="action-icon" style="background: var(--warning);">
+                <i class="bi bi-bell"></i>
+            </div>
+            <div class="action-title">Manage Alerts</div>
+            <p class="action-desc">Set up stock notifications</p>
+        </a>
+        
+        <a href="{% url 'storefront:export_inventory' slug=store.slug %}" class="action-card">
+            <div class="action-icon" style="background: var(--success);">
+                <i class="bi bi-download"></i>
+            </div>
+            <div class="action-title">Export to CSV</div>
+            <p class="action-desc">Download inventory data</p>
+        </a>
+        
+        <a href="{% url 'storefront:import_inventory' slug=store.slug %}" class="action-card">
+            <div class="action-icon" style="background: var(--primary);">
+                <i class="bi bi-upload"></i>
+            </div>
+            <div class="action-title">Import from CSV</div>
+            <p class="action-desc">Bulk update inventory</p>
+        </a>
+    </div>
+
+    <!-- Inventory Charts -->
+    <div class="inventory-charts">
+        <!-- Inventory Health -->
+        <div class="inventory-chart-card">
+            <div class="inventory-chart-header">
+                <h3 class="inventory-chart-title">Inventory Health</h3>
+                <p class="inventory-chart-subtitle">Monitor stock levels and turnover rate</p>
+            </div>
+            <div class="health-item">
+                <div class="health-label">
+                    <span>Turnover Rate</span>
+                    <span class="health-value {% if turnover_rate > 50 %}text-success{% elif turnover_rate > 20 %}text-warning{% else %}text-danger{% endif %}">
+                        {{ turnover_rate|floatformat:1 }}%
+                    </span>
+                </div>
+                <div class="health-progress">
+                    <div class="health-progress-bar {% if turnover_rate > 50 %}bg-success{% elif turnover_rate > 20 %}bg-warning{% else %}bg-danger{% endif %}" 
+                         style="width: {{ turnover_rate|default:0 }}%">
+                    </div>
+                </div>
+            </div>
+            <div class="health-item">
+                <div class="health-label">
+                    <span>Active Alerts</span>
+                    <span class="health-value text-primary">{{ active_alerts }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Distribution -->
+        <div class="inventory-chart-card">
+            <div class="inventory-chart-header">
+                <h3 class="inventory-chart-title">Stock by Category</h3>
+                <p class="inventory-chart-subtitle">Distribution across product categories</p>
+            </div>
+            <div class="category-grid">
+                {% for category in category_distribution %}
+                <div class="category-item">
+                    <div class="category-header">
+                        <span class="category-name">{{ category.category__name|default:"Uncategorized"|truncatechars:15 }}</span>
+                        <span class="category-count">{{ category.count }}</span>
+                    </div>
+                    <div class="small text-muted">{{ category.total_stock|default:0 }} units</div>
+                    <div class="category-progress">
+                        <div class="category-progress-bar" 
+                             style="width: {% widthratio category.total_stock total_products 100 %}%">
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="empty-inventory">
+                    <div class="empty-icon">
+                        <i class="bi bi-grid"></i>
+                    </div>
+                    <p class="text-muted">No category data available</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Stock Movements -->
+    <div class="movements-card">
+        <div class="movements-header">
+            <h3 class="movements-title">Recent Stock Movements</h3>
+            <a href="{% url 'storefront:stock_movements' slug=store.slug %}" class="btn-custom btn-sm btn-outline text-primary">
+                View All
+            </a>
+        </div>
+        <div class="table-responsive">
+            <table class="movements-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Product</th>
+                        <th>Type</th>
+                        <th>Quantity</th>
+                        <th>Previous</th>
+                        <th>New</th>
+                        <th>Changed By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for movement in recent_movements %}
+                    <tr>
+                        <td>{{ movement.created_at|date:"M d, H:i" }}</td>
+                        <td>
+                            <a href="{% url 'storefront:product_detail' store_slug=store.slug slug=movement.product.slug %}" class="text-decoration-none">
+                                {{ movement.product.title|truncatechars:20 }}
+                            </a>
+                        </td>
+                        <td>
+                            {% if movement.movement_type == 'sale' %}
+                            <span class="movement-badge badge-sale">{{ movement.get_movement_type_display }}</span>
+                            {% elif movement.movement_type == 'purchase' %}
+                            <span class="movement-badge badge-purchase">{{ movement.get_movement_type_display }}</span>
+                            {% else %}
+                            <span class="movement-badge badge-adjustment">{{ movement.get_movement_type_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="{% if movement.quantity > 0 %}text-success{% else %}text-danger{% endif %}">
+                            {% if movement.quantity > 0 %}+{% endif %}{{ movement.quantity }}
+                        </td>
+                        <td>{{ movement.previous_stock }}</td>
+                        <td>{{ movement.new_stock }}</td>
+                        <td>
+                            {% if movement.created_by %}
+                            <span class="text-muted">{{ movement.created_by.username|truncatechars:10 }}</span>
+                            {% else %}
+                            <span class="text-muted">System</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4">
+                            <div class="empty-inventory">
+                                <div class="empty-icon">
+                                    <i class="bi bi-clock-history"></i>
+                                </div>
+                                <p class="text-muted">No stock movements yet</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js Library -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Auto-refresh every 30 seconds
+        setTimeout(function() {
+            window.location.reload();
+        }, 30000);
+
+        // Table row hover effects
+        document.querySelectorAll('.movements-table tbody tr').forEach(row => {
+            row.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateX(4px)';
+                this.style.boxShadow = 'var(--shadow-sm)';
+            });
+            
+            row.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateX(0)';
+                this.style.boxShadow = 'none';
+            });
+        });
+
+        // Quick stock update functionality
+        window.openQuickStockModal = function(productId, currentStock, productName) {
+            // Create modal HTML
+            const modalHTML = `
+                <div class="modal fade" id="quickStockModal" tabindex="-1" data-theme="light">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content text-secondary">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Quick Stock Update</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p>Update stock for: <strong>${productName}</strong></p>
+                                <p class="text-muted mb-3">Current stock: <span class="fw-bold">${currentStock}</span></p>
+                                <form id="quickStockForm">
+                                    {% csrf_token %}
+                                    <input type="hidden" id="quickStockProductId" value="${productId}">
+                                    <div class="mb-3">
+                                        <label class="form-label">New Stock Level</label>
+                                        <input type="number" min="0" class="form-control" id="quickStockInput" value="${currentStock}" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Notes (Optional)</label>
+                                        <textarea class="form-control" id="quickStockNotes" rows="2" placeholder="Reason for adjustment..."></textarea>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button type="submit" class="btn-custom btn-primary flex-grow-1">Update Stock</button>
+                                        <button type="button" class="btn-custom btn-outline text-danger" data-bs-dismiss="modal">Cancel</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Remove existing modal if any
+            const existingModal = document.getElementById('quickStockModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+
+            // Add modal to DOM
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('quickStockModal'));
+            modal.show();
+
+            // Handle form submission
+            document.getElementById('quickStockForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                updateStock(productId);
+            });
+        };
+
+        function updateStock(productId) {
+            const newStock = document.getElementById('quickStockInput').value;
+            const notes = document.getElementById('quickStockNotes').value;
+
+            if (!newStock || newStock < 0) {
+                alert('Please enter a valid stock level');
+                return;
+            }
+
+            fetch(`{% url 'storefront:quick_stock_update' slug=store.slug product_id=0 %}`.replace('0', productId), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    stock: parseInt(newStock),
+                    notes: notes
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Error updating stock');
+            });
+        }
+
+        // Export functionality
+        function exportInventory(type) {
+            if (type === 'csv') {
+                window.location.href = '{% url "storefront:export_inventory" slug=store.slug %}';
+            }
+        }
+
+        // Add export dropdown to header
+        const exportDropdown = `
+            <div class="dropdown d-inline-block ms-2">
+                <button class="btn-custom btn-outline dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-download me-2"></i>Export
+                </button>
+                <div class="dropdown-menu dropdown-menu-end">
+                    <button class="dropdown-item" onclick="exportInventory('csv')">
+                        <i class="bi bi-file-earmark-spreadsheet me-2"></i>CSV
+                    </button>
+                    <button class="dropdown-item" onclick="window.print()">
+                        <i class="bi bi-printer me-2"></i>Print Report
+                    </button>
+                </div>
+            </div>
+        `;
+
+        // Insert export button after the action buttons
+        const btnGroup = document.querySelector('.btn-group');
+        if (btnGroup) {
+            btnGroup.insertAdjacentHTML('afterend', exportDropdown);
+        }
+    });
+
+    // Make exportInventory function global
+    window.exportInventory = function(type) {
+        if (type === 'csv') {
+            window.location.href = '{% url "storefront:export_inventory" slug=store.slug %}';
+        }
+    };
+</script>
+{% endblock %}

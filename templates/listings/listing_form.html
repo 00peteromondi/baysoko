@@ -1,0 +1,1977 @@
+{% extends 'base.html' %}
+{% load static crispy_forms_tags %}
+
+{% block title %}
+    {% if form.instance.pk %}Edit Listing{% else %}Create New Listing{% endif %} – Baysoko
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== ULTRA‑COMPACT STYLES ===== */
+    :root {
+        --form-max-width: 1200px;
+    }
+
+    /* Hero – minimal */
+    .form-hero {
+        background: linear-gradient(135deg, #073B4C 0%, #118AB2 100%);
+        color: white;
+        padding: 0.75rem 0;
+        text-align: center;
+    }
+    .form-hero-content {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 0 0.5rem;
+    }
+    .form-hero .badge {
+        background: rgba(255,255,255,0.15);
+        border-radius: 50px;
+        padding: 0.2rem 0.8rem;
+        font-size: 0.8rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        margin-bottom: 0.2rem;
+    }
+    .form-title-main {
+        font-size: 1.6rem;
+        font-weight: 800;
+        margin-bottom: 0.1rem;
+        line-height: 1.2;
+    }
+    .form-subtitle-main {
+        font-size: 0.9rem;
+        opacity: 0.9;
+        margin: 0;
+    }
+
+    .ai-copilot-banner {
+        background: linear-gradient(135deg, rgba(7, 59, 76, 0.98) 0%, rgba(17, 138, 178, 0.96) 100%);
+        color: white;
+        border-radius: 0.85rem;
+        padding: 0.9rem 1rem;
+        margin-bottom: 0.75rem;
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+        align-items: center;
+    }
+
+    .ai-copilot-banner p {
+        margin: 0;
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 0.85rem;
+    }
+
+    .ai-copilot-lock {
+        background: rgba(255, 193, 7, 0.14);
+        border: 1px solid rgba(255, 193, 7, 0.26);
+        border-radius: 0.85rem;
+        padding: 0.9rem 1rem;
+        margin-bottom: 0.75rem;
+    }
+
+    /* Main container – no forced height */
+    .form-container {
+        max-width: var(--form-max-width);
+        margin: 0.5rem auto 1rem;
+        padding: 0 0.5rem;
+    }
+
+    /* Progress steps – compact */
+    .progress-card {
+        background: var(--card-bg);
+        border-radius: 0.75rem;
+        padding: 0.5rem;
+        margin-bottom: 0.75rem;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        gap: 0.25rem;
+    }
+    .step {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.3rem;
+        border-radius: 0.4rem;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+    }
+    .step.active {
+        background: rgba(6, 214, 160, 0.1);
+        border-color: var(--accent);
+    }
+    .step-indicator {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: var(--bg-primary);
+        border: 2px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+    .step.active .step-indicator {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: white;
+    }
+    .step-label {
+        font-weight: 600;
+        font-size: 0.8rem;
+        color: var(--text-primary);
+    }
+
+    /* Section cards – minimal padding */
+    .form-section-card {
+        background: var(--card-bg);
+        border-radius: 0.75rem;
+        padding: 0.75rem;
+        margin-bottom: 0.75rem;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+    }
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+        padding-bottom: 0.25rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .section-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1rem;
+    }
+    .section-title {
+        font-size: 1rem;
+        font-weight: 700;
+        margin: 0;
+    }
+    .section-description {
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+        margin: 0;
+    }
+
+    /* Form grid – tight */
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 0.5rem;
+    }
+    .form-group {
+        margin-bottom: 0;
+    }
+    .form-group.full-width {
+        grid-column: 1 / -1;
+    }
+    .form-label {
+        font-weight: 600;
+        font-size: 0.8rem;
+        margin-bottom: 0.1rem;
+        color: var(--text-primary);
+    }
+    .form-label i {
+        color: var(--primary-dark);
+    }
+    .required-field::after {
+        content: ' *';
+        color: var(--danger);
+    }
+
+    /* Ultra‑compact inputs */
+    .form-control, .form-select {
+        width: 100%;
+        padding: 0.4rem 0.6rem;
+        border: 2px solid var(--border-color);
+        border-radius: 0.4rem;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 0.85rem;
+        transition: border-color 0.2s, box-shadow 0.2s;
+        outline: none;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(6, 214, 160, 0.1);
+    }
+    textarea.form-control {
+        min-height: 60px;
+        resize: vertical;
+    }
+    .price-input-wrapper {
+        position: relative;
+    }
+    .price-prefix {
+        position: absolute;
+        left: 0.6rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-secondary);
+        font-weight: 600;
+        font-size: 0.85rem;
+        z-index: 2;
+    }
+    .price-input-wrapper .form-control {
+        padding-left: 2.5rem;
+    }
+
+    /* Character counter – tiny */
+    .char-count {
+        font-size: 0.7rem;
+        color: var(--text-secondary);
+        text-align: right;
+        margin-top: 0.1rem;
+    }
+
+    /* Image upload – compact */
+    .upload-card {
+        background: var(--bg-secondary);
+        border: 2px dashed var(--border-color);
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        text-align: center;
+        transition: all 0.2s;
+        cursor: pointer;
+        margin-bottom: 0.5rem;
+    }
+    .upload-card:hover {
+        border-color: var(--accent);
+    }
+    .upload-card.is-invalid {
+        border-color: var(--danger);
+        background: rgba(var(--danger-rgb, 220, 53, 69), 0.06);
+    }
+    .form-control.is-invalid,
+    .form-select.is-invalid {
+        border-color: var(--danger);
+        box-shadow: 0 0 0 3px rgba(var(--danger-rgb, 220, 53, 69), 0.12);
+    }
+    .error-feedback {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        margin-top: 0.35rem;
+        font-size: 0.8rem;
+        color: var(--danger);
+    }
+    .upload-icon {
+        font-size: 1.8rem;
+        color: var(--accent);
+        margin-bottom: 0.1rem;
+    }
+    .upload-title {
+        font-size: 0.9rem;
+        font-weight: 700;
+        margin-bottom: 0.1rem;
+    }
+    .upload-subtitle {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+    }
+    .upload-btn {
+        background: var(--accent);
+        color: white;
+        border: none;
+        border-radius: 30px;
+        padding: 0.3rem 1rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+        transition: transform 0.2s, box-shadow 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.2rem;
+        margin-top: 0.2rem;
+    }
+    .upload-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(6, 214, 160, 0.3);
+    }
+
+    /* Preview grid – tiny */
+    .preview-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+        gap: 0.25rem;
+        margin-top: 0.5rem;
+    }
+    .preview-item {
+        position: relative;
+        border-radius: 6px;
+        overflow: hidden;
+        aspect-ratio: 1;
+        border: 2px solid var(--border-color);
+    }
+    .trim-video-btn,
+    .video-status-badge,
+    .video-processing-badge,
+    .video-ready-badge {
+        position: absolute;
+        bottom: 8px;
+        left: 8px;
+        right: 8px;
+        padding: 0.3rem 0.5rem;
+        border-radius: 999px;
+        border: 1px solid var(--border-color);
+        background: rgba(255, 255, 255, 0.92);
+        color: var(--text-primary);
+        font-size: 0.7rem;
+        font-weight: 600;
+        cursor: pointer;
+        z-index: 3;
+    }
+    .video-status-badge {
+        top: 8px;
+        bottom: auto;
+        left: 8px;
+        right: auto;
+        cursor: default;
+        background: rgba(var(--accent-rgb, 6, 214, 160), 0.15);
+        border-color: rgba(var(--accent-rgb, 6, 214, 160), 0.5);
+        color: var(--text-primary);
+    }
+    .video-processing-badge {
+        top: 8px;
+        bottom: auto;
+        left: 8px;
+        right: auto;
+        cursor: default;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: rgba(255, 158, 31, 0.18);
+        border-color: rgba(255, 158, 31, 0.55);
+        color: var(--text-primary);
+    }
+    .video-ready-badge {
+        top: 8px;
+        bottom: auto;
+        left: 8px;
+        right: auto;
+        cursor: default;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: rgba(6, 214, 160, 0.18);
+        border-color: rgba(6, 214, 160, 0.55);
+        color: var(--text-primary);
+    }
+    [data-theme="dark"] .trim-video-btn,
+    [data-theme="dark"] .video-status-badge,
+    [data-theme="dark"] .video-processing-badge,
+    [data-theme="dark"] .video-ready-badge {
+        background: rgba(16, 16, 16, 0.92);
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+    .video-spinner {
+        width: 0.8rem;
+        height: 0.8rem;
+        border: 2px solid rgba(255, 255, 255, 0.28);
+        border-top-color: currentColor;
+        border-radius: 50%;
+        animation: listingVideoSpin 0.8s linear infinite;
+    }
+    @keyframes listingVideoSpin {
+        to { transform: rotate(360deg); }
+    }
+    .preview-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .preview-badge {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        background: var(--accent);
+        color: white;
+        font-size: 0.5rem;
+        padding: 1px 4px;
+        border-radius: 8px;
+    }
+
+    /* Step navigation – minimal */
+    .step-navigation {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--border-color);
+    }
+    .nav-btn {
+        min-width: 100px;
+        padding: 0.5rem 1rem;
+        border-radius: 30px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+        border: none;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.3rem;
+    }
+    .nav-btn.prev {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+    }
+    .nav-btn.next, .nav-btn.submit {
+        background: linear-gradient(135deg, var(--accent), #05b386);
+        color: white;
+    }
+
+    /* No forced scrolling – page flows naturally */
+    body {
+        overflow-y: auto;
+    }
+
+    /* Responsive – still compact */
+    @media (max-width: 768px) {
+        .progress-card {
+            flex-direction: column;
+        }
+        .step-navigation {
+            flex-direction: column;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="form-hero">
+    <div class="form-hero-content">
+        <span class="badge">
+            <i class="bi bi-{% if form.instance.pk %}pencil-square{% else %}plus-circle{% endif %}"></i>
+            {% if form.instance.pk %}Edit Listing{% else %}New Listing{% endif %}
+        </span>
+        <h1 class="form-title-main">
+            {% if form.instance.pk %}Update your item{% else %}List your item{% endif %}
+        </h1>
+        <p class="form-subtitle-main">
+            {% if form.instance.pk %}
+                Make changes – they'll be live immediately.
+            {% else %}
+                Fill in the details below to start selling.
+            {% endif %}
+        </p>
+    </div>
+</div>
+
+<div class="form-container">
+    {% if seller_ai_copilot_access %}
+    <div class="ai-copilot-banner">
+        <div>
+            <div class="small fw-bold mb-1">Baysoko AI Copilot</div>
+            <p>Premium and Enterprise sellers get AI-assisted listing suggestions while typing. Start with a strong title and we’ll help fill the rest.</p>
+        </div>
+        <span class="badge bg-warning text-dark">Enabled</span>
+    </div>
+    {% else %}
+    <div class="ai-copilot-lock">
+        <div class="small fw-bold mb-1">Baysoko AI Copilot</div>
+        <div class="text-muted">AI listing assistance is available on Premium and Enterprise plans.</div>
+    </div>
+    {% endif %}
+    <!-- Progress Steps -->
+    <div class="progress-card">
+        <div class="step active" data-step="1">
+            <span class="step-indicator">1</span>
+            <span class="step-label">Basic</span>
+        </div>
+        <div class="step" data-step="2">
+            <span class="step-indicator">2</span>
+            <span class="step-label">Details</span>
+        </div>
+        <div class="step" data-step="3">
+            <span class="step-indicator">3</span>
+            <span class="step-label">Price</span>
+        </div>
+        <div class="step" data-step="4">
+            <span class="step-indicator">4</span>
+            <span class="step-label">Photos</span>
+        </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" id="listing-form" data-is-update="{% if form.instance.pk %}true{% else %}false{% endif %}" novalidate>
+        {% csrf_token %}
+        {% if form.errors %}
+        <div class="form-section-card" style="border-left: 4px solid var(--danger);">
+            <div class="section-header">
+                <div class="section-icon" style="background: var(--danger);"><i class="bi bi-exclamation-triangle"></i></div>
+                <div>
+                    <h2 class="section-title">Please Fix The Errors Below</h2>
+                    <p class="section-description">Some fields need attention before we can save your listing.</p>
+                </div>
+            </div>
+            <ul class="m-0 ps-3">
+                {% for field, errs in form.errors.items %}
+                    {% for err in errs %}
+                        <li class="text-danger small">
+                            {% if field == '__all__' %}
+                                General: {{ err }}
+                            {% else %}
+                                {{ field|title }}: {{ err }}
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <!-- Step 1: Basic Info -->
+        <div class="form-section-card active-step" id="step-1">
+            <div class="section-header">
+                <div class="section-icon"><i class="bi bi-tag"></i></div>
+                <div>
+                    <h2 class="section-title">Basic Information</h2>
+                    <p class="section-description">What are you selling?</p>
+                </div>
+            </div>
+            <div class="form-grid">
+                <div class="form-group full-width">
+                    <label for="{{ form.title.id_for_label }}" class="form-label required-field"><i class="bi bi-card-text me-1"></i>Title</label>
+                    <input type="text" name="{{ form.title.name }}" id="{{ form.title.id_for_label }}"
+                           class="form-control {% if form.title.errors %}is-invalid{% endif %}" value="{{ form.title.value|default:'' }}"
+                           placeholder="e.g., iPhone 13 Pro Max" maxlength="200" required>
+                    <div class="char-count" id="title-counter">0/200</div>
+                    {% if form.title.errors %}
+                        <div class="error-feedback"><i class="bi bi-exclamation-circle me-1"></i>{{ form.title.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                <div class="form-group">
+                    <label for="{{ form.category.id_for_label }}" class="form-label required-field"><i class="bi bi-list me-1"></i>Category</label>
+                    <select name="{{ form.category.name }}" id="{{ form.category.id_for_label }}" class="form-select {% if form.category.errors %}is-invalid{% endif %}" required>
+                        <option value="">Choose</option>
+                        {% for cat in categories %}
+                            <option value="{{ cat.id }}" {% if form.category.value == cat.id or form.instance.category_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if form.category.errors %}
+                        <div class="error-feedback"><i class="bi bi-exclamation-circle me-1"></i>{{ form.category.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                <!-- Hidden input to hold JSON for dynamic fields -->
+                <input type="hidden" name="dynamic_fields" id="id_dynamic_fields" value="{}">
+
+                {# Embed the listing's existing dynamic fields as safe JSON for client-side use. #}
+                {# Use json_script so the payload is valid JSON (avoids Python repr with single quotes). #}
+                {{ initial_dynamic_fields|default:"{}"|json_script:"initial-dynamic-fields" }}
+
+                {# Embed category schemas as JSON for client-side rendering using json_script to ensure valid JSON #}
+                {{ category_schemas|default:"{}"|json_script:"category-schemas" }}
+                {# Server-side support: attempt to render dynamic fields for the currently selected category (if any) so icons appear immediately. Requires the dict_utils.get_item filter. #}
+                {% load dict_utils %}
+                {% with selected_cat=form.category.value|default:form.instance.category_id %}
+                    {% if selected_cat %}
+                        {% with schema=category_schemas|get_item:selected_cat %}
+                            {% if schema and schema.fields %}
+                                {% comment %}Render server-side dynamic fields into step 2 and step 3 containers.{% endcomment %}
+                                {% for field in schema.fields %}
+                                    {% if field.section == 'pricing' %}
+                                        {% comment %}Rendered into pricing dynamic container (step 3). Placeholder div present below.{% endcomment %}
+                                    {% else %}
+                                        {% comment %}Rendered into details dynamic container (step 2).{% endcomment %}
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+                    {% endif %}
+                {% endwith %}
+                <div class="form-group">
+                    <label for="{{ form.condition.id_for_label }}" class="form-label required-field"><i class="bi bi-sliders me-1"></i>Condition</label>
+                    <select name="{{ form.condition.name }}" id="{{ form.condition.id_for_label }}" class="form-select {% if form.condition.errors %}is-invalid{% endif %}" required>
+                        <option value="">Select</option>
+                        {% for val, text in form.condition.field.choices %}{% if val %}
+                            <option value="{{ val }}" {% if form.condition.value == val or form.instance.condition == val %}selected{% endif %}>{{ text }}</option>
+                        {% endif %}{% endfor %}
+                    </select>
+                    {% if form.condition.errors %}
+                        <div class="error-feedback"><i class="bi bi-exclamation-circle me-1"></i>{{ form.condition.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                <!-- Store field (shared partial) -->
+                {% include 'listings/_store_field.html' %}
+                <div class="form-group full-width">
+                    <label for="{{ form.description.id_for_label }}" class="form-label required-field"><i class="bi bi-card-text me-1"></i>Description</label>
+                    <textarea name="{{ form.description.name }}" id="{{ form.description.id_for_label }}"
+                              class="form-control {% if form.description.errors %}is-invalid{% endif %}" rows="3" maxlength="2000" required
+                              placeholder="Describe your item...">{{ form.description.value|default:form.instance.description|default:'' }}</textarea>
+                    <div class="char-count" id="description-counter">0/2000</div>
+                    {% if form.description.errors %}
+                        <div class="error-feedback"><i class="bi bi-exclamation-circle me-1"></i>{{ form.description.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Additional Details -->
+        <div class="form-section-card" id="step-2" style="display:none;">
+            <div class="section-header">
+                <div class="section-icon"><i class="bi bi-info-square"></i></div>
+                <div>
+                    <h2 class="section-title">Additional Details</h2>
+                    <p class="section-description">Help buyers find your item</p>
+                </div>
+            </div>
+            <div class="form-grid">
+                    <!-- Dynamic category-specific fields will render here -->
+                    <div id="dynamic-fields-container" class="form-section-card" style="display:none; grid-column: 1 / -1; padding:0.75rem; margin-bottom:0.75rem;">
+                        <div class="section-header">
+                            <div class="section-icon"><i class="bi bi-puzzle"></i></div>
+                            <div>
+                                <h2 class="section-title">Category Details</h2>
+                                <p class="section-description">Additional information for this category</p>
+                            </div>
+                        </div>
+                        <div id="dynamic-fields">
+                            {# Server-side render: non-pricing fields for the selected category so icons show immediately #}
+                            {% with selected_cat=form.category.value|default:form.instance.category_id %}
+                                {% if selected_cat %}
+                                    {% with schema=category_schemas|get_item:selected_cat %}
+                                        {% if schema and schema.fields %}
+                                            <div class="form-grid" data-server-rendered="true">
+                                            {% for field in schema.fields %}
+                                                {% if field.section != 'pricing' %}
+                                                    <div class="form-group">
+                                                        <label for="dynamic_{{ field.name }}" class="form-label {% if field.required %}required-field{% endif %}">
+                                                            {% comment %}Icon mapping server-side{% endcomment %}
+                                                            {% if field.name == 'brand' %}
+                                                                <i class="bi bi-building me-1"></i>
+                                                            {% elif field.name == 'model' %}
+                                                                <i class="bi bi-hash me-1"></i>
+                                                            {% elif field.name == 'color' %}
+                                                                <i class="bi bi-droplet me-1"></i>
+                                                            {% elif field.name == 'material' %}
+                                                                <i class="bi bi-box2-heart me-1"></i>
+                                                            {% elif field.name == 'dimensions' %}
+                                                                <i class="bi bi-arrows-collapse me-1"></i>
+                                                            {% elif field.name == 'weight' %}
+                                                                <i class="bi bi-weight me-1"></i>
+                                                            {% else %}
+                                                                <i class="bi bi-card-text me-1"></i>
+                                                            {% endif %}
+                                                            {{ field.label|default:field.name }}
+                                                        </label>
+                                                        {% if field.type == 'textarea' %}
+                                                            <textarea name="dynamic_{{ field.name }}" id="dynamic_{{ field.name }}" class="form-control" {% if field.required %}required{% endif %}>{{ initial_dynamic_fields|get_item:field.name|default:'' }}</textarea>
+                                                        {% elif field.type == 'select' %}
+                                                            <select name="dynamic_{{ field.name }}" id="dynamic_{{ field.name }}" class="form-select" {% if field.required %}required{% endif %}>
+                                                                <option value="">Select</option>
+                                                                {% for choice in field.choices %}
+                                                                    <option value="{{ choice }}" {% if initial_dynamic_fields|get_item:field.name|stringformat:'s' == choice|stringformat:'s' %}selected{% endif %}>{{ choice }}</option>
+                                                                {% endfor %}
+                                                            </select>
+                                                        {% elif field.type == 'boolean' %}
+                                                            <div class="form-check">
+                                                                <input type="checkbox" id="dynamic_{{ field.name }}" name="dynamic_{{ field.name }}" class="form-check-input" value="true" {% if initial_dynamic_fields|get_item:field.name %}checked{% endif %}>
+                                                                <label class="form-check-label" for="dynamic_{{ field.name }}">Yes</label>
+                                                            </div>
+                                                        {% else %}
+                                                            <input type="{% if field.type == 'number' %}number{% else %}text{% endif %}" name="dynamic_{{ field.name }}" id="dynamic_{{ field.name }}" class="form-control" value="{{ initial_dynamic_fields|get_item:field.name|default:'' }}" {% if field.min %}min="{{ field.min }}"{% endif %} {% if field.max %}max="{{ field.max }}"{% endif %} {% if field.required %}required{% endif %}>
+                                                        {% endif %}
+                                                    </div>
+                                                {% endif %}
+                                            {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                    {% endwith %}
+                                {% endif %}
+                            {% endwith %}
+                        </div>
+                    </div>
+                   
+                    <div class="standard-field-container" data-field="brand">
+                        <div class="form-group">
+                            <label for="{{ form.brand.id_for_label }}" class="form-label"><i class="bi bi-building me-1"></i>Brand</label>
+                            {{ form.brand }}
+                            {% if form.brand.errors %}<div class="char-count text-danger">{{ form.brand.errors }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="standard-field-container" data-field="model">
+                        <div class="form-group">
+                            <label for="{{ form.model.id_for_label }}" class="form-label"><i class="bi bi-hash me-1"></i>Model</label>
+                            {{ form.model }}
+                            {% if form.model.errors %}<div class="char-count text-danger">{{ form.model.errors }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="standard-field-container" data-field="color">
+                        <div class="form-group">
+                            <label for="{{ form.color.id_for_label }}" class="form-label"><i class="bi bi-droplet me-1"></i>Color</label>
+                            {{ form.color }}
+                            {% if form.color.errors %}<div class="char-count text-danger">{{ form.color.errors }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="standard-field-container" data-field="material">
+                        <div class="form-group">
+                            <label for="{{ form.material.id_for_label }}" class="form-label"><i class="bi bi-box2-heart me-1"></i>Material</label>
+                            {{ form.material }}
+                            {% if form.material.errors %}<div class="char-count text-danger">{{ form.material.errors }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="standard-field-container" data-field="dimensions">
+                        <div class="form-group">
+                            <label for="{{ form.dimensions.id_for_label }}" class="form-label"><i class="bi bi-arrows-collapse me-1"></i>Dimensions</label>
+                            {{ form.dimensions }}
+                            {% if form.dimensions.errors %}<div class="char-count text-danger">{{ form.dimensions.errors }}</div>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="standard-field-container" data-field="weight">
+                        <div class="form-group">
+                            <label for="{{ form.weight.id_for_label }}" class="form-label"><i class="bi bi-weight me-1"></i>Weight</label>
+                            {{ form.weight }}
+                            {% if form.weight.errors %}<div class="char-count text-danger">{{ form.weight.errors }}</div>{% endif %}
+                        </div>
+                    </div>
+                <div class="form-group full-width">
+                    <label for="{{ form.meta_description.id_for_label }}" class="form-label"><i class="bi bi-search me-1"></i>Meta Description (SEO)</label>
+                    <textarea name="{{ form.meta_description.name }}" id="{{ form.meta_description.id_for_label }}"
+                              class="form-control" rows="2" maxlength="160"
+                              placeholder="Brief description for search engines">{{ form.meta_description.value|default:form.instance.meta_description|default:'' }}</textarea>
+                    <div class="char-count" id="meta-counter">0/160</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Pricing & Location -->
+        <div class="form-section-card" id="step-3" style="display:none;">
+            <div class="section-header">
+                <div class="section-icon"><i class="bi bi-geo-alt"></i></div>
+                <div>
+                    <h2 class="section-title">Pricing & Location</h2>
+                    <p class="section-description">Set your price and where it's available</p>
+                </div>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="{{ form.price.id_for_label }}" class="form-label required-field"><i class="bi bi-currency-dollar me-1"></i>Price (KSh)</label>
+                    <div class="price-input-wrapper">
+                        <span class="price-prefix">KSh</span>
+                        <input type="number" name="{{ form.price.name }}" id="{{ form.price.id_for_label }}"
+                               class="form-control {% if form.price.errors %}is-invalid{% endif %}" value="{{ form.price.value|default:form.instance.price|default:'' }}"
+                               placeholder="0.00" min="0" step="0.01" required>
+                    </div>
+                    {% if form.price.errors %}
+                        <div class="error-feedback"><i class="bi bi-exclamation-circle me-1"></i>{{ form.price.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                <!-- Pricing dynamic fields (server-side rendered if present) -->
+                <div class="form-group full-width" id="pricing-dynamic-fields" style="display:none;">
+                {% with selected_cat=form.category.value|default:form.instance.category_id %}
+                    {% if selected_cat %}
+                        {% with schema=category_schemas|get_item:selected_cat %}
+                            {% if schema and schema.fields %}
+                                <div class="form-grid" data-server-rendered="true">
+                                {% for field in schema.fields %}
+                                    {% if field.section == 'pricing' %}
+                                        <div class="form-group">
+                                            <label for="dynamic_{{ field.name }}" class="form-label {% if field.required %}required-field{% endif %}">
+                                                {% if field.name == 'price' %}
+                                                    <i class="bi bi-currency-dollar me-1"></i>
+                                                {% else %}
+                                                    <i class="bi bi-card-text me-1"></i>
+                                                {% endif %}
+                                                {{ field.label|default:field.name }}
+                                            </label>
+                                            {% if field.type == 'textarea' %}
+                                                <textarea name="dynamic_{{ field.name }}" id="dynamic_{{ field.name }}" class="form-control" {% if field.required %}required{% endif %}>{{ initial_dynamic_fields|get_item:field.name|default:'' }}</textarea>
+                                            {% elif field.type == 'select' %}
+                                                <select name="dynamic_{{ field.name }}" id="dynamic_{{ field.name }}" class="form-select" {% if field.required %}required{% endif %}>
+                                                    <option value="">Select</option>
+                                                    {% for choice in field.choices %}
+                                                        <option value="{{ choice }}" {% if initial_dynamic_fields|get_item:field.name|stringformat:'s' == choice|stringformat:'s' %}selected{% endif %}>{{ choice }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            {% elif field.type == 'boolean' %}
+                                                <div class="form-check">
+                                                    <input type="checkbox" id="dynamic_{{ field.name }}" name="dynamic_{{ field.name }}" class="form-check-input" value="true" {% if initial_dynamic_fields|get_item:field.name %}checked{% endif %}>
+                                                    <label class="form-check-label" for="dynamic_{{ field.name }}">Yes</label>
+                                                </div>
+                                            {% else %}
+                                                <input type="{% if field.type == 'number' %}number{% else %}text{% endif %}" name="dynamic_{{ field.name }}" id="dynamic_{{ field.name }}" class="form-control" value="{{ initial_dynamic_fields|get_item:field.name|default:'' }}" {% if field.min %}min="{{ field.min }}"{% endif %} {% if field.max %}max="{{ field.max }}"{% endif %} {% if field.required %}required{% endif %}>
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                                </div>
+                            {% endif %}
+                        {% endwith %}
+                    {% endif %}
+                {% endwith %}
+                </div>
+                <div class="form-group">
+                    <label for="{{ form.stock.id_for_label }}" class="form-label required-field"><i class="bi bi-box-seam me-1"></i>Stock</label>
+                    <input type="number" name="{{ form.stock.name }}" id="{{ form.stock.id_for_label }}"
+                           class="form-control {% if form.stock.errors %}is-invalid{% endif %}" value="{{ form.stock.value|default:form.instance.stock|default:'1' }}"
+                           min="1" required>
+                    {% if form.stock.errors %}
+                        <div class="error-feedback"><i class="bi bi-exclamation-circle me-1"></i>{{ form.stock.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                <div class="form-group">
+                    <label class="form-label required-field"><i class="bi bi-geo-alt me-1"></i>Location</label>
+                    <div class="readonly-store" id="listingLocationDisplay"
+                         data-store-location="{{ form.instance.store.location|default:'' }}">
+                        <i class="bi bi-geo-alt me-1"></i>
+                        <span id="listingLocationText">
+                            {% if form.instance.location %}
+                                {{ form.instance.get_location_display }}
+                            {% else %}
+                                Select a store to set location
+                            {% endif %}
+                        </span>
+                        <span class="badge current-badge">Locked</span>
+                    </div>
+                    <small class="form-hint">Listing location follows the store’s location.</small>
+                    <input type="hidden" name="{{ form.location.name }}" id="{{ form.location.id_for_label }}"
+                           value="{{ form.location.value|default:form.instance.location }}">
+                    {% if form.location.errors %}
+                        <div class="error-feedback"><i class="bi bi-exclamation-circle me-1"></i>{{ form.location.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                <div class="form-group">
+                    <label for="{{ form.delivery_option.id_for_label }}" class="form-label required-field"><i class="bi bi-truck me-1"></i>Delivery</label>
+                    <select name="{{ form.delivery_option.name }}" id="{{ form.delivery_option.id_for_label }}" class="form-select {% if form.delivery_option.errors %}is-invalid{% endif %}" required>
+                        <option value="">Choose</option>
+                        {% for val, text in form.delivery_option.field.choices %}{% if val %}
+                            <option value="{{ val }}" {% if form.delivery_option.value == val or form.instance.delivery_option == val %}selected{% endif %}>{{ text }}</option>
+                        {% endif %}{% endfor %}
+                    </select>
+                    {% if form.delivery_option.errors %}
+                        <div class="error-feedback"><i class="bi bi-exclamation-circle me-1"></i>{{ form.delivery_option.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: Photos -->
+        <div class="form-section-card" id="step-4" style="display:none;">
+            <div class="section-header">
+                <div class="section-icon"><i class="bi bi-camera"></i></div>
+                <div>
+                    <h2 class="section-title">Photos</h2>
+                    <p class="section-description">Add clear images – they sell faster!</p>
+                </div>
+            </div>
+
+            <!-- Main image -->
+            <div class="mb-2">
+                <h5 class="form-label {% if not form.instance.pk %}required-field{% endif %}"><i class="bi bi-camera me-1"></i>Main Photo</h5>
+                {% if form.instance.pk and form.instance.image %}
+                <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                    <img src="{{ form.instance.get_image_url }}" alt="Current" style="width:60px; height:60px; object-fit:cover; border-radius:6px;">
+                    <div class="form-check">
+                        <input type="checkbox" name="image-clear" id="image-clear" class="form-check-input">
+                        <label for="image-clear" class="form-check-label small">Remove</label>
+                    </div>
+                </div>
+                {% endif %}
+                <div class="upload-card {% if form.image.errors %}is-invalid{% endif %}" id="main-image-upload-area">
+                    <div class="upload-icon"><i class="bi bi-cloud-arrow-up"></i></div>
+                    <div class="upload-title">Upload Main Photo</div>
+                    <div class="upload-subtitle">Drag or click</div>
+                    <input type="file" name="image" id="id_image" accept="image/*" class="d-none" {% if not form.instance.pk %}required{% endif %}>
+                    <button type="button" class="upload-btn" onclick="document.getElementById('id_image').click()">
+                        <i class="bi bi-folder2-open"></i> Choose
+                    </button>
+                </div>
+                {% if form.image.errors %}
+                    <div class="error-feedback mt-2"><i class="bi bi-exclamation-circle me-1"></i>{{ form.image.errors.0 }}</div>
+                {% endif %}
+                <div class="preview-grid" id="main-image-preview"></div>
+            </div>
+
+            <!-- Additional images -->
+            <div>
+                <h5 class="form-label"><i class="bi bi-images me-1"></i>Additional Photos (up to 9)</h5>
+                <div class="upload-card" id="additional-images-upload-area">
+                    <div class="upload-icon"><i class="bi bi-images"></i></div>
+                    <div class="upload-title">Add More Photos</div>
+                    <div class="upload-subtitle">Drag multiple or click</div>
+                    <input type="file" name="images" id="id_images" accept="image/*" multiple class="d-none">
+                    <button type="button" class="upload-btn" onclick="document.getElementById('id_images').click()">
+                        <i class="bi bi-folder2-open"></i> Choose
+                    </button>
+                </div>
+                <div class="preview-grid" id="additional-images-preview"></div>
+            </div>
+
+            <!-- Existing additional images -->
+            {% if form.instance.pk and existing_images %}
+            <div class="mt-2">
+                <h6 class="fw-bold small">Current Additional Images</h6>
+                <div class="preview-grid">
+                    {% for img in existing_images %}
+                    <div class="preview-item">
+                        <img src="{{ img.get_image_url }}" class="preview-img" alt="">
+                        <input type="checkbox" class="image-remove-checkbox" name="delete_images" value="{{ img.id }}" id="delete_image_{{ img.id }}" style="position:absolute; top:2px; right:2px; z-index:2;">
+                        <label for="delete_image_{{ img.id }}" class="preview-badge" style="background: var(--danger);">Delete</label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Video descriptions -->
+            <div class="mt-3">
+                <h5 class="form-label"><i class="bi bi-camera-reels me-1"></i>Video Descriptions (up to 3)</h5>
+                <div class="upload-card" id="listing-videos-upload-area">
+                    <div class="upload-icon"><i class="bi bi-camera-video"></i></div>
+                    <div class="upload-title">Add short video descriptions</div>
+                    <div class="upload-subtitle">Max 45 seconds · 15MB each (auto‑trim/compress if needed)</div>
+                    <input type="file" name="video_descriptions" id="id_video_descriptions" accept="video/*" multiple class="d-none">
+                    <button type="button" class="upload-btn" onclick="document.getElementById('id_video_descriptions').click()">
+                        <i class="bi bi-folder2-open"></i> Choose
+                    </button>
+                </div>
+                <div class="text-danger small mt-2" id="video-errors" style="display:none;"></div>
+                {% if form.video_descriptions.errors %}
+                    <div class="error-feedback"><i class="bi bi-exclamation-circle me-1"></i>{{ form.video_descriptions.errors.0 }}</div>
+                {% endif %}
+                <div class="preview-grid" id="listing-videos-preview"></div>
+            </div>
+
+            {% if form.instance.pk and existing_videos %}
+            <div class="mt-2">
+                <h6 class="fw-bold small">Current Videos</h6>
+                <div class="preview-grid">
+                    {% for vid in existing_videos %}
+                    <div class="preview-item">
+                        <video src="{{ vid.get_video_url }}" class="preview-img" style="object-fit:cover;" muted playsinline></video>
+                        <input type="checkbox" class="image-remove-checkbox" name="delete_videos" value="{{ vid.id }}" id="delete_video_{{ vid.id }}" style="position:absolute; top:2px; right:2px; z-index:2;">
+                        <label for="delete_video_{{ vid.id }}" class="preview-badge" style="background: var(--danger);">Delete</label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Navigation -->
+        <div class="step-navigation">
+            <button type="button" class="nav-btn prev" id="prevBtn" disabled><i class="bi bi-arrow-left"></i> Prev</button>
+            <button type="button" class="nav-btn next" id="nextBtn">Next <i class="bi bi-arrow-right"></i></button>
+            <button type="submit" class="nav-btn submit" id="submitBtn" style="display:none;">
+                {% if form.instance.pk %}Update{% else %}Create{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ form.errors|json_script:"listingFormErrors" }}
+<script>
+(function() {
+    window.__listingToast = function(message, type = 'info', duration = 5000) {
+        const tryGlobalToast = function() {
+            if (typeof window.showToast === 'function') {
+                window.showToast(message, type, duration);
+                return true;
+            }
+            return false;
+        };
+        if (tryGlobalToast()) return;
+        window.setTimeout(function() {
+            if (tryGlobalToast()) return;
+            const container = document.getElementById('toastContainer') || document.querySelector('.toast-container') || (function() {
+                const el = document.createElement('div');
+                el.className = 'toast-container';
+                el.id = 'toastContainer';
+                document.body.appendChild(el);
+                return el;
+            })();
+            const toast = document.createElement('div');
+            toast.className = `custom-toast toast-${type}`;
+            toast.setAttribute('role', 'alert');
+            const icon = document.createElement('i');
+            icon.className = type === 'error' ? 'bi bi-exclamation-triangle-fill' : 'bi bi-info-circle-fill';
+            const text = document.createElement('div');
+            text.className = 'fw-medium';
+            text.textContent = message;
+            toast.appendChild(icon);
+            toast.appendChild(text);
+            container.appendChild(toast);
+            window.setTimeout(function() {
+                try { toast.remove(); } catch (err) {}
+            }, duration);
+        }, 150);
+    };
+})();
+
+document.addEventListener('DOMContentLoaded', function() {
+    try {
+        const raw = document.getElementById('listingFormErrors');
+        if (raw && raw.textContent) {
+            const data = JSON.parse(raw.textContent || '{}');
+            const shown = new Set();
+            Object.keys(data || {}).forEach(key => {
+                const label = key === '__all__'
+                    ? 'General'
+                    : ((document.querySelector(`[name="${key}"]`)?.closest('.form-group')?.querySelector('.form-label')?.textContent || key)
+                        .replace(/\s+/g, ' ')
+                        .replace(/\*/g, '')
+                        .trim());
+                (data[key] || []).forEach(msg => {
+                    const toastText = `${label}: ${msg}`;
+                    if (!shown.has(toastText)) {
+                        shown.add(toastText);
+                        window.__listingToast(toastText, 'error');
+                    }
+                });
+            });
+        }
+    } catch (e) {}
+    // Dynamic fields rendering logic
+    try {
+    (function(){
+        const schemasElement = document.getElementById('category-schemas');
+        let categorySchemas = {};
+        if (schemasElement) {
+            try {
+                categorySchemas = JSON.parse(schemasElement.textContent || '{}');
+            } catch (e) {
+                console.warn('Failed to parse category schemas JSON', e);
+                categorySchemas = {};
+            }
+        }
+        const categorySelect = document.getElementById('{{ form.category.id_for_label }}');
+        const dynamicContainer = document.getElementById('dynamic-fields-container');
+        const dynamicFieldsDiv = document.getElementById('dynamic-fields');
+        const dynamicInput = document.getElementById('id_dynamic_fields');
+
+        // Try to load the server-provided initial dynamic fields JSON (safe via json_script).
+        let existingDynamic = {};
+        try {
+            const initEl = document.getElementById('initial-dynamic-fields');
+            if (initEl) {
+                existingDynamic = JSON.parse(initEl.textContent || '{}');
+                if (dynamicInput) dynamicInput.value = JSON.stringify(existingDynamic);
+            } else {
+                existingDynamic = JSON.parse(dynamicInput.value || '{}');
+            }
+        } catch (e) {
+            existingDynamic = {};
+        }
+
+        function renderDynamicFields(categoryId, force=false){
+            const schema = categorySchemas[String(categoryId)];
+            // If server rendered fields are present, avoid overwriting them unless forced
+            try{
+                const serverMarker = dynamicFieldsDiv && dynamicFieldsDiv.querySelector && dynamicFieldsDiv.querySelector('[data-server-rendered]');
+                if(serverMarker && !force){
+                    // ensure the container is visible
+                    document.getElementById('dynamic-fields-container').style.display = 'block';
+                    return;
+                }
+            }catch(e){/* ignore and continue rendering */}
+            if(!schema || !schema.fields || !schema.fields.length){
+                dynamicContainer.style.display = 'none';
+                dynamicFieldsDiv.innerHTML = '';
+                return;
+            }
+            dynamicContainer.style.display = 'block';
+            let html = '<div class="form-grid">';
+            schema.fields.forEach(field => {
+                const fname = field.name;
+                const id = 'dynamic_' + fname;
+                const value = existingDynamic[fname] !== undefined ? existingDynamic[fname] : '';
+                const required = field.required ? 'required' : '';
+                html += `<div class="form-group">`;
+                html += `<label for="${id}" class="form-label ${field.required ? 'required-field' : ''}">${field.label || fname}</label>`;
+                if(field.type === 'textarea'){
+                    html += `<textarea name="${id}" id="${id}" class="form-control" ${required}>${String(value)}</textarea>`;
+                } else if(field.type === 'select'){
+                    html += `<select name="${id}" id="${id}" class="form-select" ${required}><option value="">Select</option>`;
+                    (field.choices || []).forEach(choice => {
+                        const sel = String(value) === String(choice) ? 'selected' : '';
+                        html += `<option value="${choice}" ${sel}>${choice}</option>`;
+                    });
+                    html += `</select>`;
+                } else if(field.type === 'boolean'){
+                    const checked = value === true || String(value) === 'true' ? 'checked' : '';
+                    html += `<div class="form-check"><input type="checkbox" id="${id}" name="${id}" class="form-check-input" value="true" ${checked}><label class="form-check-label" for="${id}">Yes</label></div>`;
+                } else {
+                    const inputType = (field.type === 'number') ? 'number' : 'text';
+                    const min = field.min ? `min="${field.min}"` : '';
+                    const max = field.max ? `max="${field.max}"` : '';
+                    html += `<input type="${inputType}" id="${id}" name="${id}" class="form-control" value="${String(value).replace(/\"/g,'&quot;')}" ${min} ${max} ${required}>`;
+                }
+                html += `</div>`;
+            });
+            html += '</div>';
+            dynamicFieldsDiv.innerHTML = html;
+        }
+        // Hide standard fields based on the selected category
+        function applyStandardFieldsVisibility(categoryId) {
+            const schema = categorySchemas[String(categoryId)] || {};
+            const hideFields = schema.hide_standard_fields || [];
+
+            document.querySelectorAll('.standard-field-container').forEach(container => {
+                const fieldName = container.dataset.field;
+                container.style.display = hideFields.includes(fieldName) ? 'none' : '';
+            });
+        }
+
+        // Call it whenever category changes
+        if (categorySelect) {
+            categorySelect.addEventListener('change', function() {
+                // … your existing dynamic fields render …
+                applyStandardFieldsVisibility(this.value);
+            });
+
+            // Also call on page load for the initially selected category
+            if (categorySelect.value) {
+                applyStandardFieldsVisibility(categorySelect.value);
+            }
+        }
+
+        if(categorySelect){
+            // initial render
+            if(categorySelect.value) renderDynamicFields(categorySelect.value);
+            categorySelect.addEventListener('change', function(){
+                // reset existingDynamic when category changes
+                existingDynamic = {};
+                renderDynamicFields(this.value, true);
+            });
+        }
+
+        // On form submit collect values into hidden input
+        const dynamicFormEl = document.getElementById('listing-form');
+        if(dynamicFormEl){
+            dynamicFormEl.addEventListener('submit', function(){
+                if (!dynamicFieldsDiv || !dynamicInput) return;
+                const data = {};
+                const inputs = dynamicFieldsDiv.querySelectorAll('[name^="dynamic_"]');
+                inputs.forEach(inp => {
+                    const key = inp.name.replace(/^dynamic_/, '').replace(/^dynamic_/, '');
+                    if(inp.type === 'checkbox'){
+                        data[key] = inp.checked;
+                    } else if(inp.type === 'number'){
+                        data[key] = inp.value ? Number(inp.value) : null;
+                    } else {
+                        data[key] = inp.value;
+                    }
+                });
+                dynamicInput.value = JSON.stringify(data);
+            });
+        }
+    })();
+    } catch (e) {
+        console.warn('Dynamic fields init failed', e);
+    }
+
+    // ===== STEP WIZARD =====
+    const formEl = document.getElementById('listing-form');
+    const steps = [1, 2, 3, 4];
+    const totalSteps = steps.length;
+    const stepElements = Array.from(document.querySelectorAll('.progress-card .step'));
+    const sections = {
+        1: document.getElementById('step-1'),
+        2: document.getElementById('step-2'),
+        3: document.getElementById('step-3'),
+        4: document.getElementById('step-4')
+    };
+    const stepCopy = {
+        1: { title: 'Basic information', subtitle: 'Start with the store, category, condition, and buyer-facing description.' },
+        2: { title: 'Additional details', subtitle: 'Add searchable specifics that help buyers compare your item.' },
+        3: { title: 'Price and delivery', subtitle: 'Set the price, stock, location, and delivery option buyers will see.' },
+        4: { title: 'Photos and videos', subtitle: 'Add clear media so buyers can trust what they are purchasing.' }
+    };
+    let currentStep = 1;
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const submitBtn = document.getElementById('submitBtn');
+    const heroTitle = document.querySelector('.form-title-main');
+    const heroSubtitle = document.querySelector('.form-subtitle-main');
+    if (!formEl || !prevBtn || !nextBtn || !submitBtn || !sections[1]) {
+        return;
+    }
+
+    function toast(message, type = 'info') {
+        if (typeof window.__listingToast === 'function') {
+            window.__listingToast(message, type);
+        } else if (typeof window.showToast === 'function') {
+            window.showToast(message, type);
+        } else if (typeof window.alert === 'function') {
+            window.alert(message);
+        }
+    }
+
+    function cleanLabelText(text) {
+        return (text || '').replace(/\*/g, '').replace(/\s+/g, ' ').trim();
+    }
+
+    function getFieldLabel(field) {
+        if (!field) return 'a required field';
+        if (field.id) {
+            const explicit = document.querySelector(`label[for="${field.id}"]`);
+            if (explicit) return cleanLabelText(explicit.textContent) || 'a required field';
+        }
+        const wrap = field.closest('.form-group, .mb-2, .mt-3');
+        if (wrap) {
+            const label = wrap.querySelector('.form-label, label, h5');
+            if (label) return cleanLabelText(label.textContent) || 'a required field';
+        }
+        return field.name ? field.name.replace(/_/g, ' ') : 'a required field';
+    }
+
+    function isFieldSkippable(field) {
+        if (!field || field.disabled) return true;
+        const type = (field.type || '').toLowerCase();
+        if (type === 'file') return false;
+        if (type === 'hidden') return true;
+        if (field.hasAttribute('data-skip-validation')) return true;
+        const style = window.getComputedStyle(field);
+        if (style.display === 'none' || style.visibility === 'hidden') return true;
+        if (field.offsetParent === null && style.position !== 'fixed') return true;
+        return false;
+    }
+
+    function setFieldInvalid(field, message) {
+        try {
+            field.classList.add('is-invalid');
+            if (field.type === 'file') {
+                const uploadCard = field.closest('.upload-card') || document.querySelector(`[onclick*="${field.id}"]`)?.closest('.upload-card');
+                if (uploadCard) {
+                    uploadCard.classList.add('is-invalid');
+                    uploadCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            } else {
+                field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            field.focus({ preventScroll: true });
+        } catch (err) {}
+        toast(message || `Please fill: ${getFieldLabel(field)}`, 'warning');
+    }
+
+    function clearFieldInvalid(field) {
+        try {
+            field.classList.remove('is-invalid');
+            if (field.type === 'file') {
+                const uploadCard = field.closest('.upload-card') || document.querySelector(`[onclick*="${field.id}"]`)?.closest('.upload-card');
+                if (uploadCard) uploadCard.classList.remove('is-invalid');
+            }
+        } catch (err) {}
+    }
+
+    function fieldHasValue(field) {
+        const tag = (field.tagName || '').toLowerCase();
+        const type = (field.type || '').toLowerCase();
+        if (type === 'checkbox') return field.checked;
+        if (type === 'file') {
+            const isUpdate = formEl.dataset.isUpdate === 'true';
+            return isUpdate || (field.files && field.files.length > 0);
+        }
+        if (tag === 'select' || tag === 'textarea' || tag === 'input') {
+            return String(field.value || '').trim() !== '';
+        }
+        return true;
+    }
+
+    function validateStep(step, showMessages = true) {
+        const section = sections[step];
+        if (!section) return true;
+        const requiredFields = Array.from(section.querySelectorAll('[required]'));
+        for (const field of requiredFields) {
+            if (isFieldSkippable(field)) continue;
+            if (!fieldHasValue(field)) {
+                if (showMessages) setFieldInvalid(field);
+                return false;
+            }
+            clearFieldInvalid(field);
+        }
+        return true;
+    }
+
+    const categorySchemasElement = document.getElementById('category-schemas');
+    let categorySchemas = {};
+    try {
+        categorySchemas = JSON.parse(categorySchemasElement?.textContent || '{}');
+    } catch (e) {
+        categorySchemas = {};
+    }
+
+    function getDynamicFieldStep(errorKey) {
+        const fieldName = errorKey.replace(/^dynamic_/, '');
+        const selectedCategory = document.getElementById('{{ form.category.id_for_label }}')?.value;
+        const schema = selectedCategory ? categorySchemas[selectedCategory] : null;
+        if (schema && Array.isArray(schema.fields)) {
+            const fieldDef = schema.fields.find((f) => String(f.name) === String(fieldName));
+            if (fieldDef) {
+                return fieldDef.section === 'pricing' ? 3 : 2;
+            }
+        }
+        return 2;
+    }
+
+    function mapErrorKeyToStep(key) {
+        const mapping = {
+            title: 1,
+            category: 1,
+            condition: 1,
+            store: 1,
+            description: 1,
+            brand: 2,
+            model: 2,
+            color: 2,
+            material: 2,
+            dimensions: 2,
+            weight: 2,
+            meta_description: 2,
+            price: 3,
+            stock: 3,
+            location: 3,
+            delivery_option: 3,
+            image: 4,
+            images: 4,
+            video_descriptions: 4
+        };
+        if (key.startsWith('dynamic_')) {
+            return getDynamicFieldStep(key);
+        }
+        return mapping[key] || null;
+    }
+
+    function findFirstErrorStep() {
+        const firstError = formEl.querySelector('.is-invalid, .error-feedback, .text-danger');
+        if (firstError) {
+            const section = firstError.closest('.form-section-card[id^="step-"]');
+            if (section) {
+                const match = section.id.match(/step-(\d+)/);
+                if (match) return parseInt(match[1], 10);
+            }
+        }
+
+        const raw = document.getElementById('listingFormErrors');
+        if (!raw || !raw.textContent) return null;
+
+        try {
+            const errors = JSON.parse(raw.textContent || '{}');
+            let errorStep = null;
+            Object.keys(errors).forEach((key) => {
+                if (key === '__all__') return;
+                const step = mapErrorKeyToStep(key);
+                if (step && (errorStep === null || step < errorStep)) {
+                    errorStep = step;
+                }
+            });
+            if (errorStep) return errorStep;
+            if (errors.__all__) {
+                return 2;
+            }
+        } catch (e) {
+            // ignore parse errors and fall back to DOM lookup
+        }
+        return null;
+    }
+
+    function showStep(step) {
+        currentStep = Math.max(1, Math.min(totalSteps, step));
+        Object.entries(sections).forEach(([key, section]) => {
+            if (!section) return;
+            const active = parseInt(key, 10) === currentStep;
+            section.style.display = active ? 'block' : 'none';
+            section.classList.toggle('active-step', active);
+            section.setAttribute('aria-hidden', active ? 'false' : 'true');
+        });
+        stepElements.forEach((el) => {
+            const stepNum = parseInt(el.dataset.step || '0', 10);
+            el.classList.toggle('active', stepNum === currentStep);
+            el.classList.toggle('completed', stepNum < currentStep);
+            el.setAttribute('aria-current', stepNum === currentStep ? 'step' : 'false');
+        });
+        const copy = stepCopy[currentStep];
+        if (copy && heroTitle) heroTitle.textContent = copy.title;
+        if (copy && heroSubtitle) heroSubtitle.textContent = copy.subtitle;
+        prevBtn.disabled = currentStep === 1;
+        nextBtn.style.display = currentStep === totalSteps ? 'none' : 'inline-flex';
+        submitBtn.style.display = currentStep === totalSteps ? 'inline-flex' : 'none';
+    }
+
+    const serverErrorStep = findFirstErrorStep();
+    if (serverErrorStep) currentStep = serverErrorStep;
+    showStep(currentStep);
+    if (serverErrorStep) {
+        const topErrorBox = document.querySelector('.form-section-card .section-title') || document.querySelector('.error-feedback, .text-danger');
+        if (topErrorBox && topErrorBox.scrollIntoView) {
+            topErrorBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    nextBtn.addEventListener('click', function() {
+        if (!validateStep(currentStep, true)) {
+            toast('Please complete the highlighted field before continuing.', 'warning');
+            return;
+        }
+        showStep(currentStep + 1);
+    });
+
+    prevBtn.addEventListener('click', function() {
+        showStep(currentStep - 1);
+    });
+
+    stepElements.forEach((stepEl) => {
+        stepEl.addEventListener('click', function() {
+            const requested = parseInt(stepEl.dataset.step || '1', 10);
+            if (requested <= currentStep) {
+                showStep(requested);
+                return;
+            }
+            for (let step = currentStep; step < requested; step += 1) {
+                if (!validateStep(step, true)) {
+                    showStep(step);
+                    return;
+                }
+            }
+            showStep(requested);
+        });
+    });
+
+    formEl.addEventListener('submit', function(e) {
+        for (const step of steps) {
+            if (!validateStep(step, true)) {
+                e.preventDefault();
+                showStep(step);
+                toast('Please complete the highlighted fields before saving.', 'warning');
+                return;
+            }
+        }
+        if (typeof isTrimmingVideo !== 'undefined' && isTrimmingVideo) {
+            e.preventDefault();
+            toast('Video is still processing. Please wait a moment.', 'warning');
+        }
+    });
+
+    window.__listingWizardBound = true;
+    formEl.setAttribute('data-wizard-bound', 'true');
+
+    // Character counters
+    const titleField = document.getElementById('{{ form.title.id_for_label }}');
+    const titleCounter = document.getElementById('title-counter');
+    if (titleField && titleCounter) {
+        titleField.addEventListener('input', () => titleCounter.textContent = titleField.value.length + '/200');
+        titleCounter.textContent = titleField.value.length + '/200';
+    }
+    const descField = document.getElementById('{{ form.description.id_for_label }}');
+    const descCounter = document.getElementById('description-counter');
+    if (descField && descCounter) {
+        descField.addEventListener('input', () => descCounter.textContent = descField.value.length + '/2000');
+        descCounter.textContent = descField.value.length + '/2000';
+    }
+    const metaField = document.getElementById('{{ form.meta_description.id_for_label }}');
+    const metaCounter = document.getElementById('meta-counter');
+    if (metaField && metaCounter) {
+        metaField.addEventListener('input', () => metaCounter.textContent = metaField.value.length + '/160');
+        metaCounter.textContent = metaField.value.length + '/160';
+    }
+
+    // Image preview (simplified)
+    const mainInput = document.getElementById('id_image');
+    const mainPreview = document.getElementById('main-image-preview');
+    if (mainInput) {
+        mainInput.addEventListener('change', function() {
+            const file = this.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    mainPreview.innerHTML = `<div class="preview-item"><img src="${e.target.result}" class="preview-img"><span class="preview-badge">New</span></div>`;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    const additionalInput = document.getElementById('id_images');
+    const additionalPreview = document.getElementById('additional-images-preview');
+    if (additionalInput) {
+        additionalInput.addEventListener('change', function() {
+            const files = Array.from(this.files);
+            additionalPreview.innerHTML = '';
+            files.forEach(file => {
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = e => {
+                        const div = document.createElement('div');
+                        div.className = 'preview-item';
+                        div.innerHTML = `<img src="${e.target.result}" class="preview-img"><span class="preview-badge">New</span>`;
+                        additionalPreview.appendChild(div);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        });
+    }
+
+    // Video preview + validation (45s max, 15MB)
+    const videoInput = document.getElementById('id_video_descriptions');
+    const videoPreview = document.getElementById('listing-videos-preview');
+    const videoErrors = document.getElementById('video-errors');
+    let listingVideoFiles = [];
+    let isTrimmingVideo = false;
+    let pendingVideoChecks = 0;
+    if (videoInput) {
+        videoInput.addEventListener('change', function() {
+            const files = Array.from(this.files || []);
+            listingVideoFiles = files;
+            let invalid = false;
+            if (videoErrors) {
+                videoErrors.style.display = 'none';
+                videoErrors.textContent = '';
+            }
+            if (videoPreview) videoPreview.innerHTML = '';
+            if (files.length > 3) {
+                invalid = true;
+                if (videoErrors) {
+                    videoErrors.textContent = 'You can upload up to 3 video descriptions.';
+                    videoErrors.style.display = 'block';
+                }
+            }
+            pendingVideoChecks = 0;
+
+            files.forEach((file) => {
+                if (!file.type.startsWith('video/')) {
+                    invalid = true;
+                    if (videoErrors) {
+                        videoErrors.textContent = `${file.name || 'Selected file'} is not a valid video file.`;
+                        videoErrors.style.display = 'block';
+                    }
+                    return;
+                }
+                const url = URL.createObjectURL(file);
+                const vid = document.createElement('video');
+                vid.src = url;
+                vid.muted = true;
+                vid.playsInline = true;
+                vid.preload = 'metadata';
+                const wrap = document.createElement('div');
+                wrap.className = 'preview-item';
+                wrap.appendChild(vid);
+                const badge = document.createElement('span');
+                badge.className = 'preview-badge';
+                badge.textContent = 'New';
+                wrap.appendChild(badge);
+                const processingBadge = document.createElement('span');
+                processingBadge.className = 'video-processing-badge';
+                processingBadge.innerHTML = '<span class="video-spinner"></span> Checking';
+                wrap.appendChild(processingBadge);
+                if (videoPreview) videoPreview.appendChild(wrap);
+
+                pendingVideoChecks += 1;
+                vid.addEventListener('loadedmetadata', () => {
+                    pendingVideoChecks = Math.max(0, pendingVideoChecks - 1);
+                    const tooLong = vid.duration > 45;
+                    const tooLarge = file.size > 15 * 1024 * 1024;
+                    if (processingBadge.parentNode) processingBadge.remove();
+                    const status = document.createElement('span');
+                    status.className = (tooLong || tooLarge) ? 'video-status-badge' : 'video-ready-badge';
+                    status.innerHTML = (tooLong || tooLarge)
+                        ? `<i class="bi bi-exclamation-circle"></i> ${tooLong ? 'Over 45s' : 'Over 15MB'}`
+                        : '<i class="bi bi-check-circle-fill"></i> Ready';
+                    wrap.appendChild(status);
+                    if (tooLong || tooLarge) {
+                        invalid = true;
+                        if (videoErrors) {
+                            videoErrors.textContent = tooLong
+                                ? `${file.name || 'Video'} is longer than 45 seconds.`
+                                : `${file.name || 'Video'} is larger than 15MB.`;
+                            videoErrors.style.display = 'block';
+                        }
+                    }
+                    if (submitBtn) submitBtn.disabled = invalid || pendingVideoChecks > 0;
+                    URL.revokeObjectURL(url);
+                }, { once: true });
+                vid.addEventListener('error', () => {
+                    pendingVideoChecks = Math.max(0, pendingVideoChecks - 1);
+                    invalid = true;
+                    if (processingBadge.parentNode) processingBadge.remove();
+                    const status = document.createElement('span');
+                    status.className = 'video-status-badge';
+                    status.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Invalid';
+                    wrap.appendChild(status);
+                    if (videoErrors) {
+                        videoErrors.textContent = `${file.name || 'Video'} could not be read.`;
+                        videoErrors.style.display = 'block';
+                    }
+                    if (submitBtn) submitBtn.disabled = true;
+                    URL.revokeObjectURL(url);
+                }, { once: true });
+            });
+            if (submitBtn) submitBtn.disabled = invalid || pendingVideoChecks > 0;
+        });
+    }
+
+    // Preserve the restored step when the page is loaded with validation errors.
+    if (!serverErrorStep) {
+        showStep(1);
+    }
+});
+</script>
+{% if seller_ai_copilot_access %}
+<script>
+// Auto-suggest integration with ws/agent/ for creative listing suggestions
+(function(){
+    const titleEl = document.getElementById('{{ form.title.id_for_label }}');
+    if(!titleEl) return;
+    let ws;
+    try{
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        ws = new WebSocket(proto + '://' + location.host + '/ws/agent/');
+    }catch(e){ console.warn('Agent WS init failed', e); ws = null; }
+
+    const debounce = (fn, wait)=>{ let t; return (...args)=>{ clearTimeout(t); t = setTimeout(()=>fn(...args), wait); }; };
+
+    function sendGenerate(title){
+        if(!ws || ws.readyState !== WebSocket.OPEN){
+            // try to reconnect
+            try{ const proto = location.protocol === 'https:' ? 'wss' : 'ws'; ws = new WebSocket(proto + '://' + location.host + '/ws/agent/'); }catch(e){}
+            setTimeout(()=>sendGenerate(title), 500);
+            return;
+        }
+        ws.send(JSON.stringify({ type: 'generate', title }));
+    }
+
+    function applySuggestion(data){
+        try{
+            // description
+            if(data.description){
+                const desc = document.getElementById('{{ form.description.id_for_label }}');
+                if(desc && (!desc.value || desc.value.length < 20)) desc.value = data.description;
+            }
+            // meta_description
+            if(data.description){
+                const meta = document.getElementById('{{ form.meta_description.id_for_label }}');
+                if(meta && (!meta.value || meta.value.length < 20)) meta.value = data.description.slice(0,160);
+            }
+            // category: if exact id provided use it, otherwise fuzzy-match by option text
+            const cat = document.getElementById('{{ form.category.id_for_label }}');
+            if(cat && data.category_id){
+                try{ cat.value = String(data.category_id); cat.dispatchEvent(new Event('change')); }
+                catch(e){}
+            } else if(cat && data.category){
+                const target = String(data.category).toLowerCase();
+                for(const opt of Array.from(cat.options)){
+                    if(opt.text && opt.text.toLowerCase().includes(target.split('>').slice(-1)[0].trim())){ opt.selected = true; break; }
+                }
+                cat.dispatchEvent(new Event('change'));
+            }
+            // key_features: show creative suggestions UI near description
+            if(data.key_features && Array.isArray(data.key_features)){
+                let container = document.getElementById('ai-features-suggestions');
+                if(!container){
+                    container = document.createElement('div');
+                    container.id = 'ai-features-suggestions';
+                    container.style.marginTop = '.5rem';
+                    container.innerHTML = '<label class="form-label">AI Suggestions</label><div style="display:flex;flex-wrap:wrap;gap:.5rem" id="ai-features-list"></div>';
+                    const descField = document.getElementById('{{ form.description.id_for_label }}');
+                    if(descField && descField.parentNode) descField.parentNode.appendChild(container);
+                }
+                const list = document.getElementById('ai-features-list');
+                list.innerHTML = '';
+                data.key_features.forEach(f => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'btn btn-outline-secondary btn-sm';
+                    btn.textContent = f;
+                    btn.onclick = ()=>{
+                        const desc = document.getElementById('{{ form.description.id_for_label }}');
+                        if(desc){ desc.value = desc.value + '\n- ' + f; }
+                    };
+                    list.appendChild(btn);
+                });
+            }
+            // Prefill common standard or dynamic fields if AI returned them
+            const standardIds = {
+                brand: '{{ form.brand.id_for_label }}',
+                model: '{{ form.model.id_for_label }}',
+                color: '{{ form.color.id_for_label }}',
+                material: '{{ form.material.id_for_label }}',
+                dimensions: '{{ form.dimensions.id_for_label }}',
+                weight: '{{ form.weight.id_for_label }}',
+                price: '{{ form.price.id_for_label }}',
+                meta_description: '{{ form.meta_description.id_for_label }}'
+            };
+            const fieldNames = ['brand','model','color','material','dimensions','weight','price','meta_description'];
+            fieldNames.forEach(fn => {
+                if(data[fn] !== undefined && data[fn] !== null){
+                    // try standard form field id first
+                    try{
+                        const stdEl = document.getElementById(standardIds[fn]);
+                        if(stdEl){
+                            if(stdEl.tagName && stdEl.tagName.toLowerCase() === 'select'){
+                                // try to match option by value or text
+                                let matched = false;
+                                for(const opt of Array.from(stdEl.options)){
+                                    if(String(opt.value) === String(data[fn]) || (opt.text && opt.text.toLowerCase().includes(String(data[fn]).toLowerCase()))){ opt.selected = true; matched = true; break; }
+                                }
+                                if(matched) stdEl.dispatchEvent(new Event('change'));
+                            } else if(stdEl.type === 'checkbox'){
+                                stdEl.checked = !!data[fn];
+                            } else {
+                                stdEl.value = data[fn];
+                            }
+                        }
+                    }catch(e){ /* ignore if template var not present */ }
+
+                    // try dynamic field id 'dynamic_<name>'
+                    try{
+                        const dyn = document.getElementById('dynamic_' + fn);
+                        if(dyn){
+                            if(dyn.type === 'checkbox') dyn.checked = !!data[fn];
+                            else dyn.value = data[fn];
+                        }
+                    }catch(e){}
+                }
+            });
+        }catch(e){ console.warn('applySuggestion failed', e); }
+    }
+
+    if(ws){
+        ws.addEventListener('message', function(ev){
+            try{ const d = JSON.parse(ev.data || '{}'); if(d.type === 'generate_response' && d.ok){ applySuggestion(d.data || {}); } }
+            catch(e){ console.warn('Invalid agent message', e); }
+        });
+    }
+
+    const sendDebounced = debounce(function(){ const title = (titleEl.value||'').trim(); if(title.length>3) sendGenerate(title); }, 800);
+    titleEl.addEventListener('input', sendDebounced);
+    // Also trigger on blur
+    titleEl.addEventListener('blur', function(){ const title = (titleEl.value||'').trim(); if(title.length>3) sendGenerate(title); });
+})();
+</script>
+{% endif %}
+ {{ location_choices|json_script:"listingLocationChoices" }} 
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const locationInput = document.getElementById('{{ form.location.id_for_label }}');
+    const locationTextEl = document.getElementById('listingLocationText');
+    const storeSelect = document.getElementById('id_store');
+    const choicesEl = document.getElementById('listingLocationChoices');
+    const locationChoices = (() => {
+        try {
+            return JSON.parse(choicesEl?.textContent || '[]').filter(item => Array.isArray(item) && item[0]);
+        } catch (e) { return []; }
+    })();
+
+    const normalize = (val) => (val || '').toString().toLowerCase().replace(/[_\s-]+/g, '');
+    const inferLocationCode = (storeLocation) => {
+        const text = (storeLocation || '').toString().toLowerCase();
+        if (!text) return '';
+        const textNorm = normalize(text);
+        for (const [code, label] of locationChoices) {
+            const codeNorm = normalize(code);
+            const labelNorm = (label || '').toString().toLowerCase();
+            if (textNorm.includes(codeNorm) || codeNorm.includes(textNorm)) return code;
+            if (labelNorm && (text.includes(labelNorm) || labelNorm.includes(text))) return code;
+            const tokens = labelNorm.split(/[\s-]+/).filter(t => t.length > 3);
+            if (tokens.some(t => text.includes(t))) return code;
+        }
+        return '';
+    };
+
+    const updateLocationFromStore = () => {
+        if (!locationInput) return;
+        let storeLocation = '';
+        if (storeSelect) {
+            if (storeSelect.tagName === 'SELECT') {
+                const opt = storeSelect.options[storeSelect.selectedIndex];
+                storeLocation = opt ? (opt.dataset.location || '') : '';
+            } else {
+                storeLocation = storeSelect.dataset.location || '';
+            }
+        }
+        if (!storeLocation) {
+            storeLocation = (document.getElementById('listingLocationDisplay')?.dataset.storeLocation || '').trim();
+        }
+        const code = inferLocationCode(storeLocation);
+        if (code) {
+            locationInput.value = code;
+            const match = locationChoices.find(c => c[0] === code);
+            if (locationTextEl && match) locationTextEl.textContent = match[1];
+        } else if (locationTextEl) {
+            locationTextEl.textContent = storeLocation || 'Select a store to set location';
+        }
+    };
+
+    if (storeSelect && storeSelect.tagName === 'SELECT') {
+        storeSelect.addEventListener('change', updateLocationFromStore);
+    }
+    updateLocationFromStore();
+});
+</script>
+
+<!-- Draft Retention -->
+<script>
+(function() {
+    const DRAFT_KEY = 'listing_form_draft_{{ form.instance.pk|default:"new" }}';
+    const AUTOSAVE_INTERVAL = 5000; // 5 seconds
+    let autosaveTimer = null;
+
+    function saveDraft() {
+        try {
+            const form = document.getElementById('listing-form');
+            if (!form) return;
+
+            const draft = {};
+            const formData = new FormData(form);
+
+            // Save all text inputs, textareas, and selects
+            for (const [key, value] of formData.entries()) {
+                if (!key.startsWith('csrfmiddlewaretoken')) {
+                    // Skip file inputs and non-serializable values
+                    if (value instanceof File || typeof value === 'object') {
+                        continue;
+                    }
+                    if (draft[key]) {
+                        // Handle multiple values (like checkboxes)
+                        if (!Array.isArray(draft[key])) {
+                            draft[key] = [draft[key]];
+                        }
+                        draft[key].push(value);
+                    } else {
+                        draft[key] = value;
+                    }
+                }
+            }
+
+            // Also save custom dynamic fields if present
+            const dynamicInput = document.getElementById('id_dynamic_fields');
+            if (dynamicInput) {
+                draft['dynamic_fields'] = dynamicInput.value;
+            }
+
+            localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+            console.log('Draft saved at', new Date().toLocaleTimeString());
+        } catch (e) {
+            console.warn('Failed to save draft:', e);
+        }
+    }
+
+    function restoreDraft() {
+        try {
+            const saved = localStorage.getItem(DRAFT_KEY);
+            if (!saved) return;
+
+            const draft = JSON.parse(saved);
+            const form = document.getElementById('listing-form');
+            if (!form) return;
+
+            Object.keys(draft).forEach(key => {
+                if (key === 'dynamic_fields') return; // Handle separately
+
+                const elements = form.elements.namedItem(key);
+                if (!elements) return;
+
+                const value = draft[key];
+
+                if (elements instanceof NodeList || Array.isArray(elements)) {
+                    // Handle multiple elements (checkboxes, radio buttons)
+                    elements.forEach(el => {
+                        if (el.type === 'checkbox' || el.type === 'radio') {
+                            if (Array.isArray(value)) {
+                                el.checked = value.includes(el.value);
+                            } else {
+                                el.checked = el.value === value;
+                            }
+                        } else {
+                            el.value = value;
+                        }
+                    });
+                } else {
+                    const el = elements;
+                    if (el.type === 'checkbox') {
+                        el.checked = value === 'on' || value === 'true' || value === true;
+                    } else if (el.type === 'radio') {
+                        el.checked = el.value === value;
+                    } else {
+                        el.value = value;
+                    }
+
+                    // Trigger change event for select elements to update dependent fields
+                    if (el.tagName === 'SELECT') {
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+            });
+
+            // Restore dynamic fields if present
+            if (draft['dynamic_fields']) {
+                const dynamicInput = document.getElementById('id_dynamic_fields');
+                if (dynamicInput) {
+                    dynamicInput.value = draft['dynamic_fields'];
+                }
+            }
+
+            console.log('Draft restored at', new Date().toLocaleTimeString());
+            window.__listingToast('Your draft has been restored', 'info', 4000);
+        } catch (e) {
+            console.warn('Failed to restore draft:', e);
+        }
+    }
+
+    function clearDraft() {
+        try {
+            localStorage.removeItem(DRAFT_KEY);
+            console.log('Draft cleared');
+        } catch (e) {
+            console.warn('Failed to clear draft:', e);
+        }
+    }
+
+    // Set up autosave on form input
+    function setupAutosave() {
+        const form = document.getElementById('listing-form');
+        if (!form) return;
+
+        form.addEventListener('input', function() {
+            // Clear existing timer
+            if (autosaveTimer) {
+                clearTimeout(autosaveTimer);
+            }
+            // Schedule new save
+            autosaveTimer = setTimeout(saveDraft, AUTOSAVE_INTERVAL);
+        });
+
+    }
+
+    // Restore draft on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Only restore if it's a new listing (not an existing one being edited)
+        const isUpdate = document.getElementById('listing-form')?.dataset.isUpdate === 'true';
+        if (!isUpdate) {
+            restoreDraft();
+        }
+        setupAutosave();
+    });
+
+    // Save draft before user leaves the page (if form has unsaved changes)
+    window.addEventListener('beforeunload', function(e) {
+        saveDraft();
+    });
+})();
+</script>
+{% endblock %}

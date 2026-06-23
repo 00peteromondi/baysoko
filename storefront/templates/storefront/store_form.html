@@ -1,0 +1,977 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% load static %}
+
+{% block title %}{% if creating_store %}Create New Store{% else %}Edit {{ store.name }}{% endif %} – Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== ULTRA‑COMPACT STYLES ===== */
+    :root {
+        --form-max-width: 1200px;
+    }
+
+    .form-hero {
+        background: linear-gradient(135deg, #073B4C 0%, #118AB2 100%);
+        color: white;
+        padding: 0.75rem 0;
+        text-align: center;
+    }
+    .form-hero-content {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 0 0.5rem;
+    }
+    .form-hero .badge {
+        background: rgba(255,255,255,0.15);
+        border-radius: 50px;
+        padding: 0.2rem 0.8rem;
+        font-size: 0.8rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        margin-bottom: 0.2rem;
+    }
+    .form-title-main {
+        font-size: 1.6rem;
+        font-weight: 800;
+        margin-bottom: 0.1rem;
+    }
+    .form-subtitle-main {
+        font-size: 0.9rem;
+        opacity: 0.9;
+        margin: 0;
+    }
+
+    .form-container {
+        max-width: var(--form-max-width);
+        margin: 0.5rem auto 1rem;
+        padding: 0 0.5rem;
+        display: grid;
+        grid-template-columns: 1fr 280px;
+        gap: 0.75rem;
+    }
+
+    /* Main Form Card */
+    .main-form-card {
+        background: var(--card-bg);
+        border-radius: 0.75rem;
+        padding: 0.75rem;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+    }
+    .form-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.25rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .form-header-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 6px;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1rem;
+    }
+    .form-header-text h2 {
+        font-size: 1.2rem;
+        font-weight: 700;
+        margin: 0;
+    }
+    .form-header-text p {
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+        margin: 0;
+    }
+
+    /* Section Cards */
+    .form-section-card {
+        background: var(--bg-secondary);
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        margin-bottom: 0.75rem;
+        border: 1px solid var(--border-color);
+    }
+    .section-title {
+        font-size: 1rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+    .section-title i {
+        color: var(--accent);
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 0.5rem;
+    }
+    .form-group {
+        margin-bottom: 0;
+    }
+    .form-label {
+        font-weight: 600;
+        font-size: 0.8rem;
+        margin-bottom: 0.1rem;
+    }
+    .required-field::after {
+        content: ' *';
+        color: var(--danger);
+    }
+
+    .form-control, .form-select {
+        width: 100%;
+        padding: 0.4rem 0.6rem;
+        border: 2px solid var(--border-color);
+        border-radius: 0.4rem;
+        background: var(--bg-primary);
+        font-size: 0.85rem;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(6, 214, 160, 0.1);
+    }
+    textarea.form-control {
+        min-height: 60px;
+    }
+
+    /* Upload card */
+    .upload-card {
+        background: var(--bg-primary);
+        border: 2px dashed var(--border-color);
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        text-align: center;
+        cursor: pointer;
+        margin-bottom: 0.5rem;
+    }
+    .upload-card:hover {
+        border-color: var(--accent);
+    }
+    .upload-icon {
+        font-size: 1.8rem;
+        color: var(--accent);
+        margin-bottom: 0.1rem;
+    }
+    .upload-title {
+        font-size: 0.9rem;
+        font-weight: 700;
+    }
+    .upload-subtitle {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+    }
+    .upload-btn {
+        background: var(--accent);
+        color: white;
+        border: none;
+        border-radius: 30px;
+        padding: 0.3rem 1rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.2rem;
+        margin-top: 0.2rem;
+    }
+
+    /* Image previews */
+    .image-previews-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+        gap: 0.25rem;
+        margin-top: 0.5rem;
+    }
+    .preview-item-modern {
+        position: relative;
+        border-radius: 6px;
+        overflow: hidden;
+        aspect-ratio: 1;
+        border: 2px solid var(--border-color);
+    }
+    .preview-img-modern {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .preview-badge {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        background: var(--accent);
+        color: white;
+        font-size: 0.5rem;
+        padding: 1px 4px;
+        border-radius: 8px;
+    }
+    .preview-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+    .preview-item {
+        position: relative;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+    }
+    .preview-item video {
+        width: 100%;
+        height: 130px;
+        object-fit: cover;
+        background: #000;
+    }
+    .trim-video-btn,
+    .video-status-badge {
+        position: absolute;
+        bottom: 8px;
+        left: 8px;
+        right: 8px;
+        padding: 0.3rem 0.5rem;
+        border-radius: 999px;
+        border: 1px solid var(--border-color);
+        background: rgba(255, 255, 255, 0.92);
+        color: var(--text-primary);
+        font-size: 0.7rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .video-status-badge {
+        top: 8px;
+        bottom: auto;
+        left: 8px;
+        right: auto;
+        cursor: default;
+        background: rgba(var(--accent-rgb, 6, 214, 160), 0.15);
+        border-color: rgba(var(--accent-rgb, 6, 214, 160), 0.5);
+        color: var(--text-primary);
+    }
+    [data-theme="dark"] .trim-video-btn,
+    [data-theme="dark"] .video-status-badge {
+        background: rgba(16, 16, 16, 0.92);
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .delivery-map {
+        border-radius: 0.5rem;
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        overflow: hidden;
+    }
+
+    .location-suggestions {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        margin-top: 6px;
+        overflow: hidden;
+        display: none;
+        box-shadow: var(--shadow-sm);
+    }
+    .location-suggestion-item {
+        padding: 8px 10px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .location-suggestion-item:last-child {
+        border-bottom: none;
+    }
+    .location-suggestion-item:hover {
+        background: var(--bg-secondary);
+    }
+    .map-help {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-top: 0.5rem;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        padding: 0.5rem 0.75rem;
+    }
+    .map-help-text {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+    .map-help .btn-ghost {
+        border: 1px solid var(--border-color);
+        background: transparent;
+        color: var(--text-primary);
+        padding: 0.35rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    /* Featured section */
+    .featured-section {
+        border-left: 4px solid var(--warning);
+    }
+    .premium-required {
+        border-left: 4px solid var(--danger);
+    }
+    .featured-benefits {
+        background: var(--bg-primary);
+        border-radius: 4px;
+        padding: 0.5rem;
+        margin-top: 0.5rem;
+        font-size: 0.8rem;
+    }
+
+    /* Tips sidebar */
+    .tips-sidebar {
+        position: sticky;
+        top: 10px;
+    }
+    .tips-card {
+        background: var(--card-bg);
+        border-radius: 0.75rem;
+        padding: 0.75rem;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 0.75rem;
+    }
+    .tips-header {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        margin-bottom: 0.5rem;
+        padding-bottom: 0.25rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .tips-header i {
+        color: var(--accent);
+        font-size: 1rem;
+    }
+    .tips-header h3 {
+        font-size: 1rem;
+        font-weight: 700;
+        margin: 0;
+    }
+    .tip-item {
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+        background: var(--bg-secondary);
+        border-radius: 6px;
+        border-left: 4px solid var(--accent);
+        font-size: 0.8rem;
+    }
+
+    /* Form actions */
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--border-color);
+    }
+    .btn-custom {
+        padding: 0.4rem 1rem;
+        border-radius: 30px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        border: none;
+        cursor: pointer;
+        text-decoration: none;
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, var(--accent), #05b386);
+        color: white;
+    }
+    .btn-ghost {
+        background: transparent;
+        color: var(--text-primary);
+        border: 2px solid var(--border-color);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .form-container {
+            grid-template-columns: 1fr;
+        }
+        .tips-sidebar {
+            position: static;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="form-hero">
+    <div class="form-hero-content">
+        <span class="badge">
+            <i class="bi bi-{% if creating_store %}plus-circle{% else %}pencil-square{% endif %}"></i>
+            {% if creating_store %}New Store{% else %}Edit Store{% endif %}
+        </span>
+        <h1 class="form-title-main">
+            {% if creating_store %}Create Your Store{% else %}Update {{ store.name }}{% endif %}
+        </h1>
+        <p class="form-subtitle-main">
+            {% if creating_store %}Start selling in minutes.{% else %}Keep your store details fresh.{% endif %}
+        </p>
+    </div>
+</div>
+
+<div class="form-container">
+    <!-- Main Form -->
+    <div class="main-form-card">
+        <div class="form-header">
+            <div class="form-header-icon"><i class="bi bi-shop"></i></div>
+            <div class="form-header-text">
+                <h2>Store Information</h2>
+                <p>Fill in the details below</p>
+            </div>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" id="storeForm" novalidate>
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger py-1 mb-2 small">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <!-- Basic Information -->
+            <div class="form-section-card">
+                <h3 class="section-title"><i class="bi bi-tag"></i> Basic</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="{{ form.name.id_for_label }}" class="form-label required-field">Name</label>
+                        {{ form.name|as_crispy_field }}
+                    </div>
+                    <div class="form-group">
+                        <label for="{{ form.slug.id_for_label }}" class="form-label required-field">URL</label>
+                        {{ form.slug|as_crispy_field }}
+                    </div>
+                </div>
+                <div class="form-group mt-1">
+                    <label for="{{ form.description.id_for_label }}" class="form-label required-field">Description</label>
+                    {{ form.description|as_crispy_field }}
+                    <div class="char-count" id="description-counter">0/2000</div>
+                </div>
+            </div>
+
+            <!-- Location -->
+            <div class="form-section-card">
+                <h3 class="section-title"><i class="bi bi-geo-alt"></i> Location</h3>
+                <div class="form-group">
+                    <label for="{{ form.location.id_for_label }}" class="form-label required-field">Store Location</label>
+                    {{ form.location|as_crispy_field }}
+                    <small class="text-muted">Pick your store location from the map.</small>
+                    {% if form.location.errors %}
+                        <div class="text-danger small mt-1">{{ form.location.errors.0 }}</div>
+                    {% endif %}
+                    {% if form.location_latitude.errors or form.location_longitude.errors or form.location_place_id.errors %}
+                        <div class="text-danger small mt-1">
+                            Please choose a location from the suggestions or map so we can save accurate coordinates.
+                        </div>
+                    {% endif %}
+                    <div class="location-suggestions" id="storeLocationSuggestions"></div>
+                </div>
+                {{ form.location_latitude }}
+                {{ form.location_longitude }}
+                {{ form.location_place_id }}
+                <div class="delivery-map mt-2" id="storeLocationMap" style="height: 220px;"></div>
+                <div class="map-help">
+                    <div class="map-help-text">
+                        Click on the map to drop a pin for your store. Location access helps buyers find you accurately.
+                    </div>
+                    <button type="button" class="btn-ghost use-device-location">Use my location</button>
+                </div>
+            </div>
+
+            <!-- Branding -->
+            <div class="form-section-card">
+                <h3 class="section-title"><i class="bi bi-palette"></i> Branding</h3>
+                <div class="form-grid">
+                    <div>
+                        <label class="form-label">Logo</label>
+                        <div class="upload-card" id="logoUploadArea">
+                            <div class="upload-icon"><i class="bi bi-cloud-arrow-up"></i></div>
+                            <div class="upload-title">Upload Logo</div>
+                            <div class="upload-subtitle">Drag or click</div>
+                            <input type="file" name="logo" id="id_logo" accept="image/*" class="d-none">
+                            <button type="button" class="upload-btn" onclick="document.getElementById('id_logo').click()">
+                                <i class="bi bi-folder2-open"></i> Choose
+                            </button>
+                        </div>
+                        <div class="image-previews-grid" id="logoPreviewContainer">
+                            {% if not creating_store and store.logo %}
+                            <div class="preview-item-modern">
+                                <img src="{{ store.logo.url }}" alt="Logo" class="preview-img-modern">
+                                <span class="preview-badge">Current</span>
+                            </div>
+                            {% else %}
+                            <div class="no-preview small text-muted">No logo</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label">Cover</label>
+                        <div class="upload-card" id="coverUploadArea">
+                            <div class="upload-icon"><i class="bi bi-images"></i></div>
+                            <div class="upload-title">Upload Cover</div>
+                            <div class="upload-subtitle">Drag or click</div>
+                            <input type="file" name="cover_image" id="id_cover_image" accept="image/*" class="d-none">
+                            <button type="button" class="upload-btn" onclick="document.getElementById('id_cover_image').click()">
+                                <i class="bi bi-folder2-open"></i> Choose
+                            </button>
+                        </div>
+                        <div class="image-previews-grid" id="coverPreviewContainer">
+                            {% if not creating_store and store.cover_image %}
+                            <div class="preview-item-modern">
+                                <img src="{{ store.cover_image.url }}" alt="Cover" class="preview-img-modern">
+                                <span class="preview-badge">Current</span>
+                            </div>
+                            {% else %}
+                            <div class="no-preview small text-muted">No cover</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Store Videos -->
+            <div class="form-section-card">
+                <h3 class="section-title"><i class="bi bi-camera-reels"></i> Store Videos</h3>
+                <div class="form-group">
+                    <div class="upload-card" id="storeVideosUploadArea">
+                        <div class="upload-icon"><i class="bi bi-camera-video"></i></div>
+                        <div class="upload-title">Add short store videos</div>
+                        <div class="upload-subtitle">Max 45 seconds · 15MB each · up to 3 (auto‑trim/compress if needed)</div>
+                        <input type="file" name="store_videos" id="id_store_videos" accept="video/*" multiple class="d-none">
+                        <button type="button" class="upload-btn" onclick="document.getElementById('id_store_videos').click()">
+                            <i class="bi bi-folder2-open"></i> Choose
+                        </button>
+                    </div>
+                    <div class="text-danger small mt-2" id="store-video-errors" style="display:none;"></div>
+                    {% if form.store_videos.errors %}
+                        <div class="text-danger small mt-1">{{ form.store_videos.errors.0 }}</div>
+                    {% endif %}
+                    <div class="preview-grid" id="store-videos-preview"></div>
+                    {% if store and store.videos.all %}
+                    <div class="mt-2">
+                        <h6 class="fw-bold small">Current Videos</h6>
+                        <div class="preview-grid">
+                            {% for vid in store.videos.all %}
+                            <div class="preview-item">
+                                <video src="{{ vid.get_video_url }}" class="preview-img" style="object-fit:cover;" muted playsinline></video>
+                                <input type="checkbox" class="image-remove-checkbox" name="delete_store_videos" value="{{ vid.id }}" id="delete_store_video_{{ vid.id }}" style="position:absolute; top:2px; right:2px; z-index:2;">
+                                <label for="delete_store_video_{{ vid.id }}" class="preview-badge" style="background: var(--danger);">Delete</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Featured Store (if editing) -->
+            {% if not creating_store %}
+            <div class="form-section-card {% if can_be_featured %}featured-section{% else %}premium-required{% endif %}">
+                <div class="d-flex align-items-center justify-content-between">
+                    <h3 class="section-title m-0"><i class="bi bi-star"></i> Featured</h3>
+                    {% if is_enterprise %}<span class="badge bg-warning">Enterprise</span>{% endif %}
+                </div>
+                {% if can_be_featured %}
+                    {% if is_enterprise %}
+                        <div class="alert alert-success py-1 mt-1 small">Auto‑featured with Enterprise.</div>
+                        <input type="hidden" name="is_featured" value="1">
+                    {% else %}
+                        <div class="form-check form-switch mt-1">
+                            {{ form.is_featured|as_crispy_field }}
+                        </div>
+                    {% endif %}
+                    <div class="featured-benefits">
+                        <div class="small"><i class="bi bi-check-circle-fill text-success me-1"></i> Top placement</div>
+                        <div class="small"><i class="bi bi-check-circle-fill text-success me-1"></i> More visibility</div>
+                    </div>
+                {% else %}
+                    <div class="alert alert-warning py-1 mt-1 small">
+                        <i class="bi bi-lock-fill me-1"></i> Upgrade to Premium.
+                    </div>
+                    <a href="{% url 'storefront:subscription_plan_select' slug=store.slug %}" class="btn-custom btn-primary w-100 mt-1">Upgrade</a>
+                {% endif %}
+            </div>
+
+            {% endif %}
+
+            <!-- Actions -->
+            <div class="form-actions">
+                <a href="{% url 'storefront:seller_dashboard' %}" class="btn-custom btn-ghost">Cancel</a>
+                <button type="submit" class="btn-custom btn-primary">
+                    <i class="bi bi-{% if creating_store %}check-circle{% else %}save{% endif %}"></i>
+                    {% if creating_store %}Create{% else %}Update{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Tips Sidebar -->
+    <div class="tips-sidebar">
+        <div class="tips-card">
+            <div class="tips-header">
+                <i class="bi bi-lightbulb"></i>
+                <h3>Tips</h3>
+            </div>
+            <div class="tip-item"><strong>🏪 Memorable name</strong><br>Keep it short.</div>
+            <div class="tip-item"><strong>📝 Clear description</strong><br>Tell what you sell.</div>
+            <div class="tip-item"><strong>🖼️ Quality images</strong><br>Builds trust.</div>
+        </div>
+        {% if not creating_store and not can_be_featured %}
+        <div class="tips-card" style="background: var(--warning); color: var(--dark);">
+            <h4 class="fw-bold small">🚀 Upgrade to Premium</h4>
+            <p class="small">Get featured and more.</p>
+            <a href="{% url 'storefront:subscription_plan_select' slug=store.slug %}" class="btn-custom btn-primary w-100">Upgrade</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Delete modals (if needed) ... -->
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Slug generation
+    const nameField = document.querySelector('input[name="name"]');
+    const slugField = document.querySelector('input[name="slug"]');
+    if (nameField && slugField) {
+        nameField.addEventListener('input', function() {
+            if (!slugField.value || slugField.dataset.manual !== 'true') {
+                slugField.value = this.value.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '');
+            }
+        });
+        slugField.addEventListener('input', function() { this.dataset.manual = 'true'; });
+    }
+
+    // Description counter
+    const descField = document.querySelector('textarea[name="description"]');
+    const descCounter = document.getElementById('description-counter');
+    if (descField && descCounter) {
+        function update() { descCounter.textContent = descField.value.length + '/2000'; }
+        descField.addEventListener('input', update);
+        update();
+    }
+
+    // Image preview (basic)
+    const logoInput = document.getElementById('id_logo');
+    const logoPreview = document.getElementById('logoPreviewContainer');
+    if (logoInput && logoPreview) {
+        logoInput.addEventListener('change', function() {
+            const file = this.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const existing = logoPreview.querySelector('.no-preview');
+                    if (existing) existing.remove();
+                    const div = document.createElement('div');
+                    div.className = 'preview-item-modern';
+                    div.innerHTML = `<img src="${e.target.result}" class="preview-img-modern"><span class="preview-badge">New</span>`;
+                    logoPreview.appendChild(div);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    const coverInput = document.getElementById('id_cover_image');
+    const coverPreview = document.getElementById('coverPreviewContainer');
+    if (coverInput && coverPreview) {
+        coverInput.addEventListener('change', function() {
+            const file = this.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const existing = coverPreview.querySelector('.no-preview');
+                    if (existing) existing.remove();
+                    const div = document.createElement('div');
+                    div.className = 'preview-item-modern';
+                    div.innerHTML = `<img src="${e.target.result}" class="preview-img-modern"><span class="preview-badge">New</span>`;
+                    coverPreview.appendChild(div);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    // Store video preview + validation
+    const storeVideoInput = document.getElementById('id_store_videos');
+    const storeVideoPreview = document.getElementById('store-videos-preview');
+    const storeVideoErrors = document.getElementById('store-video-errors');
+    const storeSubmitBtn = document.querySelector('#storeForm button[type="submit"]');
+    if (storeVideoInput) {
+        storeVideoInput.addEventListener('change', function() {
+            const files = Array.from(this.files || []);
+            let invalid = false;
+            let pendingChecks = 0;
+            if (storeVideoErrors) {
+                storeVideoErrors.style.display = 'none';
+                storeVideoErrors.textContent = '';
+            }
+            if (storeVideoPreview) storeVideoPreview.innerHTML = '';
+            if (files.length > 3) {
+                invalid = true;
+                if (storeVideoErrors) {
+                    storeVideoErrors.textContent = 'You can upload up to 3 store videos.';
+                    storeVideoErrors.style.display = 'block';
+                }
+            }
+
+            files.forEach((file, index) => {
+                if (!(file.type || '').startsWith('video/')) {
+                    invalid = true;
+                    if (storeVideoErrors) {
+                        storeVideoErrors.textContent = 'Only video files are allowed for store videos.';
+                        storeVideoErrors.style.display = 'block';
+                    }
+                    return;
+                }
+                const url = URL.createObjectURL(file);
+                const vid = document.createElement('video');
+                vid.src = url;
+                vid.muted = true;
+                vid.playsInline = true;
+                const wrap = document.createElement('div');
+                wrap.className = 'preview-item';
+                wrap.appendChild(vid);
+                const badge = document.createElement('span');
+                badge.className = 'preview-badge';
+                badge.textContent = `Video ${index + 1}`;
+                wrap.appendChild(badge);
+                const status = document.createElement('span');
+                status.className = 'video-status-badge';
+                status.textContent = 'Checking';
+                wrap.appendChild(status);
+                if (storeVideoPreview) storeVideoPreview.appendChild(wrap);
+
+                pendingChecks += 1;
+                if (storeSubmitBtn) storeSubmitBtn.disabled = true;
+                vid.addEventListener('loadedmetadata', () => {
+                    const tooLarge = file.size > 15 * 1024 * 1024;
+                    const tooLong = (vid.duration || 0) > 45;
+                    if (tooLarge || tooLong) {
+                        invalid = true;
+                        status.textContent = tooLong ? 'Over 45s' : 'Over 15MB';
+                        status.style.background = 'rgba(220, 53, 69, 0.9)';
+                        if (storeVideoErrors) {
+                            storeVideoErrors.textContent = tooLong
+                                ? 'Each store video must be 45 seconds or shorter.'
+                                : 'Each store video must be 15MB or smaller.';
+                            storeVideoErrors.style.display = 'block';
+                        }
+                    } else {
+                        status.textContent = 'Ready';
+                        status.style.background = 'rgba(6, 214, 160, 0.9)';
+                    }
+                    pendingChecks -= 1;
+                    if (storeSubmitBtn) storeSubmitBtn.disabled = pendingChecks > 0 || invalid;
+                    URL.revokeObjectURL(url);
+                }, { once: true });
+                vid.addEventListener('error', () => {
+                    invalid = true;
+                    status.textContent = 'Unreadable';
+                    status.style.background = 'rgba(220, 53, 69, 0.9)';
+                    if (storeVideoErrors) {
+                        storeVideoErrors.textContent = 'One of the selected videos could not be read.';
+                        storeVideoErrors.style.display = 'block';
+                    }
+                    pendingChecks -= 1;
+                    if (storeSubmitBtn) storeSubmitBtn.disabled = true;
+                    URL.revokeObjectURL(url);
+                }, { once: true });
+            });
+            if (invalid) {
+                if (storeSubmitBtn) storeSubmitBtn.disabled = true;
+            }
+        });
+    }
+
+    // Simple validation
+    document.getElementById('storeForm').addEventListener('submit', function(e) {
+        const required = this.querySelectorAll('[required]');
+        for (let f of required) {
+            if (!f.value.trim()) {
+                e.preventDefault();
+                alert('Please fill all required fields.');
+                return;
+            }
+        }
+    });
+
+    // Leaflet + Nominatim for store location
+    const locationInput = document.getElementById("id_location");
+    const latInput = document.getElementById("id_location_latitude");
+    const lngInput = document.getElementById("id_location_longitude");
+    const placeIdInput = document.getElementById("id_location_place_id");
+    const mapEl = document.getElementById("storeLocationMap");
+    const suggestionsEl = document.getElementById("storeLocationSuggestions");
+    let storeMap = null;
+    let storeMarker = null;
+
+    function setStoreLocation(lat, lng, label, placeId) {
+        if (latInput) latInput.value = Number(lat).toFixed(6);
+        if (lngInput) lngInput.value = Number(lng).toFixed(6);
+        if (placeIdInput) placeIdInput.value = placeId || "";
+        if (label && locationInput) locationInput.value = label;
+        if (storeMarker) {
+            storeMarker.setLatLng([lat, lng]);
+            storeMap.setView([lat, lng], 15);
+        }
+    }
+
+    function renderSuggestions(items) {
+        if (!suggestionsEl) return;
+        suggestionsEl.innerHTML = "";
+        if (!items.length) {
+            suggestionsEl.style.display = "none";
+            return;
+        }
+        items.forEach(item => {
+            const row = document.createElement("div");
+            row.className = "location-suggestion-item";
+            row.textContent = item.display_name;
+            row.addEventListener("click", () => {
+                setStoreLocation(item.lat, item.lon, item.display_name, item.place_id);
+                suggestionsEl.style.display = "none";
+            });
+            suggestionsEl.appendChild(row);
+        });
+        suggestionsEl.style.display = "block";
+    }
+
+    function filterHomabay(results) {
+        return (results || []).filter(r => {
+            const name = (r.display_name || '').toLowerCase();
+            return name.includes('homa bay') || name.includes('homabay') || name.includes('ndhiwa');
+        });
+    }
+
+    async function fetchNominatim(query) {
+        const viewbox = '34.0,-0.1,35.2,-1.1';
+        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=ke&viewbox=${viewbox}&bounded=1&q=${encodeURIComponent(query)}`;
+        const res = await fetch(url, { headers: { "Accept": "application/json" } });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return filterHomabay(data);
+    }
+
+    async function fetchReverseGeocode(lat, lng) {
+        try {
+            const url = `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`;
+            const res = await fetch(url, { headers: { "Accept": "application/json" } });
+            if (!res.ok) return null;
+            const data = await res.json();
+            return data || null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function setupAutocomplete() {
+        if (!locationInput || !suggestionsEl) return;
+        let debounce;
+        locationInput.addEventListener("input", () => {
+            const q = locationInput.value.trim();
+            clearTimeout(debounce);
+            if (q.length < 3) {
+                suggestionsEl.style.display = "none";
+                return;
+            }
+            debounce = setTimeout(async () => {
+                const results = await fetchNominatim(q);
+                renderSuggestions(results);
+            }, 300);
+        });
+    }
+
+    function initStoreLocationMap() {
+        if (!mapEl || !window.L) return;
+        const hasCoords = latInput && lngInput && latInput.value && lngInput.value;
+        const initialLat = hasCoords ? parseFloat(latInput.value) : -0.5236;
+        const initialLng = hasCoords ? parseFloat(lngInput.value) : 34.4560;
+
+        storeMap = L.map(mapEl).setView([initialLat, initialLng], hasCoords ? 14 : 10);
+        addBaseTileLayer(storeMap);
+        storeMarker = L.marker([initialLat, initialLng]).addTo(storeMap);
+        setTimeout(() => storeMap.invalidateSize(), 200);
+
+        storeMap.on("click", async (e) => {
+            let label = locationInput?.value || "";
+            let placeId = placeIdInput?.value || "";
+            try {
+                const resolved = await fetchReverseGeocode(e.latlng.lat, e.latlng.lng);
+                if (resolved?.display_name) label = resolved.display_name;
+                if (resolved?.place_id) placeId = String(resolved.place_id);
+            } catch (err) {}
+            setStoreLocation(e.latlng.lat, e.latlng.lng, label, placeId);
+        });
+    }
+
+    setupAutocomplete();
+    const whenLeafletReady = (cb) => {
+        if (window.L) return cb();
+        setTimeout(() => whenLeafletReady(cb), 100);
+    };
+    whenLeafletReady(initStoreLocationMap);
+
+    async function requestDeviceLocationForStore() {
+        if (!window.BaysokoGeo) {
+            showToast('Location services are unavailable in this browser.', 'error');
+            return;
+        }
+        try {
+            const loc = await window.BaysokoGeo.requestCurrentLocation();
+            let label = '';
+            let placeId = '';
+            const resolved = await fetchReverseGeocode(loc.lat, loc.lng);
+            if (resolved?.display_name) label = resolved.display_name;
+            if (resolved?.place_id) placeId = String(resolved.place_id);
+            if (!label) {
+                label = await window.BaysokoGeo.reverseGeocode(loc.lat, loc.lng);
+            }
+            const fallbackLabel = locationInput?.value || '';
+            if (label || fallbackLabel) {
+                setStoreLocation(loc.lat, loc.lng, label || fallbackLabel, placeId || placeIdInput?.value || "");
+                showToast('Using your current location for the store.', 'success');
+            }
+        } catch (err) {
+            showToast('Location access is required to place your store accurately. Please enable it in your browser settings and try again.', 'warning');
+        }
+    }
+
+    // Auto-suggest current location for store if empty
+    if (window.BaysokoGeo && locationInput && (!locationInput.value || !locationInput.value.trim())) {
+        requestDeviceLocationForStore();
+    }
+
+    // Manual trigger for location permission / pinning
+    const locationButtons = Array.from(document.querySelectorAll('.use-device-location'));
+    locationButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            requestDeviceLocationForStore();
+        });
+    });
+  });
+  </script>
+  {% endblock %}

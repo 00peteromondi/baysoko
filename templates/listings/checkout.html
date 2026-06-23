@@ -1,0 +1,2294 @@
+<!-- templates/listings/checkout.html -->
+{% extends 'base.html' %}
+{% load static %}
+{% load custom_filters %}
+{% load crispy_forms_tags %}
+
+{% block title %}Checkout - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== GLOBAL STYLES ===== */
+    .container-custom {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+    
+    /* ===== BREADCRUMB ===== */
+    .breadcrumb {
+        background: var(--bg-secondary);
+        padding: 10px 12px;
+        border-radius: var(--radius-md);
+        margin-bottom: 16px;
+        border: 1px solid var(--border-color);
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        font-size: 12px;
+    }
+    
+    .breadcrumb-item a {
+        text-decoration: none;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+    }
+    
+    /* ===== CHECKOUT HERO SECTION ===== */
+    .checkout-hero {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
+        position: relative;
+    }
+    
+    .checkout-header {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        padding: 16px;
+        color: white;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+
+    .checkout-header h1 {
+        font-size: 18px;
+        font-weight: 800;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    /* ===== STEP INDICATOR ===== */
+    .step-indicator {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        position: relative;
+        flex: 1;
+    }
+    
+    .step.active .step-number {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        border-color: var(--primary);
+    }
+    
+    .step.completed .step-number {
+        background: var(--success);
+        color: white;
+        border-color: var(--success);
+    }
+    
+    .step-number {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--card-bg);
+        border: 2px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+    
+    .step-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-align: center;
+        white-space: nowrap;
+    }
+    
+    .step.active .step-label {
+        color: var(--primary);
+        font-weight: 700;
+    }
+    
+    .step-line {
+        flex: 1;
+        height: 2px;
+        background: var(--border-color);
+        margin: 0 8px;
+        position: relative;
+        top: -16px;
+    }
+    
+    .step-line.active {
+        background: var(--primary);
+    }
+    
+    /* ===== FORM SECTIONS ===== */
+    .form-section {
+        padding: 16px;
+    }
+    
+    .section-title {
+        font-size: 16px;
+        font-weight: 800;
+        margin-bottom: 16px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .section-title i {
+        color: var(--primary);
+        background: rgba(255, 107, 53, 0.1);
+        padding: 8px;
+        border-radius: 8px;
+        font-size: 14px;
+    }
+    
+    /* Form Fields */
+    .form-group {
+        margin-bottom: 16px;
+    }
+    
+    .form-label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--text-primary);
+    }
+    
+    .form-control {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+    
+    .form-control:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+    }
+    
+    .form-control.is-invalid {
+        border-color: var(--danger);
+        background: rgba(234, 67, 53, 0.05);
+    }
+    
+    /* Form Switches */
+    .form-switch {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+        cursor: pointer;
+    }
+    
+    .switch-control {
+        position: relative;
+        width: 44px;
+        height: 24px;
+    }
+    
+    .switch-input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    
+    .switch-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--border-color);
+        border-radius: 24px;
+        transition: .4s;
+    }
+    
+    .switch-slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 3px;
+        bottom: 3px;
+        background: white;
+        border-radius: 50%;
+        transition: .4s;
+    }
+    
+    .switch-input:checked + .switch-slider {
+        background: var(--primary);
+    }
+    
+    .switch-input:checked + .switch-slider:before {
+        transform: translateX(20px);
+    }
+    
+    .switch-label {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+    
+    /* Info Cards */
+    .info-card {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        margin-bottom: 12px;
+        transition: all 0.2s ease;
+    }
+    
+    .info-card:hover {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .info-card h6 {
+        margin-bottom: 8px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 700;
+    }
+    
+    /* ===== ORDER SUMMARY CARD ===== */
+    .order-summary-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 20px;
+    }
+    
+    .summary-header {
+        background: var(--bg-secondary);
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .summary-header h3 {
+        font-size: 16px;
+        font-weight: 800;
+        margin: 0;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .summary-content {
+        padding: 16px;
+    }
+    
+    /* Order Items */
+    .order-items {
+        max-height: 300px;
+        overflow-y: auto;
+        margin-bottom: 16px;
+        padding-right: 4px;
+    }
+    
+    .order-items::-webkit-scrollbar {
+        width: 4px;
+    }
+    
+    .order-items::-webkit-scrollbar-track {
+        background: var(--bg-secondary);
+        border-radius: 2px;
+    }
+    
+    .order-items::-webkit-scrollbar-thumb {
+        background: var(--primary);
+        border-radius: 2px;
+    }
+    
+    .order-item {
+        display: flex;
+        gap: 12px;
+        padding: 10px;
+        border-bottom: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+    }
+    
+    .order-item:hover {
+        background: var(--bg-secondary);
+        border-radius: 8px;
+    }
+    
+    .order-item:last-child {
+        border-bottom: none;
+    }
+    
+    .item-image {
+        width: 60px;
+        height: 60px;
+        border-radius: 8px;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+    
+    .item-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.3s ease;
+    }
+    
+    .order-item:hover .item-image img {
+        transform: scale(1.05);
+    }
+    
+    .item-details {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+    
+    .item-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+        line-height: 1.3;
+    }
+    
+    .item-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+    
+    .item-price {
+        font-weight: 700;
+        font-size: 14px;
+        color: var(--primary);
+    }
+    
+    /* Totals */
+    .totals-section {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        margin-bottom: 16px;
+        border: 1px solid var(--border-color);
+    }
+    
+    .total-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        font-size: 14px;
+    }
+    
+    .total-row.total {
+        font-weight: 800;
+        font-size: 18px;
+        color: var(--primary);
+        border-top: 1px solid var(--border-color);
+        padding-top: 10px;
+        margin-top: 6px;
+    }
+    
+    /* Buttons */
+    .btn-checkout {
+        width: 100%;
+        padding: 12px;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        border: none;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .btn-checkout:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .btn-checkout:active {
+        transform: translateY(0);
+    }
+    
+    .btn-checkout:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .delivery-map {
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        overflow: hidden;
+    }
+
+    .shipping-location-wrap {
+        position: relative;
+    }
+    .map-help {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-top: 0.5rem;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 10px;
+        padding: 0.5rem 0.75rem;
+    }
+    .map-help-text {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+    .map-help .btn-ghost {
+        border: 1px solid var(--border-color);
+        background: transparent;
+        color: var(--text-primary);
+        padding: 0.35rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .location-suggestions {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        z-index: 10;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        overflow: hidden;
+        display: none;
+        box-shadow: var(--shadow-sm);
+        max-height: 220px;
+        overflow-y: auto;
+    }
+    .location-suggestion-item {
+        padding: 8px 10px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .location-suggestion-item:last-child {
+        border-bottom: none;
+    }
+    .location-suggestion-item:hover {
+        background: var(--bg-secondary);
+    }
+    
+    /* ===== SECURITY INFO ===== */
+    .security-info {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        margin-top: 16px;
+    }
+    
+    .security-info h6 {
+        margin-bottom: 8px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 700;
+    }
+    
+    .security-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .security-list li {
+        padding: 4px 0;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+    }
+    
+    .security-list li i {
+        color: var(--success);
+        font-size: 12px;
+    }
+    
+    /* ===== HELP CARD ===== */
+    .help-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 16px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-top: 20px;
+    }
+    
+    .help-card h6 {
+        margin-bottom: 12px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 700;
+    }
+    
+    .help-contact {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .contact-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-secondary);
+        font-size: 13px;
+        text-decoration: none;
+        transition: color 0.2s ease;
+    }
+    
+    .contact-item:hover {
+        color: var(--primary);
+    }
+    
+    .contact-item i {
+        color: var(--primary);
+        font-size: 14px;
+    }
+    
+    /* ===== TOAST NOTIFICATIONS ===== */
+    .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1060;
+    }
+    
+    .toast {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-lg);
+        backdrop-filter: blur(10px);
+    }
+    
+    .toast-body {
+        padding: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-primary);
+    }
+    
+    /* Crispy Forms Adjustments */
+    .form-check-label {
+        font-size: 14px;
+        color: var(--text-secondary);
+    }
+    
+    .form-check-input {
+        margin-right: 8px;
+    }
+    
+    /* Error Styling */
+    .alert-danger {
+        background: rgba(234, 67, 53, 0.1);
+        border-color: var(--danger);
+        color: var(--danger);
+    }
+    
+    .invalid-feedback {
+        font-size: 12px;
+        margin-top: 4px;
+    }
+    
+    /* ===== RESPONSIVE DESIGN ===== */
+    
+    /* Small phones (320px - 374px) */
+    @media (max-width: 374px) {
+        .container-custom {
+            padding-left: 6px;
+            padding-right: 6px;
+        }
+        
+        .checkout-header {
+            padding: 12px;
+        }
+        
+        .checkout-header h1 {
+            font-size: 16px;
+        }
+        
+        .step-indicator {
+            padding: 8px 12px;
+        }
+        
+        .step-number {
+            width: 28px;
+            height: 28px;
+            font-size: 12px;
+        }
+        
+        .step-label {
+            font-size: 9px;
+        }
+        
+        .form-section {
+            padding: 12px;
+        }
+        
+        .section-title {
+            font-size: 14px;
+        }
+    }
+    
+    /* Medium phones (375px - 424px) */
+    @media (min-width: 375px) and (max-width: 424px) {
+        .checkout-header h1 {
+            font-size: 17px;
+        }
+        
+        .step-label {
+            font-size: 10px;
+        }
+    }
+    
+    /* Large phones (425px - 575px) */
+    @media (min-width: 425px) and (max-width: 575px) {
+        .checkout-header h1 {
+            font-size: 18px;
+        }
+    }
+    
+    /* Tablets (576px - 767px) */
+    @media (min-width: 576px) {
+        .container-custom {
+            padding-left: 16px;
+            padding-right: 16px;
+        }
+        
+        .checkout-header {
+            padding: 20px;
+        }
+        
+        .checkout-header h1 {
+            font-size: 22px;
+        }
+        
+        .form-section {
+            padding: 20px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+        }
+        
+        .step-label {
+            font-size: 12px;
+        }
+    }
+    
+    /* Desktop (768px and above) */
+    @media (min-width: 768px) {
+        .checkout-hero {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            padding: 20px;
+        }
+        
+        .checkout-header {
+            grid-column: 1 / -1;
+        }
+        
+        .step-indicator {
+            grid-column: 1 / -1;
+        }
+        
+        .order-summary-card {
+            position: sticky;
+            top: 100px;
+            align-self: start;
+        }
+    }
+    
+    /* Large Desktop (992px and above) */
+    @media (min-width: 992px) {
+        .checkout-hero {
+            grid-template-columns: 1.5fr 1fr;
+            gap: 32px;
+            padding: 24px;
+        }
+    }
+    
+    /* ===== ANIMATIONS ===== */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    @keyframes slideInRight {
+        from { opacity: 0; transform: translateX(20px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+    
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.02); }
+        100% { transform: scale(1); }
+    }
+    
+    .animate-fade-in {
+        animation: fadeIn 0.5s ease-out;
+    }
+    
+    .animate-slide-right {
+        animation: slideInRight 0.5s ease-out;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-custom py-3">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}"><i class="bi bi-house"></i> Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'view_cart' %}">Cart</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Checkout</li>
+        </ol>
+    </nav>
+
+    <!-- Main Checkout Container -->
+    <div class="checkout-hero">
+        <!-- Header -->
+        <div class="checkout-header">
+            <h1><i class="bi bi-basket"></i> Complete Your Purchase</h1>
+        </div>
+
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step active">
+                <div class="step-number">1</div>
+                <span class="step-label">Shipping</span>
+            </div>
+            <div class="step-line active"></div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <span class="step-label">Payment</span>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <span class="step-label">Confirmation</span>
+            </div>
+        </div>
+
+        <!-- Left Column: Shipping Form -->
+        <div class="form-section">
+            {% if not checkout_form %}
+            <!-- Minimal checkout form (fallback) -->
+            <form method="post" id="checkoutForm" novalidate>
+                {% csrf_token %}
+                
+                <h3 class="section-title">
+                    <i class="bi bi-truck"></i>
+                    Shipping Details
+                </h3>
+                
+                
+                
+                <!-- Account Info -->
+                <div id="accountInfo">
+                    <div class="info-card">
+                        <h6><i class="bi bi-person-circle"></i> Using Account Details</h6>
+                        <div class="row g-2">
+                            <div class="col-12">
+                                <strong>{{ request.user.get_full_name|default:request.user.username }}</strong>
+                            </div>
+                            <div class="col-12">
+                                <small class="text-muted">{{ request.user.email }}</small>
+                            </div>
+                            {% if request.user.phone_number %}
+                            <div class="col-12">
+                                <small class="text-muted">{{ request.user.phone_number }}</small>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Alternate Shipping Form (hidden by default) -->
+                <div id="alternateShippingForm" style="display: none;">
+                    <div class="row">
+                        <div class="col-md-6 form-group">
+                            <label class="form-label">First Name *</label>
+                            <input type="text" name="first_name" class="form-control" placeholder="John">
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label class="form-label">Last Name *</label>
+                            <input type="text" name="last_name" class="form-control" placeholder="Doe">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 form-group">
+                            <label class="form-label">Email *</label>
+                            <input type="email" name="email" class="form-control" placeholder="john@example.com">
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label class="form-label">Phone Number *</label>
+                            <input type="text" name="phone_number" class="form-control" placeholder="0712345678">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Common Shipping Fields -->
+                <div class="form-group shipping-location-wrap">
+                    <label class="form-label">Shipping Address *</label>
+                    <textarea name="shipping_address" class="form-control" rows="3" placeholder="Enter your complete shipping address" required></textarea>
+                    <input type="hidden" name="shipping_latitude" id="id_shipping_latitude">
+                    <input type="hidden" name="shipping_longitude" id="id_shipping_longitude">
+                    <input type="hidden" name="shipping_place_id" id="id_shipping_place_id">
+                    <div class="location-suggestions" id="shippingLocationSuggestions"></div>
+                    <div class="delivery-map mt-2" id="checkoutShippingMap" style="height: 220px;"></div>
+                    <div class="map-help">
+                        <div class="map-help-text">
+                            Click on the map to drop a pin for delivery. Location access helps us get your order to the right place.
+                        </div>
+                        <button type="button" class="btn-ghost use-device-location">Use my location</button>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 form-group">
+                        <label class="form-label">City (optional)</label>
+                        <input type="text" name="city" class="form-control" placeholder="Homa Bay">
+                    </div>
+                    <div class="col-md-6 form-group">
+                        <label class="form-label">Postal Code (optional)</label>
+                        <input type="text" name="postal_code" class="form-control" placeholder="40300">
+                    </div>
+                </div>
+                
+                <!-- Payment Method -->
+                <h3 class="section-title mt-4">
+                    <i class="bi bi-credit-card"></i>
+                    Payment Method
+                </h3>
+                
+                <div class="form-group">
+                    <label class="form-label">Payment Method *</label>
+                    <!-- Enforce M-Pesa as the only allowed payment method in fallback -->
+                    <input type="hidden" name="payment_method" value="mpesa">
+                    <div class="info-card">
+                        <strong>M-Pesa</strong>
+                        <div class="small text-muted">Only available payment method</div>
+                    </div>
+                </div>
+
+                <!-- M-Pesa Phone Number -->
+                <div id="mpesaFields" style="display: block;">
+                    <div class="form-group">
+                        <label class="form-label">M-Pesa Phone Number *</label>
+                        <input type="text" name="mpesa_phone" class="form-control" placeholder="0712345678">
+                    </div>
+                    <div class="alert alert-info small">
+                        <i class="bi bi-info-circle me-2"></i>
+                        You'll receive an M-Pesa prompt on this number to complete payment.
+                    </div>
+                </div>
+                
+                <!-- Terms Agreement -->
+                <div class="info-card mt-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="terms" required>
+                        <label class="form-check-label" for="terms">
+                            I agree to the <a href="#" class="text-primary">Terms of Service</a> and <a href="#" class="text-primary">Privacy Policy</a>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Validation Errors -->
+                <div id="checkoutValidationErrors" class="alert alert-danger" style="display: none;">
+                    <div class="d-flex align-items-start gap-2">
+                        <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+                        <div>
+                            <strong>Please fix the following errors:</strong>
+                            <ul class="mb-0 mt-2" id="errorList"></ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn-checkout" id="placeOrderBtn">
+                    <i class="bi bi-lock-fill"></i>
+                    Proceed to Payment - KSh {{ cart.get_total_price }}
+                </button>
+            </form>
+            {% else %}
+            <!-- Form with crispy forms when form is provided -->
+            <form method="post" id="checkoutForm" novalidate>
+                {% csrf_token %}
+                
+                <h3 class="section-title">
+                    <i class="bi bi-truck"></i>
+                    Shipping Details
+                </h3>
+                
+                {% if checkout_form.non_field_errors %}
+                <div class="alert alert-danger">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <div>
+                            {% for error in checkout_form.non_field_errors %}
+                            <p class="mb-0 small">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Alternate Shipping Toggle -->
+                <div class="form-switch">
+                    <div class="switch-control">
+                        <input type="checkbox" class="switch-input" id="useAlternateShipping" name="use_alternate_shipping" {% if checkout_form.use_alternate_shipping.value %}checked{% endif %}>
+                        <span class="switch-slider" role="switch" aria-checked="{% if checkout_form.use_alternate_shipping.value %}true{% else %}false{% endif %}" aria-labelledby="useAlternateShippingLabel"></span>
+                    </div>
+                    <span id="useAlternateShippingLabel" class="switch-label">Ship to a different address</span>
+                </div>
+                
+                <!-- Account Info (Hidden when alternate shipping is checked) -->
+                <div id="accountInfo" {% if checkout_form.use_alternate_shipping.value %}style="display: none;"{% endif %}>
+                    <div class="info-card">
+                        <h6><i class="bi bi-person-circle"></i> Using Account Details</h6>
+                        <div class="row g-2">
+                            <div class="col-12">
+                                <strong>{{ request.user.get_full_name|default:request.user.username }}</strong>
+                            </div>
+                            <div class="col-12">
+                                <small class="text-muted">{{ request.user.email }}</small>
+                            </div>
+                            {% if request.user.phone_number %}
+                            <div class="col-12">
+                                <small class="text-muted">{{ request.user.phone_number }}</small>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Alternate Shipping Form (Shown when toggle is checked) -->
+                <div id="alternateShippingForm" {% if not checkout_form.use_alternate_shipping.value %}style="display: none;"{% endif %}>
+                    <div class="row">
+                        <div class="col-md-6">
+                            {{ checkout_form.first_name|as_crispy_field }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ checkout_form.last_name|as_crispy_field }}
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            {{ checkout_form.email|as_crispy_field }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ checkout_form.phone_number|as_crispy_field }}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Common Shipping Fields -->
+                <div class="row">
+                    <div class="col-12 shipping-location-wrap">
+                        {{ checkout_form.shipping_address|as_crispy_field }}
+                        {{ checkout_form.shipping_latitude }}
+                        {{ checkout_form.shipping_longitude }}
+                        {{ checkout_form.shipping_place_id }}
+                        <div class="location-suggestions" id="shippingLocationSuggestions"></div>
+                        <div class="delivery-map mt-2" id="checkoutShippingMap" style="height: 220px;"></div>
+                        <div class="map-help">
+                            <div class="map-help-text">
+                                Click on the map to drop a pin for delivery. Location access helps us get your order to the right place.
+                            </div>
+                            <button type="button" class="btn-ghost use-device-location">Use my location</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        {{ checkout_form.city|as_crispy_field }}
+                    </div>
+                    <div class="col-md-6">
+                        {{ checkout_form.postal_code|as_crispy_field }}
+                    </div>
+                </div>
+                
+                <!-- Shipping Notes -->
+                <div class="form-group">
+                    {{ checkout_form.shipping_notes|as_crispy_field }}
+                </div>
+                
+                <!-- Previous Address Button -->
+                {% if has_previous_orders %}
+                <div class="info-card">
+                    <h6><i class="bi bi-clock-history"></i> Use Previous Address?</h6>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary btn-sm" id="useLastAddress">
+                            <i class="bi bi-check-circle me-1"></i> Use Last Address
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="enterNewAddress">
+                            <i class="bi bi-pencil me-1"></i> Enter New
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Payment Method -->
+                <h3 class="section-title mt-4">
+                    <i class="bi bi-credit-card"></i>
+                    Payment Method
+                </h3>
+                
+                <div class="form-group">
+                    {{ checkout_form.payment_method|as_crispy_field }}
+                </div>
+                
+                <!-- Store payment method in hidden field for next page -->
+                <input type="hidden" name="selected_payment_method" id="selectedPaymentMethod" value="{{ checkout_form.payment_method.value|default:'mpesa' }}">
+                
+                <!-- M-Pesa Phone Number (shown when M-Pesa selected) -->
+                <div id="mpesaFields" style="display: none;">
+                    <div class="form-group">
+                        {{ checkout_form.mpesa_phone|as_crispy_field }}
+                    </div>
+                    <div class="alert alert-info small">
+                        <i class="bi bi-info-circle me-2"></i>
+                        You'll receive an M-Pesa prompt on this number to complete payment.
+                    </div>
+                </div>
+                
+                <!-- Terms Agreement -->
+                <div class="info-card mt-4">
+                    <div class="form-check">
+                        {{ checkout_form.terms_accepted|as_crispy_field }}
+                        <small class="text-muted">By checking this box, you agree to our <a href="#" class="text-primary">Terms of Service</a> and <a href="#" class="text-primary">Privacy Policy</a></small>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn-checkout" id="placeOrderBtn">
+                    <i class="bi bi-lock-fill"></i>
+                    Proceed to Payment - KSh {{ cart.get_total_price }}
+                </button>
+            </form>
+            {% endif %}
+        </div>
+
+        <!-- Right Column: Order Summary -->
+        <div class="order-summary-card animate-slide-right">
+            <div class="summary-header">
+                <h3><i class="bi bi-receipt"></i> Order Summary</h3>
+            </div>
+            
+            <div class="summary-content">
+                <!-- Order Items -->
+                <div class="order-items">
+                    {% for item in cart.items.all %}
+                    <div class="order-item">
+                        <div class="item-image">
+                            <img src="{{ item.listing.get_image_url }}" 
+                                 alt="{{ item.listing.title }}"
+                                 onerror="this.src='https://placehold.co/60x60/c2c2c2/1f1f1f?text=HS'">
+                        </div>
+                        <div class="item-details">
+                            <div class="item-title">{{ item.listing.title|truncatechars:50 }}</div>
+                            <div class="item-meta">
+                                <span>Qty: {{ item.quantity }}</span>
+                                <span class="item-price">KSh {{ item.get_total_price }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-cart-x text-muted" style="font-size: 2rem;"></i>
+                        <p class="text-muted mt-2">Your cart is empty</p>
+                        <a href="{% url 'all-listings' %}" class="btn btn-primary btn-sm">Browse Products</a>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                {% if cart.items.all %}
+                <!-- Totals -->
+                <div class="totals-section">
+                    <div class="total-row">
+                        <span>Subtotal</span>
+                        <span>KSh {{ cart.get_total_price }}</span>
+                    </div>
+                    <div class="total-row">
+                        <span>Delivery</span>
+                        {% if delivery_fee_estimate != None %}
+                            <span id="deliveryFeeValue">KSh {{ delivery_fee_estimate|floatformat:2 }}</span>
+                        {% else %}
+                            <span class="text-muted" id="deliveryFeeValue">Calculated at checkout</span>
+                        {% endif %}
+                    </div>
+                    {% if delivery_error_message %}
+                    <div class="alert alert-warning mt-3">
+                        <i class="bi bi-exclamation-triangle me-2"></i>{{ delivery_error_message }}
+                    </div>
+                    {% endif %}
+                    <div class="total-row">
+                        <span>Tax</span>
+                        <span>KSh 0.00</span>
+                    </div>
+                    <div class="total-row total">
+                        <span>Total</span>
+                        {% if estimated_total %}
+                            <span id="checkoutTotalValue">KSh {{ estimated_total|floatformat:2 }}</span>
+                        {% else %}
+                            <span id="checkoutTotalValue">KSh {{ cart.get_total_price }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Security Info -->
+                <div class="security-info">
+                    <h6><i class="bi bi-shield-check"></i> Secure Checkout</h6>
+                    <ul class="security-list">
+                        <li><i class="bi bi-check-circle"></i> Encrypted payment</li>
+                        <li><i class="bi bi-check-circle"></i> Buyer protection</li>
+                        <li><i class="bi bi-check-circle"></i> Escrow service</li>
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Section -->
+    <div class="help-card">
+        <h6><i class="bi bi-question-circle"></i> Need Help?</h6>
+        <div class="help-contact">
+            <a href="tel:+254700123456" class="contact-item">
+                <i class="bi bi-telephone"></i>
+                <span>+254 700 123 456</span>
+            </a>
+            <a href="mailto:support@baysoko.com" class="contact-item">
+                <i class="bi bi-envelope"></i>
+                <span>support@baysoko.com</span>
+            </a>
+            <div class="contact-item">
+                <i class="bi bi-clock"></i>
+                <span>Mon-Fri: 8:00 AM - 6:00 PM</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+{% endblock %}
+
+{% block extra_js %}
+{% if store_markers_json %}
+{{ store_markers_json|json_script:"store_markers_json" }}
+{% endif %}
+<script>
+    function initializeCheckoutPage() {
+        console.log('Checkout page initialized');
+        
+        // ===== ELEMENT REFERENCES =====
+        const checkoutForm = document.getElementById('checkoutForm');
+        const placeOrderBtn = document.getElementById('placeOrderBtn');
+        const useAlternateShipping = document.getElementById('useAlternateShipping');
+        const accountInfo = document.getElementById('accountInfo');
+        const alternateShippingForm = document.getElementById('alternateShippingForm');
+        const useLastAddress = document.getElementById('useLastAddress');
+        const enterNewAddress = document.getElementById('enterNewAddress');
+        const paymentMethod = document.getElementById('id_payment_method') || checkoutForm?.querySelector('[name="payment_method"]');
+        const mpesaFields = document.getElementById('mpesaFields');
+        const mpesaPhoneField = document.getElementById('id_mpesa_phone') || checkoutForm?.querySelector('[name="mpesa_phone"]');
+        const toastContainer = document.getElementById('toastContainer');
+        const selectedPaymentMethodField = document.getElementById('selectedPaymentMethod');
+        const shippingAddressField = document.getElementById('id_shipping_address') || checkoutForm?.querySelector('[name="shipping_address"]') || document.querySelector('textarea[name="shipping_address"]');
+        const cityField = document.getElementById('id_city') || checkoutForm?.querySelector('[name="city"]') || document.querySelector('input[name="city"]');
+        const postalCodeField = document.getElementById('id_postal_code') || checkoutForm?.querySelector('[name="postal_code"]') || document.querySelector('input[name="postal_code"]');
+        const shippingLatField = document.getElementById('id_shipping_latitude');
+        const shippingLngField = document.getElementById('id_shipping_longitude');
+        const shippingPlaceIdField = document.getElementById('id_shipping_place_id');
+        const shippingMapEl = (() => {
+            const maps = Array.from(document.querySelectorAll('#checkoutShippingMap'));
+            return maps.find(el => el && el.offsetParent !== null) || maps[0] || null;
+        })();
+        if (shippingAddressField) {
+            shippingAddressField.setAttribute('data-geo-suggest', '1');
+        }
+        
+        // ===== TOAST NOTIFICATION SYSTEM =====
+        window.showToast = function(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast animate-fade-in`;
+            toast.innerHTML = `
+                <div class="toast-body">
+                    <i class="bi ${getToastIcon(type)}"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            
+            // Add type-specific styling
+            if (type === 'success') {
+                toast.style.borderLeft = '4px solid var(--success)';
+            } else if (type === 'error') {
+                toast.style.borderLeft = '4px solid var(--danger)';
+            } else if (type === 'warning') {
+                toast.style.borderLeft = '4px solid var(--warning)';
+            } else {
+                toast.style.borderLeft = '4px solid var(--primary)';
+            }
+            
+            toastContainer.appendChild(toast);
+            
+            // Remove toast after 4 seconds
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100px)';
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 300);
+            }, 4000);
+        };
+        
+        function getToastIcon(type) {
+            switch(type) {
+                case 'success': return 'bi-check-circle-fill text-success';
+                case 'error': return 'bi-exclamation-circle-fill text-danger';
+                case 'warning': return 'bi-exclamation-triangle-fill text-warning';
+                default: return 'bi-info-circle-fill text-primary';
+            }
+        }
+
+        // ===== LEAFLET + NOMINATIM: SHIPPING ADDRESS =====
+        const HOMABAY_LOCATIONS = [
+            { name: 'Homa Bay Town', lat: -0.5236, lon: 34.4560 },
+            { name: 'Homa Bay Stadium', lat: -0.5230, lon: 34.4550 },
+            { name: 'Homa Bay County Referral Hospital', lat: -0.5245, lon: 34.4575 },
+            { name: 'Homa Bay Market', lat: -0.5240, lon: 34.4540 },
+            { name: 'Asego Hill', lat: -0.5450, lon: 34.4690 },
+            { name: 'Rangwe', lat: -0.6362, lon: 34.5530 },
+            { name: 'Kendu Bay', lat: -0.3572, lon: 34.6431 },
+            { name: 'Kendu Bay Market', lat: -0.3575, lon: 34.6400 },
+            { name: 'Rodi Kopany', lat: -0.5620, lon: 34.5970 },
+            { name: 'Oyugis', lat: -0.5080, lon: 34.7430 },
+            { name: 'Mbita', lat: -0.4330, lon: 34.2000 },
+            { name: 'Suba', lat: -0.4310, lon: 34.3000 },
+            { name: 'Ndhiwa', lat: -0.6950, lon: 34.9170 },
+            { name: 'Kobodo', lat: -0.6900, lon: 34.9000 },
+            { name: 'Homa Bay University Town', lat: -0.5140, lon: 34.4630 }
+        ];
+        let HOMABAY_LANDMARKS = [];
+        const LANDMARKS_KEY = 'baysoko_recent_locations';
+
+        async function loadHomabayLandmarks() {
+            if (HOMABAY_LANDMARKS.length) return HOMABAY_LANDMARKS;
+            try {
+                const res = await fetch("{% static 'data/homabay_landmarks.json' %}", { cache: 'force-cache' });
+                if (res.ok) {
+                    const data = await res.json();
+                    HOMABAY_LANDMARKS = Array.isArray(data?.landmarks) ? data.landmarks : [];
+                }
+            } catch (e) {}
+            return HOMABAY_LANDMARKS;
+        }
+
+        function getRecentLocations() {
+            try {
+                const raw = localStorage.getItem(LANDMARKS_KEY);
+                const list = raw ? JSON.parse(raw) : [];
+                return Array.isArray(list) ? list : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function addRecentLocation(label) {
+            if (!label || typeof label !== 'string') return;
+            try {
+                const list = getRecentLocations();
+                const cleaned = label.trim();
+                if (!cleaned) return;
+                const deduped = [cleaned, ...list.filter(l => l.toLowerCase() !== cleaned.toLowerCase())].slice(0, 5);
+                localStorage.setItem(LANDMARKS_KEY, JSON.stringify(deduped));
+            } catch (e) {}
+        }
+
+        const suggestionsEl = (() => {
+            const lists = Array.from(document.querySelectorAll('#shippingLocationSuggestions'));
+            return lists.find(el => el && el.offsetParent !== null) || lists[0] || null;
+        })();
+        let shippingMap = null;
+        let shippingMarker = null;
+        let shippingMapReady = false;
+        let lastShippingAddress = '';
+
+        function setShippingLocation(lat, lng, label, placeId, addr) {
+            if (shippingLatField) shippingLatField.value = Number(lat).toFixed(6);
+            if (shippingLngField) shippingLngField.value = Number(lng).toFixed(6);
+            if (shippingPlaceIdField) shippingPlaceIdField.value = placeId || `${Number(lat).toFixed(6)},${Number(lng).toFixed(6)}`;
+            if (label && shippingAddressField) shippingAddressField.value = label;
+            if (label) addRecentLocation(label);
+            if (addr) {
+                const city = addr.city || addr.town || addr.village || addr.county || addr.state;
+                const postcode = addr.postcode || addr.postal_code;
+                if (cityField && city) cityField.value = city;
+                if (postalCodeField && postcode) postalCodeField.value = postcode;
+            }
+            if (shippingMarker && shippingMap) {
+                shippingMarker.setLatLng([lat, lng]);
+                shippingMap.setView([lat, lng], 15);
+            }
+            if (label) updateDeliveryFeeEstimate(label);
+        }
+
+        const deliveryFeeEl = document.getElementById('deliveryFeeValue');
+        const totalEl = document.getElementById('checkoutTotalValue');
+        const baseTotal = parseFloat('{{ cart.get_total_price|floatformat:2 }}') || 0;
+        let feeTimer = null;
+
+        function setFeeText(text, totalValue) {
+            if (deliveryFeeEl) deliveryFeeEl.textContent = text;
+            if (totalEl && typeof totalValue === 'number') {
+                totalEl.textContent = `KSh ${totalValue.toFixed(2)}`;
+            }
+        }
+
+        async function updateDeliveryFeeEstimate(address) {
+            if (!address || !address.trim()) return;
+            const payload = { shipping_address: address.trim() };
+            if (deliveryFeeEl) deliveryFeeEl.textContent = 'Calculating...';
+            try {
+                const res = await fetch("{% url 'checkout_delivery_fee' %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || ''
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    if (err?.error === 'missing_store_location') {
+                        const stores = (err.stores || []).join(', ');
+                        showToast(`Delivery fee unavailable. Missing store locations: ${stores}`, 'warning');
+                        return;
+                    }
+                    throw new Error('fee_failed');
+                }
+                const data = await res.json();
+                const fee = parseFloat(data.delivery_fee || '0');
+                const total = parseFloat(data.total || (baseTotal + fee).toFixed(2));
+                setFeeText(`KSh ${fee.toFixed(2)}`, total);
+                if (Array.isArray(data.notes) && data.notes.length) {
+                    data.notes.forEach(note => {
+                        if (note) showToast(note, 'info');
+                    });
+                }
+            } catch (e) {
+                setFeeText('Calculated at checkout', baseTotal);
+            }
+        }
+
+        async function resolveAddressToLocation(address) {
+            if (!address || !address.trim()) return;
+            if ((shippingLatField?.value && shippingLngField?.value) || (shippingPlaceIdField?.value)) return;
+            try {
+                const results = await fetchNominatim(address.trim());
+                if (results && results.length) {
+                    const item = results[0];
+                    setShippingLocation(item.lat, item.lon, item.display_name, item.place_id, item.address || null);
+                }
+            } catch (e) {}
+        }
+
+        if (shippingAddressField) {
+            shippingAddressField.addEventListener('input', () => {
+                const currentValue = shippingAddressField.value || '';
+                if (currentValue !== lastShippingAddress) {
+                    lastShippingAddress = currentValue;
+                    if (cityField) cityField.value = '';
+                    if (postalCodeField) postalCodeField.value = '';
+                }
+                clearTimeout(feeTimer);
+                feeTimer = setTimeout(() => {
+                    updateDeliveryFeeEstimate(shippingAddressField.value);
+                }, 500);
+            });
+            shippingAddressField.addEventListener('blur', () => {
+                updateDeliveryFeeEstimate(shippingAddressField.value);
+                resolveAddressToLocation(shippingAddressField.value);
+            });
+            shippingAddressField.addEventListener('focus', () => {
+                refreshShippingMap();
+            });
+        }
+
+        function renderSuggestions(items) {
+            if (!suggestionsEl) return;
+            suggestionsEl.innerHTML = "";
+            if (!items.length) {
+                suggestionsEl.style.display = "none";
+                return;
+            }
+            items.forEach(item => {
+                const row = document.createElement("div");
+                row.className = "location-suggestion-item";
+                row.textContent = item.display_name || item.name || item.label || '';
+                row.addEventListener("click", async () => {
+                    const label = item.display_name || item.name || item.label || '';
+                    if (item.lat != null && item.lon != null) {
+                        setShippingLocation(item.lat, item.lon, label, item.place_id, item.address || null);
+                    } else {
+                        try {
+                            const resolved = await fetchNominatim(label);
+                            const pick = resolved && resolved.length ? resolved[0] : null;
+                            if (pick) {
+                                setShippingLocation(pick.lat, pick.lon, pick.display_name, pick.place_id, pick.address || null);
+                            } else {
+                                if (shippingAddressField) shippingAddressField.value = label;
+                            }
+                        } catch (e) {
+                            if (shippingAddressField) shippingAddressField.value = label;
+                        }
+                    }
+                    suggestionsEl.style.display = "none";
+                });
+                suggestionsEl.appendChild(row);
+            });
+            suggestionsEl.style.display = "block";
+        }
+
+        function filterHomabay(results) {
+            return (results || []).filter(r => {
+                const name = (r.display_name || '').toLowerCase();
+                return (
+                    name.includes('homa bay') ||
+                    name.includes('homabay') ||
+                    name.includes('ndhiwa') ||
+                    name.includes('kendu') ||
+                    name.includes('mbita') ||
+                    name.includes('oyugis') ||
+                    name.includes('rodi') ||
+                    name.includes('suba') ||
+                    name.includes('rangwe')
+                );
+            });
+        }
+
+        async function fetchNominatim(query) {
+            const viewbox = '34.0,-0.1,35.2,-1.1';
+            const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&addressdetails=1&countrycodes=ke&viewbox=${viewbox}&bounded=1&q=${encodeURIComponent(query)}`;
+            const res = await fetch(url, { headers: { "Accept": "application/json" } });
+            if (!res.ok) return [];
+            const data = await res.json();
+            return filterHomabay(data);
+        }
+
+        async function fetchReverseGeocode(lat, lng) {
+            try {
+                const url = `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`;
+                const res = await fetch(url, { headers: { "Accept": "application/json" } });
+                if (!res.ok) return null;
+                const data = await res.json();
+                return data || null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function localHomabayMatches(query) {
+            const q = (query || '').toLowerCase().trim();
+            const recent = getRecentLocations().map(label => ({ display_name: `${label}, Homa Bay County` }));
+            const landmarkBase = HOMABAY_LANDMARKS.length ? HOMABAY_LANDMARKS : [];
+            const landmarkMatches = !q
+                ? landmarkBase.slice(0, 8).map(label => ({ display_name: `${label}, Homa Bay County` }))
+                : landmarkBase.filter(l => l.toLowerCase().includes(q)).slice(0, 8).map(label => ({ display_name: `${label}, Homa Bay County` }));
+            if (!q) return mergeSuggestions(
+                recent,
+                HOMABAY_LOCATIONS.slice(0, 8).map(l => ({
+                display_name: `${l.name}, Homa Bay County`,
+                lat: l.lat,
+                lon: l.lon,
+                place_id: `local_${l.name.replace(/\s+/g, '_')}`,
+                address: l.lat != null && l.lon != null ? { town: 'Homa Bay', county: 'Homa Bay', postcode: '40300' } : null
+            })),
+            landmarkMatches
+            );
+            return mergeSuggestions(
+                HOMABAY_LOCATIONS
+                    .filter(l => l.name.toLowerCase().includes(q))
+                    .slice(0, 8)
+                    .map(l => ({
+                        display_name: `${l.name}, Homa Bay County`,
+                        lat: l.lat,
+                        lon: l.lon,
+                        place_id: `local_${l.name.replace(/\s+/g, '_')}`,
+                        address: l.lat != null && l.lon != null ? { town: 'Homa Bay', county: 'Homa Bay', postcode: '40300' } : null
+                    })),
+                mergeSuggestions(landmarkMatches, recent)
+            );
+        }
+
+        function mergeSuggestions(primary, fallback) {
+            const seen = new Set();
+            const merged = [];
+            [...(primary || []), ...(fallback || [])].forEach(item => {
+                const key = `${(item.display_name || item.name || '').toLowerCase()}_${item.lat || ''}_${item.lon || ''}`;
+                if (seen.has(key)) return;
+                seen.add(key);
+                merged.push(item);
+            });
+            return merged;
+        }
+
+        function setupShippingAutocomplete() {
+            if (!shippingAddressField || !suggestionsEl) return;
+            let debounce;
+            loadHomabayLandmarks();
+            shippingAddressField.addEventListener("input", () => {
+                const q = shippingAddressField.value.trim();
+                clearTimeout(debounce);
+                if (q.length < 2) {
+                    renderSuggestions(localHomabayMatches(q));
+                    return;
+                }
+                debounce = setTimeout(async () => {
+                    let results = [];
+                    try {
+                        results = await fetchNominatim(q);
+                    } catch (e) {
+                        results = [];
+                    }
+                    const local = localHomabayMatches(q);
+                    renderSuggestions(mergeSuggestions(results, local));
+                }, 300);
+            });
+            shippingAddressField.addEventListener('focus', () => {
+                if (!shippingAddressField.value.trim()) {
+                    renderSuggestions(localHomabayMatches(''));
+                }
+            });
+        }
+
+        function initCheckoutMap() {
+            if (!shippingAddressField || !shippingMapEl || !window.L) return;
+            if (shippingMapEl.dataset.initialized === '1') return;
+            const hasCoords = shippingLatField?.value && shippingLngField?.value;
+            const initialLat = hasCoords ? parseFloat(shippingLatField.value) : -0.5236;
+            const initialLng = hasCoords ? parseFloat(shippingLngField.value) : 34.4560;
+
+            shippingMap = L.map(shippingMapEl).setView([initialLat, initialLng], hasCoords ? 14 : 12);
+            addBaseTileLayer(shippingMap);
+            shippingMarker = L.marker([initialLat, initialLng]).addTo(shippingMap);
+            try {
+                const markers = document.getElementById('store_markers_json')
+                    ? JSON.parse(document.getElementById('store_markers_json').textContent || '[]')
+                    : [];
+                markers.forEach(s => {
+                    if (!s || s.lat == null || s.lng == null) return;
+                    L.circleMarker([s.lat, s.lng], {
+                        radius: 5,
+                        color: '#FF9E1F',
+                        weight: 2,
+                        fillColor: '#FF9E1F',
+                        fillOpacity: 0.7
+                    }).addTo(shippingMap).bindPopup(`${s.name}<br><small>${s.location || ''}</small>`);
+                });
+            } catch (e) {}
+            setTimeout(() => shippingMap.invalidateSize(), 200);
+            shippingMap.on("click", async (e) => {
+                let label = shippingAddressField?.value || "";
+                let addr = null;
+                try {
+                    const resolved = await fetchReverseGeocode(e.latlng.lat, e.latlng.lng);
+                    if (resolved?.display_name) label = resolved.display_name;
+                    if (resolved?.address) addr = resolved.address;
+                } catch (err) {}
+                setShippingLocation(e.latlng.lat, e.latlng.lng, label, "", addr);
+            });
+            shippingMapEl.dataset.initialized = '1';
+            shippingMapReady = true;
+        }
+
+        setupShippingAutocomplete();
+        const whenLeafletReady = (cb) => {
+            if (window.L) return cb();
+            setTimeout(() => whenLeafletReady(cb), 100);
+        };
+        whenLeafletReady(initCheckoutMap);
+
+        function refreshShippingMap() {
+            if (!shippingMapEl) return;
+            if (!shippingMapReady && window.L) {
+                initCheckoutMap();
+            }
+            if (shippingMap) {
+                setTimeout(() => shippingMap.invalidateSize(), 200);
+            }
+        }
+
+        async function requestDeviceLocationForShipping() {
+            if (!window.BaysokoGeo) {
+                showToast('Location services are unavailable in this browser.', 'error');
+                return;
+            }
+            try {
+                const loc = await window.BaysokoGeo.requestCurrentLocation();
+                const label = await window.BaysokoGeo.reverseGeocode(loc.lat, loc.lng);
+                if (label) {
+                    setShippingLocation(loc.lat, loc.lng, label, shippingPlaceIdField?.value || "");
+                    showToast('Using your current location for delivery.', 'success');
+                }
+            } catch (err) {
+                showToast('Location access is required to deliver to the right place. Please enable it in your browser settings and try again.', 'warning');
+            }
+        }
+
+        // Auto-suggest current location (if allowed) for shipping
+        if (window.BaysokoGeo && shippingAddressField && (!shippingAddressField.value || !shippingAddressField.value.trim())) {
+            requestDeviceLocationForShipping();
+        }
+
+        // Manual trigger for location permission / pinning
+        const locationButtons = Array.from(document.querySelectorAll('.use-device-location'));
+        locationButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                requestDeviceLocationForShipping();
+            });
+        });
+        
+        // ===== ALTERNATE SHIPPING TOGGLE WITH AJAX LOADING =====
+        // Centralized handler for alternate shipping UI/state with smooth AJAX transitions
+        function setAlternateShippingState(checked) {
+            if (!accountInfo || !alternateShippingForm) return;
+
+            const alternateFields = alternateShippingForm.querySelectorAll('input, select, textarea');
+            const toggleSwitch = alternateShippingForm.parentElement?.querySelector('.switch-slider');
+
+            if (checked) {
+                // Show loading state
+                if (toggleSwitch) toggleSwitch.style.opacity = '0.6';
+                
+                // Animate transition: fade out account info
+                accountInfo.style.transition = 'opacity 0.3s ease, visibility 0.3s ease';
+                accountInfo.style.opacity = '0';
+                accountInfo.style.visibility = 'hidden';
+
+                // Animate transition: fade in alternate form
+                alternateShippingForm.style.transition = 'opacity 0.3s ease, visibility 0.3s ease';
+                alternateShippingForm.style.display = 'block';
+                
+                // Force reflow to ensure display change takes effect
+                void alternateShippingForm.offsetHeight;
+                
+                alternateShippingForm.style.opacity = '1';
+                alternateShippingForm.style.visibility = 'visible';
+
+                // Enable all form fields for input
+                alternateFields.forEach(field => {
+                    // Never disable CSRF or other hidden connector fields
+                    if (field.name && field.name.toLowerCase().includes('csrf')) return;
+                    field.disabled = false;
+                    // Mark required if field originally had required attribute or is a visible contact field
+                    if (field.hasAttribute('data-required') || ['first_name','last_name','email','phone_number'].includes(field.name)) {
+                        field.required = true;
+                    }
+                });
+
+                // Restore toggle opacity
+                if (toggleSwitch) toggleSwitch.style.opacity = '1';
+                showToast('Shipping form loaded - enter your delivery address', 'info');
+                
+                // Focus first input field for better UX
+                const firstInput = alternateShippingForm.querySelector('input:not([type="hidden"])');
+                if (firstInput) setTimeout(() => firstInput.focus(), 100);
+                refreshShippingMap();
+                
+            } else {
+                // Show loading state
+                if (toggleSwitch) toggleSwitch.style.opacity = '0.6';
+                
+                // Animate transition: fade out alternate form
+                alternateShippingForm.style.transition = 'opacity 0.3s ease, visibility 0.3s ease';
+                alternateShippingForm.style.opacity = '0';
+                alternateShippingForm.style.visibility = 'hidden';
+
+                // Animate transition: fade in account info
+                accountInfo.style.transition = 'opacity 0.3s ease, visibility 0.3s ease';
+                accountInfo.style.display = 'block';
+                
+                // Force reflow
+                void accountInfo.offsetHeight;
+                
+                accountInfo.style.opacity = '1';
+                accountInfo.style.visibility = 'visible';
+
+                // Disable alternate shipping fields to prevent form submission
+                alternateFields.forEach(field => {
+                    if (field.name && field.name.toLowerCase().includes('csrf')) return;
+                    field.disabled = true;
+                    field.required = false;
+                });
+
+                // Fill visible form fields with account info where applicable
+                fillWithAccountInfo();
+
+                // Restore toggle opacity
+                if (toggleSwitch) toggleSwitch.style.opacity = '1';
+                showToast('Using your account details', 'info');
+                refreshShippingMap();
+            }
+        }
+
+        if (useAlternateShipping) {
+            // Guard existence of alternateShippingForm/accountInfo
+            if (!alternateShippingForm) {
+                console.warn('alternateShippingForm not found in DOM');
+            }
+
+            useAlternateShipping.addEventListener('change', function() {
+                try {
+                    setAlternateShippingState(this.checked);
+                } catch (err) {
+                    console.warn('Error toggling alternate shipping', err);
+                }
+            });
+
+            // Make the visible slider element toggle the checkbox (label is non-clickable now)
+            const sliderEl = document.querySelector('.switch-slider');
+            if (sliderEl) {
+                sliderEl.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    try {
+                        useAlternateShipping.checked = !useAlternateShipping.checked;
+                        // update ARIA
+                        this.setAttribute('aria-checked', useAlternateShipping.checked ? 'true' : 'false');
+                        useAlternateShipping.dispatchEvent(new Event('change'));
+                    } catch (err) { console.warn('Error toggling via slider', err); }
+                });
+            }
+
+            // Initialize based on current checkbox state with smooth load
+            try {
+                // Set initial opacity and visibility for smooth transitions
+                if (useAlternateShipping.checked) {
+                    alternateShippingForm.style.opacity = '1';
+                    alternateShippingForm.style.visibility = 'visible';
+                    accountInfo.style.opacity = '0';
+                    accountInfo.style.visibility = 'hidden';
+                    accountInfo.style.display = 'none';
+                } else {
+                    alternateShippingForm.style.opacity = '0';
+                    alternateShippingForm.style.visibility = 'hidden';
+                    accountInfo.style.opacity = '1';
+                    accountInfo.style.visibility = 'visible';
+                }
+                
+                setAlternateShippingState(useAlternateShipping.checked);
+            } catch (err) {
+                console.warn('Error initializing alternate shipping state', err);
+            }
+        } else {
+            // If toggle control is missing, ensure alternate fields are disabled to avoid validation
+            if (alternateShippingForm) {
+                const alternateFields = alternateShippingForm.querySelectorAll('input, select, textarea');
+                alternateFields.forEach(field => {
+                    if (field.name && field.name.toLowerCase().includes('csrf')) return;
+                    field.disabled = true;
+                    field.required = false;
+                });
+            }
+        }
+        
+        // ===== FORM VALIDATION =====
+        function validateCheckoutForm() {
+            const errors = [];
+            const useAlternate = document.getElementById('useAlternateShipping') && document.getElementById('useAlternateShipping').checked;
+            
+            // Check alternate shipping fields if toggled
+            if (useAlternate) {
+                const firstName = checkoutForm?.querySelector('[name="first_name"]') || document.querySelector('[name="first_name"]');
+                const lastName = checkoutForm?.querySelector('[name="last_name"]') || document.querySelector('[name="last_name"]');
+                const email = checkoutForm?.querySelector('[name="email"]') || document.querySelector('[name="email"]');
+                const phone = checkoutForm?.querySelector('[name="phone_number"]') || document.querySelector('[name="phone_number"]');
+                
+                if (!firstName?.value?.trim()) errors.push('First Name is required');
+                if (!lastName?.value?.trim()) errors.push('Last Name is required');
+                if (!email?.value?.trim()) errors.push('Email is required');
+                if (!phone?.value?.trim()) errors.push('Phone Number is required');
+            }
+            
+            // Check shipping address and city/postal code (always required)
+            const shippingAddress = checkoutForm?.querySelector('[name="shipping_address"]') || document.querySelector('[name="shipping_address"]');
+            const city = checkoutForm?.querySelector('[name="city"]') || document.querySelector('[name="city"]');
+            const postalCode = checkoutForm?.querySelector('[name="postal_code"]') || document.querySelector('[name="postal_code"]');
+            
+            if (!shippingAddress?.value?.trim()) errors.push('Shipping Address is required');
+            if (!city?.value?.trim()) errors.push('City is required');
+            if (!postalCode?.value?.trim()) errors.push('Postal Code is required');
+            const placeId = document.getElementById('id_shipping_place_id');
+            const hasLatLng = (document.getElementById('id_shipping_latitude')?.value && document.getElementById('id_shipping_longitude')?.value);
+            if (shippingAddress?.value?.trim() && placeId && !placeId.value && !hasLatLng) {
+                errors.push('Please select a valid location from the map suggestions.');
+            }
+            
+            // Check M-Pesa phone
+            const mpesaPhone = checkoutForm?.querySelector('[name="mpesa_phone"]') || document.querySelector('[name="mpesa_phone"]');
+            if (!mpesaPhone?.value?.trim()) errors.push('M-Pesa Phone Number is required');
+            
+            // Check terms
+            const termsCheckbox = document.getElementById('terms') || checkoutForm?.querySelector('[name="terms"]');
+            if (!termsCheckbox?.checked) errors.push('You must agree to Terms of Service');
+            
+            return errors;
+        }
+        
+        // Display and handle validation errors
+        if (checkoutForm) {
+            if (checkoutForm.dataset.initialized === '1') {
+                // already initialized for this DOM instance
+                return;
+            }
+            checkoutForm.addEventListener('submit', function(e) {
+                const errors = validateCheckoutForm();
+                if (errors.length > 0) {
+                    e.preventDefault();
+                    
+                    // Display error alert
+                    const errorContainer = document.getElementById('checkoutValidationErrors');
+                    const errorList = document.getElementById('errorList');
+                    if (errorContainer && errorList) {
+                        errorList.innerHTML = errors.map(err => `<li class="small">${err}</li>`).join('');
+                        errorContainer.style.display = 'block';
+                        errorContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                    
+                    return false;
+                }
+                
+                // Clear errors if validation passes
+                const errorContainer = document.getElementById('checkoutValidationErrors');
+                if (errorContainer) errorContainer.style.display = 'none';
+            });
+        }
+        
+        function fillWithAccountInfo() {
+            const firstNameField = document.getElementById('id_first_name') || checkoutForm?.querySelector('[name="first_name"]');
+            const lastNameField = document.getElementById('id_last_name') || checkoutForm?.querySelector('[name="last_name"]');
+            const emailField = document.getElementById('id_email') || checkoutForm?.querySelector('[name="email"]');
+            const phoneField = document.getElementById('id_phone_number') || checkoutForm?.querySelector('[name="phone_number"]');
+            
+            if (firstNameField && !firstNameField.value) {
+                firstNameField.value = '{{ request.user.first_name|escapejs }}';
+            }
+            if (lastNameField && !lastNameField.value) {
+                lastNameField.value = '{{ request.user.last_name|escapejs }}';
+            }
+            if (emailField && !emailField.value) {
+                emailField.value = '{{ request.user.email|escapejs }}';
+            }
+            if (phoneField && !phoneField.value && '{{ request.user.phone_number|escapejs }}') {
+                phoneField.value = '{{ request.user.phone_number|escapejs }}';
+            }
+
+            // mark initialized to avoid duplicate listeners on same DOM instance
+            checkoutForm.dataset.initialized = '1';
+        }
+        
+        // ===== PAYMENT METHOD TOGGLE =====
+        if (paymentMethod && mpesaFields) {
+            // Ensure only M-Pesa is selectable/used. If paymentMethod is a select, disable other options.
+            try {
+                if (paymentMethod.tagName && paymentMethod.tagName.toLowerCase() === 'select') {
+                    // Disable non-mpesa options
+                    Array.from(paymentMethod.options).forEach(opt => {
+                        if (opt.value !== 'mpesa') {
+                            opt.disabled = true;
+                        }
+                    });
+                    paymentMethod.value = 'mpesa';
+                } else if (paymentMethod.type === 'hidden' || paymentMethod.tagName.toLowerCase() === 'input') {
+                    paymentMethod.value = 'mpesa';
+                }
+
+                // Always show mpesa fields and require phone
+                mpesaFields.style.display = 'block';
+                if (mpesaPhoneField) {
+                    mpesaPhoneField.required = true;
+                    if (!mpesaPhoneField.value && '{{ request.user.phone_number|escapejs }}') {
+                        mpesaPhoneField.value = '{{ request.user.phone_number|escapejs }}';
+                    }
+                }
+
+                // Update hidden selectedPaymentMethodField
+                if (selectedPaymentMethodField) selectedPaymentMethodField.value = 'mpesa';
+
+                // Attach change listener only to update hidden field if user somehow changes it
+                paymentMethod.addEventListener && paymentMethod.addEventListener('change', function() {
+                    if (selectedPaymentMethodField) selectedPaymentMethodField.value = this.value || 'mpesa';
+                });
+            } catch (err) {
+                console.warn('Payment method enforcement failed', err);
+            }
+        }
+        
+        // ===== PREVIOUS ADDRESS HANDLING =====
+        if (useLastAddress) {
+            useLastAddress.addEventListener('click', function() {
+                // These would be populated from a previous order API
+                const shippingAddressField = document.getElementById('id_shipping_address') || checkoutForm?.querySelector('[name="shipping_address"]');
+                const cityField = document.getElementById('id_city') || checkoutForm?.querySelector('[name="city"]');
+                const postalCodeField = document.getElementById('id_postal_code') || checkoutForm?.querySelector('[name="postal_code"]');
+                
+                // For demo purposes - in real app, fetch from user's last order
+                if (shippingAddressField) shippingAddressField.value = '123 Previous Street';
+                if (cityField) cityField.value = 'Nairobi';
+                if (postalCodeField) postalCodeField.value = '00100';
+                
+                showToast('Previous address loaded', 'success');
+            });
+        }
+        
+        if (enterNewAddress) {
+            enterNewAddress.addEventListener('click', function() {
+                const shippingAddressField = document.getElementById('id_shipping_address') || checkoutForm?.querySelector('[name="shipping_address"]');
+                const cityField = document.getElementById('id_city') || checkoutForm?.querySelector('[name="city"]');
+                const postalCodeField = document.getElementById('id_postal_code') || checkoutForm?.querySelector('[name="postal_code"]');
+                
+                if (shippingAddressField) {
+                    shippingAddressField.value = '';
+                    shippingAddressField.focus();
+                }
+                if (cityField) cityField.value = '';
+                if (postalCodeField) postalCodeField.value = '';
+                
+                showToast('Enter new shipping address', 'info');
+            });
+        }
+        
+        // ===== FORM VALIDATION =====
+        function validateForm() {
+            let isValid = true;
+            
+            // Always require shipping address
+            const requiredFields = [
+                checkoutForm?.querySelector('[name="shipping_address"]'),
+                checkoutForm?.querySelector('[name="payment_method"]'),
+                checkoutForm?.querySelector('#terms') || checkoutForm?.querySelector('[name="terms_accepted"]')
+            ];
+            
+            // If alternate shipping is checked, also require name, email, phone
+            if (useAlternateShipping && useAlternateShipping.checked) {
+                requiredFields.push(
+                    checkoutForm?.querySelector('[name="first_name"]'),
+                    checkoutForm?.querySelector('[name="last_name"]'),
+                    checkoutForm?.querySelector('[name="email"]'),
+                    checkoutForm?.querySelector('[name="phone_number"]')
+                );
+            }
+            
+            // If M-Pesa is selected, require phone number
+            if (paymentMethod && paymentMethod.value === 'mpesa') {
+                requiredFields.push(checkoutForm?.querySelector('[name="mpesa_phone"]'));
+            }
+            
+            // Validate each required field
+            requiredFields.forEach(field => {
+                if (field && field.required) {
+                    const value = field.value ? field.value.trim() : '';
+                    const parent = field.closest('.form-group');
+                    
+                    if (!value) {
+                        field.classList.add('is-invalid');
+                        if (parent) {
+                            parent.classList.add('has-error');
+                        }
+                        isValid = false;
+                    } else {
+                        field.classList.remove('is-invalid');
+                        if (parent) {
+                            parent.classList.remove('has-error');
+                        }
+                    }
+                }
+            });
+            
+            // Validate M-Pesa phone format
+            if (paymentMethod && paymentMethod.value === 'mpesa' && mpesaPhoneField) {
+                const phoneRegex = /^(\+254|0)[1-9]\d{8}$/;
+                if (!phoneRegex.test(mpesaPhoneField.value.trim())) {
+                    mpesaPhoneField.classList.add('is-invalid');
+                    showToast('Please enter a valid Kenyan phone number (e.g., 0712345678 or +254712345678)', 'error');
+                    isValid = false;
+                }
+            }
+            
+            return isValid;
+        }
+        
+        // ===== FORM SUBMISSION =====
+        if (checkoutForm) {
+            checkoutForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Validate form
+                if (!validateForm()) {
+                    showToast('Please fill in all required fields correctly', 'error');
+                    
+                    // Scroll to first error
+                    const firstError = document.querySelector('.is-invalid');
+                    if (firstError) {
+                        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        firstError.focus();
+                    }
+                    return;
+                }
+                
+                // Show loading state
+                placeOrderBtn.innerHTML = '<i class="bi bi-hourglass-split spin"></i> Processing...';
+                placeOrderBtn.disabled = true;
+                
+                // Store payment method in session for next page
+                if (paymentMethod) {
+                    sessionStorage.setItem('selected_payment_method', paymentMethod.value);
+                }
+                
+                // CRITICAL FIX: Don't disable the CSRF token field
+                // Only disable the submit button and form fields that we want to exclude from submission
+                
+                // If alternate shipping is not checked, we need to ensure those fields are not validated
+                if (useAlternateShipping && !useAlternateShipping.checked) {
+                    // Temporarily fill and disable the fields
+                    fillWithAccountInfo();
+                    
+                    // Disable the alternate shipping fields so Django doesn't validate them
+                    // But do NOT disable the CSRF token
+                    const alternateFields = alternateShippingForm.querySelectorAll('input:not([name="csrfmiddlewaretoken"]), select, textarea');
+                    alternateFields.forEach(field => {
+                        field.disabled = true;
+                    });
+                }
+                
+                // IMPORTANT: Re-enable any fields that might have been disabled before submission
+                // Ensure CSRF token is enabled
+                const csrfTokenField = checkoutForm.querySelector('[name="csrfmiddlewaretoken"]');
+                if (csrfTokenField && csrfTokenField.disabled) {
+                    csrfTokenField.disabled = false;
+                }
+                
+                // Submit the form
+                setTimeout(() => {
+                    checkoutForm.submit();
+                }, 1000);
+            });
+        }
+        
+        // ===== CHECKOUT FORM VALIDATION =====
+        function validateCheckoutForm() {
+            const errors = [];
+            const useAlternateShipping = checkoutForm.querySelector('#useAlternateShipping');
+            const isAlternate = useAlternateShipping && useAlternateShipping.checked;
+
+            // Validate alternate shipping fields if toggled
+            if (isAlternate) {
+                const firstName = checkoutForm.querySelector('input[name="first_name"]');
+                const lastName = checkoutForm.querySelector('input[name="last_name"]');
+                const email = checkoutForm.querySelector('input[name="email"]');
+                const altPhone = checkoutForm.querySelector('input[name="phone_number"]');
+
+                if (!firstName || !firstName.value.trim()) errors.push('First name is required');
+                if (!lastName || !lastName.value.trim()) errors.push('Last name is required');
+                if (!email || !email.value.trim()) errors.push('Email is required');
+                else if (!email.value.includes('@')) errors.push('Email must be valid');
+                if (!altPhone || !altPhone.value.trim()) errors.push('Phone number is required for shipping');
+            }
+
+            // Validate common fields
+            const shippingAddress = checkoutForm.querySelector('textarea[name="shipping_address"]');
+            if (!shippingAddress || !shippingAddress.value.trim()) errors.push('Shipping address is required');
+            const placeId = document.getElementById('id_shipping_place_id');
+            const hasLatLng = (document.getElementById('id_shipping_latitude')?.value && document.getElementById('id_shipping_longitude')?.value);
+            if (shippingAddress && shippingAddress.value.trim() && placeId && !placeId.value && !hasLatLng) {
+                errors.push('Please select a valid location from the map suggestions.');
+            }
+
+            // Validate payment method phone
+            const mpesaPhone = checkoutForm.querySelector('input[name="mpesa_phone"]');
+            if (mpesaPhone && !mpesaPhone.value.trim()) {
+                errors.push('M-Pesa phone number is required');
+            } else if (mpesaPhone && mpesaPhone.value.trim().length < 9) {
+                errors.push('M-Pesa phone number must be at least 9 digits');
+            }
+
+            // Validate terms agreement
+            const terms = checkoutForm.querySelector('#terms');
+            if (terms && !terms.checked) errors.push('You must agree to the Terms of Service');
+
+            return errors;
+        }
+
+        function displayValidationErrors(errors) {
+            const errorContainer = checkoutForm.querySelector('#checkoutValidationErrors');
+            const errorList = checkoutForm.querySelector('#errorList');
+            if (!errorContainer || !errorList) return;
+
+            if (errors.length > 0) {
+                errorList.innerHTML = errors.map(err => `<li>${err}</li>`).join('');
+                errorContainer.style.display = 'block';
+                errorContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+                errorContainer.style.display = 'none';
+            }
+        }
+
+        // ===== REAL-TIME VALIDATION =====
+        if (checkoutForm) {
+            const formInputs = checkoutForm.querySelectorAll('input, select, textarea');
+            formInputs.forEach(input => {
+                input.addEventListener('blur', function() {
+                    if (this.hasAttribute('required') && !this.value.trim()) {
+                        this.classList.add('is-invalid');
+                    } else {
+                        this.classList.remove('is-invalid');
+                    }
+                });
+                
+                input.addEventListener('input', function() {
+                    if (this.value.trim()) {
+                        this.classList.remove('is-invalid');
+                    }
+                });
+            });
+
+            // Validate on form submit
+            checkoutForm.addEventListener('submit', function(e) {
+                const errors = validateCheckoutForm();
+                displayValidationErrors(errors);
+                if (errors.length > 0) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+        }
+        
+        // ===== INITIALIZATION =====
+        function initialize() {
+            console.log('Checkout page initialized');
+            
+            // Add animation to order items
+            document.querySelectorAll('.order-item').forEach((item, index) => {
+                item.classList.add('animate-fade-in');
+                item.style.animationDelay = `${index * 0.1}s`;
+            });
+            
+            // Display any Django messages as toasts
+            {% for message in messages %}
+            setTimeout(() => {
+                showToast('{{ message|escapejs }}', '{{ message.tags }}');
+            }, {{ forloop.counter0 }} * 100 + 300);
+            {% endfor %}
+            
+            // Auto-scroll to any invalid fields
+            setTimeout(() => {
+                const firstInvalid = document.querySelector('.is-invalid');
+                if (firstInvalid) {
+                    firstInvalid.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'center' 
+                    });
+                    firstInvalid.focus();
+                }
+            }, 500);
+            
+            // Check if we have a stored payment method from session
+            const storedPaymentMethod = sessionStorage.getItem('selected_payment_method');
+            if (storedPaymentMethod && paymentMethod) {
+                paymentMethod.value = storedPaymentMethod;
+                paymentMethod.dispatchEvent(new Event('change'));
+            }
+        }
+        
+        // Start initialization
+        initialize();
+    }
+
+    // Run on first load and after AJAX page replacements
+    document.addEventListener('DOMContentLoaded', initializeCheckoutPage);
+    window.addEventListener('ajaxPageLoaded', function(e){
+        try { initializeCheckoutPage(); } catch(err) { console.warn('initializeCheckoutPage failed', err); }
+    });
+
+    // ===== WINDOW RESIZE HANDLER =====
+    let resizeTimeout;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            // Adjust layout for mobile
+            if (window.innerWidth < 768) {
+                document.querySelector('.order-summary-card')?.classList.remove('sticky');
+            }
+        }, 250);
+    });
+
+    // Clean up session storage on page unload
+    window.addEventListener('beforeunload', function() {
+        sessionStorage.removeItem('selected_payment_method');
+    });
+</script>
+{% endblock %}

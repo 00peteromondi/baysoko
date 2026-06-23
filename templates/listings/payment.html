@@ -1,0 +1,1612 @@
+<!-- templates/listings/payment.html -->
+{% extends 'base.html' %}
+{% load static %}
+{% load custom_filters %}
+{% load humanize %}
+
+{% block title %}Payment - Order #{{ order.id }} - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== GLOBAL STYLES ===== */
+    .container-custom {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+    
+    /* ===== BREADCRUMB ===== */
+    .breadcrumb {
+        background: var(--bg-secondary);
+        padding: 10px 12px;
+        border-radius: var(--radius-md);
+        margin-bottom: 16px;
+        border: 1px solid var(--border-color);
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        font-size: 12px;
+    }
+    
+    .breadcrumb-item a {
+        text-decoration: none;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+    }
+    
+    /* ===== PAYMENT HERO SECTION ===== */
+    .payment-hero {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
+        border: 1px solid var(--border-color);
+    }
+    
+    .payment-header {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        padding: 16px;
+        color: white;
+        text-align: center;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+    
+    .payment-header h1 {
+        font-size: 18px;
+        font-weight: 800;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+    
+    /* ===== STEP INDICATOR ===== */
+    .step-indicator {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        position: relative;
+        flex: 1;
+    }
+    
+    .step.active .step-number {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        border-color: var(--primary);
+    }
+    
+    .step.completed .step-number {
+        background: var(--success);
+        color: white;
+        border-color: var(--success);
+    }
+    
+    .step-number {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--card-bg);
+        border: 2px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+    
+    .step-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-align: center;
+        white-space: nowrap;
+    }
+    
+    .step.active .step-label {
+        color: var(--primary);
+        font-weight: 700;
+    }
+    
+    .step-line {
+        flex: 1;
+        height: 2px;
+        background: var(--border-color);
+        margin: 0 8px;
+        position: relative;
+        top: -16px;
+    }
+    
+    .step-line.active {
+        background: var(--primary);
+    }
+    
+    /* ===== FORM SECTIONS ===== */
+    .form-section {
+        padding: 16px;
+    }
+    
+    .section-title {
+        font-size: 16px;
+        font-weight: 800;
+        margin-bottom: 16px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .section-title i {
+        color: var(--primary);
+        background: rgba(255, 107, 53, 0.1);
+        padding: 8px;
+        border-radius: 8px;
+        font-size: 14px;
+    }
+    
+    /* Form Fields */
+    .form-group {
+        margin-bottom: 16px;
+    }
+    
+    .form-label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--text-primary);
+    }
+    
+    .form-control {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+    
+    .form-control:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+    }
+    
+    /* Payment Method Cards */
+    .payment-method-card {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        border: 2px solid var(--border-color);
+        margin-bottom: 12px;
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+    
+    .payment-method-card:hover {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .payment-method-card.selected {
+        border-color: var(--primary);
+        background-color: rgba(255, 107, 53, 0.05);
+    }
+    
+    .payment-method-card .form-check {
+        margin: 0;
+    }
+    
+    .payment-method-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        margin-right: 12px;
+        flex-shrink: 0;
+    }
+    
+    .mpesa-icon {
+        background: linear-gradient(135deg, #00A300 0%, #007A00 100%);
+        color: white;
+    }
+    
+    .card-icon {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+    }
+    
+    .cash-icon {
+        background: linear-gradient(135deg, #FFC107 0%, #FF9800 100%);
+        color: white;
+    }
+    
+    .method-details h6 {
+        margin-bottom: 4px;
+        color: var(--text-primary);
+        font-size: 14px;
+        font-weight: 700;
+    }
+    
+    .method-details p {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    
+    /* Payment Status */
+    .payment-status {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 12px;
+        display: inline-block;
+    }
+    
+    .status-pending {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    
+    .status-initiated {
+        background-color: #d1edff;
+        color: #0c5460;
+    }
+    
+    .status-completed {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .status-failed {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    /* M-Pesa Simulation */
+    .mpesa-simulation {
+        background: linear-gradient(135deg, #00A300 0%, #007A00 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+    
+    .mpesa-simulation .text-center {
+        margin-bottom: 16px;
+    }
+    
+    .mpesa-simulation .display-4 {
+        font-size: 2.5rem;
+        margin-bottom: 8px;
+    }
+    
+    /* Alert Styling */
+    .alert {
+        border-radius: var(--radius-md);
+        padding: 12px;
+        margin-bottom: 16px;
+        border: 1px solid transparent;
+    }
+    
+    .alert-info {
+        background-color: #d1edff;
+        border-color: #bee5eb;
+        color: #0c5460;
+    }
+    
+    .alert-warning {
+        background-color: #fff3cd;
+        border-color: #ffeaa7;
+        color: #856404;
+    }
+    
+    .alert-success {
+        background-color: #d4edda;
+        border-color: #c3e6cb;
+        color: #155724;
+    }
+    
+    /* Buttons */
+    .btn-payment {
+        width: 100%;
+        padding: 12px;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        border: none;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .btn-payment:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .btn-payment:active {
+        transform: translateY(0);
+    }
+    
+    .btn-payment:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+        transform: none;
+    }
+    
+    .btn-outline-info {
+        border: 1px solid var(--primary);
+        color: var(--primary);
+        background: transparent;
+        padding: 6px 12px;
+        border-radius: var(--radius-md);
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-outline-info:hover {
+        background: var(--primary);
+        color: white;
+    }
+    
+    /* ===== ORDER SUMMARY CARD ===== */
+    .order-summary-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 20px;
+    }
+    
+    .summary-header {
+        background: var(--bg-secondary);
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .summary-header h5 {
+        font-size: 16px;
+        font-weight: 800;
+        margin: 0;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .summary-content {
+        padding: 16px;
+    }
+    
+    /* Order Items */
+    .order-items {
+        max-height: 300px;
+        overflow-y: auto;
+        margin-bottom: 16px;
+        padding-right: 4px;
+    }
+    
+    .order-items::-webkit-scrollbar {
+        width: 4px;
+    }
+    
+    .order-items::-webkit-scrollbar-track {
+        background: var(--bg-secondary);
+        border-radius: 2px;
+    }
+    
+    .order-items::-webkit-scrollbar-thumb {
+        background: var(--primary);
+        border-radius: 2px;
+    }
+    
+    .order-item {
+        display: flex;
+        gap: 12px;
+        padding: 10px;
+        border-bottom: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+    }
+    
+    .order-item:hover {
+        background: var(--bg-secondary);
+        border-radius: 8px;
+    }
+    
+    .order-item:last-child {
+        border-bottom: none;
+    }
+    
+    .item-image {
+        width: 50px;
+        height: 50px;
+        border-radius: 8px;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+    
+    .item-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.3s ease;
+    }
+    
+    .order-item:hover .item-image img {
+        transform: scale(1.05);
+    }
+    
+    .item-details {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    
+    .item-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+        line-height: 1.3;
+    }
+    
+    .item-meta {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+    
+    .item-price {
+        font-weight: 700;
+        font-size: 14px;
+        color: var(--primary);
+        display: flex;
+        align-items: center;
+    }
+    
+    /* Totals */
+    .totals-section {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        margin-bottom: 16px;
+        border: 1px solid var(--border-color);
+    }
+    
+    .total-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        font-size: 14px;
+    }
+    
+    .total-row.total {
+        font-weight: 800;
+        font-size: 18px;
+        color: var(--primary);
+        border-top: 1px solid var(--border-color);
+        padding-top: 10px;
+        margin-top: 6px;
+    }
+    
+    /* Security Badge */
+    .security-badge {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        margin-top: 16px;
+    }
+    
+    .security-badge h6 {
+        margin-bottom: 8px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        font-weight: 700;
+    }
+    
+    /* Help Card */
+    .help-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 16px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-top: 20px;
+    }
+    
+    .help-card h6 {
+        margin-bottom: 12px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 700;
+    }
+    
+    .help-contact {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .contact-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-secondary);
+        font-size: 13px;
+        text-decoration: none;
+        transition: color 0.2s ease;
+    }
+    
+    .contact-item:hover {
+        color: var(--primary);
+    }
+    
+    .contact-item i {
+        color: var(--primary);
+        font-size: 14px;
+    }
+    
+    /* ===== TOAST NOTIFICATIONS ===== */
+    .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1060;
+    }
+    
+    .toast {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-lg);
+        backdrop-filter: blur(10px);
+    }
+    
+    .toast-body {
+        padding: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-primary);
+    }
+    
+    /* Processing Section */
+    .processing-section {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        text-align: center;
+        margin-bottom: 16px;
+    }
+    
+    .spinner-border {
+        width: 3rem;
+        height: 3rem;
+    }
+    
+    /* ===== ANIMATIONS ===== */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    @keyframes slideInRight {
+        from { opacity: 0; transform: translateX(20px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+    
+    .animate-fade-in {
+        animation: fadeIn 0.5s ease-out;
+    }
+    
+    .animate-slide-right {
+        animation: slideInRight 0.5s ease-out;
+    }
+    
+    /* ===== RESPONSIVE DESIGN ===== */
+    @media (max-width: 374px) {
+        .container-custom {
+            padding-left: 6px;
+            padding-right: 6px;
+        }
+        
+        .payment-header {
+            padding: 12px;
+        }
+        
+        .payment-header h1 {
+            font-size: 16px;
+        }
+        
+        .step-indicator {
+            padding: 8px 12px;
+        }
+        
+        .step-number {
+            width: 28px;
+            height: 28px;
+            font-size: 12px;
+        }
+        
+        .step-label {
+            font-size: 9px;
+        }
+        
+        .form-section {
+            padding: 12px;
+        }
+        
+        .section-title {
+            font-size: 14px;
+        }
+    }
+    
+    @media (min-width: 375px) and (max-width: 424px) {
+        .payment-header h1 {
+            font-size: 17px;
+        }
+        
+        .step-label {
+            font-size: 10px;
+        }
+    }
+    
+    @media (min-width: 425px) and (max-width: 575px) {
+        .payment-header h1 {
+            font-size: 18px;
+        }
+    }
+    
+    @media (min-width: 576px) {
+        .container-custom {
+            padding-left: 16px;
+            padding-right: 16px;
+        }
+        
+        .payment-header {
+            padding: 20px;
+        }
+        
+        .payment-header h1 {
+            font-size: 22px;
+        }
+        
+        .form-section {
+            padding: 20px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+        }
+        
+        .step-label {
+            font-size: 12px;
+        }
+    }
+    
+    @media (min-width: 768px) {
+        .payment-hero {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            padding: 20px;
+        }
+        
+        .payment-header {
+            grid-column: 1 / -1;
+        }
+        
+        .step-indicator {
+            grid-column: 1 / -1;
+        }
+        
+        .order-summary-card {
+            position: sticky;
+            top: 100px;
+            align-self: start;
+        }
+    }
+    
+    @media (min-width: 992px) {
+        .payment-hero {
+            grid-template-columns: 1.5fr 1fr;
+            gap: 32px;
+            padding: 24px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-custom py-3">
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+    
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}"><i class="bi bi-house"></i> Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'view_cart' %}">Cart</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'checkout' %}">Checkout</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Payment</li>
+        </ol>
+    </nav>
+
+    <!-- Main Payment Container -->
+    <div class="payment-hero">
+        <!-- Header -->
+        <div class="payment-header">
+            <h1><i class="bi bi-lock-fill"></i> Secure Payment</h1>
+            <p class="mb-0">Complete your purchase for Order #{{ order.id }}</p>
+        </div>
+
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step completed">
+                <div class="step-number">1</div>
+                <span class="step-label">Shipping</span>
+            </div>
+            <div class="step-line active"></div>
+            <div class="step active">
+                <div class="step-number">2</div>
+                <span class="step-label">Payment</span>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <span class="step-label">Confirmation</span>
+            </div>
+        </div>
+
+        <!-- Left Column: Payment Form -->
+        <div class="form-section">
+            <!-- Payment Status -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="section-title mb-0"><i class="bi bi-credit-card"></i> Payment Details</h4>
+                <div>
+                    {% if order.payment.status == 'pending' %}
+                        <span class="payment-status status-pending">
+                            <i class="bi bi-hourglass-split me-1"></i> Pending
+                        </span>
+                    {% elif order.payment.status == 'initiated' %}
+                        <span class="payment-status status-initiated">
+                            <i class="bi bi-arrow-repeat me-1"></i> Processing
+                        </span>
+                    {% elif order.payment.status == 'completed' %}
+                        <span class="payment-status status-completed">
+                            <i class="bi bi-check-circle me-1"></i> Completed
+                        </span>
+                    {% elif order.payment.status == 'failed' %}
+                        <span class="payment-status status-failed">
+                            <i class="bi bi-exclamation-circle me-1"></i> Failed
+                        </span>
+                    {% elif order.payment.status == 'refunded' %}
+                        <span class="payment-status" style="background-color: #d4d4d4; color: #333;">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i> Refunded
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Payment Method Selection (Only show if payment is pending) -->
+            {% if order.payment.status == 'pending' %}
+            <div class="mb-4">
+                <h5 class="section-title"><i class="bi bi-wallet2"></i> Choose Payment Method</h5>
+                
+                <!-- M-Pesa Option -->
+                <div class="payment-method-card" data-method="mpesa">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="payment_method" id="mpesa" value="mpesa" 
+                               {% if order.payment.method == 'mpesa' or selected_payment_method == 'mpesa' %}checked{% endif %}>
+                        <label class="form-check-label w-100" for="mpesa">
+                            <div class="d-flex align-items-center">
+                                <div class="payment-method-icon mpesa-icon">
+                                    <i class="bi bi-phone"></i>
+                                </div>
+                                <div class="method-details">
+                                    <h6>M-Pesa</h6>
+                                    <p>Pay instantly via M-Pesa. You'll receive a prompt on your phone.</p>
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Card and Cash options are hidden — M-Pesa only in this deployment -->
+                <style>
+                    .payment-method-card[data-method="card"],
+                    .payment-method-card[data-method="cash"] {
+                        display: none !important;
+                    }
+                </style>
+            </div>
+            
+            <!-- Payment Form (Dynamic based on selection) -->
+            <div id="paymentFormContainer">
+                <!-- M-Pesa Payment Form -->
+                <div class="payment-method-form" id="mpesaForm">
+                    <div class="mb-3">
+                        <div class="text-center mb-3">
+                            <i class="bi bi-phone display-4 mb-2 text-primary"></i>
+                            <h4>M-Pesa Payment</h4>
+                            <p class="mb-0">We will initiate a secure M-Pesa payment request to your phone. Do not rely on simulated flows; follow the prompt on your device to complete payment.</p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="mpesaNumber" class="form-label">M-Pesa Phone Number</label>
+                            <div class="input-group">
+                                <span class="input-group-text">+254</span>
+                                <input type="tel" class="form-control" id="mpesaNumber" 
+                                       placeholder="7XX XXX XXX" 
+                                       value="{% if order.phone_number %}{{ order.phone_number|slice:'4:' }}{% endif %}">
+                            </div>
+                            <small class="text-muted">Enter your M-Pesa registered phone number. You will receive the real payment prompt on this device.</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Card Payment Form -->
+                <div class="payment-method-form" id="cardForm" style="display: none;">
+                    <div class="alert alert-info">
+                        <h6><i class="bi bi-credit-card me-2"></i>Card Payment</h6>
+                        <p class="mb-0">Your card payment will be processed securely. Click "Complete Payment" to proceed.</p>
+                    </div>
+                </div>
+                
+                <!-- Cash on Delivery Info -->
+                <div class="payment-method-form" id="cashForm" style="display: none;">
+                    <div class="alert alert-warning">
+                        <h6><i class="bi bi-cash-coin me-2"></i>Cash on Delivery</h6>
+                        <p class="mb-0">You will pay with cash when your order is delivered. Our delivery agent will contact you to arrange the delivery time.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Payment Action Button -->
+            <button type="button" class="btn-payment" id="processPaymentBtn">
+                <i class="bi bi-lock-fill"></i>
+                Complete Payment - KSh {{ order.total_price }}
+            </button>
+            {% endif %}
+            
+            <!-- Payment Processing Section -->
+            <div id="paymentProcessingSection" {% if order.payment.status != 'initiated' %}style="display: none;"{% endif %}>
+                <div class="processing-section">
+                    <i class="bi bi-phone display-4 text-primary mb-3"></i>
+                    <h5>Check Your Phone</h5>
+                    <p class="mb-2">Enter your M-Pesa PIN to complete payment of</p>
+                    <h4 class="text-primary mb-3">KSh {{ order.total_price }}</h4>
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Processing...</span>
+                    </div>
+                    <p class="small text-muted mb-2">Waiting for payment confirmation...</p>
+                    <button type="button" class="btn-outline-info" id="checkStatusBtn">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Check Status
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Payment Success Section -->
+            <div id="paymentSuccessSection" {% if order.payment.status != 'completed' %}style="display: none;"{% endif %}>
+                <div class="alert alert-success text-center">
+                    <i class="bi bi-check-circle display-4 text-success mb-3"></i>
+                    <h5>Payment Successful!</h5>
+                    <p class="mb-3">Your payment has been processed successfully.</p>
+                    
+                    <!-- Transaction Details Card -->
+                    <div class="bg-white p-3 rounded mb-3 border border-success" style="text-align: left;">
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <small class="text-muted">Payment Status</small>
+                                <p class="mb-0"><strong>✓ Completed</strong></p>
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <small class="text-muted">Payment Method</small>
+                                <p class="mb-0"><strong>M-Pesa</strong></p>
+                            </div>
+                            {% if order.payment.transaction_id %}
+                            <div class="col-md-6 mb-2">
+                                <small class="text-muted">Receipt Number</small>
+                                <p class="mb-0">
+                                    <strong style="font-family: monospace; font-size: 13px;">{{ order.payment.transaction_id }}</strong>
+                                    <button type="button" class="btn btn-sm btn-link p-0 ms-1" onclick="copyToClipboard('{{ order.payment.transaction_id }}')">
+                                        <i class="bi bi-clipboard"></i> Copy
+                                    </button>
+                                </p>
+                            </div>
+                            {% endif %}
+                            <div class="col-md-6 mb-2">
+                                <small class="text-muted">Amount Paid</small>
+                                <p class="mb-0"><strong>KSh {{ order.total_price }}</strong></p>
+                            </div>
+                            <div class="col-md-6 mb-0">
+                                <small class="text-muted">Payment Date</small>
+                                <p class="mb-0"><strong>{{ order.payment.completed_at|date:"d M Y, H:i" }}</strong></p>
+                            </div>
+                            {% if order.payment.mpesa_phone_number %}
+                            <div class="col-md-6 mb-0">
+                                <small class="text-muted">Phone Number Used</small>
+                                <p class="mb-0"><strong>+{{ order.payment.mpesa_phone_number }}</strong></p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Debug Info (if available) -->
+                    {% if order.payment.mpesa_callback_data %}
+                    <div class="mt-2 text-start bg-light p-2 rounded" style="overflow:auto; max-height:200px;">
+                        <small><strong>M-Pesa Response Details:</strong></small>
+                        <pre class="small mb-0">{{ order.payment.mpesa_callback_data|safe }}</pre>
+                    </div>
+                    {% endif %}
+                    
+                    <a href="{% url 'order_detail' order.id %}" class="btn-payment mt-3">
+                        <i class="bi bi-eye me-2"></i> View Order Details
+                    </a>
+                </div>
+            </div>
+
+            <!-- Payment Failed / Retry Section -->
+            <div id="paymentFailedSection" {% if order.payment.status != 'failed' %}style="display: none;"{% endif %}>
+                <div class="alert alert-danger text-center">
+                    <i class="bi bi-x-circle display-4 text-danger mb-3"></i>
+                    <h5>Payment Failed</h5>
+                    <p class="mb-3">Your payment could not be completed. Please review the error below and try again.</p>
+                    
+                    <!-- Error Details Card -->
+                    {% if order.payment.mpesa_result_code or order.payment.mpesa_result_desc %}
+                    <div class="bg-white p-3 rounded mb-3 border border-danger" style="text-align: left;">
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <small class="text-muted">Error Code</small>
+                                <p class="mb-0">
+                                    <strong style="color: #721c24;">{% if order.payment.mpesa_result_code %}{{ order.payment.mpesa_result_code }}{% else %}Unknown{% endif %}</strong>
+                                </p>
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <small class="text-muted">Payment Status</small>
+                                <p class="mb-0"><strong style="color: #721c24;">Failed</strong></p>
+                            </div>
+                            <div class="col-12 mb-2">
+                                <small class="text-muted">Error Message</small>
+                                <p class="mb-0">
+                                    <strong style="color: #721c24;">
+                                        {% if order.payment.mpesa_result_desc %}
+                                            {{ order.payment.mpesa_result_desc }}
+                                        {% elif order.payment.mpesa_result_code == '1' %}
+                                            Transaction cancelled by user
+                                        {% elif order.payment.mpesa_result_code == '2' %}
+                                            Transaction timeout
+                                        {% elif order.payment.mpesa_result_code == '1032' %}
+                                            Cancelled by user
+                                        {% elif order.payment.mpesa_result_code == '1037' %}
+                                            Transaction timeout waiting for user input
+                                        {% else %}
+                                            Payment failed (see details below)
+                                        {% endif %}
+                                    </strong>
+                                </p>
+                            </div>
+                            <div class="col-12">
+                                <small class="text-muted">Attempted At</small>
+                                <p class="mb-0">
+                                    <strong>{{ order.payment.created_at|date:"d M Y, H:i" }}</strong>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Common Solutions -->
+                    <div class="alert alert-info mb-3">
+                        <h6 class="mb-2"><i class="bi bi-lightbulb"></i> Common Solutions:</h6>
+                        <ul class="small mb-0" style="text-align: left;">
+                            <li>Ensure you have sufficient M-Pesa balance</li>
+                            <li>Check that you're using the correct M-Pesa registered phone number</li>
+                            <li>Make sure you entered the correct M-Pesa PIN</li>
+                            <li>Try again - the payment prompt may be still on your phone</li>
+                            <li>Contact support if the issue persists</li>
+                        </ul>
+                    </div>
+                    {% endif %}
+                    
+                    {% if order.payment.mpesa_callback_data %}
+                    <div class="mt-2 text-start bg-light p-2 rounded" style="overflow:auto; max-height:200px;">
+                        <small><strong>Debug Info:</strong></small>
+                        <pre class="small mb-0">{{ order.payment.mpesa_callback_data|safe }}</pre>
+                    </div>
+                    {% endif %}
+                    
+                    <button type="button" class="btn-payment mt-3" id="retryPaymentBtn">
+                        <i class="bi bi-arrow-repeat me-2"></i> Retry Payment
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Security Badge -->
+            <div class="security-badge">
+                <h6><i class="bi bi-shield-check"></i> Secure Payment</h6>
+                <p class="mb-0 small">Your payment information is encrypted and secure. We do not store your M-Pesa PIN or card details.</p>
+            </div>
+        </div>
+
+        <!-- Right Column: Order Summary -->
+        <div class="order-summary-card animate-slide-right">
+            <div class="summary-header">
+                <h5><i class="bi bi-receipt"></i> Order Summary</h5>
+            </div>
+            
+            <div class="summary-content">
+                <!-- Order Items -->
+                <div class="order-items">
+                    {% for item in order.order_items.all %}
+                    <div class="order-item">
+                        <div class="item-image">
+                            <img src="{{ item.listing.get_image_url }}" 
+                                 alt="{{ item.listing.title }}"
+                                 onerror="this.src='https://placehold.co/50x50/c2c2c2/1f1f1f?text=HS'">
+                        </div>
+                        <div class="item-details">
+                            <div class="item-title">{{ item.listing.title|truncatechars:50 }}</div>
+                            <div class="item-meta">Qty: {{ item.quantity }}</div>
+                        </div>
+                        <span class="item-price">KSh {{ item.get_total_price }}</span>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-cart-x text-muted" style="font-size: 2rem;"></i>
+                        <p class="text-muted mt-2">No items in order</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                {% if order.order_items.all %}
+                <!-- Totals -->
+                <div class="totals-section">
+                    <div class="total-row">
+                        <span>Subtotal</span>
+                        <span>KSh {{ subtotal|default:order.total_price|floatformat:2|intcomma }}</span>
+                    </div>
+                    <div class="total-row">
+                        <span>Shipping</span>
+                        <span>KSh {{ order.delivery_fee|default:0|floatformat:2|intcomma }}</span>
+                    </div>
+                    <div class="total-row">
+                        <span>Tax</span>
+                        <span>KSh 0.00</span>
+                    </div>
+                    <div class="total-row total">
+                        <span>Total</span>
+                        <span>KSh {{ order.total_price|floatformat:2|intcomma }}</span>
+                    </div>
+                </div>
+                
+                <!-- Shipping Information -->
+                <div class="mb-3">
+                    <h6 class="section-title"><i class="bi bi-truck"></i> Shipping Information</h6>
+                    <div class="small">
+                        <p class="mb-1"><strong>Name:</strong> {{ order.first_name }} {{ order.last_name }}</p>
+                        <p class="mb-1"><strong>Phone:</strong> {{ order.phone_number }}</p>
+                        <p class="mb-1"><strong>Address:</strong> {{ order.shipping_address }}</p>
+                        <p class="mb-0"><strong>City:</strong> {{ order.city }}, {{ order.postal_code }}</p>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Section -->
+    <div class="help-card">
+        <h6><i class="bi bi-question-circle"></i> Need Help with Payment?</h6>
+        <div class="help-contact">
+            <a href="tel:+254700123456" class="contact-item">
+                <i class="bi bi-telephone"></i>
+                <span>+254 700 123 456</span>
+            </a>
+            <a href="mailto:support@baysoko.com" class="contact-item">
+                <i class="bi bi-envelope"></i>
+                <span>support@baysoko.com</span>
+            </a>
+            <div class="contact-item">
+                <i class="bi bi-clock"></i>
+                <span>Mon-Fri: 8:00 AM - 6:00 PM</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const processPaymentBtn = document.getElementById('processPaymentBtn');
+    const checkStatusBtn = document.getElementById('checkStatusBtn');
+    const paymentMethodCards = document.querySelectorAll('.payment-method-card');
+    const paymentForms = document.querySelectorAll('.payment-method-form');
+    
+    let statusCheckInterval;
+    
+    // Payment method selection
+    paymentMethodCards.forEach(card => {
+        card.addEventListener('click', function() {
+            const radio = this.querySelector('input[type="radio"]');
+            radio.checked = true;
+            
+            // Update UI
+            paymentMethodCards.forEach(c => c.classList.remove('selected'));
+            this.classList.add('selected');
+            
+            updatePaymentFormDisplay();
+        });
+    });
+    
+    function updatePaymentFormDisplay() {
+        const selectedMethod = document.querySelector('input[name="payment_method"]:checked').value;
+        
+        // Hide all forms
+        paymentForms.forEach(form => {
+            form.style.display = 'none';
+        });
+        
+        // Show selected form
+        const selectedForm = document.getElementById(selectedMethod + 'Form');
+        if (selectedForm) {
+            selectedForm.style.display = 'block';
+        }
+    }
+    
+    // Initialize form display and selection state
+    function initializePaymentMethods() {
+        // Set initial selection state
+        const selectedMethod = document.querySelector('input[name="payment_method"]:checked');
+        if (selectedMethod) {
+            const selectedCard = selectedMethod.closest('.payment-method-card');
+            if (selectedCard) {
+                selectedCard.classList.add('selected');
+            }
+        }
+        
+        updatePaymentFormDisplay();
+    }
+    
+    initializePaymentMethods();
+
+    // Enforce M-Pesa-only: disable/hide other options and force selection
+    try {
+        document.querySelectorAll('input[name="payment_method"]').forEach(r => {
+            if (r.value !== 'mpesa') {
+                r.checked = false;
+                r.disabled = true;
+                const card = r.closest('.payment-method-card');
+                if (card) card.style.display = 'none';
+            }
+        });
+
+        const mpesaRadio = document.querySelector('input[name="payment_method"][value="mpesa"]');
+        if (mpesaRadio) {
+            mpesaRadio.checked = true;
+            const mpesaCard = mpesaRadio.closest('.payment-method-card');
+            if (mpesaCard) mpesaCard.classList.add('selected');
+        }
+        updatePaymentFormDisplay();
+    } catch (err) {
+        console.warn('Failed to enforce M-Pesa-only on payment page', err);
+    }
+    
+    // Format phone number input
+    const phoneInput = document.getElementById('mpesaNumber');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function() {
+            let value = this.value.replace(/\D/g, '');
+            if (value.length > 9) value = value.substring(0, 9);
+            
+            // Format as 7XX XXX XXX
+            if (value.length > 3) {
+                value = value.substring(0, 3) + ' ' + value.substring(3);
+            }
+            if (value.length > 7) {
+                value = value.substring(0, 7) + ' ' + value.substring(7);
+            }
+            
+            this.value = value;
+        });
+    }
+    
+    // Process payment
+    if (processPaymentBtn) {
+        processPaymentBtn.addEventListener('click', function() {
+            const selectedMethod = document.querySelector('input[name="payment_method"]:checked').value;
+            
+            // Validate form based on method
+            if (selectedMethod === 'mpesa') {
+                const mpesaNumber = document.getElementById('mpesaNumber').value.replace(/\s/g, '');
+                if (!mpesaNumber || mpesaNumber.length !== 9) {
+                    showToast('Please enter a valid M-Pesa phone number (9 digits without country code)', 'error');
+                    return;
+                }
+                
+                // Initiate M-Pesa payment via AJAX
+                initiateMpesaPayment(mpesaNumber);
+            } else {
+                // For card and cash, submit the form directly
+                processOtherPayment(selectedMethod);
+            }
+        });
+    }
+    
+    function initiateMpesaPayment(phoneNumber) {
+        // Disable button and show loading
+        processPaymentBtn.innerHTML = '<i class="bi bi-hourglass-split spin"></i> Initiating Payment...';
+        processPaymentBtn.disabled = true;
+        
+        // Send AJAX request to initiate payment
+        fetch(`/orders/{{ order.id }}/initiate-mpesa/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': getCSRFToken(),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: `phone_number=${encodeURIComponent(phoneNumber)}`
+        })
+        .then(async response => {
+            let data = null;
+            try {
+                data = await response.json();
+            } catch (e) {
+                // not json
+            }
+
+            if (!response.ok) {
+                // Try to show detailed server / MPesa error if available
+                const msg = (data && (data.error || data.message || data.detail)) ? (data.error || data.message || data.detail) : `Server error: ${response.status} ${response.statusText}`;
+                showToast(msg, 'error');
+
+                // Re-enable button
+                processPaymentBtn.innerHTML = '<i class="bi bi-lock-fill me-2"></i> Complete Payment - KSh {{ order.total_price }}';
+                processPaymentBtn.disabled = false;
+                return Promise.reject(new Error(msg));
+            }
+
+            return data;
+        })
+        .then(data => {
+            if (!data) return; // already handled
+
+            if (data.success) {
+                showToast(data.message || 'Payment initiated', 'success');
+
+                // Switch to processing view
+                document.getElementById('paymentFormContainer').style.display = 'none';
+                document.getElementById('paymentProcessingSection').style.display = 'block';
+                processPaymentBtn.style.display = 'none';
+
+                // Start checking payment status
+                startStatusChecking();
+            } else {
+                // Provide MPesa-specific messages if present
+                const detail = data.mpesa_result_desc || data.error || data.message || 'Failed to initiate payment';
+                showToast(detail, 'error');
+
+                // Re-enable button
+                processPaymentBtn.innerHTML = '<i class="bi bi-lock-fill me-2"></i> Complete Payment - KSh {{ order.total_price }}';
+                processPaymentBtn.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Error initiating payment:', error);
+            // Show a friendly message if not already shown
+            if (error && error.message) {
+                showToast(error.message, 'error');
+            } else {
+                showToast('An error occurred while initiating payment. Please try again.', 'error');
+            }
+
+            // Re-enable button
+            processPaymentBtn.innerHTML = '<i class="bi bi-lock-fill me-2"></i> Complete Payment - KSh {{ order.total_price }}';
+            processPaymentBtn.disabled = false;
+        });
+    }
+    
+    function processOtherPayment(method) {
+        // Create form and submit
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = window.location.href;
+        
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrfmiddlewaretoken';
+        csrfInput.value = getCSRFToken();
+        form.appendChild(csrfInput);
+        
+        const methodInput = document.createElement('input');
+        methodInput.type = 'hidden';
+        methodInput.name = 'payment_method';
+        methodInput.value = method;
+        form.appendChild(methodInput);
+        
+        // For card, we might need additional data, but for now just submit
+        document.body.appendChild(form);
+        form.submit();
+    }
+    
+    // Handle manual status check
+    if (checkStatusBtn) {
+        checkStatusBtn.addEventListener('click', function() {
+            checkPaymentStatus();
+        });
+    }
+    
+    function startStatusChecking() {
+        // Check immediately
+        checkPaymentStatus();
+        
+        // Then check every 5 seconds
+        statusCheckInterval = setInterval(checkPaymentStatus, 5000);
+    }
+    
+    function checkPaymentStatus() {
+        fetch(`/order/{{ order.id }}/check-payment-status/`, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (data.payment_status === 'completed') {
+                    // Payment completed successfully
+                    clearInterval(statusCheckInterval);
+                    showPaymentSuccess();
+                } else if (data.payment_status === 'failed') {
+                    // Payment failed
+                    clearInterval(statusCheckInterval);
+                    showPaymentFailed(data.result_desc || 'Payment failed');
+                }
+                // If still initiated, continue checking
+            } else {
+                console.error('Status check failed:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Status check error:', error);
+        });
+    }
+    
+    function showPaymentSuccess() {
+        document.getElementById('paymentProcessingSection').style.display = 'none';
+        document.getElementById('paymentSuccessSection').style.display = 'block';
+        
+        showToast('Payment completed successfully!', 'success');
+        
+        // Redirect to order details after a delay
+        setTimeout(() => {
+            window.location.href = "{% url 'order_detail' order.id %}";
+        }, 3000);
+    }
+    
+    function showPaymentFailed(reason) {
+        document.getElementById('paymentProcessingSection').style.display = 'none';
+        document.getElementById('paymentFormContainer').style.display = 'block';
+        processPaymentBtn.style.display = 'block';
+        processPaymentBtn.innerHTML = '<i class="bi bi-lock-fill me-2"></i> Complete Payment - KSh {{ order.total_price }}';
+        processPaymentBtn.disabled = false;
+        document.getElementById('paymentFailedSection') && (document.getElementById('paymentFailedSection').style.display = 'block');
+        showToast('Payment failed: ' + reason, 'error');
+    }
+
+    // Retry payment button handler (reinitiate MPesa)
+    const retryPaymentBtn = document.getElementById('retryPaymentBtn');
+    if (retryPaymentBtn) {
+        retryPaymentBtn.addEventListener('click', function() {
+            // Hide failed section, show form and process button for retry
+            document.getElementById('paymentFailedSection').style.display = 'none';
+            document.getElementById('paymentFormContainer').style.display = 'block';
+            if (processPaymentBtn) {
+                processPaymentBtn.style.display = 'block';
+                processPaymentBtn.disabled = false;
+                processPaymentBtn.innerHTML = '<i class="bi bi-lock-fill me-2"></i> Complete Payment - KSh {{ order.total_price }}';
+            }
+            
+            // Use current mpesaNumber value or order phone (strip spaces and any leading country code)
+            const mpesaNumberRaw = document.getElementById('mpesaNumber') ? document.getElementById('mpesaNumber').value.replace(/\s/g, '') : '';
+            let phone = '';
+            if (mpesaNumberRaw && mpesaNumberRaw.length === 9) {
+                phone = mpesaNumberRaw;
+            } else {
+                // Fallback: strip leading +254 or 254 from stored order phone
+                phone = '{{ order.phone_number|slice:"4:" }}';
+                if (phone && phone.startsWith('254')) phone = phone.slice(3);
+                phone = phone.replace(/\D/g, '');
+            }
+
+            if (phone && phone.length === 9) {
+                // Pre-fill the phone number for convenience
+                const phoneInput = document.getElementById('mpesaNumber');
+                if (phoneInput) {
+                    // Format as 7XX XXX XXX
+                    const formatted = phone.substring(0, 3) + ' ' + phone.substring(3, 6) + ' ' + phone.substring(6);
+                    phoneInput.value = formatted;
+                }
+            }
+            
+            // Scroll to payment form
+            const formContainer = document.getElementById('paymentFormContainer');
+            if (formContainer) {
+                setTimeout(() => {
+                    formContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            }
+        });
+    }
+    
+    // CSRF token function
+    function getCSRFToken() {
+        const name = 'csrftoken';
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    // Copy to clipboard function
+    window.copyToClipboard = function(text) {
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Copied to clipboard!', 'success');
+            }).catch(() => {
+                // Fallback for older browsers
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showToast('Copied to clipboard!', 'success');
+            });
+        } else {
+            // Fallback
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            showToast('Copied to clipboard!', 'success');
+        }
+    };
+    
+    // Toast function
+    window.showToast = function(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `toast animate-fade-in`;
+        toast.innerHTML = `
+            <div class="toast-body">
+                <i class="bi ${getToastIcon(type)}"></i>
+                <span>${message}</span>
+            </div>
+        `;
+        
+        // Add type-specific styling
+        if (type === 'success') {
+            toast.style.borderLeft = '4px solid var(--success)';
+        } else if (type === 'error') {
+            toast.style.borderLeft = '4px solid var(--danger)';
+        } else if (type === 'warning') {
+            toast.style.borderLeft = '4px solid var(--warning)';
+        } else {
+            toast.style.borderLeft = '4px solid var(--primary)';
+        }
+        
+        const toastContainer = document.getElementById('toastContainer');
+        if (toastContainer) {
+            toastContainer.appendChild(toast);
+            
+            // Remove toast after 4 seconds
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100px)';
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 300);
+            }, 4000);
+        }
+    };
+    
+    function getToastIcon(type) {
+        switch(type) {
+            case 'success': return 'bi-check-circle-fill text-success';
+            case 'error': return 'bi-exclamation-circle-fill text-danger';
+            case 'warning': return 'bi-exclamation-triangle-fill text-warning';
+            default: return 'bi-info-circle-fill text-primary';
+        }
+    }
+    
+    // Display Django messages as toasts
+    const djangoMessages = [
+        {% for msg in messages %}
+        { message: "{{ msg|escapejs }}", tags: "{{ msg.tags }}" }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+    
+    const mapTag = (tags) => {
+        if (!tags) return 'info';
+        if (tags.indexOf('error') !== -1) return 'error';
+        if (tags.indexOf('warning') !== -1) return 'warning';
+        if (tags.indexOf('success') !== -1) return 'success';
+        return 'info';
+    };
+    
+    setTimeout(() => {
+        djangoMessages.forEach(m => {
+            try {
+                const t = mapTag(m.tags);
+                if (typeof showToast === 'function') showToast(m.message, t);
+            } catch (e) {
+                console.error('Error showing toast for message', m, e);
+            }
+        });
+    }, 150);
+    
+    // Initial setup based on current payment status
+    const currentStatus = '{{ order.payment.status }}';
+    if (currentStatus === 'initiated') {
+        document.getElementById('paymentFormContainer').style.display = 'none';
+        document.getElementById('paymentProcessingSection').style.display = 'block';
+        if (processPaymentBtn) processPaymentBtn.style.display = 'none';
+        startStatusChecking();
+    } else if (currentStatus === 'completed') {
+        document.getElementById('paymentFormContainer').style.display = 'none';
+        document.getElementById('paymentSuccessSection').style.display = 'block';
+        if (processPaymentBtn) processPaymentBtn.style.display = 'none';
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,1952 @@
+<!-- users/templates/users/profile_edit.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Edit Profile - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== GLOBAL & MODERN STYLES (existing kept + modal additions) ===== */
+    .profile-edit-container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: var(--spacing-lg);
+    }
+
+    .edit-header {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-lg);
+        border: 1px solid var(--border-color);
+        border-bottom: none;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .edit-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 6px;
+        background: linear-gradient(90deg, var(--primary), var(--accent));
+    }
+
+    .back-btn-modern {
+        position: absolute;
+        top: var(--spacing-xl);
+        left: var(--spacing-xl);
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-primary);
+        transition: var(--transition);
+        text-decoration: none;
+        z-index: 10;
+    }
+
+    .back-btn-modern:hover {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+        transform: translateX(-3px);
+    }
+
+    .profile-edit-card-modern {
+        background: var(--card-bg);
+        border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+        border: 1px solid var(--border-color);
+        border-top: none;
+        overflow: hidden;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .profile-pic-section-modern, .cover-photo-section-modern {
+        padding: var(--spacing-xxl) var(--spacing-xl);
+        text-align: center;
+        background: linear-gradient(to bottom, var(--bg-secondary) 0%, transparent 100%);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .profile-pic-wrapper-modern, .cover-photo-wrapper-modern {
+        position: relative;
+        display: inline-block;
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .profile-pic-modern, .cover-photo-modern {
+        width: 160px;
+        height: 160px;
+        border-radius: var(--radius-full);
+        object-fit: cover;
+        border: 4px solid var(--card-bg);
+        box-shadow: var(--shadow-xl);
+        background: var(--bg-secondary);
+        cursor: pointer;
+        transition: var(--transition);
+    }
+
+    .profile-pic-modern:hover, .cover-photo-modern:hover {
+        transform: scale(1.05);
+        box-shadow: var(--shadow-xxl);
+    }
+
+    .upload-btn-modern {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        width: 48px;
+        height: 48px;
+        background: var(--primary);
+        border-radius: var(--radius-full);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        cursor: pointer;
+        transition: var(--transition);
+        border: 3px solid var(--card-bg);
+        box-shadow: var(--shadow-md);
+    }
+
+    .upload-btn-modern:hover {
+        background: var(--primary-dark);
+        transform: scale(1.1);
+    }
+
+    .form-section-modern {
+        padding: var(--spacing-xl);
+    }
+
+    .section-title-modern {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: var(--spacing-lg);
+        padding-bottom: var(--spacing-sm);
+        border-bottom: 2px solid var(--border-color);
+        position: relative;
+        font-family: var(--font-heading);
+    }
+
+    .section-title-modern::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        left: 0;
+        width: 80px;
+        height: 2px;
+        background: var(--primary);
+    }
+
+    .form-grid-modern {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: var(--spacing-lg);
+        margin-bottom: var(--spacing-xl);
+    }
+
+    .form-group-modern {
+        margin-bottom: var(--spacing-lg);
+        position: relative;
+    }
+
+    .form-label-modern {
+        display: block;
+        margin-bottom: var(--spacing-sm);
+        font-weight: 600;
+        color: var(--text-primary);
+        font-size: 1rem;
+        font-family: var(--font-heading);
+    }
+
+    .input-modern {
+        width: 100%;
+        padding: 0.875rem 1.25rem;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--input-bg, var(--bg-secondary));
+        color: var(--text-primary);
+        font-size: 1rem;
+        transition: var(--transition);
+        outline: none;
+        font-family: var(--font-body);
+    }
+
+    .input-modern:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.15);
+        transform: translateY(-2px);
+    }
+    .verification-banner {
+        margin: var(--spacing-lg) var(--spacing-xl) 0;
+        padding: 0.9rem 1.1rem;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(255, 193, 7, 0.35);
+        background: rgba(255, 193, 7, 0.12);
+        color: var(--text-primary);
+        font-size: 0.95rem;
+        display: flex;
+        gap: 0.75rem;
+        align-items: flex-start;
+    }
+    .verification-banner i {
+        color: var(--warning);
+        font-size: 1.2rem;
+        margin-top: 2px;
+    }
+
+    .location-suggestions {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-md);
+        z-index: 20;
+        max-height: 220px;
+        overflow-y: auto;
+        display: none;
+    }
+    .location-suggestion-item {
+        padding: 0.55rem 0.75rem;
+        font-size: 0.9rem;
+        cursor: pointer;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .location-suggestion-item:last-child { border-bottom: none; }
+    .location-suggestion-item:hover {
+        background: rgba(var(--primary-rgb), 0.08);
+    }
+    .location-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 0.4rem;
+        gap: 0.4rem;
+    }
+    .use-location-btn {
+        background: rgba(var(--primary-rgb), 0.08);
+        border: 1px solid rgba(var(--primary-rgb), 0.35);
+        color: var(--primary);
+        padding: 0.35rem 0.8rem;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: var(--transition);
+    }
+    .use-location-btn:hover {
+        background: rgba(var(--primary-rgb), 0.16);
+        transform: translateY(-1px);
+    }
+
+    .textarea-modern {
+        min-height: 120px;
+        resize: vertical;
+        line-height: 1.6;
+        font-family: var(--font-body);
+    }
+
+    .char-counter-modern {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+        text-align: right;
+        margin-top: 0.5rem;
+        font-family: var(--font-body);
+    }
+
+    .char-counter-modern.warning {
+        color: var(--warning);
+        font-weight: 600;
+    }
+
+    .char-counter-modern.error {
+        color: var(--danger);
+        font-weight: 600;
+    }
+
+    .switch-container-modern {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-md);
+        padding: var(--spacing-lg);
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        margin: var(--spacing-lg) 0;
+    }
+
+    .switch-modern {
+        position: relative;
+        display: inline-block;
+        width: 60px;
+        height: 34px;
+        flex-shrink: 0;
+    }
+
+    .switch-modern input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .slider-modern {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: var(--border-color);
+        transition: var(--transition);
+        border-radius: 34px;
+    }
+
+    .slider-modern:before {
+        position: absolute;
+        content: "";
+        height: 26px;
+        width: 26px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: var(--transition);
+        border-radius: 50%;
+        box-shadow: var(--shadow-sm);
+    }
+
+    input:checked + .slider-modern {
+        background-color: var(--primary);
+    }
+
+    input:checked + .slider-modern:before {
+        transform: translateX(26px);
+    }
+
+    .switch-label {
+        font-weight: 600;
+        color: var(--text-primary);
+        font-family: var(--font-heading);
+        font-size: 1.1rem;
+    }
+
+    .switch-description {
+        font-size: 0.9375rem;
+        color: var(--text-secondary);
+        margin-top: 0.25rem;
+        font-family: var(--font-body);
+    }
+
+    .form-actions-modern {
+        display: flex;
+        gap: var(--spacing-md);
+        justify-content: flex-end;
+        padding-top: var(--spacing-xl);
+        border-top: 1px solid var(--border-color);
+        margin-top: var(--spacing-xl);
+        flex-wrap: wrap;
+    }
+
+    .error-message-modern {
+        color: var(--danger);
+        font-size: 0.875rem;
+        margin-top: var(--spacing-sm);
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        font-family: var(--font-body);
+        padding: 0.75rem 1rem;
+        background: rgba(239, 71, 111, 0.1);
+        border-radius: var(--radius-sm);
+        border-left: 3px solid var(--danger);
+    }
+
+    .success-message-modern {
+        background: linear-gradient(135deg, var(--success), #05B88A);
+        color: white;
+        padding: var(--spacing-md) var(--spacing-lg);
+        border-radius: var(--radius-md);
+        margin: var(--spacing-lg) var(--spacing-xl) 0;
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        font-family: var(--font-body);
+        box-shadow: var(--shadow-md);
+    }
+
+    .security-actions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: var(--spacing-md);
+        margin-top: var(--spacing-lg);
+    }
+
+    .security-action {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: var(--spacing-lg);
+        transition: var(--transition);
+        text-align: center;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .security-action:hover {
+        transform: translateY(-4px);
+        border-color: var(--primary);
+        box-shadow: var(--shadow-md);
+    }
+
+    .security-icon {
+        width: 64px;
+        height: 64px;
+        background: var(--primary);
+        border-radius: var(--radius-full);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.75rem;
+        margin: 0 auto var(--spacing-md);
+        box-shadow: var(--shadow-md);
+    }
+
+    .security-icon.danger {
+        background: var(--danger);
+    }
+
+    .security-title {
+        font-weight: 700;
+        margin-bottom: var(--spacing-sm);
+        color: var(--text-primary);
+        font-family: var(--font-heading);
+        font-size: 1.25rem;
+    }
+
+    .security-description {
+        font-size: 0.9375rem;
+        color: var(--text-secondary);
+        margin-bottom: var(--spacing-lg);
+        flex: 1;
+        font-family: var(--font-body);
+    }
+
+    .profile-pic-note, .cover-photo-note {
+        color: var(--text-secondary);
+        font-size: 0.9375rem;
+        max-width: 400px;
+        margin: 0 auto;
+        line-height: 1.5;
+    }
+
+    /* ===== MODAL STYLES (inspired by password_reset_modal) ===== */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+        z-index: 10000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    .modal-overlay.show {
+        display: flex;
+        opacity: 1;
+    }
+
+    .modal-card {
+        background: rgba(var(--bg-primary-rgb), 0.8);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255,255,255,0.18);
+        border-radius: var(--radius-xl);
+        box-shadow: var(--shadow-xl), 0 0 0 1px rgba(255,255,255,0.05);
+        width: 90%;
+        max-width: 450px;
+        max-height: 90vh;
+        overflow-y: auto;
+        transform: translateY(20px);
+        transition: transform 0.3s ease;
+        position: relative;
+    }
+
+    .modal-overlay.show .modal-card {
+        transform: translateY(0);
+    }
+
+    .modal-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--primary), var(--accent));
+        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    }
+
+    .modal-header {
+        padding: 1.5rem 1.5rem 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .modal-header h3 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin: 0;
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        font-size: 1.8rem;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0 0.5rem;
+        transition: color 0.2s;
+    }
+
+    .modal-close:hover {
+        color: var(--primary);
+    }
+
+    .modal-body {
+        padding: 0.5rem 1.5rem 1.5rem;
+    }
+
+    /* remove large top icon used previously in modals; keep markup for accessibility */
+    .modal-icon {
+        display: none;
+    }
+
+    /* input group and password toggle styles: place toggle inside the input */
+    .input-group-modern {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .input-group-modern .input-modern {
+        width: 100%;
+        padding-right: 3.2rem; /* room for the toggle button */
+    }
+
+    .password-toggle-btn {
+        position: absolute;
+        right: 0.5rem;
+        top: 50%;
+        transform: translateY(-50%);
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        padding: 0.25rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        transition: color 0.15s, background 0.15s;
+    }
+
+    .password-toggle-btn:hover {
+        color: var(--primary);
+        background: rgba(var(--primary-rgb), 0.06);
+    }
+
+    /* slightly more compact modal card and body */
+    .modal-card {
+        width: 520px;
+        max-width: 95%;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .modal-body {
+        padding: 0.75rem 1.25rem 1.25rem;
+    }
+
+    /* Compact inputs and spacing inside modals to fit content */
+    .modal-card .input-modern {
+        padding: 0.45rem 0.7rem;
+        font-size: 0.95rem;
+        line-height: 1.1;
+        min-height: 38px;
+    }
+
+    .modal-card .form-group-modern {
+        margin-bottom: 0.5rem;
+    }
+
+    .modal-card .modal-footer {
+        margin-top: 0.5rem;
+    }
+
+    .modal-card .strength-container, .modal-card .match-indicator {
+        padding: 0.5rem;
+        margin-top: 0.4rem;
+    }
+
+    /* Password strength & match indicators (reuse from change password page) */
+    .strength-container, .match-indicator {
+        margin-top: 0.75rem;
+        padding: 0.75rem;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+    }
+
+    .strength-meter {
+        height: 4px;
+        background: var(--border-color);
+        border-radius: 2px;
+        overflow: hidden;
+        margin-bottom: 0.25rem;
+    }
+
+    .strength-fill {
+        height: 100%;
+        width: 0%;
+        border-radius: 2px;
+        transition: width 0.3s, background 0.3s;
+    }
+
+    .strength-fill.strength-weak { background: var(--danger); width: 25%; }
+    .strength-fill.strength-fair { background: var(--warning); width: 50%; }
+    .strength-fill.strength-good { background: var(--info); width: 75%; }
+    .strength-fill.strength-strong { background: var(--success); width: 100%; }
+
+    .strength-text {
+        font-size: 0.8rem;
+        text-align: right;
+        color: var(--text-secondary);
+    }
+
+    .match-indicator {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .match-indicator.success {
+        color: var(--success);
+        background: rgba(var(--success-rgb), 0.1);
+        border-color: rgba(var(--success-rgb), 0.2);
+    }
+
+    .match-indicator.error {
+        color: var(--danger);
+        background: rgba(var(--danger-rgb), 0.1);
+        border-color: rgba(var(--danger-rgb), 0.2);
+    }
+
+    /* Delete reason dropdown & textarea */
+    .delete-reason-select, .delete-reason-other {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--input-bg);
+        color: var(--text-primary);
+        font-size: 0.95rem;
+        margin-bottom: 1rem;
+    }
+
+    .delete-reason-other {
+        display: none;
+    }
+
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        margin-top: 1.5rem;
+    }
+
+    .btn-modal {
+        padding: 0.7rem 1.5rem;
+        border-radius: var(--radius-md);
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 0.95rem;
+    }
+
+    .btn-modal-primary {
+        background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        color: white;
+        box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.3);
+    }
+
+    .btn-modal-primary:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(var(--primary-rgb), 0.4);
+    }
+
+    .btn-modal-secondary {
+        background: transparent;
+        border: 1px solid var(--border-color);
+        color: var(--text-secondary);
+    }
+
+    .btn-modal-secondary:hover {
+        background: var(--bg-secondary);
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+
+    .btn-modal:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* Global message container */
+    #globalMessageContainer {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10001;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .global-message {
+        padding: 1rem 1.5rem;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-lg);
+        color: white;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        animation: slideInRight 0.3s ease-out;
+        max-width: 350px;
+    }
+
+    .global-success { background: var(--success); }
+    .global-danger { background: var(--danger); }
+    .global-warning { background: var(--warning); }
+    .global-info { background: var(--info); }
+
+    @keyframes slideInRight {
+        from { opacity: 0; transform: translateX(100%); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes slideOutRight {
+        from { opacity: 1; transform: translateX(0); }
+        to { opacity: 0; transform: translateX(100%); }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .profile-edit-container {
+            padding: var(--spacing-sm);
+        }
+
+        .edit-header {
+            padding: var(--spacing-xl) var(--spacing-md) var(--spacing-lg);
+            border-radius: var(--radius-md) var(--radius-md) 0 0;
+        }
+
+        .back-btn-modern {
+            top: var(--spacing-lg);
+            left: var(--spacing-md);
+            width: 44px;
+            height: 44px;
+        }
+
+        .form-section-modern {
+            padding: var(--spacing-lg);
+        }
+
+        .form-grid-modern {
+            grid-template-columns: 1fr;
+            gap: var(--spacing-md);
+        }
+
+        .form-actions-modern {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .profile-pic-modern, .cover-photo-modern {
+            width: 140px;
+            height: 140px;
+        }
+
+        .upload-btn-modern {
+            width: 44px;
+            height: 44px;
+        }
+
+        .security-actions {
+            grid-template-columns: 1fr;
+        }
+
+        .modal-card {
+            width: 95%;
+        }
+    }
+
+    @media (max-width: 576px) {
+        .profile-edit-container {
+            padding: 0;
+        }
+
+        .edit-header {
+            border-radius: 0;
+            border-left: none;
+            border-right: none;
+        }
+
+        .profile-edit-card-modern {
+            border-radius: 0;
+            border-left: none;
+            border-right: none;
+            box-shadow: none;
+        }
+
+        .profile-pic-section-modern {
+            padding: var(--spacing-xl) var(--spacing-md);
+        }
+        .cover-photo-section-modern {
+            padding: var(--spacing-xl) var(--spacing-md);
+        }
+        .form-section-modern {
+            padding: var(--spacing-md);
+        }
+
+        .switch-container-modern {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-md);
+        }
+
+        .switch-modern {
+            align-self: flex-start;
+        }
+    }
+
+    /* Animation for form elements */
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .form-group-modern {
+        animation: fadeInUp 0.5s ease-out;
+        animation-fill-mode: both;
+    }
+
+    .form-group-modern:nth-child(1) { animation-delay: 0.1s; }
+    .form-group-modern:nth-child(2) { animation-delay: 0.2s; }
+    .form-group-modern:nth-child(3) { animation-delay: 0.3s; }
+    .form-group-modern:nth-child(4) { animation-delay: 0.4s; }
+    .form-group-modern:nth-child(5) { animation-delay: 0.5s; }
+
+    /* Root variables (ensure they exist, fallback) */
+    :root {
+        --bg-primary-rgb: 255,255,255;
+        --primary-rgb: 255,107,53;
+        --success-rgb: 40,167,69;
+        --danger-rgb: 220,53,69;
+    }
+    [data-theme="dark"] {
+        --bg-primary-rgb: 18,18,18;
+    }
+
+    .verification-banner .banner-link {
+        color: #ff6b35;
+        font-weight: 600;
+        text-decoration: underline;
+    }
+    .verification-banner .banner-link:hover {
+        color: #e65a2a;
+    }
+    .change-counter {
+        font-size: 0.8rem;
+        color: rgba(0, 0, 0, 0.55);
+        margin-top: 6px;
+        display: block;
+    }
+    [data-theme="dark"] .change-counter {
+        color: rgba(255, 255, 255, 0.65);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="profile-edit-container animate-fade-in">
+    <!-- Modern Header -->
+    <div class="edit-header text-center">
+        <a href="{% url 'profile' user.pk %}" class="back-btn-modern">
+            <i class="bi bi-arrow-left"></i>
+        </a>
+        <div class="position-relative">
+            <h1 class="h2 mb-3 fw-bold">Edit Profile</h1>
+            <p class="mb-0 text-secondary">Update your personal information and preferences</p>
+        </div>
+    </div>
+
+    <!-- Modern Profile Card -->
+    <div class="profile-edit-card-modern">
+        <div class="verification-banner">
+            <i class="bi bi-shield-check"></i>
+            <div>
+                <strong>Verified contact details are protected.</strong>
+                <div class="text-muted mt-1">
+                    You can change your verified email or phone number up to <strong>2 times</strong>.
+                    Any change will require re‑verification before it’s active. Payouts can only go to your verified
+                    registration phone number.
+                    <a href="#" class="banner-link" id="contactVerificationLink">
+                        Learn why
+                    </a>
+                </div>
+            </div>
+        </div>
+        <!-- Main Form -->
+        <form method="post" enctype="multipart/form-data" class="form-section-modern" id="profileForm">
+            {% csrf_token %}
+
+            <!-- Profile Picture Section -->
+            <div class="profile-pic-section-modern">
+                <div class="profile-pic-wrapper-modern">
+                <img id="profile-pic-preview"
+                    src="{% if form.instance.profile_picture %}{{ form.instance.get_profile_picture_url }}{% else %}{% static "images/default_profile_pic.svg" %}{% endif %}"
+                    data-default="{% static 'images/default_profile_pic.svg' %}"
+                    class="profile-pic-modern"
+                    alt="Profile Picture"
+                    onerror="this.onerror=null;this.src=this.getAttribute('data-default');">
+
+                    <label for="id_profile_picture" class="upload-btn-modern" title="Change Profile Picture">
+                        <i class="bi bi-camera fs-5"></i>
+                    </label>
+                    <input type="file" name="profile_picture" accept="image/*" id="id_profile_picture" class="d-none">
+                </div>
+                <p class="profile-pic-note mb-0">Click the camera or your photo to update your profile image — JPG/PNG up to 5MB.</p>
+                {% if form.profile_picture.errors %}
+                    <div class="error-message-modern mt-3">
+                        <i class="bi bi-exclamation-circle"></i>
+                        {{ form.profile_picture.errors }}
+                    </div>
+                {% endif %}
+            </div>
+            <!-- Cover Photo Section -->
+            <div class="cover-photo-section-modern">
+                <div class="cover-photo-wrapper-modern">
+                    <img id="cover-photo-preview"
+                        src="{% if form.instance.cover_photo %}{{ form.instance.get_cover_photo_url }}{% else %}{% static "images/default_cover_photo.svg" %}{% endif %}"
+                        data-default="{% static 'images/default_cover_photo.svg' %}"
+                        class="cover-photo-modern"
+                        alt="Cover Photo"
+                        onerror="this.onerror=null;this.src=this.getAttribute('data-default');">
+
+                    <label for="id_cover_photo" class="upload-btn-modern" title="Change Cover Photo">
+                        <i class="bi bi-camera fs-5"></i>
+                    </label>
+                    <input type="file" name="cover_photo" accept="image/*" id="id_cover_photo" class="d-none">
+                </div>
+                <p class="cover-photo-note mb-0">Click the camera or your photo to update your cover image — JPG/PNG up to 5MB.</p>
+                {% if form.cover_photo.errors %}
+                    <div class="error-message-modern mt-3">
+                        <i class="bi bi-exclamation-circle"></i>
+                        {{ form.cover_photo.errors }}
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Display non-field errors -->
+            {% if form.non_field_errors %}
+                <div class="error-message-modern mb-4">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    {% for error in form.non_field_errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <!-- Basic Information Section -->
+            <h3 class="section-title-modern">Basic Information</h3>
+            <div class="form-grid-modern">
+                <div class="form-group-modern">
+                    <label for="{{ form.first_name.id_for_label }}" class="form-label-modern">First Name</label>
+                    <input type="text" 
+                           name="first_name" 
+                           value="{{ form.first_name.value|default:'' }}" 
+                           class="input-modern {% if form.first_name.errors %}border-danger{% endif %}" 
+                           id="{{ form.first_name.id_for_label }}" 
+                           placeholder="Enter your first name"
+                           required>
+                    {% if form.first_name.errors %}
+                        <div class="error-message-modern mt-2">{{ form.first_name.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group-modern">
+                    <label for="{{ form.last_name.id_for_label }}" class="form-label-modern">Last Name</label>
+                    <input type="text" 
+                           name="last_name" 
+                           value="{{ form.last_name.value|default:'' }}" 
+                           class="input-modern {% if form.last_name.errors %}border-danger{% endif %}" 
+                           id="{{ form.last_name.id_for_label }}" 
+                           placeholder="Enter your last name"
+                           required>
+                    {% if form.last_name.errors %}
+                        <div class="error-message-modern mt-2">{{ form.last_name.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group-modern">
+                    <label for="{{ form.username.id_for_label }}" class="form-label-modern">Username</label>
+                    <input type="text" 
+                           name="username" 
+                           value="{{ form.username.value|default:'' }}" 
+                           class="input-modern {% if form.username.errors %}border-danger{% endif %}" 
+                           id="{{ form.username.id_for_label }}" 
+                           placeholder="Choose a username"
+                           required>
+                    {% if form.username.errors %}
+                        <div class="error-message-modern mt-2">{{ form.username.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group-modern">
+                    <label for="{{ form.email.id_for_label }}" class="form-label-modern">Email Address</label>
+                    <input type="email" 
+                           name="email" 
+                           value="{{ form.email.value|default:'' }}" 
+                           class="input-modern {% if form.email.errors %}border-danger{% endif %}" 
+                           id="{{ form.email.id_for_label }}" 
+                           placeholder="your.email@example.com"
+                           required>
+                    <span class="change-counter">
+                        Changes left:
+                        {% if user.email_change_count|default:0 >= 2 %}
+                            0
+                        {% else %}
+                            {{ 2|add:user.email_change_count }}
+                        {% endif %}
+                    </span>
+                    {% if form.email.errors %}
+                        <div class="error-message-modern mt-2">{{ form.email.errors }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Bio Section -->
+            <div class="form-group-modern">
+                <label for="{{ form.bio.id_for_label }}" class="form-label-modern">Bio</label>
+                <textarea name="bio" 
+                          class="input-modern textarea-modern {% if form.bio.errors %}border-danger{% endif %}" 
+                          id="{{ form.bio.id_for_label }}" 
+                          rows="4" 
+                          placeholder="Tell others about yourself... (Max 500 characters)">{{ form.bio.value|default:'' }}</textarea>
+                <div class="char-counter-modern" id="bio-counter">0/500 characters</div>
+                {% if form.bio.errors %}
+                    <div class="error-message-modern mt-2">{{ form.bio.errors }}</div>
+                {% endif %}
+            </div>
+
+            <!-- Contact Information Section -->
+            <h3 class="section-title-modern">Contact Information</h3>
+            <div class="form-grid-modern">
+                <div class="form-group-modern">
+                    <label for="{{ form.phone_number.id_for_label }}" class="form-label-modern">Phone Number</label>
+                    <input type="tel" 
+                           name="phone_number" 
+                           value="{{ form.phone_number.value|default:'' }}" 
+                           class="input-modern {% if form.phone_number.errors %}border-danger{% endif %}" 
+                           id="{{ form.phone_number.id_for_label }}" 
+                           placeholder="+254 712 345 678">
+                    <span class="change-counter">
+                        Changes left:
+                        {% if user.phone_change_count|default:0 >= 2 %}
+                            0
+                        {% else %}
+                            {{ 2|add:user.phone_change_count }}
+                        {% endif %}
+                    </span>
+                    {% if form.phone_number.errors %}
+                        <div class="error-message-modern mt-2">{{ form.phone_number.errors }}</div>
+                    {% endif %}
+                    <small class="text-secondary mt-2 d-block">Include country code for international numbers</small>
+                </div>
+
+                <div class="form-group-modern">
+                    <label for="{{ form.location.id_for_label }}" class="form-label-modern">Location</label>
+                    <input type="text" 
+                           name="location" 
+                           value="{{ form.location.value|default:'' }}" 
+                           class="input-modern {% if form.location.errors %}border-danger{% endif %}" 
+                           id="{{ form.location.id_for_label }}" 
+                            placeholder="Your area in Homabay"
+                            required>
+                    <div class="location-suggestions" id="profileLocationSuggestions"></div>
+                    <div class="location-actions">
+                        <button type="button" class="use-location-btn" id="useCurrentLocationBtn">
+                            <i class="bi bi-geo-alt"></i>
+                            Use current location
+                        </button>
+                    </div>
+                    {% if form.location.errors %}
+                        <div class="error-message-modern mt-2">{{ form.location.errors }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Privacy Settings -->
+            <h3 class="section-title-modern">Privacy Settings</h3>
+            <div class="switch-container-modern">
+                <label class="switch-modern">
+                    <input type="checkbox" name="show_contact_info" id="show_contact_info" {% if form.show_contact_info.value %}checked{% endif %}>
+                    <span class="slider-modern"></span>
+                </label>
+                <div>
+                    <div class="switch-label">Show contact information</div>
+                    <div class="switch-description">Allow other users to see your phone number and email</div>
+                </div>
+            </div>
+
+            <!-- Security Section -->
+            <h3 class="section-title-modern">Security</h3>
+            <div class="security-actions">
+                <!-- Change Password Card (triggers modal) -->
+                <div class="security-action">
+                    <div class="security-icon">
+                        <i class="bi bi-shield-lock"></i>
+                    </div>
+                    <div class="security-title">Change Password</div>
+                    <div class="security-description">Update your password to keep your account secure</div>
+                    <button type="button" class="btn-custom btn-primary mt-auto" id="changePasswordBtn">
+                        <i class="bi bi-key"></i>
+                        Change Password
+                    </button>
+                </div>
+                
+                <!-- Delete Account Card (triggers modal) -->
+                <div class="security-action">
+                    <div class="security-icon danger" style="background: var(--danger);">
+                        <i class="bi bi-trash"></i>
+                    </div>
+                    <div class="security-title">Delete Account</div>
+                    <div class="security-description">Permanently delete your account and all data</div>
+                    <button type="button" class="btn-custom btn-ghost mt-auto text-danger" id="deleteAccountBtn" style="border-color: var(--danger);">
+                        <i class="bi bi-trash"></i>
+                        Delete Account
+                    </button>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="form-actions-modern">
+                <a href="{% url 'profile' user.pk %}" class="btn-custom btn-ghost">
+                    <i class="bi bi-x-circle"></i>
+                    Cancel
+                </a>
+                <button type="submit" class="btn-custom btn-primary">
+                    <i class="bi bi-check-circle"></i>
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ===== MODALS ===== -->
+
+<!-- Global message container -->
+<div id="globalMessageContainer"></div>
+
+<!-- Contact Verification Modal -->
+<div class="modal-overlay" id="contactVerificationModal">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3><i class="bi bi-shield-check me-2"></i>Why we verify contact details</h3>
+            <button type="button" class="modal-close" id="closeContactVerificationModal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="modal-icon">
+                <i class="bi bi-patch-check"></i>
+            </div>
+            <p class="text-secondary mb-3">
+                We re‑verify any email or phone number change to keep your account secure and to protect payouts.
+            </p>
+            <ul class="text-secondary ps-3">
+                <li>You can update a verified email or phone number up to two times.</li>
+                <li>After each change, the new contact must be verified before it becomes active.</li>
+                <li>Payouts are limited to your verified registration phone number.</li>
+            </ul>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn-custom btn-primary" id="confirmContactVerificationModal">
+                Got it
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Change Password Modal -->
+<div class="modal-overlay" id="changePasswordModal">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3><i class="bi bi-shield-lock me-2"></i>Change Password</h3>
+            <button type="button" class="modal-close" id="closeChangeModal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="modal-icon">
+                <i class="bi bi-key"></i>
+            </div>
+            <form id="changePasswordForm" novalidate>
+                {% csrf_token %}
+                <!-- Old Password -->
+                <div class="form-group-modern">
+                    <label class="form-label-modern">Current Password</label>
+                    <div class="input-group-modern">
+                        <input type="password" name="old_password" class="input-modern" id="cp_old" placeholder="Enter current password" required>
+                        <button type="button" class="password-toggle-btn" data-target="cp_old">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <!-- New Password -->
+                <div class="form-group-modern">
+                    <label class="form-label-modern">New Password</label>
+                    <div class="input-group-modern">
+                        <input type="password" name="new_password1" class="input-modern" id="cp_new1" placeholder="Create new password" required>
+                        <button type="button" class="password-toggle-btn" data-target="cp_new1">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
+                    <div class="strength-container" id="cpStrengthContainer" style="display: none;">
+                        <div class="strength-meter">
+                            <div class="strength-fill" id="cpStrengthFill"></div>
+                        </div>
+                        <div class="strength-text" id="cpStrengthText"></div>
+                    </div>
+                </div>
+                <!-- Confirm Password -->
+                <div class="form-group-modern">
+                    <label class="form-label-modern">Confirm New Password</label>
+                    <div class="input-group-modern">
+                        <input type="password" name="new_password2" class="input-modern" id="cp_new2" placeholder="Confirm new password" required>
+                        <button type="button" class="password-toggle-btn" data-target="cp_new2">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
+                    <div class="match-indicator" id="cpMatchIndicator" style="display: none;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-modal btn-modal-secondary" id="cancelChangeModal">Cancel</button>
+                    <button type="submit" class="btn-modal btn-modal-primary" id="submitChangePassword">
+                        <i class="bi bi-check-circle"></i> Update Password
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Account Modal -->
+<div class="modal-overlay" id="deleteAccountModal">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3><i class="bi bi-exclamation-triangle me-2" style="color: var(--danger);"></i>Delete Account</h3>
+            <button type="button" class="modal-close" id="closeDeleteModal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="modal-icon" style="background: var(--danger);">
+                <i class="bi bi-trash"></i>
+            </div>
+            <p class="text-center mb-3" style="color: var(--text-secondary);">This action is permanent and cannot be undone.</p>
+            <form id="deleteAccountForm" novalidate>
+                {% csrf_token %}
+                <!-- Reason dropdown -->
+                <div class="form-group-modern">
+                    <label class="form-label-modern">Reason for deletion</label>
+                    <select name="reason" class="delete-reason-select" id="deleteReason">
+                        <option value="">Select a reason (optional)</option>
+                        <option value="not_using">I'm no longer using Baysoko</option>
+                        <option value="too_many_emails">Too many emails</option>
+                        <option value="privacy">Privacy concerns</option>
+                        <option value="other">Other</option>
+                    </select>
+                    <textarea name="reason_other" class="delete-reason-other input-modern" id="deleteReasonOther" placeholder="Please specify..."></textarea>
+                </div>
+                <!-- Password confirmation -->
+                <div class="form-group-modern">
+                    <label class="form-label-modern">Confirm your password</label>
+                    <div class="input-group-modern">
+                        <input type="password" name="password" class="input-modern" id="deletePassword" placeholder="Enter current password" required>
+                        <button type="button" class="password-toggle-btn" data-target="deletePassword">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-modal btn-modal-secondary" id="cancelDeleteModal">Cancel</button>
+                    <button type="submit" class="btn-modal btn-modal-primary" style="background: var(--danger);" id="submitDeleteAccount">
+                        <i class="bi bi-trash"></i> Permanently Delete
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+{{ form.errors|json_script:"profileErrors" }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Show form errors as toasts for clearer feedback
+    try {
+        const raw = document.getElementById('profileErrors');
+        if (raw && raw.textContent) {
+            const data = JSON.parse(raw.textContent || '{}');
+            if (data && typeof data === 'object' && window.showToast) {
+                Object.keys(data).forEach(key => {
+                    (data[key] || []).forEach(msg => showToast(msg, 'error'));
+                });
+            }
+        }
+    } catch (e) {}
+    // ========== EXISTING PROFILE EDIT JS (image previews, counters, etc.) ==========
+    // (Preserved exactly as in original; only the security actions are replaced with modal triggers)
+
+    // Profile picture preview
+    const fileInput = document.getElementById('id_profile_picture');
+    const profilePicPreview = document.getElementById('profile-pic-preview');
+
+    if (fileInput && profilePicPreview) {
+        fileInput.addEventListener('change', function(event) {
+            const [file] = event.target.files;
+            if (file) {
+                if (file.size > 5 * 1024 * 1024) {
+                    showGlobalMessage('Please select an image smaller than 5MB', 'danger');
+                    fileInput.value = '';
+                    return;
+                }
+                if (!file.type.startsWith('image/')) {
+                    showGlobalMessage('Please select a valid image file', 'danger');
+                    fileInput.value = '';
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    profilePicPreview.src = e.target.result;
+                    profilePicPreview.style.transform = 'scale(1.1)';
+                    setTimeout(() => { profilePicPreview.style.transform = 'scale(1)'; }, 300);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        profilePicPreview.addEventListener('click', () => fileInput.click());
+        const uploadBtn = document.querySelector('label[for="id_profile_picture"]');
+        if (uploadBtn) uploadBtn.addEventListener('click', (e) => { e.preventDefault(); fileInput.click(); });
+    }
+
+    // Cover photo preview
+    const coverInput = document.getElementById('id_cover_photo');
+    const coverPreview = document.getElementById('cover-photo-preview');
+    if (coverInput && coverPreview) {
+        coverInput.addEventListener('change', function(event) {
+            const [file] = event.target.files;
+            if (file) {
+                if (file.size > 5 * 1024 * 1024) {
+                    showGlobalMessage('Please select an image smaller than 5MB', 'danger');
+                    coverInput.value = '';
+                    return;
+                }
+                if (!file.type.startsWith('image/')) {
+                    showGlobalMessage('Please select a valid image file', 'danger');
+                    coverInput.value = '';
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    coverPreview.src = e.target.result;
+                    coverPreview.style.transform = 'scale(1.02)';
+                    setTimeout(() => { coverPreview.style.transform = 'scale(1)'; }, 300);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        coverPreview.addEventListener('click', () => coverInput.click());
+        const coverUploadBtn = document.querySelector('label[for="id_cover_photo"]');
+        if (coverUploadBtn) coverUploadBtn.addEventListener('click', (e) => { e.preventDefault(); coverInput.click(); });
+    }
+
+    // Bio character counter
+    const bioField = document.getElementById('{{ form.bio.id_for_label }}');
+    const bioCounter = document.getElementById('bio-counter');
+    if (bioField && bioCounter) {
+        function updateBioCounter() {
+            const maxLength = 500;
+            const currentLength = bioField.value.length;
+            bioCounter.textContent = `${currentLength}/${maxLength} characters`;
+            bioCounter.classList.remove('warning', 'error');
+            if (currentLength > maxLength * 0.8) bioCounter.classList.add('warning');
+            if (currentLength > maxLength) bioCounter.classList.add('error');
+            if (currentLength > maxLength) bioField.value = bioField.value.substring(0, maxLength);
+        }
+        bioField.addEventListener('input', updateBioCounter);
+        updateBioCounter();
+    }
+
+    // Real-time input validation
+    document.querySelectorAll('.input-modern').forEach(input => {
+        input.addEventListener('blur', function() {
+            if (this.value.trim() === '' && this.hasAttribute('required')) {
+                this.style.borderColor = 'var(--danger)';
+            } else {
+                this.style.borderColor = '';
+            }
+        });
+        input.addEventListener('input', function() {
+            this.style.borderColor = '';
+            if (this.id === 'id_phone_number') {
+                this.value = this.value.replace(/[^\d+]/g, '');
+            }
+        });
+    });
+
+    // Location autocomplete (Homabay County only)
+    (function() {
+        const input = document.getElementById('id_location');
+        const suggestions = document.getElementById('profileLocationSuggestions');
+        const useCurrentBtn = document.getElementById('useCurrentLocationBtn');
+        if (!input || !suggestions) return;
+        let timer = null;
+        const viewbox = '34.0,-0.1,35.2,-1.1';
+        const isAllowed = (name) => /Homa\\s*Bay|Homabay|Ndhiwa/i.test(name || '');
+        let HOMABAY_LANDMARKS = [];
+        const LANDMARKS_KEY = 'baysoko_recent_locations';
+
+        async function loadHomabayLandmarks() {
+            if (HOMABAY_LANDMARKS.length) return HOMABAY_LANDMARKS;
+            try {
+                const res = await fetch("{% static 'data/homabay_landmarks.json' %}", { cache: 'force-cache' });
+                if (res.ok) {
+                    const data = await res.json();
+                    HOMABAY_LANDMARKS = Array.isArray(data?.landmarks) ? data.landmarks : [];
+                }
+            } catch (e) {}
+            return HOMABAY_LANDMARKS;
+        }
+
+        function getRecentLocations() {
+            try {
+                const raw = localStorage.getItem(LANDMARKS_KEY);
+                const list = raw ? JSON.parse(raw) : [];
+                return Array.isArray(list) ? list : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function addRecentLocation(label) {
+            if (!label || typeof label !== 'string') return;
+            try {
+                const list = getRecentLocations();
+                const cleaned = label.trim();
+                if (!cleaned) return;
+                const deduped = [cleaned, ...list.filter(l => l.toLowerCase() !== cleaned.toLowerCase())].slice(0, 5);
+                localStorage.setItem(LANDMARKS_KEY, JSON.stringify(deduped));
+            } catch (e) {}
+        }
+
+        function localMatches(query) {
+            const q = (query || '').toLowerCase().trim();
+            const recent = getRecentLocations().map(label => ({ display_name: `${label}, Homa Bay County` }));
+            const matches = !q
+                ? HOMABAY_LANDMARKS.slice(0, 10)
+                : HOMABAY_LANDMARKS.filter(l => l.toLowerCase().includes(q)).slice(0, 10);
+            const locals = matches.map(label => ({ display_name: `${label}, Homa Bay County` }));
+            return [...recent, ...locals].slice(0, 10);
+        }
+
+        function renderSuggestions(items) {
+            if (!items.length) {
+                hideSuggestions();
+                return;
+            }
+            suggestions.innerHTML = items.map(item =>
+                `<div class="location-suggestion-item" data-label="${item.display_name.replace(/"/g, '&quot;')}">${item.display_name}</div>`
+            ).join('');
+            suggestions.style.display = 'block';
+        }
+
+        function hideSuggestions() {
+            suggestions.style.display = 'none';
+            suggestions.innerHTML = '';
+        }
+
+        loadHomabayLandmarks();
+
+        input.addEventListener('input', () => {
+            const query = input.value.trim();
+            clearTimeout(timer);
+            if (query.length < 2) {
+                renderSuggestions(localMatches(query));
+                return;
+            }
+            timer = setTimeout(async () => {
+                try {
+                    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=ke&viewbox=${viewbox}&bounded=1&q=${encodeURIComponent(query)}`;
+                    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+                    const data = await res.json();
+                    const items = (data || []).filter(r => isAllowed(r.display_name));
+                    const merged = [...items, ...localMatches(query)];
+                    renderSuggestions(merged.slice(0, 12));
+                } catch (e) {
+                    renderSuggestions(localMatches(query));
+                }
+            }, 280);
+        });
+
+        suggestions.addEventListener('click', (e) => {
+            const item = e.target.closest('.location-suggestion-item');
+            if (!item) return;
+            input.value = item.getAttribute('data-label') || item.textContent.trim();
+            addRecentLocation(input.value);
+            hideSuggestions();
+        });
+
+        input.addEventListener('blur', () => setTimeout(hideSuggestions, 200));
+
+        if (useCurrentBtn && window.BaysokoGeo) {
+            useCurrentBtn.addEventListener('click', async () => {
+                try {
+                    useCurrentBtn.disabled = true;
+                    useCurrentBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Locating...';
+                    const loc = await window.BaysokoGeo.ensurePermission({ force: true });
+                    const label = await window.BaysokoGeo.reverseGeocode(loc.lat, loc.lng);
+                    if (label) {
+                        input.value = label;
+                        addRecentLocation(label);
+                        input.focus();
+                        renderSuggestions(localMatches(label));
+                    } else {
+                        renderSuggestions(localMatches(input.value || ''));
+                    }
+                } catch (e) {
+                    renderSuggestions(localMatches(input.value || ''));
+                } finally {
+                    useCurrentBtn.disabled = false;
+                    useCurrentBtn.innerHTML = '<i class="bi bi-geo-alt"></i> Use current location';
+                }
+            });
+        }
+
+        if (window.BaysokoGeo && (!input.value || !input.value.trim())) {
+            window.BaysokoGeo.requestCurrentLocation().then(async (loc) => {
+                const label = await window.BaysokoGeo.reverseGeocode(loc.lat, loc.lng);
+                if (label) {
+                    input.value = label;
+                    addRecentLocation(label);
+                    renderSuggestions(localMatches(label));
+                }
+            }).catch(() => {});
+        }
+    })();
+
+    // ========== MODAL FUNCTIONALITY ==========
+    const changeModal = document.getElementById('changePasswordModal');
+    const deleteModal = document.getElementById('deleteAccountModal');
+    const contactModal = document.getElementById('contactVerificationModal');
+    const changeBtn = document.getElementById('changePasswordBtn');
+    const deleteBtn = document.getElementById('deleteAccountBtn');
+    const contactLink = document.getElementById('contactVerificationLink');
+    const closeChange = document.getElementById('closeChangeModal');
+    const cancelChange = document.getElementById('cancelChangeModal');
+    const closeDelete = document.getElementById('closeDeleteModal');
+    const cancelDelete = document.getElementById('cancelDeleteModal');
+    const closeContact = document.getElementById('closeContactVerificationModal');
+    const confirmContact = document.getElementById('confirmContactVerificationModal');
+
+    function openModal(modal) {
+        modal.classList.add('show');
+        document.body.style.overflow = 'auto';
+    }
+    function closeModal(modal) {
+        modal.classList.remove('show');
+        document.body.style.overflow = '';
+    }
+
+    changeBtn.addEventListener('click', () => openModal(changeModal));
+    deleteBtn.addEventListener('click', () => openModal(deleteModal));
+    if (contactLink && contactModal) {
+        contactLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            openModal(contactModal);
+        });
+    }
+
+    [closeChange, cancelChange].forEach(el => el.addEventListener('click', () => closeModal(changeModal)));
+    [closeDelete, cancelDelete].forEach(el => el.addEventListener('click', () => closeModal(deleteModal)));
+    [closeContact, confirmContact].forEach(el => {
+        if (el && contactModal) {
+            el.addEventListener('click', () => closeModal(contactModal));
+        }
+    });
+
+    // Close on overlay click (optional)
+    changeModal.addEventListener('click', (e) => { if (e.target === changeModal) closeModal(changeModal); });
+    deleteModal.addEventListener('click', (e) => { if (e.target === deleteModal) closeModal(deleteModal); });
+    if (contactModal) {
+        contactModal.addEventListener('click', (e) => { if (e.target === contactModal) closeModal(contactModal); });
+    }
+
+    // ========== PASSWORD TOGGLE (for modals) ==========
+    document.querySelectorAll('.password-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const targetId = this.getAttribute('data-target');
+            const input = document.getElementById(targetId);
+            const icon = this.querySelector('i');
+            if (input && icon) {
+                const type = input.type === 'password' ? 'text' : 'password';
+                input.type = type;
+                icon.classList.toggle('bi-eye');
+                icon.classList.toggle('bi-eye-slash');
+            }
+        });
+    });
+
+    // ========== CHANGE PASSWORD MODAL: strength & match ==========
+    const cpNew1 = document.getElementById('cp_new1');
+    const cpNew2 = document.getElementById('cp_new2');
+    const cpStrengthContainer = document.getElementById('cpStrengthContainer');
+    const cpStrengthFill = document.getElementById('cpStrengthFill');
+    const cpStrengthText = document.getElementById('cpStrengthText');
+    const cpMatchIndicator = document.getElementById('cpMatchIndicator');
+
+    if (cpNew1) {
+        cpNew1.addEventListener('input', function() {
+            const pwd = this.value;
+            if (!pwd) {
+                cpStrengthContainer.style.display = 'none';
+                return;
+            }
+            cpStrengthContainer.style.display = 'block';
+            let strength = 0;
+            if (pwd.length >= 8) strength += 25;
+            if (/[a-z]/.test(pwd)) strength += 25;
+            if (/[A-Z]/.test(pwd)) strength += 25;
+            if (/[0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd)) strength += 25;
+
+            cpStrengthFill.className = 'strength-fill';
+            if (strength <= 25) {
+                cpStrengthFill.classList.add('strength-weak');
+                cpStrengthText.textContent = 'Weak';
+            } else if (strength <= 50) {
+                cpStrengthFill.classList.add('strength-fair');
+                cpStrengthText.textContent = 'Fair';
+            } else if (strength <= 75) {
+                cpStrengthFill.classList.add('strength-good');
+                cpStrengthText.textContent = 'Good';
+            } else {
+                cpStrengthFill.classList.add('strength-strong');
+                cpStrengthText.textContent = 'Strong';
+            }
+        });
+    }
+
+    function checkMatch() {
+        if (!cpNew1 || !cpNew2 || !cpMatchIndicator) return;
+        const pwd1 = cpNew1.value;
+        const pwd2 = cpNew2.value;
+        if (pwd2.length === 0) {
+            cpMatchIndicator.style.display = 'none';
+            return;
+        }
+        cpMatchIndicator.style.display = 'flex';
+        if (pwd1 === pwd2) {
+            cpMatchIndicator.className = 'match-indicator success';
+            cpMatchIndicator.innerHTML = '<i class="bi bi-check-circle"></i><span>Passwords match</span>';
+        } else {
+            cpMatchIndicator.className = 'match-indicator error';
+            cpMatchIndicator.innerHTML = '<i class="bi bi-x-circle"></i><span>Passwords do not match</span>';
+        }
+    }
+    if (cpNew1 && cpNew2) {
+        cpNew1.addEventListener('input', checkMatch);
+        cpNew2.addEventListener('input', checkMatch);
+    }
+
+    // ========== DELETE MODAL: show "other" textarea ==========
+    const deleteReason = document.getElementById('deleteReason');
+    const deleteReasonOther = document.getElementById('deleteReasonOther');
+    if (deleteReason && deleteReasonOther) {
+        deleteReason.addEventListener('change', function() {
+            deleteReasonOther.style.display = this.value === 'other' ? 'block' : 'none';
+        });
+    }
+
+    // ========== AJAX SUBMISSION HANDLERS ==========
+    // Helper: get CSRF token
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+
+    // Change Password AJAX
+    const changeForm = document.getElementById('changePasswordForm');
+    const changeSubmitBtn = document.getElementById('submitChangePassword');
+
+    // Unsaved phone/location guard
+    (function() {
+        const profileForm = document.getElementById('profileForm');
+        if (!profileForm) return;
+        const phoneInput = document.getElementById('id_phone_number');
+        const locationInput = document.getElementById('id_location');
+        const initial = {
+            phone: phoneInput ? phoneInput.value : null,
+            location: locationInput ? locationInput.value : null
+        };
+        let isDirty = false;
+
+        function checkDirty() {
+            const now = {
+                phone: phoneInput ? phoneInput.value : null,
+                location: locationInput ? locationInput.value : null
+            };
+            isDirty = (now.phone !== initial.phone) || (now.location !== initial.location);
+            return isDirty;
+        }
+
+        // mark dirty on input changes
+        [phoneInput, locationInput].forEach(el => {
+            if (!el) return;
+            el.addEventListener('input', () => { checkDirty(); });
+        });
+
+        // when form is submitted, reset dirty flag
+        profileForm.addEventListener('submit', () => { isDirty = false; });
+
+        // intercept internal navigation clicks
+        document.addEventListener('click', function(e) {
+            if (!isDirty) return;
+            const a = e.target.closest('a[href]');
+            if (!a) return;
+            const href = a.getAttribute('href');
+            if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+            // allow same-page anchors
+            const origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
+            if (href.startsWith(origin) || href.startsWith('/')) {
+                e.preventDefault();
+                showGlobalMessage('You have unsaved profile changes (phone/location). Please save before leaving.', 'warning');
+                // focus the phone input to prompt user
+                if (phoneInput) phoneInput.focus();
+                return false;
+            }
+        });
+
+        // warn on browser/tab close or refresh
+        window.addEventListener('beforeunload', function(e) {
+            if (!checkDirty()) return undefined;
+            const confirmationMessage = 'You have unsaved changes to your profile. Are you sure you want to leave?';
+            (e || window.event).returnValue = confirmationMessage; // Gecko + IE
+            return confirmationMessage; // Webkit, Chrome
+        });
+    })();
+
+    changeForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(changeForm);
+        const oldPwd = formData.get('old_password');
+        const new1 = formData.get('new_password1');
+        const new2 = formData.get('new_password2');
+
+        if (!oldPwd || !new1 || !new2) {
+            showGlobalMessage('All fields are required.', 'danger');
+            return;
+        }
+        if (new1 !== new2) {
+            showGlobalMessage('New passwords do not match.', 'danger');
+            return;
+        }
+        if (new1.length < 8) {
+            showGlobalMessage('Password must be at least 8 characters.', 'danger');
+            return;
+        }
+
+        changeSubmitBtn.disabled = true;
+        changeSubmitBtn.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> Updating...';
+
+        fetch("{% url 'change_password_ajax' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: formData
+        })
+        .then(async res => {
+            changeSubmitBtn.disabled = false;
+            changeSubmitBtn.innerHTML = '<i class="bi bi-check-circle"></i> Update Password';
+            // Try to parse JSON body; if not JSON, fall back to plain text
+            let data = null;
+            try {
+                data = await res.json();
+            } catch (e) {
+                const text = await res.text();
+                // If the server returned a Django HTML error page, extract a short message
+                const cleaned = text.replace(/<[^>]+>/g, '').trim().slice(0, 1000);
+                showGlobalMessage(cleaned || 'Unexpected server response.', 'danger');
+                return;
+            }
+
+            if (res.ok) {
+                if (data.success) {
+                    showGlobalMessage('Password changed successfully!', 'success');
+                    closeModal(changeModal);
+                    changeForm.reset();
+                    if (cpStrengthContainer) cpStrengthContainer.style.display = 'none';
+                    if (cpMatchIndicator) cpMatchIndicator.style.display = 'none';
+                } else {
+                    if (data.errors) {
+                        const errorMsg = Object.values(data.errors).flat().join(' ');
+                        showGlobalMessage(errorMsg, 'danger');
+                    } else {
+                        showGlobalMessage(data.error || 'Password change failed.', 'danger');
+                    }
+                }
+            } else {
+                // Non-OK responses with JSON body
+                if (data) {
+                    if (data.errors) {
+                        const errorMsg = Object.values(data.errors).flat().join(' ');
+                        showGlobalMessage(errorMsg, 'danger');
+                    } else {
+                        showGlobalMessage(data.error || data.message || 'Request failed.', 'danger');
+                    }
+                } else {
+                    showGlobalMessage('Request failed. Please try again.', 'danger');
+                }
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            changeSubmitBtn.disabled = false;
+            changeSubmitBtn.innerHTML = '<i class="bi bi-check-circle"></i> Update Password';
+            showGlobalMessage('Network error. Please try again.', 'danger');
+        });
+    });
+
+    // Delete Account AJAX
+    const deleteForm = document.getElementById('deleteAccountForm');
+    const deleteSubmitBtn = document.getElementById('submitDeleteAccount');
+
+    deleteForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(deleteForm);
+        const password = formData.get('password');
+        if (!password) {
+            showGlobalMessage('Please enter your password to confirm.', 'danger');
+            return;
+        }
+
+        deleteSubmitBtn.disabled = true;
+        deleteSubmitBtn.innerHTML = '<i class="bi bi-arrow-repeat spin"></i> Deleting...';
+
+        fetch("{% url 'delete_account_ajax' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                showGlobalMessage('Your account has been deleted. Redirecting...', 'success');
+                setTimeout(() => { window.location.href = data.redirect || '/'; }, 2000);
+            } else {
+                deleteSubmitBtn.disabled = false;
+                deleteSubmitBtn.innerHTML = '<i class="bi bi-trash"></i> Permanently Delete';
+                showGlobalMessage(data.error || 'Account deletion failed.', 'danger');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            deleteSubmitBtn.disabled = false;
+            deleteSubmitBtn.innerHTML = '<i class="bi bi-trash"></i> Permanently Delete';
+            showGlobalMessage('Network error. Please try again.', 'danger');
+        });
+    });
+
+    // ========== GLOBAL MESSAGE FUNCTION ==========
+    function showGlobalMessage(message, type) {
+        const container = document.getElementById('globalMessageContainer');
+        if (!container) return;
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `global-message global-${type}`;
+        msgDiv.innerHTML = `<i class="bi ${type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill'}"></i><span>${message}</span>`;
+        container.appendChild(msgDiv);
+        setTimeout(() => {
+            msgDiv.style.animation = 'slideOutRight 0.3s';
+            setTimeout(() => msgDiv.remove(), 300);
+        }, 4000);
+    }
+
+    // Add spin animation
+    const style = document.createElement('style');
+    style.textContent = `
+        .spin {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Toast validation errors (if any)
+    try {
+        const errors = JSON.parse(document.getElementById('profileErrors')?.textContent || '{}');
+        Object.keys(errors || {}).forEach(key => {
+            const msgs = errors[key] || [];
+            msgs.forEach(msg => {
+                if (window.showToast) {
+                    window.showToast(msg, 'error');
+                }
+            });
+        });
+    } catch (e) {}
+});
+</script>
+{% endblock %}
