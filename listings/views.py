@@ -3026,12 +3026,12 @@ def checkout(request):
                     platform_tax = (subtotal * tax_rate).quantize(Decimal('0.01'))
                     order_total = subtotal + platform_tax + (delivery_fee_total or Decimal('0'))
                     
-                    # Create order
+                    # Create order with all pricing information
                     order = Order.objects.create(
-                                                subtotal=subtotal,
-                                                platform_tax=platform_tax,
-                                                tax_rate=tax_rate,
                         user=request.user,
+                        subtotal=subtotal,
+                        platform_tax=platform_tax,
+                        tax_rate=tax_rate,
                         total_price=order_total,
                         first_name=form.cleaned_data['first_name'],
                         last_name=form.cleaned_data['last_name'],
@@ -3102,7 +3102,10 @@ def checkout(request):
             delivery_error_message = _extract_delivery_error_message(delivery_breakdown_estimate)
             if delivery_error_message:
                 delivery_fee_estimate = None
-            estimated_total = cart.get_total_price() + (delivery_fee_estimate or Decimal('0'))
+            # Include tax in the estimated total
+            cart_subtotal = cart.get_total_price()
+            cart_tax = cart.get_platform_tax()
+            estimated_total = cart_subtotal + cart_tax + (delivery_fee_estimate or Decimal('0'))
             return render(request, 'listings/checkout.html', {
                 'cart': cart,
                 'form': form,
@@ -3139,7 +3142,10 @@ def checkout(request):
     delivery_error_message = _extract_delivery_error_message(delivery_breakdown_estimate)
     if delivery_error_message:
         delivery_fee_estimate = None
-    estimated_total = cart.get_total_price() + (delivery_fee_estimate or Decimal('0'))
+    # Include tax in the estimated total
+    cart_subtotal = cart.get_total_price()
+    cart_tax = cart.get_platform_tax()
+    estimated_total = cart_subtotal + cart_tax + (delivery_fee_estimate or Decimal('0'))
 
     return render(request, 'listings/checkout.html', {
         'cart': cart,
@@ -3654,6 +3660,7 @@ def order_list(request):
             'seller_items_count': len(seller_items),
             'unique_sellers': list(unique_sellers),
             'unique_sellers_count': len(unique_sellers),
+            'price_breakdown': order.get_price_breakdown(),
         })
     
     # Paginate the orders_data list
@@ -3719,6 +3726,7 @@ def order_detail(request, order_id):
         'is_buyer': is_buyer,
         'is_seller': is_seller,
         'seller_specific_total': seller_specific_total,  # Add this for seller view
+        'price_breakdown': order.get_price_breakdown(),
         'can_ship': is_seller and order.status == 'paid',
         'can_confirm': is_buyer and order.status == 'shipped',
         'can_dispute': is_buyer and order.status in ['shipped', 'delivered'],

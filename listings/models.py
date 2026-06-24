@@ -743,6 +743,36 @@ class Order(models.Model):
         
         return self.status == 'shipped'
 
+    # Tax and pricing helper methods
+    def get_subtotal(self):
+        """Get the subtotal (all items before tax/delivery)"""
+        return self.subtotal or sum(
+            item.get_total_price() for item in self.order_items.all()
+        )
+    
+    def get_tax(self):
+        """Get the platform tax amount"""
+        return self.platform_tax or Decimal('0')
+    
+    def get_delivery_fee(self):
+        """Get the delivery fee"""
+        return self.delivery_fee or Decimal('0')
+    
+    def get_order_total(self):
+        """Get the complete order total (subtotal + tax + delivery)"""
+        return self.total_price or (
+            self.get_subtotal() + self.get_tax() + self.get_delivery_fee()
+        )
+    
+    def get_price_breakdown(self):
+        """Get a dict with all price components for template display"""
+        return {
+            'subtotal': self.get_subtotal(),
+            'tax': self.get_tax(),
+            'delivery_fee': self.get_delivery_fee(),
+            'total': self.get_order_total(),
+        }
+
     def send_to_delivery_system(self):
         
         from .webhooks import send_order_webhook
