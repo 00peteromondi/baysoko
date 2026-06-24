@@ -2665,45 +2665,14 @@ function handleListingCartClick(button, listingId) {
 }
 
 function updateNavbarCart(total, count) {
-    console.log('Updating navbar cart:', { total, count });
-    
-    document.querySelectorAll('.cart-count-badge, .mobile-cart-badge').forEach(badge => {
-        if (count > 0) {
-            badge.textContent = count;
-            badge.style.display = 'flex';
-        } else {
-            badge.style.display = 'none';
+    // Dispatch cartUpdated event to trigger global BadgeManager update
+    // This ensures consistent cart display across entire site
+    document.dispatchEvent(new CustomEvent('cartUpdated', {
+        detail: { 
+            itemCount: parseInt(count) || 0, 
+            total: parseFloat(total) || 0 
         }
-    });
-    
-    const cartTotalElements = document.querySelectorAll('.cart-total');
-    cartTotalElements.forEach(element => {
-        if (count > 0) {
-            element.textContent = `KSh ${parseFloat(total).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-            element.style.display = 'inline';
-        } else {
-            element.style.display = 'none';
-        }
-    });
-    
-    const cartEmptyTextElements = document.querySelectorAll('.cart-empty-text');
-    cartEmptyTextElements.forEach(element => {
-        if (count > 0) {
-            element.style.display = 'none';
-        } else {
-            element.style.display = 'inline';
-        }
-    });
-    
-    const desktopCartBadge = document.getElementById('desktopCartBadge');
-    if (desktopCartBadge) {
-        if (count > 0) {
-            desktopCartBadge.textContent = count;
-            desktopCartBadge.style.display = 'inline-flex';
-        } else {
-            desktopCartBadge.style.display = 'none';
-        }
-    }
+    }));
 }
 
 // ============================================
@@ -3791,14 +3760,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    document.addEventListener('cartUpdated', function(event) {
-        const { itemCount, total } = event.detail;
-        console.log('Received cart update event:', { itemCount, total });
-        updateNavbarCart(total, itemCount);
-    });
-    
+    // Initialize cart display on page load (triggers global BadgeManager update)
     {% if cart_total and cart_item_count %}
-    updateNavbarCart({{ cart_total }}, {{ cart_item_count }});
+    // Trigger cart update event with server-provided values
+    document.dispatchEvent(new CustomEvent('cartUpdated', {
+        detail: { 
+            itemCount: {{ cart_item_count|default:0 }}, 
+            total: {{ cart_total|default:0 }} 
+        }
+    }));
     {% endif %}
     
     // Initialize favorite button event delegation
