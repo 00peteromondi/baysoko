@@ -2790,6 +2790,123 @@ def add_to_cart(request, listing_id):
         # For non-AJAX requests, show message and redirect
         messages.success(request, message)
         return redirect(reverse('view_cart'))
+
+@login_required
+@require_POST
+@ajax_required
+def cart_increment_quantity(request, listing_id):
+    """Increment cart item quantity for a listing"""
+    listing = get_object_or_404(Listing, id=listing_id)
+    cart, created = Cart.objects.get_or_create(user=request.user)
+    
+    try:
+        cart_item = CartItem.objects.get(cart=cart, listing=listing)
+        # Check if we can increment
+        if cart_item.quantity < listing.stock:
+            cart_item.quantity += 1
+            cart_item.save()
+            message = 'Quantity increased'
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': f'Only {listing.stock} units available.',
+                'item_quantity': cart_item.quantity
+            })
+    except CartItem.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Item not in cart'
+        })
+    
+    # Get updated cart info
+    cart.refresh_from_db()
+    cart_item_count = sum(int(item.quantity or 0) for item in cart.items.all())
+    cart_total = float(cart.get_total_price())
+    
+    # Broadcast cart update
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'notifications_user_{request.user.id}',
+            {
+                'type': 'cart_updated',
+                'cart': {
+                    'cart_item_count': cart_item_count,
+                    'cart_total': float(cart_total),
+                    'action': 'increment',
+                    'listing_id': listing.id,
+                },
+            }
+        )
+    except Exception:
+        logger.exception('Failed to broadcast cart_updated from cart_increment')
+    
+    return JsonResponse({
+        'success': True,
+        'message': message,
+        'item_quantity': cart_item.quantity,
+        'cart_item_count': cart_item_count,
+        'cart_total': cart_total,
+    })
+
+@login_required
+@require_POST
+@ajax_required
+def cart_decrement_quantity(request, listing_id):
+    """Decrement cart item quantity for a listing"""
+    listing = get_object_or_404(Listing, id=listing_id)
+    cart, created = Cart.objects.get_or_create(user=request.user)
+    
+    try:
+        cart_item = CartItem.objects.get(cart=cart, listing=listing)
+        if cart_item.quantity > 1:
+            cart_item.quantity -= 1
+            cart_item.save()
+            message = 'Quantity decreased'
+        else:
+            # Remove item if quantity would be 0
+            cart_item.delete()
+            message = 'Item removed from cart'
+    except CartItem.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Item not in cart'
+        })
+    
+    # Get updated cart info
+    cart.refresh_from_db()
+    cart_item_count = sum(int(item.quantity or 0) for item in cart.items.all())
+    cart_total = float(cart.get_total_price())
+    
+    # Broadcast cart update
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'notifications_user_{request.user.id}',
+            {
+                'type': 'cart_updated',
+                'cart': {
+                    'cart_item_count': cart_item_count,
+                    'cart_total': float(cart_total),
+                    'action': 'decrement',
+                    'listing_id': listing.id,
+                },
+            }
+        )
+    except Exception:
+        logger.exception('Failed to broadcast cart_updated from cart_decrement')
+    
+    return JsonResponse({
+        'success': True,
+        'message': message,
+        'item_quantity': cart_item.quantity if cart_item.pk else 0,
+        'cart_item_count': cart_item_count,
+        'cart_total': cart_total,
+    })
     
 @login_required
 def checkout(request):
@@ -2903,9 +3020,17 @@ def checkout(request):
                                 ]
                             })
 
-                    order_total = cart.get_total_price() + (delivery_fee_total or Decimal('0'))
+                    # Calculate platform tax (5%)
+                    subtotal = cart.get_total_price()
+                    tax_rate = Decimal('0.05')
+                    platform_tax = (subtotal * tax_rate).quantize(Decimal('0.01'))
+                    order_total = subtotal + platform_tax + (delivery_fee_total or Decimal('0'))
+                    
                     # Create order
                     order = Order.objects.create(
+                                                subtotal=subtotal,
+                                                platform_tax=platform_tax,
+                                                tax_rate=tax_rate,
                         user=request.user,
                         total_price=order_total,
                         first_name=form.cleaned_data['first_name'],

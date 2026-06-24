@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db import models
 from django.db.utils import IntegrityError
 from django.contrib.auth import get_user_model
+from decimal import Decimal
 from django.urls import reverse
 from django.db.models import Avg, Q
 from cloudinary.models import CloudinaryField
@@ -567,7 +568,19 @@ class Cart(models.Model):
         return f"Cart ({self.user.username})"
 
     def get_total_price(self):
+        """Get subtotal (items only, no tax/delivery)"""
         return sum(item.get_total_price() for item in self.items.all())
+    
+    def get_platform_tax(self, tax_rate=Decimal('0.05')):
+        """Calculate 5% platform tax on subtotal"""
+        subtotal = self.get_total_price()
+        return (subtotal * tax_rate).quantize(Decimal('0.01'))
+    
+    def get_total_with_tax(self, tax_rate=Decimal('0.05')):
+        """Get subtotal + tax (no delivery)"""
+        subtotal = self.get_total_price()
+        tax = self.get_platform_tax(tax_rate)
+        return subtotal + tax
 
     @property
     def total_items(self):
@@ -617,6 +630,11 @@ class Order(models.Model):
     items = models.ManyToManyField(Listing, through='OrderItem')
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=ORDER_STATUS, default='pending')
+    
+    # Platform tax (5% by default)
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    platform_tax = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=4, default=Decimal('0.05'))
     
     # Add shipping and contact information fields
     first_name = models.CharField(max_length=100, blank=True)

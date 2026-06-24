@@ -753,12 +753,30 @@ print("=" * 50)
 
 
 # Celery Configuration
+# Try to use Redis as broker; fall back to eager mode if unavailable
 CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = 'django-db'
 CELERY_CACHE_BACKEND = 'django-cache'
 CELERY_TIMEZONE = 'Africa/Nairobi'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
+
+# Check if Redis is available for broker
+_REDIS_AVAILABLE = False
+CELERY_TASK_ALWAYS_EAGER = config('CELERY_TASK_ALWAYS_EAGER', default=False, cast=bool)
+if not CELERY_TASK_ALWAYS_EAGER:
+    try:
+        import redis
+        _redis_test = redis.Redis.from_url(CELERY_BROKER_URL, socket_connect_timeout=2)
+        _redis_test.ping()
+        _REDIS_AVAILABLE = True
+    except Exception as e:
+        print(f"⚠️  Celery broker Redis unavailable at {CELERY_BROKER_URL}. Using eager mode for development.")
+        _REDIS_AVAILABLE = False
+        # In development, use eager mode so tasks run synchronously
+        if DEBUG or RUNNING_RUNSERVER:
+            CELERY_TASK_ALWAYS_EAGER = True
+            CELERY_TASK_EAGER_PROPAGATES = True
 
 # Redis for caching and channels (with safe local fallback)
 REDIS_URL = os.environ.get('REDIS_URL')

@@ -659,23 +659,28 @@ def process_product_import_row(store, data, params):
     sku = data.get('sku')
     title = data.get('title')
     
-    # Ensure title is a non-empty string (not NaN or other float values)
-    if isinstance(title, float) and (math.isnan(title) or not math.isfinite(title)):
-        title = None
+    # Clean up title - handle NaN and other invalid values
+    if isinstance(title, float):
+        if math.isnan(title) or not math.isfinite(title):
+            title = None
     if isinstance(title, str):
         title = title.strip() if title else None
+    elif title is not None and not isinstance(title, str):
+        title = str(title).strip() if str(title).strip() != 'nan' else None
     
     if not title:
         raise ValueError("Product title is required")
     
-    # Ensure SKU is a string if present
+    # Clean up SKU - handle NaN and other invalid values
     if sku is not None:
-        if isinstance(sku, float) and (math.isnan(sku) or not math.isfinite(sku)):
-            sku = None
+        if isinstance(sku, float):
+            if math.isnan(sku) or not math.isfinite(sku):
+                sku = None
         elif isinstance(sku, str):
             sku = sku.strip() if sku else None
         else:
-            sku = str(sku) if sku else None
+            sku_str = str(sku).strip() if str(sku).strip() != 'nan' else None
+            sku = sku_str if sku_str else None
     
     # Look for existing product
     product = None
@@ -683,6 +688,7 @@ def process_product_import_row(store, data, params):
         # Some deployments may not have a `sku` field on Listing.
         # Safely attempt to use `sku` field; if it doesn't exist, fall back to `slug` lookup.
         try:
+            from django.core.exceptions import FieldDoesNotExist
             Listing._meta.get_field('sku')
             product = Listing.objects.filter(store=store, sku=sku).first()
         except FieldDoesNotExist:
@@ -717,6 +723,10 @@ def process_product_import_row(store, data, params):
         # Update fields
         for field, value in data.items():
             if hasattr(product, field) and value is not None:
+                # Skip NaN values completely
+                if isinstance(value, float) and (math.isnan(value) or not math.isfinite(value)):
+                    continue
+                    
                 # Handle special field types
                 if field == 'price':
                     parsed_price = _parse_decimal(value)
@@ -762,7 +772,10 @@ def process_product_import_row(store, data, params):
                     if isinstance(value, str):
                         value = value.strip()
                     elif value is not None:
-                        value = str(value).strip()
+                        value_str = str(value).strip()
+                        if value_str.lower() == 'nan':
+                            continue
+                        value = value_str
                     
                     # Only set if not empty
                     if value:

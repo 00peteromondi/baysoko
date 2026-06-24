@@ -1184,14 +1184,14 @@
                     {% endif %}
                     <div class="total-row">
                         <span>Tax</span>
-                        <span>KSh 0.00</span>
+                        <span id="taxValue">KSh {{ cart.get_platform_tax|floatformat:2 }}</span>
                     </div>
                     <div class="total-row total">
                         <span>Total</span>
                         {% if estimated_total %}
                             <span id="checkoutTotalValue">KSh {{ estimated_total|floatformat:2 }}</span>
                         {% else %}
-                            <span id="checkoutTotalValue">KSh {{ cart.get_total_price }}</span>
+                            <span id="checkoutTotalValue">KSh {{ cart.get_total_with_tax|floatformat:2 }}</span>
                         {% endif %}
                     </div>
                 </div>
@@ -1533,7 +1533,7 @@
         async function fetchNominatim(query) {
             const viewbox = '34.0,-0.1,35.2,-1.1';
             const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&addressdetails=1&countrycodes=ke&viewbox=${viewbox}&bounded=1&q=${encodeURIComponent(query)}`;
-            const res = await fetch(url, { headers: { "Accept": "application/json" } });
+            const res = await fetch(url, { headers: { "Accept": "application/json", "Referer": "{{ request.build_absolute_uri|default:'/' }}" } });
             if (!res.ok) return [];
             const data = await res.json();
             return filterHomabay(data);
@@ -1541,8 +1541,8 @@
 
         async function fetchReverseGeocode(lat, lng) {
             try {
-                const url = `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`;
-                const res = await fetch(url, { headers: { "Accept": "application/json" } });
+                const url = `https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&lat=${lat}&lon=${lng}`;
+                const res = await fetch(url, { headers: { "Accept": "application/json", "Referer": "{{ request.build_absolute_uri|default:'/' }}" } });
                 if (!res.ok) return null;
                 const data = await res.json();
                 return data || null;
