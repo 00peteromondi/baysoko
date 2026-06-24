@@ -85,11 +85,16 @@ class ChatConsumer(AsyncWebsocketConsumer):
         conversation_id = data.get('conversation_id')
         if not conversation_id:
             return
-        # Verify user is participant
+        # Verify user is participant - PERMISSION CHECK
         participant_ids = await self.get_conversation_participants(conversation_id)
         if self.user.id not in participant_ids:
+            logger.warning(f"User {self.user.id} attempted to type in unauthorized conversation {conversation_id}")
             return
-        # Send to other participants only
+        # Apply rate limiting - max 10 typing events per 5 seconds per conversation
+        if not await self.check_rate_limit(f"typing_{conversation_id}", max_events=10, window=5):
+            logger.warning(f"User {self.user.id} exceeded typing rate limit for conversation {conversation_id}")
+            return
+        # Send to other participants only using conversation-specific group
         for pid in participant_ids:
             if pid != self.user.id:
                 await self.channel_layer.group_send(
@@ -107,8 +112,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
         conversation_id = data.get('conversation_id')
         if not conversation_id:
             return
+        # Verify user is participant - PERMISSION CHECK
         participant_ids = await self.get_conversation_participants(conversation_id)
         if self.user.id not in participant_ids:
+            logger.warning(f"User {self.user.id} attempted to stop typing in unauthorized conversation {conversation_id}")
             return
         for pid in participant_ids:
             if pid != self.user.id:
@@ -127,11 +134,19 @@ class ChatConsumer(AsyncWebsocketConsumer):
         message_ids = data.get('message_ids', [])
         if not conversation_id or not message_ids:
             return
+        # Verify user is participant - PERMISSION CHECK
+        participant_ids = await self.get_conversation_participants(conversation_id)
+        if self.user.id not in participant_ids:
+            logger.warning(f"User {self.user.id} attempted to mark read in unauthorized conversation {conversation_id}")
+            return
+        # Apply rate limiting - max 20 mark_read events per 10 seconds
+        if not await self.check_rate_limit(f"mark_read_{conversation_id}", max_events=20, window=10):
+            logger.warning(f"User {self.user.id} exceeded mark_read rate limit for conversation {conversation_id}")
+            return
         # Mark messages as read (update DB)
         await self.mark_messages_read(conversation_id, message_ids)
         # Notify sender(s) that messages have been read
         # For simplicity, we'll broadcast to other participants that specific messages were read
-        participant_ids = await self.get_conversation_participants(conversation_id)
         for pid in participant_ids:
             if pid != self.user.id:
                 await self.channel_layer.group_send(
@@ -230,13 +245,48 @@ class ChatConsumer(AsyncWebsocketConsumer):
             sender=self.user
         ).update(is_read=True, read_at=timezone.now())
 
+    async def check_rate_limit(self, key: str, max_events: int = 10, window: int = 60) -> bool:
+        """Simple in-memory rate limiting per connection.
+        
+        Args:
+            key: Unique key for this rate limit (e.g., "typing_123")
+            max_events: Maximum events allowed in the time window
+            window: Time window in seconds
+        
+        Returns:
+            True if under limit, False if exceeded
+        """
+        if not hasattr(self, '_rate_limits'):
+            self._rate_limits = {}
+        
+        now = asyncio.get_event_loop().time()
+        
+        if key not in self._rate_limits:
+            self._rate_limits[key] = []
+        
+        # Remove old events outside the window
+        self._rate_limits[key] = [t for t in self._rate_limits[key] if now - t < window]
+        
+        # Check if under limit
+        if len(self._rate_limits[key]) < max_events:
+            self._rate_limits[key].append(now)
+            return True
+        
+        return False
+
 
 
 class AgentConsumer(AsyncWebsocketConsumer):
     """A lightweight AI agent websocket consumer that accepts a title or prompt and returns generated fields.
 
-    Expected incoming JSON: { "type": "generate", "title": "Product title here" }
+    Expected incoming JSON: { "type": "generate", "title": "Product title here", "conversation_id": 123 }
     Sends back: { "type": "generate_response", "ok": True, "data": { ... } }
+    
+    SECURITY:
+    - Validates user authentication and authorization
+    - Isolates agent history per conversation (not global per user)
+    - Implements rate limiting to prevent abuse
+    - Only visible to authorized participants
     """
     async def connect(self):
         self.user = self.scope.get('user')
@@ -244,6 +294,7 @@ class AgentConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
         await self.accept()
+        self._rate_limits = {}
         # If the user has never interacted with the assistant, send an initial greeting
         try:
             from .models import AgentChat

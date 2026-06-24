@@ -204,6 +204,7 @@ class ListingForm(forms.ModelForm):
             has_uploaded_image = False
 
         if not image and not self.instance.pk and not has_uploaded_image:
+            print('DEBUG clean_image: image=', image, 'has_uploaded_image=', has_uploaded_image, 'files=', getattr(self, 'files', None), 'data_keys=', getattr(self, 'data', {}).keys())
             raise forms.ValidationError("Main image is required for new listings.")
         
         if image:

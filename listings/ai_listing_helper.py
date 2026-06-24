@@ -37,7 +37,8 @@ class ListingAIHelper:
         self.last_error: Optional[str] = None
         self.disabled_until: Optional[float] = None
         # How long to disable AI after encountering quota/rate-limit (seconds)
-        self.disable_seconds = getattr(settings, 'AI_DISABLE_SECONDS', 600)
+        # Reduced from 600s to 60s for better user experience and faster recovery
+        self.disable_seconds = getattr(settings, 'AI_DISABLE_SECONDS', 60)
 
         if self.enabled:
             self.client = OpenAI(api_key=self.api_key)
@@ -109,7 +110,11 @@ class ListingAIHelper:
             self.last_error = str(e)
             self.disabled_until = time.time() + self.disable_seconds
             logger.warning(f"OpenAI rate limit / quota error: {self.last_error}. Disabling AI until {self.disabled_until}.")
-            return self._fallback_generation(user_input)
+            # Add status flag to indicate AI is temporarily unavailable
+            result = self._fallback_generation(user_input)
+            result['_ai_disabled'] = True
+            result['_ai_status'] = f'AI temporarily unavailable. Please try again in {self.disable_seconds}s.'
+            return result
         except OpenAIError as e:
             # Generic OpenAI error
             self.last_error = str(e)

@@ -1,16 +1,24 @@
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
-from django.urls import reverse
+from django.conf import settings
 import logging
 
-from .models import Listing
+from .models import Listing, Review
 
 logger = logging.getLogger(__name__)
+
+try:
+    from baysoko.utils.email_helpers import render_and_send
+except Exception:
+    render_and_send = None
 
 
 @receiver(post_save, sender=Listing)
 def listing_post_save(sender, instance, created, **kwargs):
-    """Create in-app notification when a listing is created or updated."""
+    """
+    Send comprehensive notifications when a listing is created or updated.
+    Handles in-app notifications, emails, and SMS.
+    """
     try:
         # Import here to avoid circular imports
         from notifications.utils import notify_listing_saved
@@ -20,35 +28,11 @@ def listing_post_save(sender, instance, created, **kwargs):
             # Nothing to notify
             return
 
+        # This now sends in-app notification, email, and SMS based on user preferences
         notify_listing_saved(recipient, instance, created=created)
-        logger.info(f"Created notification for listing {instance.pk} (created={created})")
+        logger.info(f"Sent notifications for listing {instance.pk} (created={created})")
     except Exception as e:
-        logger.exception('Failed to create listing notification: %s', e)
-from django.db.models.signals import post_save, post_delete
-from django.dispatch import receiver
-from django.conf import settings
-import logging
-
-logger = logging.getLogger(__name__)
-
-try:
-    from baysoko.utils.email_helpers import render_and_send
-except Exception:
-    render_and_send = None
-
-from .models import Listing, Review
-
-
-@receiver(post_save, sender=Listing)
-def listing_saved(sender, instance, created, **kwargs):
-    try:
-        # Listing create/update notifications are now centralized in
-        # notifications.utils.notify_listing_saved so SMS, email, and in-app
-        # alerts stay in sync without duplicate sends.
-        return
-    except Exception:
-        logger.exception('Error sending listing saved email')
-
+        logger.exception('Failed to send listing notifications: %s', e)
 
 @receiver(post_delete, sender=Listing)
 def listing_deleted(sender, instance, **kwargs):

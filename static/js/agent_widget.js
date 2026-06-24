@@ -136,13 +136,23 @@
       this._messageTextById = {};
       this._messageIdCounter = 0;
       this._proactiveBubble = null;
-      this._currentUserId = String(this.container?.dataset?.agentUserId || '').trim() || 'guest';
+      this._currentUserId = String(this.container?.dataset?.agentUserId || this.container?.dataset?.agentSessionId || '').trim() || 'guest';
       this._storageKeys = {
         panelOpen: `agent_panel_open:${this._currentUserId}`,
         history: `agent_chat_history_v1:${this._currentUserId}`,
         offlineQueue: `agent_offline_queue_v1:${this._currentUserId}`,
-        dailyWelcomeDate: `agent_daily_welcome_date:${this._currentUserId}`
+        dailyWelcomeDate: `agent_dailyWelcomeDate:${this._currentUserId}`,
+        activeUserId: 'agent_widget_active_user_id',
       };
+      try {
+        const activeUserId = localStorage.getItem(this._storageKeys.activeUserId);
+        if (activeUserId !== this._currentUserId) {
+          localStorage.removeItem(this._storageKeys.history);
+          localStorage.removeItem(this._storageKeys.offlineQueue);
+          localStorage.removeItem(this._storageKeys.dailyWelcomeDate);
+          localStorage.setItem(this._storageKeys.activeUserId, this._currentUserId);
+        }
+      } catch (e) {}
       this._connect();
       this._bind();
       this._bindScrollVisibility();

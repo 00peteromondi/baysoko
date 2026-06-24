@@ -1178,11 +1178,6 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
             logger.exception('Unhandled exception during form_valid: %s', e)
             raise
 
-        # Handle main image
-        if 'image' in self.request.FILES:
-            form.instance.image = self.request.FILES['image']
-            form.instance.save()
-
         # Handle multiple image uploads for gallery
         images = self.request.FILES.getlist('images')
         for image in images:
@@ -1269,17 +1264,7 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
             action=f"Created listing: {form.instance.title}"
         )
 
-        # In-app notification for listing creation
-        try:
-            from notifications.utils import notify_system_message
-            try:
-                action_url = form.instance.get_absolute_url()
-            except Exception:
-                action_url = ''
-            notify_system_message(self.request.user, 'Listing Created', f'Your listing "{form.instance.title}" was created.', action_url=action_url)
-        except Exception:
-            logger.exception('Failed to create in-app notification for listing creation')
-
+        # Listing creation notifications and email are handled centrally by signals.
         messages.success(self.request, f"Listing {'created' if is_new_listing else 'updated'} successfully!")
         # Broadcast new listing to connected users so clients can refresh live
         try:
@@ -1347,10 +1332,8 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
                 if not has_seller_ai_access(request.user, store=candidate_store):
                     messages.warning(request, 'Baysoko AI Copilot for listings is available on Premium and Enterprise plans.')
                     return super().post(request, *args, **kwargs)
-                # Generate AI suggestions using the form helper
+                # Generate AI suggestions using the form helper and keep the same form instance
                 ai_data = form.generate_with_ai()
-                # Re-bind a form instance with current POST (mutable copy handled in generate_with_ai)
-                form = self.get_form()
 
                 context = self.get_context_data(form=form)
                 context.update({
@@ -1369,7 +1352,7 @@ class ListingCreateView(LoginRequiredMixin, CreateView):
 # Update the ListingUpdateView class
 class ListingUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     model = Listing
-    form_class = ListingForm  # Now uses the updated ListingForm
+    form_class = AIListingForm
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1449,6 +1432,36 @@ class ListingUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
             return reverse('listing-detail', args=[self.object.pk])
 
     # Update the ListingUpdateView class form_valid method
+    def post(self, request, *args, **kwargs):
+        """Support AI-assisted updates for existing listings."""
+        self.object = self.get_object()
+        form = self.get_form()
+        use_ai = request.POST.get('use_ai') in ['on', 'true', '1']
+        if use_ai:
+            try:
+                from storefront.ai_copilot import has_seller_ai_access
+                candidate_store = None
+                try:
+                    candidate_store = form.cleaned_data.get('store')
+                except Exception:
+                    candidate_store = self.object.store
+                if not has_seller_ai_access(request.user, store=candidate_store):
+                    messages.warning(request, 'Baysoko AI Copilot for listings is available on Premium and Enterprise plans.')
+                    return super().post(request, *args, **kwargs)
+                ai_data = form.generate_with_ai()
+                context = self.get_context_data(form=form)
+                context.update({
+                    'ai_suggestions': ai_data,
+                    'ai_used': True,
+                    'quick_mode': request.POST.get('quick_mode') == '1'
+                })
+                return render(request, 'listings/listing_form.html', context)
+            except Exception as e:
+                logger.exception('AI generate failed on listing update: %s', e)
+                messages.error(request, 'AI generation failed. Showing standard form.')
+
+        return super().post(request, *args, **kwargs)
+
     def form_valid(self, form):
         form.instance.seller = self.request.user
         
@@ -1585,17 +1598,8 @@ class ListingUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
             user=self.request.user,
             action=f"Updated listing: {form.instance.title}"
         )
-        # In-app notification for listing update
-        try:
-            from notifications.utils import notify_system_message
-            try:
-                action_url = form.instance.get_absolute_url()
-            except Exception:
-                action_url = ''
-            notify_system_message(self.request.user, 'Listing Updated', f'Your listing "{form.instance.title}" was updated.', action_url=action_url)
-        except Exception:
-            logger.exception('Failed to create in-app notification for listing update')
-        
+
+        # Notification and email are handled centrally via listing_post_save signal
         messages.success(self.request, "Listing updated successfully!")
         return response
     
