@@ -976,8 +976,8 @@
                             <i class="bi bi-plus-lg"></i> New Listing
                         </a>
                     {% else %}
-                        <button class="btn-custom btn-primary">
-                            <i class="bi bi-person-plus"></i> Follow
+                        <button id="followBtn" class="btn-custom btn-primary" data-user-id="{{ profile_user.id }}">
+                            <i class="bi bi-person-plus" id="followIcon"></i> <span id="followText">{% if is_following %}Following{% else %}Follow{% endif %}</span>
                         </button>
                         <a href="{% url 'inbox' %}?user={{ profile_user.id }}" class="btn-custom btn-secondary">
                             <i class="bi bi-chat"></i> Message
@@ -996,6 +996,10 @@
             <div class="stat-card">
                 <div class="stat-value">{{ saved_count }}</div>
                 <div class="stat-label">Saved</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="followersCount">{{ followers_count|default:0 }}</div>
+                <div class="stat-label">Followers</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value">{{ rating_average|default:"0.0"|floatformat:1 }}</div>
@@ -1778,6 +1782,49 @@ document.addEventListener('DOMContentLoaded', function() {
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     `;
     document.head.appendChild(style);
+
+    // ===== FOLLOW / UNFOLLOW =====
+    const followBtn = document.getElementById('followBtn');
+    if (followBtn) {
+        followBtn.addEventListener('click', async function() {
+            const userId = this.dataset.userId;
+            this.disabled = true;
+            const icon = document.getElementById('followIcon');
+            const text = document.getElementById('followText');
+            try {
+                const res = await fetch("{% url 'toggle_follow' %}", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken'), 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify({ user_id: userId })
+                });
+                if (res.status === 401) {
+                    window.location.href = '{% url "login" %}?next=' + encodeURIComponent(window.location.pathname);
+                    return;
+                }
+                const data = await res.json();
+                if (data.success) {
+                    const followersEl = document.getElementById('followersCount');
+                    if (followersEl) followersEl.textContent = data.followers_count || 0;
+                    if (data.following) {
+                        text.textContent = 'Following';
+                        icon.className = 'bi bi-person-check';
+                        showGlobalMessage('You are now following this user', 'success');
+                    } else {
+                        text.textContent = 'Follow';
+                        icon.className = 'bi bi-person-plus';
+                        showGlobalMessage('Unfollowed', 'info');
+                    }
+                } else {
+                    showGlobalMessage(data.message || 'Action failed', 'danger');
+                }
+            } catch (e) {
+                showGlobalMessage('Network error', 'danger');
+            } finally {
+                this.disabled = false;
+            }
+        });
+    }
+
 });
 </script>
 {% endblock %}

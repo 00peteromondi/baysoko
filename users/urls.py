@@ -65,6 +65,7 @@ urlpatterns = [
     # WebSocket login completion (sets session cookie via HTTP)
     path('ws-login-complete/', views.ws_login_complete, name='ws_login_complete'),
     path('clear-welcome-toast/', views.clear_welcome_toast, name='clear_welcome_toast'),
+    path('api/toggle-follow/', views.toggle_follow, name='toggle_follow'),
     path('settings/toggle-contact-info/', views.toggle_show_contact_info, name='toggle_contact_info'),
     path('settings/get/', views.get_user_settings, name='get_user_settings'),
     path('settings/update-notifications/', views.update_notification_settings, name='update_notifications'),

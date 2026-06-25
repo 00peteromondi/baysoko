@@ -13,6 +13,10 @@ from django.utils.decorators import method_decorator
 from django.utils import timezone
 
 from .models import BlogPost, BlogCategory, BlogComment, BlogPostLike
+import markdown as md
+import bleach
+from django.utils.safestring import mark_safe
+from notifications.utils import create_notification
 from .forms import BlogPostForm, BlogCategoryForm, BlogCommentForm, BlogSearchForm
 from django.utils.text import Truncator
 
@@ -144,6 +148,22 @@ class BlogPostDetailView(DetailView):
             context['categories'] = BlogCategory.objects.annotate(
                 post_count=Count('posts', filter=Q(posts__status='published'))
             ).filter(post_count__gt=0).order_by('name')
+            # Render markdown content safely
+            try:
+                raw_html = md.markdown(post.content or '', extensions=['extra', 'nl2br'])
+                allowed_tags = bleach.sanitizer.ALLOWED_TAGS + [
+                    'p', 'pre', 'code', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'img', 'blockquote', 'ul', 'ol', 'li'
+                ]
+                allowed_attrs = {
+                    '*': ['class', 'style'],
+                    'a': ['href', 'title', 'rel', 'target'],
+                    'img': ['src', 'alt', 'title', 'width', 'height'],
+                }
+                cleaned = bleach.clean(raw_html, tags=allowed_tags, attributes=allowed_attrs, strip=True)
+                context['rendered_content'] = mark_safe(cleaned)
+            except Exception as e:
+                print(f"Error rendering markdown for post {post.id}: {e}")
+                context['rendered_content'] = mark_safe(bleach.clean(post.content or ''))
         except Exception as e:
             print(f"Error in BlogPostDetailView get_context_data: {e}")
             context['comment_form'] = BlogCommentForm()
@@ -247,6 +267,41 @@ def toggle_like(request, slug):
             liked = True
         
         like_count = post.likes.count()
+        # Notify post author about like/unlike
+        try:
+            if post.author and post.author != request.user:
+                action = 'liked' if liked else 'unliked'
+                create_notification(
+                    recipient=post.author,
+                    notification_type='blog_like',
+                    title=f'{request.user.get_full_name() or request.user.username} {action} your post',
+                    message=f'{request.user.get_full_name() or request.user.username} {action} "{post.title}"',
+                    sender=request.user,
+                    related_object_id=post.id,
+                    related_content_type='blogpost',
+                    action_url=post.get_absolute_url(),
+                    action_text='View post',
+                )
+        except Exception as e:
+            print(f"Error creating like notification: {e}")
+        # Broadcast like event to post author group to enable live UI updates
+        try:
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+            channel_layer = get_channel_layer()
+            listing_data = {
+                'id': post.id,
+                'total_favorites': like_count,
+                'is_favorited': liked,
+                'by_user_id': request.user.id,
+                'object_type': 'blogpost'
+            }
+            async_to_sync(channel_layer.group_send)(f'notifications_user_{post.author.id}', {
+                'type': 'listing_liked',
+                'listing': listing_data,
+            })
+        except Exception:
+            pass
         
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return JsonResponse({
@@ -284,7 +339,35 @@ def add_comment(request, slug):
             
             comment.save()
             messages.success(request, 'Your comment has been added successfully!')
-        
+
+            # Notify post author about new comment
+            try:
+                if post.author and post.author != request.user:
+                    create_notification(
+                        recipient=post.author,
+                        notification_type='blog_comment',
+                        title=f'{request.user.get_full_name() or request.user.username} commented on your post',
+                        message=f'{request.user.get_full_name() or request.user.username} commented: {comment.content[:120]}',
+                        sender=request.user,
+                        related_object_id=post.id,
+                        related_content_type='blogpost',
+                        action_url=post.get_absolute_url(),
+                        action_text='View comment',
+                    )
+            except Exception as e:
+                print(f"Error creating comment notification: {e}")
+
+            # If AJAX request, return JSON with minimal info
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                comment_data = {
+                    'id': comment.id,
+                    'user': request.user.get_full_name() or request.user.username,
+                    'content': comment.content,
+                    'created_at': comment.created_at.isoformat(),
+                }
+                comment_count = post.comments.filter(active=True).count()
+                return JsonResponse({'success': True, 'comment': comment_data, 'comment_count': comment_count})
+
         return redirect('blog:post-detail', slug=post.slug)
     except Exception as e:
         print(f"Error in add_comment: {e}")

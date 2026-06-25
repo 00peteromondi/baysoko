@@ -212,6 +212,7 @@ INSTALLED_APPS = [
     'notifications.apps.NotificationsConfig',
     'storefront.apps.StorefrontConfig',
     'affiliates.apps.AffiliatesConfig',
+    'reels.apps.ReelsConfig',
 ]
 
 REST_FRAMEWORK = {

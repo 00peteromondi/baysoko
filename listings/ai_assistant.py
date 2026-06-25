@@ -1012,7 +1012,15 @@ def _handle_cart_action_intent(prompt, context=None, user_id=None):
             stock = int(getattr(listing, 'stock', 0) or 0)
             if stock <= 0:
                 return {'text': f'{listing.title} is currently out of stock.', 'platform_items': []}
-            if getattr(listing, 'seller_id', None) == user_id:
+            # Treat a listing as owned by the user if either the listing.seller matches
+            # or the listing belongs to a store whose owner matches the user.
+            listing_seller_id = getattr(listing, 'seller_id', None)
+            listing_store_owner_id = None
+            try:
+                listing_store_owner_id = getattr(getattr(listing, 'store', None), 'owner_id', None)
+            except Exception:
+                listing_store_owner_id = None
+            if listing_seller_id == user_id or listing_store_owner_id == user_id:
                 return {'text': 'You cannot add your own listing to cart.', 'platform_items': []}
 
             qty = _extract_quantity_from_prompt(prompt, default=1)
@@ -1159,6 +1167,16 @@ def assistant_reply(prompt: str, context=None, user_id=None):
             max_prompt_items = getattr(settings, 'ASSISTANT_PROMPT_MAX_ITEMS', 8)
 
             if user:
+                # Helper: prefer explicit listing.seller username, fallback to store owner username
+                def _seller_name_for_listing(l):
+                    try:
+                        if getattr(l, 'seller', None):
+                            return getattr(l.seller, 'username', None)
+                        if getattr(l, 'store', None) and getattr(l.store, 'owner', None):
+                            return getattr(l.store.owner, 'username', None)
+                    except Exception:
+                        return None
+                    return None
                 # Signed-in identity snapshot for strict account-grounded responses.
                 display_identity = _format_user_identity_label(user)
                 platform_lines.append('Signed-in user profile:')
@@ -1184,7 +1202,7 @@ def assistant_reply(prompt: str, context=None, user_id=None):
                             'url': l.get_absolute_url(),
                             'image': l.image.url if l.image else None,
                             'location': l.location,
-                            'seller': l.seller.username if l.seller else None,
+                            'seller': _seller_name_for_listing(l),
                         })
                         platform_lines.append(f"- {l.title} | {l.price} | {l.get_absolute_url()}")
                 # Cart
@@ -1234,6 +1252,7 @@ def assistant_reply(prompt: str, context=None, user_id=None):
                             'price': str(l.price),
                             'url': l.get_absolute_url(),
                             'image': l.image.url if l.image else None,
+                            'seller': _seller_name_for_listing(l),
                         })
                         platform_lines.append(f"- {l.title} | {l.price} | {l.get_absolute_url()}")
                 # User's stores

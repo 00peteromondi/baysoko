@@ -966,7 +966,12 @@
                 
                 <button type="submit" class="btn-checkout" id="placeOrderBtn">
                     <i class="bi bi-lock-fill"></i>
-                    Proceed to Payment - KSh {{ cart.get_total_price }}
+                    Proceed to Payment -
+                    {% if estimated_total %}
+                        KSh {{ estimated_total|floatformat:2 }}
+                    {% else %}
+                        KSh {{ cart.get_total_with_tax|floatformat:2 }}{% if delivery_fee_estimate %} + KSh {{ delivery_fee_estimate|floatformat:2 }}{% endif %}
+                    {% endif %}
                 </button>
             </form>
             {% else %}
@@ -1398,7 +1403,7 @@
 
         const deliveryFeeEl = document.getElementById('deliveryFeeValue');
         const totalEl = document.getElementById('checkoutTotalValue');
-        const baseTotal = parseFloat('{{ cart.get_total_price|floatformat:2 }}') || 0;
+        const baseTotal = parseFloat('{{ cart.get_total_with_tax|floatformat:2 }}') || 0;
         let feeTimer = null;
 
         function setFeeText(text, totalValue) {
@@ -1406,6 +1411,13 @@
             if (totalEl && typeof totalValue === 'number') {
                 totalEl.textContent = `KSh ${totalValue.toFixed(2)}`;
             }
+            // Update place order button to reflect the dynamic total
+            try {
+                const btn = document.getElementById('placeOrderBtn');
+                if (btn && typeof totalValue === 'number') {
+                    btn.innerHTML = `<i class="bi bi-lock-fill"></i> Proceed to Payment - KSh ${totalValue.toFixed(2)}`;
+                }
+            } catch (e) {}
         }
 
         async function updateDeliveryFeeEstimate(address) {

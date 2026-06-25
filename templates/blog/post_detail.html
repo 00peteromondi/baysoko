@@ -384,7 +384,7 @@
                 {% endif %}
                 
                 <div class="blog-body-content">
-                    {{ post.content|linebreaks }}
+                    {{ rendered_content|safe }}
                 </div>
                 
                 <!-- Post Actions -->
@@ -427,12 +427,12 @@
 
                     <!-- Edit/Delete for authors -->
                     {% if user == post.author or user.is_staff %}
-                    <div class="btn-group ms-auto">
-                        <a href="{% url 'blog:post-update' post.slug %}" class="btn-custom btn-secondary">
-                            <i class="bi bi-pencil"></i> Edit
+                    <div class="btn-group ms-auto" role="group" aria-label="Post actions">
+                        <a href="{% url 'blog:post-update' post.slug %}" class="btn-custom btn-secondary" aria-label="Edit post">
+                            <i class="bi bi-pencil"></i>
                         </a>
-                        <a href="{% url 'blog:post-delete' post.slug %}" class="btn-custom btn-danger">
-                            <i class="bi bi-trash"></i> Delete
+                        <a href="{% url 'blog:post-delete' post.slug %}" class="btn-custom btn-danger" aria-label="Delete post">
+                            <i class="bi bi-trash"></i>
                         </a>
                     </div>
                     {% endif %}
@@ -449,7 +449,7 @@
                 {% if post.allow_comments %}
                     <!-- Comment Form -->
                     {% if user.is_authenticated %}
-                    <form method="post" action="{% url 'blog:add-comment' post.slug %}" class="mb-4">
+                    <form id="comment-form" method="post" action="{% url 'blog:add-comment' post.slug %}" class="mb-4">
                         {% csrf_token %}
                         <div class="mb-3">
                             <label for="comment-content" class="form-label">Add a comment</label>
@@ -619,6 +619,45 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         return cookieValue;
+    }
+
+    // Comment form AJAX submit
+    const commentForm = document.getElementById('comment-form');
+    if (commentForm) {
+        commentForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const textarea = document.getElementById('comment-content');
+            const content = textarea.value.trim();
+            if (!content) return;
+
+            fetch(this.action, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({content: content})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    // Prepend new comment (simple display)
+                    const list = document.querySelector('.comments-list');
+                    const div = document.createElement('div');
+                    div.className = 'comment';
+                    div.innerHTML = `<div class="comment-author"><strong>${data.comment.user}</strong> <small class="text-muted ms-2">just now</small></div><div>${data.comment.content}</div>`;
+                    if (list) list.prepend(div);
+                    // Update counts
+                    document.querySelector('#comments .sidebar-title').innerHTML = `<i class="bi bi-chat"></i> Comments (${data.comment_count})`;
+                    const commentStat = document.querySelector('.col-4 .text-success');
+                    if (commentStat) commentStat.textContent = data.comment_count;
+                    textarea.value = '';
+                    if (window.showToast) window.showToast('Comment posted', 'success');
+                }
+            })
+            .catch(err => console.error('Comment error', err));
+        });
     }
 
     // Share functions

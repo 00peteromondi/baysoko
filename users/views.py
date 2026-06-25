@@ -54,7 +54,7 @@ from requests.exceptions import RequestException, SSLError
 from urllib3.util.retry import Retry
 from allauth.socialaccount.models import SocialApp, SocialAccount
 
-from .models import User
+from .models import User, Follow
 from .forms import (
     CustomUserCreationForm,
     CustomUserChangeForm,
@@ -62,6 +62,7 @@ from .forms import (
 )
 
 from listings.models import Listing
+from notifications.utils import create_notification
 
 logger = logging.getLogger(__name__)
 
@@ -391,6 +392,62 @@ def clear_welcome_toast(request):
     except Exception:
         pass
     return JsonResponse({'ok': True})
+
+
+@require_http_methods(['POST'])
+@login_required
+def toggle_follow(request):
+    """AJAX endpoint to toggle following a user.
+    Expects JSON body: { "user_id": <id> }
+    Returns: { success: True, following: bool, followers_count: int }
+    """
+    try:
+        payload = json.loads(request.body.decode() or '{}')
+    except Exception:
+        payload = {}
+    target_id = payload.get('user_id') or payload.get('userId')
+    try:
+        target_id = int(target_id)
+    except Exception:
+        return JsonResponse({'success': False, 'message': 'invalid user id'}, status=400)
+    if target_id == request.user.id:
+        return JsonResponse({'success': False, 'message': 'cannot follow yourself'}, status=400)
+    try:
+        target = User.objects.get(pk=target_id)
+    except User.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'user not found'}, status=404)
+
+    try:
+        existing = Follow.objects.filter(follower=request.user, followee=target).first()
+        if existing:
+            existing.delete()
+            following = False
+        else:
+            Follow.objects.create(follower=request.user, followee=target)
+            following = True
+    except Exception as e:
+        logger.exception('Failed toggle follow: %s', e)
+        return JsonResponse({'success': False}, status=500)
+
+    followers_count = Follow.objects.filter(followee=target).count()
+    # Notify the followed user when a new follower is added
+    try:
+        if following and target and target != request.user:
+            create_notification(
+                recipient=target,
+                notification_type='follow',
+                title=f'{request.user.get_full_name() or request.user.username} started following you',
+                message=f'{request.user.get_full_name() or request.user.username} is now following you.',
+                sender=request.user,
+                related_object_id=request.user.id,
+                related_content_type='user',
+                action_url=f'/users/{request.user.username}/',
+                action_text='View profile',
+            )
+    except Exception as e:
+        logger.exception('Failed to create follow notification: %s', e)
+    return JsonResponse({'success': True, 'following': following, 'followers_count': followers_count})
+
 
 # ----------------------------------------------------------------------
 #  Registration
@@ -1298,6 +1355,14 @@ class ProfileDetailView(DetailView):
             except Exception:
                 can_connect = False
             context['can_connect_google'] = can_connect
+
+        # Followers information
+        try:
+            followers_count = Follow.objects.filter(followee=profile_user).count()
+        except Exception:
+            followers_count = 0
+        context['followers_count'] = followers_count
+        context['is_following'] = user.is_authenticated and Follow.objects.filter(follower=user, followee=profile_user).exists()
 
         return context
     

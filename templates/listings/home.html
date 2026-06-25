@@ -3163,8 +3163,10 @@
     }
 
     /* Seasonal Campaign Banner */
-    .campaign-banner {
-        background: url('https://images.unsplash.com/...') center/cover no-repeat;
+    .campaign-banner, .flash-sale-banner {
+        background-color: rgba(0, 0, 0, 0.08);
+        background-size: cover;
+        background-position: center;
         border-radius: var(--radius-lg);
         padding: 3rem 2rem;
         color: white;
@@ -3573,13 +3575,13 @@
 
 <!-- ===== NEW: FLASH SALE / DEALS OF THE DAY ===== -->
 {% if flash_sale_listings %}
-<section class="featured-section scroll-animate" style="background: linear-gradient(135deg, var(--accent) 0%, var(--danger) 100%); color: white;">
+<section class="featured-section scroll-animate flash-sale-banner" data-flash-campaign="monthly" style="color: white;">
     <div class="container-custom">
         <div class="section-header">
             <h2 class="section-title" style="color: white;">⚡ Flash Sale</h2>
             <p class="section-subtitle" style="color: rgba(255,255,255,0.9);">Limited time offers – grab them before they're gone!</p>
             <!-- Countdown Timer -->
-            <div class="countdown-timer" id="flashCountdown" data-end="2025-12-31T23:59:59">
+            <div class="countdown-timer" id="flashCountdown">
                 <div class="countdown-item"><span class="countdown-value" id="days">00</span><span class="countdown-label">Days</span></div>
                 <div class="countdown-item"><span class="countdown-value" id="hours">00</span><span class="countdown-label">Hours</span></div>
                 <div class="countdown-item"><span class="countdown-value" id="minutes">00</span><span class="countdown-label">Mins</span></div>
@@ -4543,13 +4545,19 @@
 </section>
 {% endif %}
 
-<!-- ===== EXISTING STATS SECTION (unchanged) ===== -->
+<!-- ===== EXISTING STATS SECTION (updated) ===== -->
 <section class="horizontal-scroll-section stats-section scroll-animate">
     <div class="container-custom">
         <div class="section-header">
-            <h2 class="section-title" style="color: white;">Why Choose Baysoko?</h2>
+            <h2 class="section-title" style="color: white;">
+                {% if user.is_authenticated %}Your Baysoko Snapshot{% else %}Why Choose Baysoko?{% endif %}
+            </h2>
             <p class="section-subtitle" style="color: rgba(255, 255, 255, 0.9);">
-                Join thousands of satisfied users who trust our platform
+                {% if user.is_authenticated %}
+                    Quick insight into your activity, offers, and marketplace performance.
+                {% else %}
+                    Join thousands of satisfied users who trust our platform.
+                {% endif %}
             </p>
         </div>
         
@@ -4559,6 +4567,37 @@
             </button>
             
             <div class="scroll-content" id="statsScroll">
+                {% if user.is_authenticated %}
+                <div class="scroll-item stat-card animate-fade-left" style="animation-delay: 0.1s">
+                    <i class="bi bi-bag-check stat-icon"></i>
+                    <div class="stat-number">{{ user_orders_count|default:"0"|intcomma }}</div>
+                    <div class="stat-label">Your Orders</div>
+                </div>
+                
+                <div class="scroll-item stat-card animate-fade-up" style="animation-delay: 0.2s">
+                    <i class="bi bi-box-seam stat-icon"></i>
+                    <div class="stat-number">{{ user_listings_count|default:"0"|intcomma }}</div>
+                    <div class="stat-label">Your Listings</div>
+                </div>
+                
+                <div class="scroll-item stat-card animate-fade-up" style="animation-delay: 0.3s">
+                    <i class="bi bi-shop stat-icon"></i>
+                    <div class="stat-number">{{ user_store_count|default:"0"|intcomma }}</div>
+                    <div class="stat-label">Your Stores</div>
+                </div>
+                
+                <div class="scroll-item stat-card animate-fade-right" style="animation-delay: 0.4s">
+                    <i class="bi bi-eye stat-icon"></i>
+                    <div class="stat-number">{{ user_recent_viewed_count|default:"0"|intcomma }}</div>
+                    <div class="stat-label">Viewed Items</div>
+                </div>
+                
+                <div class="scroll-item stat-card animate-fade-up" style="animation-delay: 0.5s">
+                    <i class="bi bi-cart stat-icon"></i>
+                    <div class="stat-number">{{ user_cart_items_count|default:"0"|intcomma }}</div>
+                    <div class="stat-label">Cart Items</div>
+                </div>
+                {% else %}
                 <div class="scroll-item stat-card animate-fade-left" style="animation-delay: 0.1s">
                     <i class="bi bi-people stat-icon"></i>
                     <div class="stat-number">{{ total_users|default:"0"|intcomma }}+</div>
@@ -4588,14 +4627,15 @@
                     <div class="stat-number">4.8/5</div>
                     <div class="stat-label">User Rating</div>
                 </div>
+                {% endif %}
                 
                 <!-- View More Card -->
                 <div class="scroll-item view-more-card animate-scale-in" style="animation-delay: 0.6s">
                     <i class="bi bi-graph-up" style="font-size: 3rem; margin-bottom: var(--spacing-md);"></i>
-                    <h3>See More Stats</h3>
-                    <p>Explore our detailed analytics and growth metrics</p>
+                    <h3>{% if user.is_authenticated %}Track Your Growth{% else %}See More Stats{% endif %}</h3>
+                    <p>{% if user.is_authenticated %}Go deeper into your selling and buying performance.{% else %}Explore our detailed analytics and growth metrics.{% endif %}</p>
                     <a href="#" class="btn-custom">
-                        View Analytics
+                        {% if user.is_authenticated %}View Dashboard{% else %}View Analytics{% endif %}
                     </a>
                 </div>
             </div>
@@ -4668,12 +4708,21 @@
     <div class="newsletter-card">
         <h2 class="ad-title">Stay in the Loop</h2>
         <p class="ad-subtitle">Get exclusive deals, new arrivals, and insider offers straight to your inbox.</p>
-        <form class="newsletter-form" method="post" action="{% url 'newsletter_subscribe' %}">
-            {% csrf_token %}
-            <input type="email" name="email" placeholder="Your email address" required>
-            <button type="submit">Subscribe</button>
-        </form>
-        <p class="small mt-2">We respect your privacy. Unsubscribe at any time.</p>
+        {% if newsletter_subscribed %}
+            <div class="newsletter-subscribed">
+                <p>You are subscribed to our newsletter as <strong>{{ newsletter_email }}</strong>.</p>
+                <div class="newsletter-actions">
+                    <button type="button" id="newsletter-unsubscribe" class="btn-custom btn-ghost">Unsubscribe</button>
+                </div>
+            </div>
+        {% else %}
+            <form class="newsletter-form" method="post" action="{% url 'newsletter_subscribe' %}">
+                {% csrf_token %}
+                <input type="email" name="email" placeholder="Your email address" required>
+                <button type="submit">Subscribe</button>
+            </form>
+            <p class="small mt-2">We respect your privacy. Unsubscribe at any time.</p>
+        {% endif %}
     </div>
 </section>
 
@@ -4708,11 +4757,11 @@
 
 <!-- ===== NEW: SEASONAL CAMPAIGN BANNER ===== -->
 <section class="container-custom scroll-animate">
-    <div class="campaign-banner" style="background-image: url('{% static 'images/campaign_bg.jpg' %}');">
+    <div class="campaign-banner" data-campaign="seasonal-offer">
         <div class="campaign-content">
-            <h2 class="campaign-title">Back to School Sale</h2>
-            <p class="campaign-subtitle">Up to 40% off on stationery, electronics & more</p>
-            <div class="countdown-timer" id="campaignCountdown" data-end="2025-08-31T23:59:59">
+            <h2 class="campaign-title">Seasonal Offers</h2>
+            <p class="campaign-subtitle">Discover curated campaigns that match Kenya's seasonal market trends.</p>
+            <div class="countdown-timer" id="campaignCountdown">
                 <div class="countdown-item"><span class="countdown-value" id="campaign-days">00</span><span class="countdown-label">Days</span></div>
                 <div class="countdown-item"><span class="countdown-value" id="campaign-hours">00</span><span class="countdown-label">Hours</span></div>
                 <div class="countdown-item"><span class="countdown-value" id="campaign-minutes">00</span><span class="countdown-label">Mins</span></div>
@@ -6287,18 +6336,131 @@
         setInterval(update, 1000);
     }
 
-    // Flash sale countdown
+    // Flash sale countdown (monthly refresh)
     const flashTimer = document.getElementById('flashCountdown');
     if (flashTimer) {
-        const end = flashTimer.dataset.end || '2025-12-31T23:59:59';
-        initCountdown('flash', end);
+        // If no explicit end date, set end to last moment of current month
+        const dataEnd = flashTimer.dataset.end || '';
+        let endDate = dataEnd ? new Date(dataEnd) : new Date('');
+        if (isNaN(endDate.getTime())) {
+            const now = new Date();
+            endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+        }
+        const flashBanner = document.querySelector('.flash-sale-banner');
+        const campaignBgUrl = `{% static 'images/campaign_bg.jpg' %}`;
+        if (flashBanner) {
+            const flashTheme = getFlashCampaignTheme(new Date().getMonth(), campaignBgUrl);
+            flashBanner.style.backgroundImage = flashTheme.background;
+            if (flashBanner.style.backgroundSize === '') {
+                flashBanner.style.backgroundSize = 'cover';
+            }
+        }
+        initCountdown('flash', endDate.toISOString());
+        // Refresh monthly at start of every month
+        const msUntilNextMonth = (new Date(new Date().getFullYear(), new Date().getMonth()+1, 1) - new Date());
+        setTimeout(() => {
+            const now = new Date();
+            const nextEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+            initCountdown('flash', nextEnd.toISOString());
+        }, msUntilNextMonth + 5000);
     }
 
-    // Campaign countdown
+    function getFlashCampaignTheme(monthIndex, campaignBgUrl) {
+        if (monthIndex >= 0 && monthIndex <= 2) {
+            return {
+                name: 'Monthly Flash',
+                background: `linear-gradient(135deg, rgba(1, 50, 87, 0.85), rgba(5, 134, 171, 0.78)), url("${campaignBgUrl}")`
+            };
+        }
+        if (monthIndex >= 3 && monthIndex <= 5) {
+            return {
+                name: 'Spring Flash',
+                background: `linear-gradient(135deg, rgba(88, 79, 8, 0.85), rgba(224, 169, 36, 0.78)), url("${campaignBgUrl}")`
+            };
+        }
+        if (monthIndex >= 6 && monthIndex <= 7) {
+            return {
+                name: 'Back to School Flash',
+                background: `linear-gradient(135deg, rgba(103, 2, 77, 0.85), rgba(183, 74, 156, 0.78)), url("${campaignBgUrl}")`
+            };
+        }
+        if (monthIndex >= 8 && monthIndex <= 9) {
+            return {
+                name: 'Autumn Flash',
+                background: `linear-gradient(135deg, rgba(138, 52, 0, 0.85), rgba(241, 136, 15, 0.78)), url("${campaignBgUrl}")`
+            };
+        }
+        return {
+            name: 'Holiday Flash',
+            background: `linear-gradient(135deg, rgba(36, 2, 75, 0.85), rgba(120, 44, 170, 0.78)), url("${campaignBgUrl}")`
+        };
+    }
+
+    // Campaign countdown (seasonal based on Kenyan seasons)
     const campaignTimer = document.getElementById('campaignCountdown');
     if (campaignTimer) {
-        const end = campaignTimer.dataset.end || '2025-08-31T23:59:59';
-        initCountdown('campaign', end);
+        const campaignBgUrl = `{% static 'images/campaign_bg.jpg' %}`;
+        function getSeasonCampaignForMonth(monthIndex) {
+            // monthIndex: 0-Jan .. 11-Dec
+            if (monthIndex >= 0 && monthIndex <= 2) {
+                return {
+                    slug: 'backtoschool',
+                    title: 'Back to School Sale',
+                    subtitle: 'Save on stationery, backpacks & electronics for the new term',
+                    endOffsetDays: 90,
+                    background: `linear-gradient(135deg, rgba(12, 68, 114, 0.9), rgba(16, 113, 194, 0.85)), url("${campaignBgUrl}")`
+                };
+            }
+            if (monthIndex >= 3 && monthIndex <= 5) {
+                return {
+                    slug: 'midyear',
+                    title: 'Mid Year Savings',
+                    subtitle: 'Refresh your home, tech and lifestyle with seasonal offers',
+                    endOffsetDays: 60,
+                    background: `linear-gradient(135deg, rgba(3, 83, 11, 0.9), rgba(40, 180, 99, 0.8)), url("${campaignBgUrl}")`
+                };
+            }
+            if (monthIndex >= 6 && monthIndex <= 7) {
+                return {
+                    slug: 'backtoschool',
+                    title: 'Back to School Sale',
+                    subtitle: 'Study essentials, gadgets, and everyday essentials on sale',
+                    endOffsetDays: 60,
+                    background: `linear-gradient(135deg, rgba(80, 16, 77, 0.9), rgba(143, 50, 142, 0.8)), url("${campaignBgUrl}")`
+                };
+            }
+            if (monthIndex >= 8 && monthIndex <= 9) {
+                return {
+                    slug: 'spring',
+                    title: 'Spring Deals',
+                    subtitle: 'Fresh offers for the season — home, fashion and more',
+                    endOffsetDays: 45,
+                    background: `linear-gradient(135deg, rgba(194, 89, 0, 0.9), rgba(236, 156, 44, 0.8)), url("${campaignBgUrl}")`
+                };
+            }
+            return {
+                slug: 'holiday',
+                title: 'Holiday Specials',
+                subtitle: 'Celebrate with gifts, deals and festive discounts across categories',
+                endOffsetDays: 60,
+                background: `linear-gradient(135deg, rgba(78, 11, 107, 0.9), rgba(143, 65, 192, 0.8)), url("${campaignBgUrl}")`
+            };
+        }
+
+        const now = new Date();
+        const campaign = getSeasonCampaignForMonth(now.getMonth());
+        const banner = document.querySelector('.campaign-banner');
+        const titleEl = document.querySelector('.campaign-title');
+        const subtitleEl = document.querySelector('.campaign-subtitle');
+        const btn = document.querySelector('.campaign-banner .btn-custom');
+        if (banner) banner.style.backgroundImage = campaign.background;
+        if (titleEl) titleEl.textContent = campaign.title;
+        if (subtitleEl) subtitleEl.textContent = campaign.subtitle;
+        if (btn) btn.href = `{% url 'all-listings' %}?campaign=${campaign.slug}`;
+
+        // Compute end date as now + endOffsetDays
+        const end = new Date(now.getTime() + (campaign.endOffsetDays || 30) * 24 * 60 * 60 * 1000);
+        initCountdown('campaign', end.toISOString());
     }
 
     // Legacy help chat removed; global assistant widget (in base.html) handles chat interactions.
@@ -6317,8 +6479,13 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showToast('Subscribed successfully!', 'success');
-                    newsletterForm.reset();
+                    showToast(data.message || 'Subscribed successfully!', 'success');
+                    // Replace form with subscribed message if possible
+                    const parent = newsletterForm.parentElement;
+                    if (parent) {
+                        parent.innerHTML = `<div class="newsletter-subscribed"><p>You are subscribed to our newsletter as <strong>${formData.get('email')}</strong>.</p><div class="newsletter-actions"><button type="button" id="newsletter-unsubscribe" class="btn-custom btn-ghost">Unsubscribe</button></div></div>`;
+                        attachUnsubscribeHandler();
+                    }
                 } else {
                     showToast(data.error || 'Subscription failed', 'error');
                 }
@@ -6326,5 +6493,36 @@
             .catch(() => showToast('Network error', 'error'));
         });
     }
+
+    function attachUnsubscribeHandler() {
+        const unsubBtn = document.getElementById('newsletter-unsubscribe');
+        if (!unsubBtn) return;
+        unsubBtn.addEventListener('click', function() {
+            const payload = {}
+            // prefer logged-in user's email if available
+            const email = '{{ newsletter_email|default:""|escapejs }}';
+            if (email) payload.email = email;
+            fetch('{% url "newsletter_unsubscribe" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(payload)
+            }).then(r => r.json()).then(data => {
+                if (data.success) {
+                    showToast('You have been unsubscribed.', 'success');
+                    // Replace subscribed message with subscribe form
+                    window.location.reload();
+                } else {
+                    showToast(data.error || 'Unsubscribe failed', 'error');
+                }
+            }).catch(() => showToast('Network error', 'error'));
+        });
+    }
+
+    // Attach unsubscribe handler on load if button exists
+    attachUnsubscribeHandler();
 </script>
 {% endblock %}

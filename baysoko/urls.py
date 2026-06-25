@@ -27,6 +27,7 @@ urlpatterns = [
     path('reviews/', include('reviews.urls')),
     path('blog/', include('blog.urls')),
     path('notifications/', include('notifications.urls')),
+    path('reels/', include('reels.urls')),
     path('affiliates/', include('affiliates.urls')),
     path('storefront/', include('storefront.urls')),
     path('healthz/', views.health, name='health'),

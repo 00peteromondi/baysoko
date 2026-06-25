@@ -229,3 +229,22 @@ class UserSettings(models.Model):
 
     def __str__(self):
         return f"Settings for {self.user.username}"
+
+
+class Follow(models.Model):
+    """Represents a follower relationship between two users.
+
+    follower: the user who follows (actor)
+    followee: the user being followed (target)
+    """
+    follower = models.ForeignKey(User, on_delete=models.CASCADE, related_name='following_set')
+    followee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='followers_set')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = (('follower', 'followee'),)
+        indexes = [models.Index(fields=['followee', 'follower'])]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.follower_id} -> {self.followee_id}"

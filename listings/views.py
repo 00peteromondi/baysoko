@@ -547,6 +547,36 @@ class ListingListView(ListView):
         context['cart_items'] = cart_items
         context['cart_total'] = cart_total
         context['cart_item_count'] = cart_item_count
+
+        user_orders_count = 0
+        user_recent_viewed_count = 0
+        user_store_count = 0
+        user_listings_count = 0
+        if self.request.user.is_authenticated:
+            try:
+                user_orders_count = Order.objects.filter(user=self.request.user).count()
+            except Exception:
+                user_orders_count = 0
+            try:
+                user_recent_viewed_count = RecentlyViewed.objects.filter(user=self.request.user).count()
+            except Exception:
+                user_recent_viewed_count = 0
+            try:
+                user_store_count = Store.objects.filter(owner=self.request.user).count()
+            except Exception:
+                user_store_count = 0
+            try:
+                user_listings_count = Listing.objects.filter(
+                    Q(seller=self.request.user) | Q(store__owner=self.request.user)
+                ).distinct().count()
+            except Exception:
+                user_listings_count = 0
+
+        context['user_orders_count'] = user_orders_count
+        context['user_recent_viewed_count'] = user_recent_viewed_count
+        context['user_store_count'] = user_store_count
+        context['user_listings_count'] = user_listings_count
+        context['user_cart_items_count'] = cart_item_count
         
         # Add favorite count annotation to listings - NEW
         featured_listings_with_favorites = Listing.objects.filter(
@@ -635,6 +665,18 @@ class ListingListView(ListView):
                 user=self.request.user
             ).select_related('listing').order_by('-viewed_at')[:6]
             context['recently_viewed'] = [rv.listing for rv in recently_viewed]
+
+        # Newsletter subscription state for authenticated users
+        try:
+            if self.request.user.is_authenticated and getattr(self.request.user, 'email', None):
+                context['newsletter_subscribed'] = NewsletterSubscription.objects.filter(email__iexact=self.request.user.email).exists()
+                context['newsletter_email'] = self.request.user.email
+            else:
+                context['newsletter_subscribed'] = False
+                context['newsletter_email'] = ''
+        except Exception:
+            context['newsletter_subscribed'] = False
+            context['newsletter_email'] = ''
 
         # Brands for the homepage (distinct non-empty brand names)
         try:
@@ -873,6 +915,33 @@ def newsletter_subscribe(request):
         return JsonResponse({'success': True, 'message': message})
     except Exception as exc:
         logger.exception('Error in newsletter_subscribe: %s', exc)
+        return JsonResponse({'success': False, 'error': 'Server error'}, status=500)
+
+
+@require_POST
+@ajax_required
+def newsletter_unsubscribe(request):
+    """AJAX endpoint to unsubscribe an email. For authenticated users, email may be taken from user.email.
+
+    Expects JSON payload: {email: 'user@example.com'} or form-encoded `email`.
+    Returns JSON: {success: True, message: '...'}
+    """
+    try:
+        if request.content_type == 'application/json':
+            payload = json.loads(request.body.decode('utf-8') or '{}')
+            email = payload.get('email')
+        else:
+            email = request.POST.get('email') or (request.user.email if request.user.is_authenticated else None)
+
+        if not email:
+            return JsonResponse({'success': False, 'error': 'Email is required.'}, status=400)
+
+        deleted, _ = NewsletterSubscription.objects.filter(email__iexact=email).delete()
+        if deleted:
+            return JsonResponse({'success': True, 'message': 'Unsubscribed.'})
+        return JsonResponse({'success': False, 'error': 'Email not found.'}, status=404)
+    except Exception as exc:
+        logger.exception('Error in newsletter_unsubscribe: %s', exc)
         return JsonResponse({'success': False, 'error': 'Server error'}, status=500)
 
 class ListingDetailView(DetailView):
@@ -1762,7 +1831,7 @@ def all_listings(request):
 
     # For AJAX requests, return JSON
     # X-Requested-With header indicates this is an AJAX/XHR request (sent by fetch API)
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest':
         paginator = Paginator(listings, 12)
         page_number = request.GET.get('page', 1)
         
@@ -1811,6 +1880,8 @@ def all_listings(request):
                 'is_favorited': is_favorited,
                 'favorite_count': listing.total_favorites,
                 'user_favorite_count': user_favorite_count,
+                'seller_id': listing.seller.id if listing.seller else None,
+                'seller_name': listing.seller.get_full_name() if listing.seller else '',
                 'date_created': listing.date_created.strftime('%Y-%m-%d %H:%M') if listing.date_created else '',
             }
             
@@ -1839,6 +1910,7 @@ def all_listings(request):
                 'previous_page': page_obj.previous_page_number() if page_obj.has_previous() else None,
             },
             'user_authenticated': request.user.is_authenticated,
+            'user_id': request.user.id if request.user.is_authenticated else None,
         })
     
     # Pagination for regular requests
@@ -2042,6 +2114,9 @@ def all_listings_json(request):
             listing_data['store_name'] = listing.store.name
             listing_data['store_logo'] = listing.store.get_logo_url()
             listing_data['store_url'] = listing.store.get_absolute_url()
+        # Add seller info where present (helps clients determine ownership)
+        listing_data['seller_id'] = listing.seller.id if getattr(listing, 'seller', None) else None
+        listing_data['seller_name'] = getattr(getattr(listing, 'seller', None), 'get_full_name', lambda: None)() if getattr(listing, 'seller', None) else (listing.store.owner.get_full_name() if getattr(getattr(listing, 'store', None), 'owner', None) else None)
         
         listings_data.append(listing_data)
     
@@ -3179,7 +3254,12 @@ def checkout_delivery_fee(request):
         pass
     fee, breakdown = _estimate_delivery_fee_for_cart(cart, shipping_address)
     fee = fee or Decimal('0')
-    total = cart.get_total_price() + fee
+    # Include platform tax in the returned total
+    try:
+        tax = cart.get_platform_tax()
+    except Exception:
+        tax = Decimal('0')
+    total = cart.get_total_price() + fee + tax
     notes = []
     for row in breakdown or []:
         if isinstance(row, dict):
@@ -3263,48 +3343,6 @@ def process_payment(request, order_id):
         # end POST handling
     
     return render(request, 'listings/payment.html', {'order': order, 'subtotal': subtotal_val})
-
-def _notify_sellers_after_payment(order):
-    """Notify all sellers in an order after successful payment"""
-    # Group order items by seller
-    from collections import defaultdict
-    seller_items = defaultdict(list)
-    try:
-        from baysoko.utils.email_helpers import render_and_send
-    except Exception:
-        render_and_send = None
-    
-    for order_item in order.order_items.all():
-        seller_items[order_item.listing.seller].append(order_item)
-    
-    # Notify each seller
-    for seller, items in seller_items.items():
-        notify_payment_received(seller, order.user, order)
-        try:
-            if render_and_send and getattr(seller, 'email', None):
-                payment = getattr(order, 'payment', None)
-                escrow = getattr(order, 'escrow', None)
-                seller_total = sum([it.get_total_price() for it in items])
-                ctx = {
-                    'order': order,
-                    'buyer': order.user,
-                    'seller': seller,
-                    'order_items': items,
-                    'seller_total': seller_total,
-                    'payment_status': getattr(payment, 'status', 'unknown'),
-                    'escrow_status': getattr(escrow, 'status', 'none'),
-                    'site_url': getattr(settings, 'SITE_URL', ''),
-                }
-                subject = f'Order #{order.id} paid — items to fulfill'
-                render_and_send('emails/order_paid_seller.html', 'emails/order_paid_seller.txt', ctx, subject, [seller.email])
-        except Exception:
-            logger.exception('Failed to send seller paid email for order %s', order.id)
-        
-        # Create activity log
-        Activity.objects.create(
-            user=seller,
-            action=f"Payment received for order #{order.id}"
-        )
 
 @login_required
 def initiate_mpesa_payment(request, order_id):

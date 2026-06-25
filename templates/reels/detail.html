@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ reel.title|default:'Reel' }} - Baysoko{% endblock %}
+
+{% block content %}
+<div class="container-custom">
+    <div class="reel-player">
+        <video src="{{ reel.video.url }}" controls autoplay muted playsinline style="width:100%;max-width:800px;display:block;margin:0 auto;"></video>
+    </div>
+    <div class="reel-actions mt-3 d-flex align-items-center gap-2">
+        {% if user.is_authenticated %}
+        <button id="reelLikeBtn" class="btn-custom blog-like-btn {% if user in reel.likes.all.values_list 'user' %}liked{% endif %}" data-reel-slug="{{ reel.slug }}">
+            <i class="bi bi-heart{% if user in reel.likes.all.values_list 'user' %}-fill{% endif %}"></i>
+        </button>
+        <span id="reelLikeCount" class="blog-like-count">{{ reel.like_count }}</span>
+        {% else %}
+        <a href="{% url 'login' %}?next={{ request.path }}" class="btn-custom btn-primary">Login to like</a>
+        {% endif %}
+    </div>
+
+    <section class="comments-section mt-4">
+        <h4>Comments ({{ reel.comment_count }})</h4>
+        {% if user.is_authenticated %}
+        <form id="reelCommentForm" class="mb-3" action="{% url 'reels:add-comment' reel.slug %}" method="post">
+            {% csrf_token %}
+            <textarea id="reelCommentContent" name="content" class="form-control" rows="2" placeholder="Write a comment..."></textarea>
+            <button type="submit" class="btn-custom btn-primary mt-2">Post</button>
+        </form>
+        {% else %}
+        <a href="{% url 'login' %}?next={{ request.path }}" class="btn-custom btn-primary">Login to comment</a>
+        {% endif %}
+
+        <div id="reelCommentsList">
+            {% for c in reel.comments.all %}
+            <div class="comment"><strong>{{ c.user.get_full_name|default:c.user.username }}</strong> <div>{{ c.content }}</div></div>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const likeBtn = document.getElementById('reelLikeBtn');
+    if (likeBtn) {
+        likeBtn.addEventListener('click', async function() {
+            const slug = this.dataset.reelSlug;
+            try {
+                const res = await fetch(`{% url 'reels:toggle-like' reel.slug %}`, { method: 'POST', headers: { 'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || '' } });
+                const data = await res.json();
+                if (data.success) {
+                    const countEl = document.getElementById('reelLikeCount');
+                    if (countEl) countEl.textContent = data.like_count;
+                }
+            } catch (e) {}
+        });
+    }
+
+    const commentForm = document.getElementById('reelCommentForm');
+    if (commentForm) {
+        commentForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const text = document.getElementById('reelCommentContent').value.trim();
+            if (!text) return;
+            try {
+                const res = await fetch(this.action, { method: 'POST', headers: { 'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || '' }, body: new URLSearchParams({ content: text }) });
+                const data = await res.json();
+                if (data.success) {
+                    const list = document.getElementById('reelCommentsList');
+                    const div = document.createElement('div');
+                    div.className = 'comment';
+                    div.innerHTML = `<strong>${data.comment.user}</strong><div>${data.comment.content}</div>`;
+                    list.prepend(div);
+                    document.getElementById('reelCommentContent').value = '';
+                    const h4 = document.querySelector('.comments-section h4');
+                    if (h4) h4.textContent = `Comments (${data.comment_count})`;
+                }
+            } catch (e) {}
+        });
+    }
+});
+</script>
+{% endblock %}
+
+{% endblock %}
