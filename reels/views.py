@@ -1,12 +1,16 @@
 import json
 
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.views.generic import ListView, DetailView
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from .models import Reel, ReelLike, ReelComment
+from listings.models import ListingVideo
+from storefront.models import StoreVideo
 from notifications.utils import create_notification
 from django.views.decorators.http import require_POST
+from django.utils import timezone
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
@@ -16,6 +20,61 @@ class ReelListView(ListView):
     template_name = 'reels/index.html'
     context_object_name = 'reels'
     paginate_by = 12
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        reel_items = []
+
+        try:
+            listing_reels = ListingVideo.objects.select_related('listing', 'listing__store').filter(
+                listing__is_active=True,
+                listing__is_sold=False,
+            ).order_by('-created_at')[:80]
+            for video in listing_reels:
+                if not video.get_video_url() or not video.listing:
+                    continue
+                reel_items.append({
+                    'kind': 'listing',
+                    'created_at': video.created_at,
+                    'video_id': video.id,
+                    'video_url': video.get_video_url(),
+                    'likes_count': video.likes_count,
+                    'comments_count': video.comments_count,
+                    'shares_count': video.shares_count,
+                    'views_count': video.views_count,
+                    'title': video.listing.title,
+                    'price': video.listing.price,
+                    'url': reverse('listing-detail', args=[video.listing.pk]),
+                })
+        except Exception:
+            pass
+
+        try:
+            store_reels = StoreVideo.objects.select_related('store').filter(
+                store__is_active=True,
+            ).order_by('-created_at')[:80]
+            for video in store_reels:
+                if not video.get_video_url() or not video.store:
+                    continue
+                reel_items.append({
+                    'kind': 'store',
+                    'created_at': video.created_at,
+                    'video_id': video.id,
+                    'video_url': video.get_video_url(),
+                    'likes_count': video.likes_count,
+                    'comments_count': video.comments_count,
+                    'shares_count': video.shares_count,
+                    'views_count': video.views_count,
+                    'title': video.store.name,
+                    'price': None,
+                    'url': reverse('storefront:store_detail', args=[video.store.slug]),
+                })
+        except Exception:
+            pass
+
+        reel_items.sort(key=lambda item: item.get('created_at') or timezone.now(), reverse=True)
+        context['reel_items'] = reel_items
+        return context
 
 
 class ReelDetailView(DetailView):

@@ -4029,6 +4029,25 @@ document.addEventListener('DOMContentLoaded', function() {
         `).join('');
     }
 
+    function commentMarkup(item) {
+        return `
+            <div class="listing-reel-comment">
+                <div class="listing-reel-comment-header">
+                    <strong>${esc(item.author || 'You')}</strong>
+                    <span>${item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Just now'}</span>
+                </div>
+                <div class="listing-reel-comment-body">${esc(item.comment || '')}</div>
+            </div>
+        `;
+    }
+
+    function prependComment(item) {
+        if (!commentsList || !item) return;
+        const empty = commentsList.querySelector('.listing-reel-comments-empty');
+        if (empty) empty.remove();
+        commentsList.insertAdjacentHTML('afterbegin', commentMarkup(item));
+    }
+
     function fetchComments() {
         if (!activeVideoId) return Promise.resolve();
         return fetch(`/listings/reels/${activeKind}/${activeVideoId}/comments/`, {
@@ -4212,7 +4231,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then((data) => {
                 if (commentInput) commentInput.value = '';
                 applyCounts(data);
-                fetchComments();
+                prependComment((data.comments || [])[0]);
                 if (window.showToast) window.showToast('Comment posted.', 'success');
             })
             .catch((error) => {

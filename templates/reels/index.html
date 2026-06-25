@@ -1,28 +1,238 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static humanize %}
 
 {% block title %}Reels - Baysoko{% endblock %}
 
+{% block extra_css %}
+<style>
+    .reels-page {
+        padding: 28px 0 44px;
+    }
+
+    .reels-page-header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 22px;
+    }
+
+    .reels-page-title {
+        margin: 0;
+        font-size: clamp(24px, 4vw, 38px);
+        font-weight: 900;
+        color: var(--text-primary);
+    }
+
+    .reels-page-subtitle {
+        margin: 6px 0 0;
+        color: var(--text-secondary);
+        font-weight: 600;
+    }
+
+    .reels-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 18px;
+        align-items: stretch;
+    }
+
+    .reel-card {
+        position: relative;
+        min-height: 390px;
+        border-radius: 18px;
+        overflow: hidden;
+        background: #05080d;
+        border: 1px solid var(--border-color);
+        box-shadow: var(--shadow-md);
+        color: #fff;
+        text-decoration: none;
+        isolation: isolate;
+    }
+
+    .reel-card video {
+        width: 100%;
+        height: 100%;
+        min-height: 390px;
+        object-fit: cover;
+        display: block;
+        background: #000;
+        transition: transform 0.35s ease;
+    }
+
+    .reel-card:hover video {
+        transform: scale(1.04);
+    }
+
+    .reel-card-overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 12px;
+        background: linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.08) 42%, rgba(0,0,0,0.82));
+        z-index: 1;
+    }
+
+    .reel-kind {
+        align-self: flex-start;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: 999px;
+        padding: 5px 8px;
+        background: rgba(0,0,0,0.56);
+        border: 1px solid rgba(255,255,255,0.14);
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .reel-card-meta {
+        display: grid;
+        gap: 8px;
+    }
+
+    .reel-title {
+        font-size: 16px;
+        line-height: 1.2;
+        font-weight: 900;
+        margin: 0;
+        text-shadow: 0 2px 8px rgba(0,0,0,0.45);
+    }
+
+    .reel-price {
+        color: #ffd166;
+        font-size: 14px;
+        font-weight: 900;
+    }
+
+    .reel-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .reel-stat {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: 999px;
+        padding: 4px 7px;
+        background: rgba(0,0,0,0.54);
+        border: 1px solid rgba(255,255,255,0.12);
+        font-size: 11px;
+        font-weight: 800;
+    }
+
+    .reel-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        width: fit-content;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 900;
+        text-decoration: none;
+    }
+
+    .reels-empty {
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        background: var(--card-bg);
+        padding: 28px;
+        text-align: center;
+        color: var(--text-secondary);
+    }
+
+    @media (max-width: 1199px) {
+        .reels-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 767px) {
+        .reels-page-header {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .reels-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .reel-card,
+        .reel-card video {
+            min-height: 280px;
+        }
+
+        .reel-title {
+            font-size: 13px;
+        }
+
+        .reel-stats {
+            gap: 4px;
+        }
+
+        .reel-stat {
+            font-size: 10px;
+            padding: 3px 6px;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-custom">
-    <h1>Reels</h1>
-    <div class="reels-grid">
-        {% for reel in reels %}
-        <a href="{% url 'reels:detail' reel.slug %}" class="reel-card" data-reel-id="{{ reel.id }}">
-            <div class="reel-thumb">
-                <video src="{{ reel.video.url }}" muted playsinline preload="metadata"></video>
+<section class="reels-page">
+    <div class="container-custom">
+        <div class="reels-page-header">
+            <div>
+                <h1 class="reels-page-title">Baysoko Reels</h1>
+                <p class="reels-page-subtitle">Quick video tours from listings and stores.</p>
             </div>
-            <div class="reel-meta">
-                <div class="reel-title">{{ reel.title|default:'Untitled' }}</div>
-                <div class="reel-stats">{{ reel.like_count }} likes • {{ reel.comment_count }} comments</div>
-            </div>
-        </a>
-        {% empty %}
-        <p>No reels yet.</p>
-        {% endfor %}
+            <a href="{% url 'all-listings' %}" class="btn-custom btn-ghost">
+                Browse listings <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
+
+        {% if reel_items %}
+        <div class="reels-grid">
+            {% for reel in reel_items %}
+            <a href="{{ reel.url }}" class="reel-card">
+                <video src="{{ reel.video_url }}" muted playsinline preload="metadata"></video>
+                <div class="reel-card-overlay">
+                    <span class="reel-kind">
+                        <i class="bi {% if reel.kind == 'store' %}bi-shop{% else %}bi-box-seam{% endif %}"></i>
+                        {{ reel.kind }}
+                    </span>
+                    <div class="reel-card-meta">
+                        <h2 class="reel-title">{{ reel.title|truncatechars:48 }}</h2>
+                        <div class="reel-price">
+                            {% if reel.price %}KSh {{ reel.price|intcomma }}{% else %}Visit Store{% endif %}
+                        </div>
+                        <div class="reel-stats">
+                            <span class="reel-stat"><i class="bi bi-heart-fill"></i>{{ reel.likes_count|default:0 }}</span>
+                            <span class="reel-stat"><i class="bi bi-chat-dots-fill"></i>{{ reel.comments_count|default:0 }}</span>
+                            <span class="reel-stat"><i class="bi bi-eye-fill"></i>{{ reel.views_count|default:0 }}</span>
+                        </div>
+                        <span class="reel-cta">
+                            {% if reel.kind == 'store' %}View store{% else %}View listing{% endif %}
+                            <i class="bi bi-arrow-right"></i>
+                        </span>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="reels-empty">
+            <h2>No reels yet</h2>
+            <p>Seller videos will appear here as listings and stores add them.</p>
+        </div>
+        {% endif %}
     </div>
-    {% if is_paginated %}
-        <div class="pagination">{% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">Prev</a>{% endif %} Page {{ page_obj.number }} {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">Next</a>{% endif %}</div>
-    {% endif %}
-</div>
+</section>
 {% endblock %}

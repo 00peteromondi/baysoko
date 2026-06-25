@@ -430,6 +430,30 @@
         background: rgba(6, 214, 160, 0.16);
         border-color: rgba(6, 214, 160, 0.45);
     }
+    .reels-more {
+        display: flex;
+        justify-content: center;
+        margin-top: var(--spacing-lg);
+    }
+    .reels-more-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        padding: 10px 18px;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        font-weight: 800;
+        text-decoration: none;
+        box-shadow: var(--shadow-sm);
+        transition: transform 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    }
+    .reels-more-link:hover {
+        transform: translateY(-2px);
+        border-color: rgba(6, 214, 160, 0.45);
+        color: var(--primary);
+    }
     .reel-card {
         width: 100%;
         background: var(--card-bg);
@@ -4443,6 +4467,11 @@
                 <i class="bi bi-chevron-right"></i>
             </button>
         </div>
+        <div class="reels-more">
+            <a href="{% url 'reels:index' %}" class="reels-more-link">
+                View more reels <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
     </div>
 </section>
 {% endif %}
@@ -5951,6 +5980,25 @@
                 `).join('');
             }
 
+            function commentMarkup(item) {
+                return `
+                    <div class="listing-reel-comment">
+                        <div class="listing-reel-comment-header">
+                            <strong>${esc(item.author || 'You')}</strong>
+                            <span>${item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Just now'}</span>
+                        </div>
+                        <div class="listing-reel-comment-body">${esc(item.comment || '')}</div>
+                    </div>
+                `;
+            }
+
+            function prependModalComment(item) {
+                if (!reelModalCommentList || !item) return;
+                const empty = reelModalCommentList.querySelector('.listing-reel-comments-empty');
+                if (empty) empty.remove();
+                reelModalCommentList.insertAdjacentHTML('afterbegin', commentMarkup(item));
+            }
+
             function fetchReelComments() {
                 if (!activeReelVideoId) return Promise.resolve();
                 return fetch(`/listings/reels/${activeReelKind}/${activeReelVideoId}/comments/`, {
@@ -6190,7 +6238,7 @@
                     .then((data) => {
                         if (reelModalCommentInput) reelModalCommentInput.value = '';
                         updateReelCounts(activeReelVideoId, data, activeReelKind);
-                        fetchReelComments();
+                        prependModalComment((data.comments || [])[0]);
                         showToast('Comment posted.', 'success');
                     })
                     .catch((error) => {
