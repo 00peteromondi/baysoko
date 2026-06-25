@@ -754,8 +754,12 @@ print("=" * 50)
 
 
 # Celery Configuration
-# Try to use Redis as broker; fall back to eager mode if unavailable
-CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+# Try to use Redis as broker; fall back to eager mode if unavailable.
+# Production can split Redis traffic by setting CELERY_BROKER_URL,
+# CACHE_REDIS_URL, and CHANNEL_REDIS_URL. REDIS_URL remains the fallback for
+# hosts like Railway that expose one Redis attachment by default.
+APP_REDIS_URL = os.environ.get('REDIS_URL')
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL') or APP_REDIS_URL or 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'django-db'
 CELERY_CACHE_BACKEND = 'django-cache'
 CELERY_TIMEZONE = 'Africa/Nairobi'
@@ -780,9 +784,12 @@ if not CELERY_TASK_ALWAYS_EAGER:
             CELERY_TASK_EAGER_PROPAGATES = True
 
 # Redis for caching and channels (with safe local fallback)
-REDIS_URL = os.environ.get('REDIS_URL')
+REDIS_URL = os.environ.get('CACHE_REDIS_URL') or APP_REDIS_URL
+CHANNEL_REDIS_URL = os.environ.get('CHANNEL_REDIS_URL') or APP_REDIS_URL
 if not REDIS_URL and (DEBUG or RUNNING_RUNSERVER):
     REDIS_URL = 'redis://localhost:6379/1'
+if not CHANNEL_REDIS_URL and (DEBUG or RUNNING_RUNSERVER):
+    CHANNEL_REDIS_URL = 'redis://localhost:6379/2'
 USE_REDIS_CACHE = False
 FORCE_REDIS_CACHE = os.environ.get('FORCE_REDIS_CACHE', '').lower() in ('1', 'true', 'yes')
 LOCAL_REDIS = isinstance(REDIS_URL, str) and ('localhost' in REDIS_URL or '127.0.0.1' in REDIS_URL)
@@ -824,13 +831,20 @@ else:
 # Channels Configuration
 # Prefer full Redis URL strings for channels_redis. If REDIS_URL is a proper
 # redis:// URL use that directly; otherwise try to parse host/port as a fallback.
+FORCE_INMEMORY_CHANNELS = os.environ.get('FORCE_INMEMORY_CHANNELS', '').lower() in ('1', 'true', 'yes')
 try:
-    if REDIS_URL and isinstance(REDIS_URL, str) and REDIS_URL.startswith('redis://'):
-        channels_hosts = [REDIS_URL]
+    if CHANNEL_REDIS_URL and isinstance(CHANNEL_REDIS_URL, str) and CHANNEL_REDIS_URL.startswith('redis://'):
+        channels_hosts = [{
+            "address": CHANNEL_REDIS_URL,
+            "socket_connect_timeout": 5,
+            "socket_timeout": 30,
+            "health_check_interval": 30,
+            "retry_on_timeout": True,
+        }]
     else:
         # attempt to parse host and port
         from urllib.parse import urlparse
-        parsed = urlparse(REDIS_URL)
+        parsed = urlparse(CHANNEL_REDIS_URL)
         host = parsed.hostname or 'localhost'
         port = parsed.port or 6379
         channels_hosts = [(host, port)]
@@ -845,9 +859,11 @@ try:
     # alternatives or older Redis versions don't implement this command and
     # will raise a ResponseError at runtime. Probe the server version and
     # fall back to InMemoryChannelLayer for local/dev compatibility.
-    if REDIS_URL and isinstance(REDIS_URL, str) and REDIS_URL.startswith('redis://'):
+    if FORCE_INMEMORY_CHANNELS:
+        print("ℹ️  FORCE_INMEMORY_CHANNELS enabled; using InMemoryChannelLayer.")
+    elif CHANNEL_REDIS_URL and isinstance(CHANNEL_REDIS_URL, str) and CHANNEL_REDIS_URL.startswith('redis://'):
         try:
-            probe_client = redis.Redis.from_url(REDIS_URL, socket_connect_timeout=2, socket_timeout=2)
+            probe_client = redis.Redis.from_url(CHANNEL_REDIS_URL, socket_connect_timeout=2, socket_timeout=2)
             info = probe_client.info()
             version = info.get('redis_version', '')
             if version:
@@ -861,7 +877,7 @@ try:
                 # If we couldn't read version, be conservative and enable only if connection succeeds
                 use_redis_channel = True
         except Exception as e:
-            print(f"⚠️  Could not probe Redis server at {REDIS_URL}: {e}; using InMemoryChannelLayer")
+            print(f"⚠️  Could not probe Redis server at {CHANNEL_REDIS_URL}: {e}; using InMemoryChannelLayer")
     elif not (DEBUG or RUNNING_RUNSERVER):
         print("ℹ️  No REDIS_URL configured for this environment; using LocMem cache and InMemoryChannelLayer.")
     if use_redis_channel:
