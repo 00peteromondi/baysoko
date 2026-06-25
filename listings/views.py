@@ -64,24 +64,34 @@ def _get_reel_resources(kind, video_id):
 
 
 def _parse_reel_comment(request):
+    comment_text = (
+        request.POST.get('comment')
+        or request.POST.get('content')
+        or request.headers.get('X-Reel-Comment')
+        or ''
+    ).strip()
+    if comment_text:
+        return comment_text
+
     raw_body = ''
     payload = {}
     content_type = request.META.get('CONTENT_TYPE', '')
 
-    if request.body:
-        raw_body = request.body.decode(request.encoding or 'utf-8', errors='replace')
-        if 'application/json' in content_type:
-            try:
-                payload = json.loads(raw_body or '{}')
-            except (TypeError, ValueError):
-                payload = {}
+    try:
+        if request.body:
+            raw_body = request.body.decode(request.encoding or 'utf-8', errors='replace')
+    except Exception:
+        raw_body = ''
+
+    if raw_body and 'application/json' in content_type:
+        try:
+            payload = json.loads(raw_body or '{}')
+        except (TypeError, ValueError):
+            payload = {}
 
     comment_text = (
         payload.get('comment')
         or payload.get('content')
-        or request.POST.get('comment')
-        or request.POST.get('content')
-        or request.headers.get('X-Reel-Comment')
         or ''
     ).strip()
 
