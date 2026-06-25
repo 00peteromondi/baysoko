@@ -44,6 +44,72 @@ from notifications.utils import (
 )
 
 
+def _get_reel_resources(kind, video_id):
+    normalized_kind = 'store' if kind == 'store' else 'listing'
+    if normalized_kind == 'store':
+        return (
+            normalized_kind,
+            get_object_or_404(StoreVideo, id=video_id),
+            StoreVideo,
+            StoreVideoLike,
+            StoreVideoComment,
+        )
+    return (
+        normalized_kind,
+        get_object_or_404(ListingVideo, id=video_id),
+        ListingVideo,
+        ListingVideoLike,
+        ListingVideoComment,
+    )
+
+
+def _parse_reel_comment(request):
+    raw_body = ''
+    payload = {}
+    content_type = request.META.get('CONTENT_TYPE', '')
+
+    if request.body:
+        raw_body = request.body.decode(request.encoding or 'utf-8', errors='replace')
+        if 'application/json' in content_type:
+            try:
+                payload = json.loads(raw_body or '{}')
+            except (TypeError, ValueError):
+                payload = {}
+
+    comment_text = (
+        payload.get('comment')
+        or payload.get('content')
+        or request.POST.get('comment')
+        or request.POST.get('content')
+        or request.headers.get('X-Reel-Comment')
+        or ''
+    ).strip()
+
+    if not comment_text and raw_body:
+        try:
+            from urllib.parse import parse_qs
+            parsed = parse_qs(raw_body)
+            comment_text = (
+                (parsed.get('comment') or parsed.get('content') or [''])[0]
+            ).strip()
+        except Exception:
+            comment_text = ''
+
+    return comment_text
+
+
+def _broadcast_reel_update(payload):
+    try:
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            async_to_sync(channel_layer.group_send)(
+                'reels',
+                {'type': 'reel_update', 'payload': payload}
+            )
+    except Exception:
+        pass
+
+
 def _broadcast_reel_created(video):
     try:
         channel_layer = get_channel_layer()
@@ -2281,14 +2347,7 @@ def toggle_favorite(request, listing_id):
 
 @require_POST
 def reel_action(request, kind, video_id, action):
-    if kind == 'store':
-        video = get_object_or_404(StoreVideo, id=video_id)
-        like_model = StoreVideoLike
-        comment_model = StoreVideoComment
-    else:
-        video = get_object_or_404(ListingVideo, id=video_id)
-        like_model = ListingVideoLike
-        comment_model = ListingVideoComment
+    kind, video, model_cls, like_model, _comment_model = _get_reel_resources(kind, video_id)
     valid_actions = {
         'share': 'shares_count',
         'view': 'views_count',
@@ -2298,7 +2357,6 @@ def reel_action(request, kind, video_id, action):
             return JsonResponse({'success': False, 'error': 'Login required.'}, status=401)
         try:
             like_obj, created = like_model.objects.get_or_create(video=video, user=request.user)
-            model_cls = StoreVideo if kind == 'store' else ListingVideo
             if created:
                 model_cls.objects.filter(id=video.id).update(likes_count=F('likes_count') + 1)
                 liked = True
@@ -2310,7 +2368,7 @@ def reel_action(request, kind, video_id, action):
         except Exception:
             return JsonResponse({'success': False, 'error': 'Unable to update like.'}, status=500)
         payload = {
-            'kind': kind if kind == 'store' else 'listing',
+            'kind': kind,
             'video_id': video.id,
             'likes_count': video.likes_count,
             'comments_count': video.comments_count,
@@ -2324,14 +2382,13 @@ def reel_action(request, kind, video_id, action):
 
         field = valid_actions[action]
         try:
-            model_cls = StoreVideo if kind == 'store' else ListingVideo
             model_cls.objects.filter(id=video.id).update(**{field: F(field) + 1})
             video.refresh_from_db(fields=[field, 'likes_count', 'comments_count', 'shares_count', 'views_count'])
         except Exception:
             return JsonResponse({'success': False, 'error': 'Unable to update count.'}, status=500)
 
         payload = {
-            'kind': kind if kind == 'store' else 'listing',
+            'kind': kind,
             'video_id': video.id,
             'likes_count': video.likes_count,
             'comments_count': video.comments_count,
@@ -2339,54 +2396,19 @@ def reel_action(request, kind, video_id, action):
             'views_count': video.views_count,
         }
 
-    try:
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            async_to_sync(channel_layer.group_send)(
-                'reels',
-                {'type': 'reel_update', 'payload': payload}
-            )
-    except Exception:
-        pass
+    _broadcast_reel_update(payload)
 
     return JsonResponse({'success': True, **payload})
 
 
 @require_http_methods(["GET", "POST"])
 def reel_comments(request, kind, video_id):
-    if kind == 'store':
-        video = get_object_or_404(StoreVideo, id=video_id)
-        comment_model = StoreVideoComment
-        like_model = StoreVideoLike
-        model_cls = StoreVideo
-    else:
-        video = get_object_or_404(ListingVideo, id=video_id)
-        comment_model = ListingVideoComment
-        like_model = ListingVideoLike
-        model_cls = ListingVideo
+    kind, video, model_cls, like_model, comment_model = _get_reel_resources(kind, video_id)
 
     if request.method == 'POST':
         if not request.user.is_authenticated:
             return JsonResponse({'success': False, 'error': 'Login required.'}, status=401)
-        payload = {}
-        raw_body = ''
-        try:
-            raw_body = request.body.decode('utf-8') if request.body else ''
-            payload = json.loads(raw_body or '{}')
-        except Exception:
-            payload = {}
-        comment_text = (
-            payload.get('comment')
-            or request.POST.get('comment')
-            or request.headers.get('X-Reel-Comment')
-            or ''
-        ).strip()
-        if not comment_text and raw_body and 'comment=' in raw_body:
-            try:
-                from urllib.parse import parse_qs
-                comment_text = (parse_qs(raw_body).get('comment') or [''])[0].strip()
-            except Exception:
-                comment_text = ''
+        comment_text = _parse_reel_comment(request)
         if not comment_text:
             return JsonResponse({'success': False, 'error': 'Comment cannot be empty.'}, status=400)
         if len(comment_text) > 600:
@@ -2420,20 +2442,12 @@ def reel_comments(request, kind, video_id):
         'comments_count': video.comments_count,
         'shares_count': video.shares_count,
         'views_count': video.views_count,
-        'kind': kind if kind == 'store' else 'listing',
+        'kind': kind,
         'video_id': video.id,
     }
 
     if request.method == 'POST':
-        try:
-            channel_layer = get_channel_layer()
-            if channel_layer:
-                async_to_sync(channel_layer.group_send)(
-                    'reels',
-                    {'type': 'reel_update', 'payload': response_payload}
-                )
-        except Exception:
-            pass
+        _broadcast_reel_update(response_payload)
 
     return JsonResponse(response_payload)
 

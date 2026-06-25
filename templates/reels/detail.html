@@ -10,8 +10,8 @@
     </div>
     <div class="reel-actions mt-3 d-flex align-items-center gap-2">
         {% if user.is_authenticated %}
-        <button id="reelLikeBtn" class="btn-custom blog-like-btn {% if user in reel.likes.all.values_list 'user' %}liked{% endif %}" data-reel-slug="{{ reel.slug }}">
-            <i class="bi bi-heart{% if user in reel.likes.all.values_list 'user' %}-fill{% endif %}"></i>
+        <button id="reelLikeBtn" class="btn-custom blog-like-btn {% if user_liked_reel %}liked{% endif %}" data-reel-slug="{{ reel.slug }}">
+            <i class="bi bi-heart{% if user_liked_reel %}-fill{% endif %}"></i>
         </button>
         <span id="reelLikeCount" class="blog-like-count">{{ reel.like_count }}</span>
         {% else %}
@@ -47,11 +47,17 @@ document.addEventListener('DOMContentLoaded', function() {
         likeBtn.addEventListener('click', async function() {
             const slug = this.dataset.reelSlug;
             try {
-                const res = await fetch(`{% url 'reels:toggle-like' reel.slug %}`, { method: 'POST', headers: { 'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || '' } });
+                const res = await fetch(`{% url 'reels:toggle-like' reel.slug %}`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || '' }
+                });
                 const data = await res.json();
                 if (data.success) {
                     const countEl = document.getElementById('reelLikeCount');
                     if (countEl) countEl.textContent = data.like_count;
+                    this.classList.toggle('liked', !!data.liked);
+                    const icon = this.querySelector('i');
+                    if (icon) icon.className = `bi bi-heart${data.liked ? '-fill' : ''}`;
                 }
             } catch (e) {}
         });
@@ -64,13 +70,24 @@ document.addEventListener('DOMContentLoaded', function() {
             const text = document.getElementById('reelCommentContent').value.trim();
             if (!text) return;
             try {
-                const res = await fetch(this.action, { method: 'POST', headers: { 'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || '' }, body: new URLSearchParams({ content: text }) });
+                const res = await fetch(this.action, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || '',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: new URLSearchParams({ content: text })
+                });
                 const data = await res.json();
                 if (data.success) {
                     const list = document.getElementById('reelCommentsList');
                     const div = document.createElement('div');
                     div.className = 'comment';
-                    div.innerHTML = `<strong>${data.comment.user}</strong><div>${data.comment.content}</div>`;
+                    const author = document.createElement('strong');
+                    author.textContent = data.comment.user;
+                    const body = document.createElement('div');
+                    body.textContent = data.comment.content;
+                    div.append(author, body);
                     list.prepend(div);
                     document.getElementById('reelCommentContent').value = '';
                     const h4 = document.querySelector('.comments-section h4');

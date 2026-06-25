@@ -6102,24 +6102,8 @@
                 return card;
             }
 
-            // WebSocket updates
-            try {
-                const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-                const reelsWs = new WebSocket(`${proto}://${window.location.host}/ws/reels/`);
-                reelsWs.onmessage = (evt) => {
-                    try {
-                        const msg = JSON.parse(evt.data);
-                        if (msg.type === 'reel_update') {
-                            updateReelCounts(msg.payload.video_id, msg.payload, msg.payload.kind);
-                        }
-                        if (msg.type === 'reel_created' && msg.payload) {
-                            const card = buildReelCard(msg.payload);
-                            reelsTrack.prepend(card);
-                            wireReelCard(card);
-                        }
-                    } catch (e) {}
-                };
-            } catch (e) {}
+            // Reel counts are updated by the action/comment responses. Avoid opening a
+            // persistent reels socket on the homepage so Redis timeouts do not disrupt browsing.
 
             // View tracking using IntersectionObserver
             viewObserver = new IntersectionObserver((entries) => {

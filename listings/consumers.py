@@ -56,22 +56,38 @@ class CartConsumer(AsyncWebsocketConsumer):
 
 class ReelsConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        await self.channel_layer.group_add('reels', self.channel_name)
+        self.reels_group_joined = False
+        try:
+            await self.channel_layer.group_add('reels', self.channel_name)
+            self.reels_group_joined = True
+        except Exception:
+            self.reels_group_joined = False
         await self.accept()
 
     async def disconnect(self, close_code):
-        await self.channel_layer.group_discard('reels', self.channel_name)
+        if not getattr(self, 'reels_group_joined', False):
+            return
+        try:
+            await self.channel_layer.group_discard('reels', self.channel_name)
+        except Exception:
+            pass
 
     async def reel_update(self, event):
         payload = event.get('payload', {})
-        await self.send(text_data=json.dumps({
-            'type': 'reel_update',
-            'payload': payload
-        }))
+        try:
+            await self.send(text_data=json.dumps({
+                'type': 'reel_update',
+                'payload': payload
+            }))
+        except Exception:
+            pass
 
     async def reel_created(self, event):
         payload = event.get('payload', {})
-        await self.send(text_data=json.dumps({
-            'type': 'reel_created',
-            'payload': payload
-        }))
+        try:
+            await self.send(text_data=json.dumps({
+                'type': 'reel_created',
+                'payload': payload
+            }))
+        except Exception:
+            pass

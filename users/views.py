@@ -34,6 +34,7 @@ from django.core.mail import send_mail, get_connection, EmailMessage as DjangoEm
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import models, transaction, IntegrityError
+from django.db.utils import OperationalError, ProgrammingError
 from django.conf import settings
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -1359,10 +1360,20 @@ class ProfileDetailView(DetailView):
         # Followers information
         try:
             followers_count = Follow.objects.filter(followee=profile_user).count()
-        except Exception:
+            is_following = user.is_authenticated and Follow.objects.filter(
+                follower=user,
+                followee=profile_user,
+            ).exists()
+        except (OperationalError, ProgrammingError):
+            logger.warning('Follow table is unavailable while rendering profile %s', profile_user.pk)
             followers_count = 0
+            is_following = False
+        except Exception:
+            logger.exception('Failed to load follow state for profile %s', profile_user.pk)
+            followers_count = 0
+            is_following = False
         context['followers_count'] = followers_count
-        context['is_following'] = user.is_authenticated and Follow.objects.filter(follower=user, followee=profile_user).exists()
+        context['is_following'] = is_following
 
         return context
     

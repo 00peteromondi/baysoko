@@ -2099,7 +2099,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return '';
     };
     const csrfToken = getCookie('csrftoken');
-    const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws';
     let activeCard = null;
     let activeVideoId = null;
     let activeKind = 'store';
@@ -2303,21 +2302,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    try {
-        const reelsWs = new WebSocket(`${wsProto}://${window.location.host}/ws/reels/`);
-        reelsWs.onmessage = (event) => {
-            try {
-                const message = JSON.parse(event.data);
-                if (message.type !== 'reel_update' || !message.payload) return;
-                const payload = message.payload;
-                const card = getCard(payload.video_id, payload.kind || 'store');
-                syncCardCounts(card, payload);
-                if (String(activeVideoId) === String(payload.video_id) && activeKind === (payload.kind || 'store')) {
-                    applyCounts(payload);
-                }
-            } catch (error) {}
-        };
-    } catch (error) {}
+    // Reel counts are updated by the action/comment responses. Avoid opening a
+    // persistent reels socket on product pages so Redis timeouts do not disrupt browsing.
 });
 </script>
 {% endblock %}

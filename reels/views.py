@@ -1,4 +1,6 @@
-from django.shortcuts import render, get_object_or_404, redirect
+import json
+
+from django.shortcuts import get_object_or_404
 from django.views.generic import ListView, DetailView
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -20,6 +22,15 @@ class ReelDetailView(DetailView):
     model = Reel
     template_name = 'reels/detail.html'
     context_object_name = 'reel'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        context['user_liked_reel'] = (
+            user.is_authenticated
+            and self.object.likes.filter(user=user).exists()
+        )
+        return context
 
 
 @require_POST
@@ -72,7 +83,17 @@ def toggle_like(request, slug):
 @login_required
 def add_comment(request, slug):
     reel = get_object_or_404(Reel, slug=slug)
-    content = request.POST.get('content') or request.body.decode('utf-8')
+    content = (request.POST.get('content') or request.POST.get('comment') or '').strip()
+    if not content and request.body:
+        raw_body = request.body.decode(request.encoding or 'utf-8', errors='replace')
+        try:
+            payload = json.loads(raw_body)
+            content = (payload.get('content') or payload.get('comment') or '').strip()
+        except Exception:
+            from urllib.parse import parse_qs
+            content = (
+                (parse_qs(raw_body).get('content') or parse_qs(raw_body).get('comment') or [''])[0]
+            ).strip()
     if not content:
         return JsonResponse({'success': False, 'error': 'empty'}, status=400)
     comment = ReelComment.objects.create(reel=reel, user=request.user, content=content)
