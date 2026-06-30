@@ -20,6 +20,9 @@ def listing_post_save(sender, instance, created, **kwargs):
     Handles in-app notifications, emails, and SMS.
     """
     try:
+        if getattr(instance, '_suppress_listing_notifications', False):
+            return
+
         # Import here to avoid circular imports
         from notifications.utils import notify_listing_saved
 

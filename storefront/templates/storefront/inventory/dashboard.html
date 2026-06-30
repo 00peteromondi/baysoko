@@ -5,6 +5,7 @@
 {% block title %}Inventory Dashboard - {{ store.name }}{% endblock %}
 
 {% block extra_css %}
+    {% include 'storefront/partials/seller_dashboard_ui.html' %}
     {% include 'storefront/partials/breadcrumb_css.html' %}
 <style>
     /* ===== INVENTORY DASHBOARD STYLES ===== */
@@ -502,6 +503,7 @@
 {% endblock %}
 
 {% block content %}
+{% include 'storefront/partials/seller_dashboard_interactions.html' %}
 <div class="container-custom py-3">
     <!-- Breadcrumb -->
     <nav aria-label="breadcrumb" class="mb-3">
@@ -769,9 +771,11 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Auto-refresh every 30 seconds
+        // Refresh the dashboard fragment every 30 seconds
         setTimeout(function() {
-            window.location.reload();
+            if (window.SellerDashboardUI) {
+                window.SellerDashboardUI.fetchAndReplace(window.location.href);
+            }
         }, 30000);
 
         // Table row hover effects
@@ -866,7 +870,12 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    window.location.reload();
+                    const quickStockElement = document.getElementById('quickStockModal');
+                    bootstrap.Modal.getInstance(quickStockElement)?.hide();
+                    if (window.SellerDashboardUI) {
+                        window.SellerDashboardUI.notify('Stock updated.', 'success');
+                        window.SellerDashboardUI.fetchAndReplace(window.location.href);
+                    }
                 } else {
                     alert('Error: ' + data.error);
                 }

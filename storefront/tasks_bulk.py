@@ -13,6 +13,7 @@ import logging
 from datetime import timedelta
 from django.db.models import Q
 from decimal import Decimal, InvalidOperation
+from django.conf import settings
 
 
 logger = logging.getLogger('storefront.bulk')
@@ -176,6 +177,41 @@ def _complete_job(job, error_count, errors):
     return job.status
 
 
+def _send_import_summary_email(job, summary):
+    recipient = getattr(job, 'created_by', None) or getattr(job.store, 'owner', None)
+    email = getattr(recipient, 'email', '') if recipient else ''
+    if not email:
+        return False
+
+    try:
+        from baysoko.utils.email_helpers import render_and_send
+    except Exception:
+        logger.exception('Bulk import job %s: email helper unavailable', job.id)
+        return False
+
+    context = {
+        'job': job,
+        'store': job.store,
+        'user': recipient,
+        'summary': summary,
+        'site_url': getattr(settings, 'SITE_URL', ''),
+    }
+    subject = f'Bulk import summary for {job.store.name}'
+    try:
+        render_and_send(
+            'emails/bulk_import_summary.html',
+            'emails/bulk_import_summary.txt',
+            context,
+            subject,
+            [email],
+        )
+        logger.info('Bulk import job %s: summary email sent to %s', job.id, email)
+        return True
+    except Exception:
+        logger.exception('Bulk import job %s: failed sending summary email', job.id)
+        return False
+
+
 def _normalize_location(value):
     if value is None:
         return None
@@ -240,6 +276,51 @@ def _parse_image_candidates(data):
         seen.add(candidate)
         unique_candidates.append(candidate)
     return unique_candidates
+
+
+def _has_listing_image(product):
+    if getattr(product, 'image', None):
+        return True
+    images_rel = getattr(product, 'images', None)
+    if images_rel is None:
+        return False
+    try:
+        return images_rel.exists()
+    except Exception:
+        return bool(images_rel.count())
+
+
+def _build_wikimedia_queries(product, data, store):
+    parts = []
+    for field in ('title', 'brand', 'model', 'category'):
+        value = data.get(field)
+        if value:
+            parts.append(str(value).strip())
+
+    if getattr(product, 'title', None) and product.title not in parts:
+        parts.insert(0, product.title)
+    if getattr(product, 'category', None) and product.category:
+        category_name = getattr(product.category, 'name', '')
+        if category_name and category_name not in parts:
+            parts.append(category_name)
+
+    primary = ' '.join(part for part in parts if part).strip()
+    queries = [primary] if primary else []
+
+    if getattr(product, 'title', None):
+        queries.append(str(product.title).strip())
+    if primary and getattr(store, 'name', None):
+        queries.append(f"{primary} product")
+
+    seen = set()
+    unique_queries = []
+    for query in queries:
+        normalized = ' '.join(str(query).split())
+        key = normalized.lower()
+        if normalized and key not in seen:
+            seen.add(key)
+            unique_queries.append(normalized)
+    return unique_queries
 
 
 def _attach_image_urls_to_product(product, image_urls):
@@ -551,6 +632,14 @@ def process_import_task(self, job_id):
         success_count = 0
         error_count = 0
         errors = []
+        import_summary = {
+            'created_count': 0,
+            'updated_count': 0,
+            'skipped_count': 0,
+            'created_items': [],
+            'updated_items': [],
+            'skipped_items': [],
+        }
 
         for index, row in enumerate(rows):
             try:
@@ -572,7 +661,23 @@ def process_import_task(self, job_id):
                 template_type = params.get('template_type', 'products')
 
                 if template_type == 'products':
-                    process_product_import_row(job.store, mapped_data, params)
+                    row_result = process_product_import_row(job.store, mapped_data, params)
+                    row_status = (row_result or {}).get('status')
+                    row_item = {
+                        'row': index + 2,
+                        'title': (row_result or {}).get('title') or mapped_data.get('title') or 'Untitled product',
+                        'id': (row_result or {}).get('id'),
+                        'reason': (row_result or {}).get('reason', ''),
+                    }
+                    if row_status == 'created':
+                        import_summary['created_count'] += 1
+                        import_summary['created_items'].append(row_item)
+                    elif row_status == 'updated':
+                        import_summary['updated_count'] += 1
+                        import_summary['updated_items'].append(row_item)
+                    elif row_status == 'skipped':
+                        import_summary['skipped_count'] += 1
+                        import_summary['skipped_items'].append(row_item)
 
                 # Log success
                 BulkOperationLog.objects.create(
@@ -612,6 +717,11 @@ def process_import_task(self, job_id):
                     job.success_count = success_count
                     job.error_count = error_count
                     job.save(update_fields=['status', 'completed_at', 'errors', 'processed_items', 'success_count', 'error_count'])
+                    import_summary['error_count'] = error_count
+                    import_summary['success_count'] = success_count
+                    import_summary['total_rows'] = total_rows
+                    import_summary['errors'] = errors[:20]
+                    _send_import_summary_email(job, import_summary)
                     logger.warning('Import job %s aborted after error row %s because skip_errors is disabled', job.id, index + 2)
                     return {
                         'job_id': job_id,
@@ -628,6 +738,16 @@ def process_import_task(self, job_id):
         
         # Update job completion
         _complete_job(job, error_count, errors)
+        import_summary['error_count'] = error_count
+        import_summary['success_count'] = success_count
+        import_summary['total_rows'] = total_rows
+        import_summary['errors'] = errors[:20]
+        job.results = {
+            **(job.results or {}),
+            'import_summary': _clean_json(import_summary),
+        }
+        job.save(update_fields=['results'])
+        _send_import_summary_email(job, import_summary)
         
         logger.info(f"Import job {job_id} completed: {success_count} success, {error_count} errors")
         
@@ -704,16 +824,27 @@ def process_product_import_row(store, data, params):
     create_new = params.get('create_new', True)
     
     if product and not update_existing:
-        return  # Skip existing products
+        return {
+            'status': 'skipped',
+            'reason': 'Existing product was not updated',
+            'id': product.id,
+            'title': product.title,
+        }
     
     if not product and not create_new:
-        return  # Don't create new products
+        return {
+            'status': 'skipped',
+            'reason': 'Creating new products is disabled',
+            'id': None,
+            'title': title,
+        }
     
     with transaction.atomic():
+        was_created = product is None
         if not product:
             # Create new product
             product = Listing(store=store, seller=store.owner)
-        existing_related_images = product.images.count() if product.pk else 0
+        product._suppress_listing_notifications = True
 
         delivery_choice = _normalize_choice(data.get('delivery_option'), Listing.DELIVERY_OPTIONS)
         condition_choice = _normalize_choice(data.get('condition'), Listing.CONDITION_CHOICES)
@@ -803,21 +934,26 @@ def process_product_import_row(store, data, params):
         if image_urls:
             _attach_image_urls_to_product(product, image_urls)
 
-        # Auto-fetch images when requested and none exist for this listing
+        # Auto-fetch Wikimedia images when requested and the listing has no image.
         try:
-            auto_fetch = params.get('auto_fetch_images') or params.get('auto_fetch', False)
-            if auto_fetch and fetch_and_attach is not None:
-                # ensure there is an images related manager
-                images_rel = getattr(product, 'images', None)
-                has_images = images_rel.count() if images_rel is not None else existing_related_images
-                if has_images == 0:
-                    q = title or data.get('title') or f"{product.title} {store.name}"
-                    listing_image = fetch_and_attach(product, q)
-                    if listing_image and not product.image:
-                        product.image = listing_image.image
-                        product.save(update_fields=['image'])
+            auto_fetch = params.get('auto_fetch_images', params.get('auto_fetch', True))
+            if auto_fetch and fetch_and_attach is not None and not _has_listing_image(product):
+                for query in _build_wikimedia_queries(product, data, store):
+                    listing_image = fetch_and_attach(product, query)
+                    if listing_image:
+                        if not product.image:
+                            product._suppress_listing_notifications = True
+                            product.image = listing_image.image
+                            product.save(update_fields=['image'])
+                        break
         except Exception as e:
             logger.exception('Auto-fetch images failed for product %s: %s', getattr(product, 'id', None), e)
+
+    return {
+        'status': 'created' if was_created else 'updated',
+        'id': product.id,
+        'title': product.title,
+    }
 
 @shared_task(bind=True)
 def generate_export_task(self, job_id):

@@ -26,9 +26,17 @@ DATABASE_URL = (os.environ.get('DATABASE_URL') or '').strip()
 
 def _sqlite_database_config():
     return {
-        'ENGINE': 'django.db.backends.sqlite3',
+        'ENGINE': 'baysoko.sqlite_retry_backend',
         'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {
+            'timeout': config('SQLITE_BUSY_TIMEOUT', default=60, cast=int),
+        },
     }
+
+
+def _is_sqlite_database():
+    engine = DATABASES.get('default', {}).get('ENGINE', '')
+    return engine in ('django.db.backends.sqlite3', 'baysoko.sqlite_retry_backend')
 
 
 def _postgres_database_config(database_url: str):
@@ -82,9 +90,10 @@ print(f"✅ DATABASE ENGINE CONFIRMED: {DATABASES['default']['ENGINE']}")
 
 # SQLite tuning to reduce "database is locked" errors during concurrent requests
 try:
-    if DATABASES.get('default', {}).get('ENGINE') == 'django.db.backends.sqlite3':
+    if _is_sqlite_database():
         DATABASES['default'].setdefault('OPTIONS', {})
-        DATABASES['default']['OPTIONS'].setdefault('timeout', 30)
+        DATABASES['default']['OPTIONS'].setdefault('timeout', config('SQLITE_BUSY_TIMEOUT', default=60, cast=int))
+        DATABASES['default']['CONN_MAX_AGE'] = 0
 except Exception:
     pass
 # SECURITY WARNING: keep the secret key used in production secret!
@@ -908,7 +917,7 @@ if USE_REDIS_CACHE:
     SESSION_CACHE_ALIAS = 'default'
 else:
     # Avoid SQLite session write locks in DEBUG by using cache sessions (LocMem)
-    if DATABASES.get('default', {}).get('ENGINE') == 'django.db.backends.sqlite3' and DEBUG:
+    if _is_sqlite_database() and DEBUG:
         SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
         SESSION_CACHE_ALIAS = 'default'
         print("ℹ️  Using cache sessions in DEBUG with SQLite to avoid session lock errors.")

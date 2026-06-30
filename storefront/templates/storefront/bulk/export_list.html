@@ -5,6 +5,7 @@
 {% block title %}Export Jobs - {{ store.name }}{% endblock %}
 
 {% block extra_css %}
+    {% include 'storefront/partials/seller_dashboard_ui.html' %}
     {% include 'storefront/partials/breadcrumb_css.html' %}
 <style>
     .export-filters {
@@ -93,6 +94,7 @@
 {% endblock %}
 
 {% block content %}
+{% include 'storefront/partials/seller_dashboard_interactions.html' %}
 <div class="container-custom py-3">
     <!-- Breadcrumb -->
     <nav aria-label="breadcrumb" class="mb-3">
@@ -339,7 +341,9 @@
         {% for job in page_obj %}
         {% if job.status == 'processing' %}
         setTimeout(function() {
-            window.location.reload();
+            if (window.SellerDashboardUI) {
+                window.SellerDashboardUI.fetchAndReplace(window.location.href);
+            }
         }, 10000);
         {% endif %}
         {% endfor %}
@@ -359,7 +363,11 @@
                     }
                 }
                 
-                window.location.href = '?' + params.toString();
+                const nextUrl = '?' + params.toString();
+                history.replaceState(null, '', nextUrl);
+                if (window.SellerDashboardUI) {
+                    window.SellerDashboardUI.fetchAndReplace(nextUrl);
+                }
             });
         }
     });

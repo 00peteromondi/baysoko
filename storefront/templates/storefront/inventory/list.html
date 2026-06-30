@@ -5,6 +5,7 @@
 {% block title %}Inventory List - {{ store.name }}{% endblock %}
 
 {% block extra_css %}
+    {% include 'storefront/partials/seller_dashboard_ui.html' %}
     {% include 'storefront/partials/breadcrumb_css.html' %}
 <style>
     /* ===== INVENTORY LIST STYLES ===== */
@@ -371,6 +372,7 @@
 {% endblock %}
 
 {% block content %}
+{% include 'storefront/partials/seller_dashboard_interactions.html' %}
 <div class="container-custom py-3">
     <!-- Breadcrumb -->
     <nav aria-label="breadcrumb" class="mb-3">
@@ -527,7 +529,7 @@
                 </thead>
                 <tbody>
                     {% for product in page_obj %}
-                    <tr>
+                    <tr data-product-id="{{ product.id }}">
                         <td>
                             <input type="checkbox" class="form-check-input product-checkbox" 
                                    value="{{ product.id }}">
@@ -558,11 +560,11 @@
                         </td>
                         <td>
                             {% if product.stock == 0 %}
-                            <span class="stock-badge badge-out">Out of Stock</span>
+                            <span class="stock-badge badge-out" data-stock-value>Out of Stock</span>
                             {% elif product.stock <= 5 %}
-                            <span class="stock-badge badge-low">Low Stock ({{ product.stock }})</span>
+                            <span class="stock-badge badge-low" data-stock-value>Low Stock ({{ product.stock }})</span>
                             {% else %}
-                            <span class="stock-badge badge-good">{{ product.stock }}</span>
+                            <span class="stock-badge badge-good" data-stock-value>{{ product.stock }}</span>
                             {% endif %}
                             {% if product.variants.exists %}
                             <div class="text-muted small mt-1">{{ product.variants.count }} variants</div>
@@ -792,7 +794,25 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (data.success) {
                 quickStockModal.hide();
-                window.location.reload();
+                const row = document.querySelector(`tr[data-product-id="${productId}"]`);
+                const badge = row ? row.querySelector('[data-stock-value]') : null;
+                if (badge) {
+                    badge.classList.remove('badge-out', 'badge-low', 'badge-good');
+                    if (parseInt(newStock) === 0) {
+                        badge.classList.add('badge-out');
+                        badge.textContent = 'Out of Stock';
+                    } else if (parseInt(newStock) <= 5) {
+                        badge.classList.add('badge-low');
+                        badge.textContent = `Low Stock (${newStock})`;
+                    } else {
+                        badge.classList.add('badge-good');
+                        badge.textContent = newStock;
+                    }
+                }
+                document.querySelector(`.quick-stock-btn[data-product-id="${productId}"]`)?.setAttribute('data-current-stock', newStock);
+                if (window.SellerDashboardUI) {
+                    window.SellerDashboardUI.notify('Stock updated.', 'success');
+                }
             } else {
                 alert('Error: ' + data.error);
             }
@@ -810,7 +830,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const url = new URL(window.location);
         url.searchParams.set('sort', sortBy);
         url.searchParams.set('order', sortOrder);
-        window.location.href = url.toString();
+        history.replaceState(null, '', url.toString());
+        if (window.SellerDashboardUI) {
+            window.SellerDashboardUI.fetchAndReplace(url.toString());
+        }
     });
     
     // Bulk actions
@@ -868,7 +891,9 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (data.success) {
                 showToast(data.message, 'success');
-                setTimeout(() => location.reload(), 1500);
+                if (window.SellerDashboardUI) {
+                    window.SellerDashboardUI.fetchAndReplace(window.location.href);
+                }
             } else {
                 showToast('Error: ' + data.error, 'error');
             }

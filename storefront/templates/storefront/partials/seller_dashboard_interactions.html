@@ -1,0 +1,163 @@
+<script>
+    (function () {
+        const surfaceSelector = '.seller-dashboard-surface';
+
+        function getCsrfToken() {
+            const input = document.querySelector('input[name="csrfmiddlewaretoken"]');
+            if (input) return input.value;
+            const match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+            return match ? decodeURIComponent(match[1]) : '';
+        }
+
+        function notify(message, type) {
+            if (window.showToast) {
+                window.showToast(message, type || 'success');
+                return;
+            }
+            const toast = document.createElement('div');
+            toast.className = `seller-dashboard-toast ${type || 'success'}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.add('show'));
+            window.setTimeout(() => {
+                toast.classList.remove('show');
+                window.setTimeout(() => toast.remove(), 220);
+            }, 2800);
+        }
+
+        function adoptSurface(nextDocument) {
+            const current = document.querySelector(surfaceSelector);
+            const next = nextDocument.querySelector(surfaceSelector) || nextDocument.querySelector('.container-custom');
+            if (!current || !next) return false;
+            current.replaceWith(next);
+            prepareSurface();
+            document.dispatchEvent(new CustomEvent('seller-dashboard:fragment-replaced'));
+            return true;
+        }
+
+        async function fetchAndReplace(url, options) {
+            const surface = document.querySelector(surfaceSelector);
+            if (surface) surface.classList.add('dashboard-loading');
+            try {
+                const response = await fetch(url, {
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        ...(options && options.headers ? options.headers : {})
+                    },
+                    ...(options || {})
+                });
+
+                const contentType = response.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    return response.json();
+                }
+
+                if (response.redirected) {
+                    const redirected = await fetch(response.url, {
+                        credentials: 'same-origin',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    const html = await redirected.text();
+                    const doc = new DOMParser().parseFromString(html, 'text/html');
+                    adoptSurface(doc);
+                    return { success: true };
+                }
+
+                const html = await response.text();
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                return { success: adoptSurface(doc) };
+            } finally {
+                if (surface) surface.classList.remove('dashboard-loading');
+            }
+        }
+
+        function prepareSurface() {
+            const surface = document.querySelector('.container-custom');
+            if (surface) {
+                surface.classList.add('seller-dashboard-surface');
+                const firstContent = surface.querySelector(':scope > div, :scope > section, :scope > form, :scope > nav');
+                if (firstContent) firstContent.classList.add('dashboard-live-region');
+            }
+
+            document.querySelectorAll(`${surfaceSelector} form[method="get"]`).forEach((form) => {
+                form.dataset.dashboardLive = form.dataset.dashboardLive || 'replace';
+            });
+
+            document.querySelectorAll(`${surfaceSelector} form`).forEach((form) => {
+                const method = (form.getAttribute('method') || 'get').toLowerCase();
+                const enctype = (form.getAttribute('enctype') || '').toLowerCase();
+                if (method === 'post' && !enctype && (form.closest('.dropdown-menu') || form.classList.contains('d-inline') || form.querySelector('[name="csrfmiddlewaretoken"]'))) {
+                    form.dataset.dashboardLive = form.dataset.dashboardLive || 'replace';
+                }
+            });
+        }
+
+        function installHandlers() {
+            document.addEventListener('submit', async function (event) {
+                const form = event.target.closest(`${surfaceSelector} form[data-dashboard-live="replace"]`);
+                if (!form) return;
+                const method = (form.getAttribute('method') || 'get').toUpperCase();
+                const enctype = (form.getAttribute('enctype') || '').toLowerCase();
+                if (enctype.includes('multipart')) return;
+
+                event.preventDefault();
+
+                const submitter = event.submitter;
+                if (submitter) {
+                    submitter.disabled = true;
+                    submitter.dataset.originalText = submitter.innerHTML;
+                    submitter.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>';
+                }
+
+                try {
+                    const formData = new FormData(form);
+                    let url = form.action || window.location.href;
+                    const options = { method };
+                    if (method === 'GET') {
+                        const params = new URLSearchParams(formData);
+                        url = `${url.split('?')[0]}?${params.toString()}`;
+                        history.replaceState(null, '', url);
+                    } else {
+                        options.body = formData;
+                        options.headers = { 'X-CSRFToken': getCsrfToken() };
+                    }
+
+                    const result = await fetchAndReplace(url, options);
+                    if (result && result.message) notify(result.message, result.success ? 'success' : 'error');
+                    else if (method !== 'GET') notify('Updated successfully.', 'success');
+                } catch (error) {
+                    notify('That action could not be completed. Please try again.', 'error');
+                } finally {
+                    if (submitter) {
+                        submitter.disabled = false;
+                        submitter.innerHTML = submitter.dataset.originalText || submitter.innerHTML;
+                    }
+                }
+            });
+        }
+
+        window.SellerDashboardUI = {
+            notify,
+            fetchAndReplace,
+            prepareSurface,
+            updateStockDisplay(productId, stock) {
+                document.querySelectorAll(`[data-product-id="${productId}"]`).forEach((row) => {
+                    row.querySelectorAll('[data-stock-value], .stock-value').forEach((node) => {
+                        node.textContent = stock;
+                    });
+                });
+            }
+        };
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                prepareSurface();
+                installHandlers();
+            });
+        } else {
+            prepareSurface();
+            installHandlers();
+        }
+    })();
+</script>

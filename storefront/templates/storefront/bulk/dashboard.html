@@ -5,6 +5,7 @@
 {% block title %}Bulk Operations Dashboard - {{ store.name }}{% endblock %}
 
 {% block extra_css %}
+    {% include 'storefront/partials/seller_dashboard_ui.html' %}
 <style>
     /* ===== BULK DASHBOARD STYLES ===== */
     .bulk-header {
@@ -474,6 +475,7 @@
 {% endblock %}
 
 {% block content %}
+{% include 'storefront/partials/seller_dashboard_interactions.html' %}
 <div class="container-custom py-3">
     <!-- Breadcrumb -->
     <nav aria-label="breadcrumb" class="mb-3">
@@ -767,10 +769,12 @@
 <!-- Auto-refresh for processing jobs -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Auto-refresh every 30 seconds if there are processing jobs
+    // Refresh the dashboard fragment every 30 seconds if there are processing jobs
     {% if job_stats.processing > 0 %}
     setTimeout(function() {
-        window.location.reload();
+        if (window.SellerDashboardUI) {
+            window.SellerDashboardUI.fetchAndReplace(window.location.href);
+        }
     }, 30000);
     {% endif %}
 
@@ -789,11 +793,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Job status polling for real-time updates
     function pollJobStatus(jobId) {
-        fetch(`/storefront/${storeSlug}/bulk/job/${jobId}/progress/`)
+        fetch(`{% url 'storefront:get_job_progress' slug=store.slug job_id=0 %}`.replace('0', jobId))
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'completed' || data.status === 'failed') {
-                    location.reload();
+                    if (window.SellerDashboardUI) {
+                        window.SellerDashboardUI.fetchAndReplace(window.location.href);
+                    }
                 }
             })
             .catch(error => console.log('Polling error:', error));

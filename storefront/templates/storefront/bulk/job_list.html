@@ -5,6 +5,7 @@
 {% block title %}Batch Jobs - {{ store.name }}{% endblock %}
 
 {% block extra_css %}
+    {% include 'storefront/partials/seller_dashboard_ui.html' %}
     {% include 'storefront/partials/breadcrumb_css.html' %}
 <style>
     .jobs-filter-card {
@@ -189,6 +190,7 @@
 {% endblock %}
 
 {% block content %}
+{% include 'storefront/partials/seller_dashboard_interactions.html' %}
 <div class="container-custom py-3">
     <!-- Breadcrumb -->
     <nav aria-label="breadcrumb" class="mb-3">
@@ -395,7 +397,11 @@ document.addEventListener('DOMContentLoaded', function() {
     {% if page_obj %}
         {% for job in page_obj %}
             {% if job.status == 'processing' %}
-                setTimeout(() => location.reload(), 30000);
+                setTimeout(() => {
+                    if (window.SellerDashboardUI) {
+                        window.SellerDashboardUI.fetchAndReplace(window.location.href);
+                    }
+                }, 30000);
                 break;
             {% endif %}
         {% endfor %}
@@ -407,19 +413,27 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch(`{% url 'storefront:cancel_job' slug=store.slug job_id=0 %}`.replace('0', jobId), {
                 method: 'POST',
                 headers: {
-                    'X-CSRFToken': '{{ csrf_token }}'
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'X-Requested-With': 'XMLHttpRequest'
                 }
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success || response.ok) {
-                    location.reload();
-                } else {
-                    alert('Failed to cancel job');
+            .then(response => {
+                if (!response.ok) throw new Error('Cancel failed');
+                return window.SellerDashboardUI
+                    ? window.SellerDashboardUI.fetchAndReplace(response.redirected ? response.url : window.location.href)
+                    : Promise.resolve();
+            })
+            .then(() => {
+                if (window.SellerDashboardUI) {
+                    window.SellerDashboardUI.notify('Job cancelled.', 'success');
                 }
             })
             .catch(error => {
-                alert('Error cancelling job');
+                if (window.SellerDashboardUI) {
+                    window.SellerDashboardUI.notify('Error cancelling job.', 'error');
+                } else {
+                    alert('Error cancelling job');
+                }
             });
         }
     };

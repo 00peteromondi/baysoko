@@ -44,6 +44,33 @@ from .tasks_bulk import (
 logger = logging.getLogger(__name__)
 
 
+def _run_task_synchronously(task, *args):
+    result = task.apply(args=args, throw=True)
+    return result.get(propagate=True)
+
+
+def _queue_or_run_task(request, task, job, success_message, fallback_message, failure_message):
+    try:
+        task.delay(job.id)
+        messages.success(request, success_message)
+        return 'queued'
+    except Exception as exc:
+        logger.exception(
+            'Failed to enqueue %s job %s: %s; falling back to synchronous run',
+            getattr(task, 'name', task),
+            job.id,
+            exc,
+        )
+        try:
+            _run_task_synchronously(task, job.id)
+            messages.success(request, fallback_message)
+            return 'ran'
+        except Exception as exc2:
+            logger.exception('Synchronous %s job %s failed: %s', getattr(task, 'name', task), job.id, exc2)
+            messages.warning(request, failure_message.format(error=exc2))
+            return 'failed'
+
+
 def _format_mapping_value(value):
     if isinstance(value, dict):
         return [{'type': 'pair', 'label': str(k).replace('_', ' ').title(), 'value': v} for k, v in value.items()]
@@ -116,16 +143,17 @@ def bulk_update_products(request, slug):
                 created_by=request.user,
                 parameters=form.cleaned_data,
                 total_items=0,  # Will be calculated in task
-                started_at=timezone.now(),
             )
             
-            # Start async task
-            process_bulk_update_task.delay(batch_job.id)
-            
-            messages.success(
+            _queue_or_run_task(
                 request,
+                process_bulk_update_task,
+                batch_job,
                 f'Bulk update job #{batch_job.id} has been queued. '
-                f'You will be notified when it completes.'
+                f'You will be notified when it completes.',
+                f'Bulk update job #{batch_job.id} was processed synchronously.',
+                f'Bulk update job #{batch_job.id} was created but could not be processed: {{error}}. '
+                'Start your Celery worker and Redis broker to process it.',
             )
             return redirect('storefront:bulk_job_detail', slug=slug, job_id=batch_job.id)
     else:
@@ -171,42 +199,15 @@ def bulk_import_data(request, slug):
                     batch_job.parameters['field_mapping'] = fm
             batch_job.save()
             
-            # Start async task; if broker (Redis) is unavailable, fall back to synchronous execution
-            try:
-                process_import_task.delay(batch_job.id)
-                messages.success(
-                    request,
-                    f'Import job #{batch_job.id} has been queued. '
-                    f'Processing {batch_job.file.name}.'
-                )
-            except Exception as exc:
-                # Broker unavailable — run the task synchronously so the import still completes.
-                logger.exception(
-                    'Failed to enqueue import job %s: %s — falling back to synchronous run',
-                    batch_job.id, exc,
-                )
-                try:
-                    # Transition to 'processing' before running so the job detail page
-                    # reflects the correct state if the user refreshes mid-run.
-                    batch_job.status = 'processing'
-                    batch_job.started_at = timezone.now()
-                    batch_job.save(update_fields=['status', 'started_at'])
-                    logger.info('Running import job %s synchronously (no broker)', batch_job.id)
-                    # Call the underlying task function directly — .run() does not exist on
-                    # Celery tasks; calling the task object itself invokes the body without
-                    # going through the broker or result backend.
-                    process_import_task(batch_job.id)
-                    messages.success(
-                        request,
-                        f'Import job #{batch_job.id} was processed synchronously.'
-                    )
-                except Exception as exc2:
-                    logger.exception('Synchronous import job %s failed: %s', batch_job.id, exc2)
-                    messages.warning(
-                        request,
-                        f'Import job #{batch_job.id} was created but could not be processed: {exc2}. '
-                        'Start your Celery worker and Redis broker to process it.'
-                    )
+            _queue_or_run_task(
+                request,
+                process_import_task,
+                batch_job,
+                f'Import job #{batch_job.id} has been queued. Processing {batch_job.file.name}.',
+                f'Import job #{batch_job.id} was processed synchronously.',
+                f'Import job #{batch_job.id} was created but could not be processed: {{error}}. '
+                'Start your Celery worker and Redis broker to process it.',
+            )
             return redirect('storefront:bulk_job_detail', slug=slug, job_id=batch_job.id)
     else:
         form = BulkImportForm(store)
@@ -279,13 +280,15 @@ def export_data(request, slug):
                 created_by=request.user,
             )
             
-            # Start async task
-            generate_export_task.delay(export_job.id)
-            
-            messages.success(
+            _queue_or_run_task(
                 request,
+                generate_export_task,
+                export_job,
                 f'Export job #{export_job.id} has been queued. '
-                f'You will be able to download the file when it\'s ready.'
+                f'You will be able to download the file when it\'s ready.',
+                f'Export job #{export_job.id} was generated synchronously.',
+                f'Export job #{export_job.id} was created but could not be processed: {{error}}. '
+                'Start your Celery worker and Redis broker to process it.',
             )
             return redirect('storefront:export_job_detail', slug=slug, job_id=export_job.id)
     else:

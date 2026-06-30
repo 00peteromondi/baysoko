@@ -342,7 +342,7 @@ class BulkImportForm(forms.ModelForm):
     auto_fetch_images = forms.BooleanField(
         label="Auto-fetch Images",
         required=False,
-        initial=False,
+        initial=True,
         help_text="Search Wikimedia Commons for product images if none are provided in the import file.",
         widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
     )

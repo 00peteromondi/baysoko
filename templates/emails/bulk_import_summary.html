@@ -1,0 +1,56 @@
+{% extends "emails/base_email.html" %}
+
+{% block content %}
+<h2>Bulk import summary</h2>
+
+<p>Hello {{ user.get_full_name|default:user.username }},</p>
+
+<p>Your bulk import for <strong>{{ store.name }}</strong> has finished with status <strong>{{ job.get_status_display }}</strong>.</p>
+
+<ul>
+  <li>Total rows: {{ summary.total_rows }}</li>
+  <li>Successful rows: {{ summary.success_count }}</li>
+  <li>Created listings: {{ summary.created_count }}</li>
+  <li>Updated listings: {{ summary.updated_count }}</li>
+  <li>Skipped rows: {{ summary.skipped_count }}</li>
+  <li>Errors: {{ summary.error_count }}</li>
+</ul>
+
+{% if summary.created_items %}
+<h3>Created listings</h3>
+<ul>
+  {% for item in summary.created_items|slice:":10" %}
+    <li>{{ item.title }}{% if item.id %} (#{{ item.id }}){% endif %}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if summary.updated_items %}
+<h3>Updated listings</h3>
+<ul>
+  {% for item in summary.updated_items|slice:":10" %}
+    <li>{{ item.title }}{% if item.id %} (#{{ item.id }}){% endif %}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if summary.skipped_items %}
+<h3>Skipped rows</h3>
+<ul>
+  {% for item in summary.skipped_items|slice:":10" %}
+    <li>Row {{ item.row }}: {{ item.title }}{% if item.reason %} - {{ item.reason }}{% endif %}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if summary.errors %}
+<h3>Errors</h3>
+<ul>
+  {% for error in summary.errors|slice:":10" %}
+    <li>Row {{ error.row }}: {{ error.error }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<p>You can review the full job details from your bulk operations dashboard.</p>
+{% endblock %}

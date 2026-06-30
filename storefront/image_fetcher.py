@@ -11,6 +11,9 @@ logger = logging.getLogger(__name__)
 
 # Wikimedia Commons API endpoints
 WIKIMEDIA_API = 'https://commons.wikimedia.org/w/api.php'
+WIKIMEDIA_HEADERS = {
+    'User-Agent': 'BaysokoBulkImporter/1.0 (https://baysoko.com; bulk image import)'
+}
 
 
 def search_wikimedia_images(query, max_results=3):
@@ -26,7 +29,7 @@ def search_wikimedia_images(query, max_results=3):
         'srlimit': max_results,
     }
     try:
-        r = requests.get(WIKIMEDIA_API, params=params, timeout=10)
+        r = requests.get(WIKIMEDIA_API, params=params, headers=WIKIMEDIA_HEADERS, timeout=10)
         r.raise_for_status()
         data = r.json()
         hits = data.get('query', {}).get('search', [])
@@ -45,7 +48,7 @@ def get_imageinfo_for_pageids(pageids):
         'pageids': '|'.join(str(p) for p in pageids)
     }
     try:
-        r = requests.get(WIKIMEDIA_API, params=params, timeout=10)
+        r = requests.get(WIKIMEDIA_API, params=params, headers=WIKIMEDIA_HEADERS, timeout=10)
         r.raise_for_status()
         return r.json().get('query', {}).get('pages', {})
     except Exception as e:
@@ -56,7 +59,7 @@ def get_imageinfo_for_pageids(pageids):
 def download_image(url, max_bytes=5 * 1024 * 1024):
     """Download image bytes with a size limit."""
     try:
-        r = requests.get(url, stream=True, timeout=15)
+        r = requests.get(url, stream=True, headers=WIKIMEDIA_HEADERS, timeout=15)
         r.raise_for_status()
         content = BytesIO()
         total = 0
