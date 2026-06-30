@@ -49,8 +49,24 @@ def _run_task_synchronously(task, *args):
     return result.get(propagate=True)
 
 
-def _queue_or_run_task(request, task, job, success_message, fallback_message, failure_message):
+def _celery_workers_available(task, timeout=1.0):
     try:
+        app = getattr(task, 'app', None)
+        if app is None:
+            return False
+        if getattr(app.conf, 'task_always_eager', False):
+            return True
+        replies = app.control.inspect(timeout=timeout).ping()
+        return bool(replies)
+    except Exception as exc:
+        logger.warning('Could not verify Celery worker availability: %s', exc)
+        return False
+
+
+def _queue_or_run_task(request, task, job, success_message, fallback_message, failure_message, require_worker=False):
+    try:
+        if require_worker and not _celery_workers_available(task):
+            raise RuntimeError('No active Celery worker responded for this queue')
         task.delay(job.id)
         messages.success(request, success_message)
         return 'queued'
@@ -207,6 +223,7 @@ def bulk_import_data(request, slug):
                 f'Import job #{batch_job.id} was processed synchronously.',
                 f'Import job #{batch_job.id} was created but could not be processed: {{error}}. '
                 'Start your Celery worker and Redis broker to process it.',
+                require_worker=True,
             )
             return redirect('storefront:bulk_job_detail', slug=slug, job_id=batch_job.id)
     else:
@@ -387,12 +404,18 @@ def bulk_job_detail(request, slug, job_id):
     paginator = Paginator(logs, 100)
     page_number = request.GET.get('page')
     logs_page = paginator.get_page(page_number)
+    failed_rows = [
+        error for error in (job.errors or [])
+        if isinstance(error, dict) and error.get('data')
+    ]
     
     context = {
         'store': store,
         'job': job,
         'logs_page': logs_page,
         'job_parameter_rows': _build_parameter_display(job.parameters),
+        'can_retry_failed': job.job_type == 'import' and job.status in ['failed', 'completed_with_errors'] and bool(failed_rows),
+        'failed_retry_count': len(failed_rows),
     }
     
     return render(request, 'storefront/bulk/job_detail.html', context)
@@ -521,6 +544,51 @@ def cancel_job(request, slug, job_id):
     
     return redirect('storefront:bulk_job_detail', slug=slug, job_id=job_id)
 
+
+@require_POST
+@login_required
+@store_owner_required
+def retry_failed_import_items(request, slug, job_id):
+    """Create a new import job containing only failed rows from a previous import."""
+    store = get_object_or_404(Store, slug=slug, owner=request.user)
+    original_job = get_object_or_404(BatchJob, id=job_id, store=store, job_type='import')
+    failed_rows = [
+        error.get('data') for error in (original_job.errors or [])
+        if isinstance(error, dict) and error.get('data')
+    ]
+
+    if not failed_rows:
+        messages.warning(request, 'There are no failed import rows available to retry.')
+        return redirect('storefront:bulk_job_detail', slug=slug, job_id=job_id)
+
+    retry_params = dict(original_job.parameters or {})
+    retry_params.update({
+        'retry_of_job_id': original_job.id,
+        'retry_rows': failed_rows,
+        'auto_fetch_images': True,
+    })
+
+    retry_job = BatchJob.objects.create(
+        store=store,
+        job_type='import',
+        status='pending',
+        created_by=request.user,
+        parameters=retry_params,
+        total_items=len(failed_rows),
+    )
+
+    _queue_or_run_task(
+        request,
+        process_import_task,
+        retry_job,
+        f'Retry import job #{retry_job.id} has been queued with {len(failed_rows)} failed item(s).',
+        f'Retry import job #{retry_job.id} was processed synchronously.',
+        f'Retry import job #{retry_job.id} was created but could not be processed: {{error}}. '
+        'Start your Celery worker and Redis broker to process it.',
+        require_worker=True,
+    )
+    return redirect('storefront:bulk_job_detail', slug=slug, job_id=retry_job.id)
+
 @require_GET
 @login_required
 def get_job_progress(request, slug, job_id):
@@ -531,11 +599,15 @@ def get_job_progress(request, slug, job_id):
     return JsonResponse({
         'id': job.id,
         'status': job.status,
+        'status_display': job.get_status_display(),
         'progress_percentage': job.progress_percentage,
         'processed_items': job.processed_items,
         'total_items': job.total_items,
         'success_count': job.success_count,
         'error_count': job.error_count,
+        'can_retry_failed': job.job_type == 'import' and job.status in ['failed', 'completed_with_errors'] and any(
+            isinstance(error, dict) and error.get('data') for error in (job.errors or [])
+        ),
         'started_at': job.started_at.isoformat() if job.started_at else None,
         'completed_at': job.completed_at.isoformat() if job.completed_at else None,
     })

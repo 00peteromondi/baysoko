@@ -38,6 +38,7 @@ bulk_patterns = [
     path('dashboard/store/<slug:slug>/bulk/jobs/', lazy_view('storefront.views_bulk.bulk_job_list'), name='bulk_job_list'),
     path('dashboard/store/<slug:slug>/bulk/jobs/<int:job_id>/', lazy_view('storefront.views_bulk.bulk_job_detail'), name='bulk_job_detail'),
     path('dashboard/store/<slug:slug>/bulk/jobs/<int:job_id>/cancel/', lazy_view('storefront.views_bulk.cancel_job'), name='cancel_job'),
+    path('dashboard/store/<slug:slug>/bulk/jobs/<int:job_id>/retry-failed/', lazy_view('storefront.views_bulk.retry_failed_import_items'), name='retry_failed_import_items'),
     path('dashboard/store/<slug:slug>/bulk/jobs/<int:job_id>/progress/', lazy_view('storefront.views_bulk.get_job_progress'), name='get_job_progress'),
     
     # Export Jobs
@@ -91,4 +92,3 @@ bundle_patterns = [
     path('dashboard/store/<slug:slug>/bundles/<int:bundle_id>/ajax/update-item-order/', lazy_view('storefront.views_bundles.update_bundle_item_order'), name='update_bundle_item_order'),
     path('dashboard/store/<slug:slug>/bundles/ajax/update-bundle-order/', lazy_view('storefront.views_bundles.update_bundle_order'), name='update_bundle_order'),
 ]
-

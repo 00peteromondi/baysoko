@@ -127,7 +127,30 @@
     .progress-bar-large {
         height: 100%;
         border-radius: 6px;
-        transition: width 0.3s ease;
+        transition: width 0.45s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .progress-bar-large.is-active::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent);
+        animation: progress-shine 1.2s linear infinite;
+    }
+
+    @keyframes progress-shine {
+        from { transform: translateX(-100%); }
+        to { transform: translateX(100%); }
+    }
+
+    .progress-status-line {
+        min-height: 20px;
+        margin-top: 8px;
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 600;
     }
     
     .timeline {
@@ -326,17 +349,7 @@
                     <div class="meta-item">
                         <span class="meta-label">Status:</span>
                         <span class="meta-value">
-                            {% if job.status == 'completed' %}
-                            <span class="job-badge badge-completed">{{ job.get_status_display }}</span>
-                            {% elif job.status == 'processing' %}
-                            <span class="job-badge badge-processing">{{ job.get_status_display }}</span>
-                            {% elif job.status == 'completed_with_errors' %}
-                            <span class="job-badge badge-warning">{{ job.get_status_display }}</span>
-                            {% elif job.status == 'failed' %}
-                            <span class="job-badge badge-failed">{{ job.get_status_display }}</span>
-                            {% else %}
-                            <span class="job-badge badge-pending">{{ job.get_status_display }}</span>
-                            {% endif %}
+                            <span id="jobStatusBadge" class="job-badge {% if job.status == 'completed' %}badge-completed{% elif job.status == 'processing' %}badge-processing{% elif job.status == 'completed_with_errors' %}badge-warning{% elif job.status == 'failed' %}badge-failed{% else %}badge-pending{% endif %}">{{ job.get_status_display }}</span>
                         </span>
                     </div>
                     
@@ -385,6 +398,15 @@
                     <i class="bi bi-x-circle me-2"></i>Cancel
                 </a>
                 {% endif %}
+
+                {% if can_retry_failed %}
+                <form method="post" action="{% url 'storefront:retry_failed_import_items' slug=store.slug job_id=job.id %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn-custom btn-primary">
+                        <i class="bi bi-arrow-clockwise me-2"></i>Retry Failed
+                    </button>
+                </form>
+                {% endif %}
                 
                 {% if job.file %}
                 <a href="{{ job.file.url }}" class="btn-custom btn-primary" download>
@@ -398,15 +420,15 @@
     <!-- Stats -->
     <div class="stats-grid">
         <div class="stat-card">
-            <div class="stat-value">{{ job.total_items|intcomma }}</div>
+            <div class="stat-value" id="totalItemsValue">{{ job.total_items|intcomma }}</div>
             <div class="stat-label">Total Items</div>
         </div>
         
         <div class="stat-card">
-            <div class="stat-value">{{ job.processed_items|intcomma }}</div>
+            <div class="stat-value" id="processedItemsValue">{{ job.processed_items|intcomma }}</div>
             <div class="stat-label">Processed Items</div>
             <div class="progress-large">
-                <div class="progress-bar-large 
+                <div id="mainProgressBar" class="progress-bar-large {% if job.status in 'pending,processing' %}is-active{% endif %}
                     {% if job.status == 'completed' %}progress-success
                     {% elif job.status == 'completed_with_errors' %}progress-warning
                     {% elif job.status == 'processing' %}progress-warning
@@ -415,29 +437,43 @@
                      style="width: {{ job.progress_percentage }}%">
                 </div>
             </div>
-            <small class="text-muted">{{ job.progress_percentage }}% complete</small>
+            <div class="progress-status-line" id="progressStatusLine">{{ job.progress_percentage }}% complete</div>
         </div>
         
         <div class="stat-card">
-            <div class="stat-value">{{ job.success_count|intcomma }}</div>
+            <div class="stat-value" id="successCountValue">{{ job.success_count|intcomma }}</div>
             <div class="stat-label">Successful</div>
             <div class="progress-large">
-                <div class="progress-bar-large progress-success" 
+                <div class="progress-bar-large progress-success" id="successProgressBar"
                      style="width: {% if job.total_items > 0 %}{{ job.success_count|div:job.total_items|mul:100 }}{% else %}0{% endif %}%">
                 </div>
             </div>
         </div>
         
         <div class="stat-card">
-            <div class="stat-value">{{ job.error_count|intcomma }}</div>
+            <div class="stat-value" id="errorCountValue">{{ job.error_count|intcomma }}</div>
             <div class="stat-label">Errors</div>
             <div class="progress-large">
-                <div class="progress-bar-large progress-danger" 
+                <div class="progress-bar-large progress-danger" id="errorProgressBar"
                      style="width: {% if job.total_items > 0 %}{{ job.error_count|div:job.total_items|mul:100 }}{% else %}0{% endif %}%">
                 </div>
             </div>
         </div>
     </div>
+
+    {% if can_retry_failed %}
+    <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3 flex-wrap">
+        <div>
+            <strong>{{ failed_retry_count|intcomma }} failed item{{ failed_retry_count|pluralize }}</strong> can be retried.
+        </div>
+        <form method="post" action="{% url 'storefront:retry_failed_import_items' slug=store.slug job_id=job.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn-custom btn-primary">
+                <i class="bi bi-arrow-clockwise me-2"></i>Retry Failed Items
+            </button>
+        </form>
+    </div>
+    {% endif %}
 
     <!-- Timeline & Parameters -->
     <div class="row">
@@ -614,13 +650,86 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Auto-refresh for processing jobs
-        {% if job.status == 'processing' %}
-        setTimeout(function() {
-            if (window.SellerDashboardUI) {
-                window.SellerDashboardUI.fetchAndReplace(window.location.href);
+        const terminalStatuses = new Set(['completed', 'completed_with_errors', 'failed', 'cancelled']);
+        const progressUrl = "{% url 'storefront:get_job_progress' slug=store.slug job_id=job.id %}";
+        const statusBadge = document.getElementById('jobStatusBadge');
+        const mainProgressBar = document.getElementById('mainProgressBar');
+        const successProgressBar = document.getElementById('successProgressBar');
+        const errorProgressBar = document.getElementById('errorProgressBar');
+        const progressStatusLine = document.getElementById('progressStatusLine');
+        const processedItemsValue = document.getElementById('processedItemsValue');
+        const totalItemsValue = document.getElementById('totalItemsValue');
+        const successCountValue = document.getElementById('successCountValue');
+        const errorCountValue = document.getElementById('errorCountValue');
+
+        function formatNumber(value) {
+            return Number(value || 0).toLocaleString();
+        }
+
+        function setBar(bar, percent) {
+            if (!bar) return;
+            const safePercent = Math.max(0, Math.min(100, Number(percent || 0)));
+            bar.style.width = `${safePercent}%`;
+        }
+
+        function badgeClass(status) {
+            if (status === 'completed') return 'job-badge badge-completed';
+            if (status === 'processing') return 'job-badge badge-processing';
+            if (status === 'completed_with_errors') return 'job-badge badge-warning';
+            if (status === 'failed') return 'job-badge badge-failed';
+            return 'job-badge badge-pending';
+        }
+
+        function progressClass(status) {
+            if (status === 'completed') return 'progress-bar-large progress-success';
+            if (status === 'completed_with_errors' || status === 'processing') return 'progress-bar-large progress-warning';
+            if (status === 'failed') return 'progress-bar-large progress-danger';
+            return 'progress-bar-large progress-info';
+        }
+
+        function applyProgress(data) {
+            processedItemsValue.textContent = formatNumber(data.processed_items);
+            totalItemsValue.textContent = formatNumber(data.total_items);
+            successCountValue.textContent = formatNumber(data.success_count);
+            errorCountValue.textContent = formatNumber(data.error_count);
+            statusBadge.textContent = data.status_display;
+            statusBadge.className = badgeClass(data.status);
+
+            setBar(mainProgressBar, data.progress_percentage);
+            setBar(successProgressBar, data.total_items ? (data.success_count / data.total_items) * 100 : 0);
+            setBar(errorProgressBar, data.total_items ? (data.error_count / data.total_items) * 100 : 0);
+
+            mainProgressBar.className = progressClass(data.status);
+            if (!terminalStatuses.has(data.status)) {
+                mainProgressBar.classList.add('is-active');
             }
-        }, 10000);
+            progressStatusLine.textContent = `${data.progress_percentage}% complete`;
+
+            if (terminalStatuses.has(data.status)) {
+                window.setTimeout(() => window.location.reload(), 700);
+                return false;
+            }
+            return true;
+        }
+
+        async function pollProgress() {
+            try {
+                const response = await fetch(progressUrl, {
+                    headers: {'X-Requested-With': 'XMLHttpRequest'},
+                    credentials: 'same-origin'
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                if (applyProgress(data)) {
+                    window.setTimeout(pollProgress, 1500);
+                }
+            } catch (error) {
+                window.setTimeout(pollProgress, 3000);
+            }
+        }
+
+        {% if job.status == 'pending' or job.status == 'processing' %}
+        pollProgress();
         {% endif %}
         
         // Log filtering

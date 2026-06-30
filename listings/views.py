@@ -318,6 +318,21 @@ def _get_default_shipping_address(user):
         return ''
 
 
+def listing_fallback_image(request, listing_id):
+    listing = get_object_or_404(Listing.objects.select_related('category', 'store'), id=listing_id)
+    try:
+        from storefront.image_fetcher import generate_title_image_bytes
+
+        subtitle = listing.category.name if listing.category else (listing.store.name if listing.store else 'Baysoko Marketplace')
+        image_bytes = generate_title_image_bytes(listing.title, subtitle=subtitle)
+        response = HttpResponse(image_bytes, content_type='image/jpeg')
+        response['Cache-Control'] = 'public, max-age=86400'
+        return response
+    except Exception:
+        logger.exception('Failed generating fallback image for listing %s', listing_id)
+        return redirect('/static/images/listing_placeholder.svg')
+
+
 def _get_shipping_address_for_estimate(request):
     """Prefer checkout-typed address stored in session, fallback to defaults."""
     try:
@@ -402,6 +417,7 @@ class ListingListView(ListView):
                         'title': listing.title,
                         'price': float(listing.price) if listing.price is not None else 0,
                         'image_url': img_url,
+                        'image_fallback_url': reverse('listing_fallback_image', args=[listing.pk]),
                         'category_id': listing.category.id if listing.category else None,
                         'category': listing.category.name if listing.category else None,
                         'category_icon': getattr(listing.category, 'icon', '') if listing.category else '',
@@ -1948,6 +1964,7 @@ def all_listings(request):
                 'category_id': listing.category.id if listing.category else None,
                 'category_icon': listing.category.icon if listing.category else 'bi-tag',
                 'image_url': listing.get_image_url(),
+                'image_fallback_url': reverse('listing_fallback_image', args=[listing.pk]),
                 'is_featured': listing.is_featured,
                 'is_recent': is_recent,
                 'is_sold': listing.is_sold,
@@ -2173,6 +2190,7 @@ def all_listings_json(request):
             'category_id': listing.category.id if listing.category else None,
             'category_icon': listing.category.icon if listing.category else 'bi-tag',
             'image_url': listing.get_image_url(),
+            'image_fallback_url': reverse('listing_fallback_image', args=[listing.pk]),
             'is_featured': listing.is_featured,
             'is_recent': is_recent,
             'is_sold': listing.is_sold,

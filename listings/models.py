@@ -78,8 +78,9 @@ class ListingImage(models.Model):
             try:
                 return self.image.url
             except Exception as e:
-                if hasattr(self.image, 'url'):
-                    return self.image.url
+                image_value = str(self.image).strip()
+                if image_value.startswith(('http://', 'https://', '/')):
+                    return image_value
         return '/static/images/listing_placeholder.svg'
 
 
@@ -273,8 +274,15 @@ class Listing(models.Model):
             try:
                 return self.image.url
             except Exception as e:
-                if hasattr(self.image, 'url'):
-                    return self.image.url
+                image_value = str(self.image).strip()
+                if image_value.startswith(('http://', 'https://', '/')):
+                    return image_value
+        try:
+            first_image = self.images.first()
+        except Exception:
+            first_image = None
+        if first_image:
+            return first_image.get_image_url()
         return '/static/images/listing_placeholder.svg'
 
     def _infer_location_from_store(self):

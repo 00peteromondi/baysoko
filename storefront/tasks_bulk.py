@@ -14,6 +14,7 @@ from datetime import timedelta
 from django.db.models import Q
 from decimal import Decimal, InvalidOperation
 from django.conf import settings
+from urllib.parse import urlparse
 
 
 logger = logging.getLogger('storefront.bulk')
@@ -149,12 +150,14 @@ try:
         download_image,
         validate_image_bytes,
         save_image_to_listing,
+        attach_generated_title_image,
     )
 except Exception:
     fetch_and_attach = None
     download_image = None
     validate_image_bytes = None
     save_image_to_listing = None
+    attach_generated_title_image = None
 
 
 JOB_TERMINAL_SUCCESS = {'completed', 'completed_with_errors'}
@@ -266,6 +269,9 @@ def _parse_image_candidates(data):
         for candidate in values:
             candidate = str(candidate).strip()
             if candidate and candidate.lower().startswith(('http://', 'https://')):
+                if _is_placeholder_image_url(candidate):
+                    logger.info('Ignoring placeholder image URL during bulk import: %s', candidate)
+                    continue
                 candidates.append(candidate)
     # preserve order while deduplicating
     seen = set()
@@ -276,6 +282,30 @@ def _parse_image_candidates(data):
         seen.add(candidate)
         unique_candidates.append(candidate)
     return unique_candidates
+
+
+def _is_placeholder_image_url(url):
+    try:
+        parsed = urlparse(str(url))
+    except Exception:
+        return False
+
+    host = (parsed.netloc or '').lower()
+    path = (parsed.path or '').lower()
+    placeholder_hosts = (
+        'picsum.photos',
+        'placehold.co',
+        'placehold.it',
+        'placeholder.com',
+        'dummyimage.com',
+        'fakeimg.pl',
+        'via.placeholder.com',
+    )
+    if host.startswith('www.'):
+        host = host[4:]
+    if host in placeholder_hosts or any(host.endswith(f'.{h}') for h in placeholder_hosts):
+        return True
+    return 'placeholder' in path or 'dummy-image' in path or 'dummy_image' in path
 
 
 def _has_listing_image(product):
@@ -554,15 +584,20 @@ def process_import_task(self, job_id):
             except ImportTemplate.DoesNotExist:
                 pass
         
-        # Read file
-        file_content = job.file.read()
-        file_ext = job.file.name.split('.')[-1].lower()
+        retry_rows = params.get('retry_rows') or []
+        if retry_rows:
+            rows = retry_rows
+            logger.info('Import job %s: retrying %s previously failed rows', job_id, len(rows))
+        else:
+            # Read file
+            file_content = job.file.read()
+            file_ext = job.file.name.split('.')[-1].lower()
 
-        # Import pandas lazily to avoid hard dependency during startup
-        try:
-            import pandas as pd
-        except Exception:
-            pd = None
+            # Import pandas lazily to avoid hard dependency during startup
+            try:
+                import pandas as pd
+            except Exception:
+                pd = None
 
         # Get field mapping from job parameters (form submits this as JSON) or template
         field_mapping = {}
@@ -580,20 +615,21 @@ def process_import_task(self, job_id):
             field_mapping = template.field_mapping if template else {}
 
         # Load rows depending on file type; prefer pandas but fall back for CSV
-        rows = []
-        if file_ext == 'csv':
-            rows = _load_csv_rows(file_content, job_id=job_id)
-        elif file_ext in ['xlsx', 'xls']:
-            if pd is None:
-                raise ImportError('pandas is required to process Excel imports')
-            df = pd.read_excel(BytesIO(file_content))
-            headers, normalized_rows = _normalize_tabular_rows(
-                [[str(cell or '').strip() for cell in df.columns.tolist()]]
-                + [[str(cell or '').strip() for cell in row] for row in df.values.tolist()]
-            )
-            rows = [dict(zip(headers, row)) for row in normalized_rows]
-        else:
-            raise ValueError(f"Unsupported file format: {file_ext}")
+        if not retry_rows:
+            rows = []
+            if file_ext == 'csv':
+                rows = _load_csv_rows(file_content, job_id=job_id)
+            elif file_ext in ['xlsx', 'xls']:
+                if pd is None:
+                    raise ImportError('pandas is required to process Excel imports')
+                df = pd.read_excel(BytesIO(file_content))
+                headers, normalized_rows = _normalize_tabular_rows(
+                    [[str(cell or '').strip() for cell in df.columns.tolist()]]
+                    + [[str(cell or '').strip() for cell in row] for row in df.values.tolist()]
+                )
+                rows = [dict(zip(headers, row)) for row in normalized_rows]
+            else:
+                raise ValueError(f"Unsupported file format: {file_ext}")
 
         # If still no mapping provided, attempt to auto-detect mapping from CSV headers
         if not field_mapping and rows:
@@ -623,6 +659,9 @@ def process_import_task(self, job_id):
                         break
             if auto_map:
                 field_mapping = auto_map
+                params['field_mapping'] = field_mapping
+                job.parameters = params
+                job.save(update_fields=['parameters'])
 
         # Process rows
         total_rows = len(rows)
@@ -642,6 +681,7 @@ def process_import_task(self, job_id):
         }
 
         for index, row in enumerate(rows):
+            row_data = None
             try:
                 row_data = row if isinstance(row, dict) else row.to_dict()
 
@@ -656,6 +696,9 @@ def process_import_task(self, job_id):
                             if k and k.strip().lower() == str(csv_col).strip().lower():
                                 mapped_data[model_field] = row_data[k]
                                 break
+
+                if retry_rows and not mapped_data:
+                    mapped_data = row_data
 
                 # Process based on template type
                 template_type = params.get('template_type', 'products')
@@ -696,7 +739,7 @@ def process_import_task(self, job_id):
                 errors.append({
                     'row': index + 2,
                     'error': error_msg,
-                    'data': _clean_json(row_data) if 'row_data' in locals() else None
+                    'data': _clean_json(row_data) if row_data is not None else None
                 })
 
                 # Log error
@@ -706,7 +749,7 @@ def process_import_task(self, job_id):
                     action='import',
                     status='error',
                     error_message=error_msg,
-                    details=_clean_json(row_data) if 'row_data' in locals() else None
+                    details=_clean_json(row_data) if row_data is not None else None
                 )
 
                 if not skip_errors:
@@ -838,6 +881,8 @@ def process_product_import_row(store, data, params):
             'id': None,
             'title': title,
         }
+
+    image_urls = _parse_image_candidates(data)
     
     with transaction.atomic():
         was_created = product is None
@@ -849,7 +894,6 @@ def process_product_import_row(store, data, params):
         delivery_choice = _normalize_choice(data.get('delivery_option'), Listing.DELIVERY_OPTIONS)
         condition_choice = _normalize_choice(data.get('condition'), Listing.CONDITION_CHOICES)
         location_choice = _normalize_location(data.get('location'))
-        image_urls = _parse_image_candidates(data)
         
         # Update fields
         for field, value in data.items():
@@ -931,23 +975,37 @@ def process_product_import_row(store, data, params):
         
         product.save()
 
-        if image_urls:
-            _attach_image_urls_to_product(product, image_urls)
+    if image_urls:
+        _attach_image_urls_to_product(product, image_urls)
 
-        # Auto-fetch Wikimedia images when requested and the listing has no image.
-        try:
-            auto_fetch = params.get('auto_fetch_images', params.get('auto_fetch', True))
-            if auto_fetch and fetch_and_attach is not None and not _has_listing_image(product):
-                for query in _build_wikimedia_queries(product, data, store):
-                    listing_image = fetch_and_attach(product, query)
-                    if listing_image:
-                        if not product.image:
-                            product._suppress_listing_notifications = True
-                            product.image = listing_image.image
-                            product.save(update_fields=['image'])
-                        break
-        except Exception as e:
-            logger.exception('Auto-fetch images failed for product %s: %s', getattr(product, 'id', None), e)
+    # Auto-fetch Wikimedia images when requested and the listing has no image.
+    try:
+        auto_fetch = params.get('auto_fetch_images', params.get('auto_fetch', True))
+        if not image_urls:
+            auto_fetch = True
+        attached_image = None
+        if auto_fetch and fetch_and_attach is not None and not _has_listing_image(product):
+            for query in _build_wikimedia_queries(product, data, store):
+                listing_image = fetch_and_attach(product, query)
+                if listing_image:
+                    attached_image = listing_image
+                    if not product.image:
+                        product._suppress_listing_notifications = True
+                        product.image = listing_image.image
+                        product.save(update_fields=['image'])
+                    break
+        if auto_fetch and not attached_image and attach_generated_title_image is not None and not _has_listing_image(product):
+            listing_image = attach_generated_title_image(
+                product,
+                title=product.title,
+                subtitle=getattr(product.category, 'name', None) if getattr(product, 'category', None) else getattr(store, 'name', None),
+            )
+            if listing_image and not product.image:
+                product._suppress_listing_notifications = True
+                product.image = listing_image.image
+                product.save(update_fields=['image'])
+    except Exception as e:
+        logger.exception('Auto-fetch images failed for product %s: %s', getattr(product, 'id', None), e)
 
     return {
         'status': 'created' if was_created else 'updated',

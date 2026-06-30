@@ -11,6 +11,7 @@ from . import api_views
 urlpatterns = [
     path('', ListingListView.as_view(), name='home'),
     path('listing/<int:pk>/', ListingDetailView.as_view(), name='listing-detail'),
+    path('listing/<int:listing_id>/fallback-image/', views.listing_fallback_image, name='listing_fallback_image'),
     path('all-listings/', views.all_listings, name='all-listings'),
     path('my-listings/', views.my_listings, name='my-listings'),
     path('api/my-listings/', api_views.MyListingsView.as_view(), name='my_listings'),
