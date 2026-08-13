@@ -1,0 +1,655 @@
+<!-- storefront/templates/storefront/subscription_plan_select.html -->
+{% extends 'base.html' %}
+{% load static humanize %}
+
+{% block title %}Choose Plan - {{ store.name }} - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== PLAN SELECTION STYLES ===== */
+    .plan-selection-container {
+        min-height: 80vh;
+        padding: var(--spacing-xl) 0;
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(255, 209, 102, 0.05) 50%, 
+            rgba(255, 107, 53, 0.05) 100%);
+    }
+
+    .plan-selection-header {
+        text-align: center;
+        margin-bottom: var(--spacing-xl);
+        max-width: 800px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .trial-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        font-weight: 700;
+        font-size: 0.875rem;
+        margin-bottom: 1rem;
+    }
+
+    .plan-selection-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        box-shadow: var(--shadow-lg);
+        border: 2px solid var(--border-color);
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+
+    .plan-cards-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin: var(--spacing-lg) 0;
+    }
+
+    .plan-card-modern {
+        background: var(--bg-secondary);
+        padding: 2rem;
+        border-radius: var(--radius-lg);
+        border: 2px solid var(--border-color);
+        transition: all 0.3s ease;
+        position: relative;
+        height: 100%;
+    }
+
+    .plan-card-modern:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+    }
+
+    .plan-card-modern.popular {
+        border-color: var(--primary);
+        box-shadow: 0 10px 40px rgba(255, 107, 53, 0.15);
+    }
+
+    .plan-card-modern.popular::before {
+        content: 'Most Popular';
+        position: absolute;
+        top: -12px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--primary);
+        color: white;
+        padding: 0.25rem 1rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .plan-radio-modern {
+        margin-bottom: 1rem;
+    }
+
+    .plan-radio-modern input[type="radio"] {
+        display: none;
+    }
+
+    .plan-radio-modern label {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem;
+        border-radius: var(--radius-md);
+        border: 2px solid var(--border-color);
+        background: var(--card-bg);
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .plan-radio-modern input[type="radio"]:checked + label {
+        border-color: var(--accent);
+        background: rgba(6, 214, 160, 0.1);
+        transform: scale(1.02);
+    }
+
+    .plan-header-modern {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .plan-icon {
+        font-size: 2rem;
+        color: var(--primary);
+    }
+
+    .plan-price-modern {
+        font-size: 2rem;
+        font-weight: 800;
+        color: var(--primary);
+        margin: 1rem 0;
+    }
+
+    .plan-features-modern {
+        list-style: none;
+        padding: 0;
+        margin: 1.5rem 0;
+    }
+
+    .plan-features-modern li {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+        font-size: 0.9rem;
+    }
+
+    .plan-features-modern li i {
+        color: var(--success);
+        margin-top: 0.125rem;
+    }
+
+    /* Payment Information Card */
+    .payment-info-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 2rem;
+        border: 2px solid var(--border-color);
+        margin: var(--spacing-lg) 0;
+    }
+
+    .payment-info-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .payment-info-icon {
+        font-size: 1.5rem;
+        color: var(--primary);
+    }
+
+    .eligibility-warning {
+        border-left: 4px solid var(--warning);
+        padding-left: 1rem;
+        margin: 1rem 0;
+    }
+
+    .phone-input-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .terms-checkbox {
+        margin: 1.5rem 0;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        margin-top: var(--spacing-xl);
+        padding-top: var(--spacing-lg);
+        border-top: 1px solid var(--border-color);
+        flex-wrap: wrap;
+    }
+
+    .btn-gradient-primary {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        border: none;
+        padding: 1rem 2rem;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        text-decoration: none;
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .btn-gradient-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(255, 107, 53, 0.3);
+    }
+
+    .btn-outline-modern {
+        background: transparent;
+        color: var(--text-primary);
+        border: 2px solid var(--border-color);
+        padding: 1rem 2rem;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        text-decoration: none;
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .btn-outline-modern:hover {
+        background: var(--bg-secondary);
+        border-color: var(--accent);
+        color: var(--accent);
+        transform: translateY(-2px);
+    }
+
+    /* FAQ Section */
+    .faq-section {
+        margin-top: var(--spacing-xl);
+    }
+
+    .accordion-modern .accordion-item {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        margin-bottom: 0.75rem;
+        overflow: hidden;
+    }
+
+    .accordion-modern .accordion-button {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-weight: 600;
+        padding: 1rem 1.5rem;
+        border: none;
+        box-shadow: none;
+    }
+
+    .accordion-modern .accordion-button:not(.collapsed) {
+        background: var(--bg-secondary);
+        color: var(--primary);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .accordion-modern .accordion-body {
+        background: var(--card-bg);
+        padding: 1.5rem;
+        color: var(--text-secondary);
+    }
+
+    @media (max-width: 768px) {
+        .plan-selection-card {
+            padding: var(--spacing-md);
+        }
+        
+        .plan-cards-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .action-buttons {
+            flex-direction: column;
+        }
+        
+        .btn-gradient-primary,
+        .btn-outline-modern {
+            width: 100%;
+            min-width: 100%;
+        }
+    }
+
+    @media (max-width: 374px) {
+        .plan-selection-card {
+            padding: var(--spacing-sm);
+        }
+        
+        .plan-card-modern {
+            padding: 1.5rem;
+        }
+        
+        .plan-price-modern {
+            font-size: 1.75rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="plan-selection-container">
+    <div class="container-custom">
+        <!-- Header -->
+        <div class="plan-selection-header animate-slide-up">
+            {% if eligibility.can_start_trial %}
+            <div class="trial-badge mx-auto">
+                <i class="bi bi-gem"></i>
+                <span>7-Day Free Trial Available</span>
+            </div>
+            {% elif eligibility.has_expired_trial %}
+            <div class="trial-badge mx-auto" style="background: linear-gradient(135deg, var(--warning) 0%, #e6a900 100%);">
+                <i class="bi bi-clock-history"></i>
+                <span>Trial Already Used</span>
+            </div>
+            {% endif %}
+            
+            <h1 class="display-6 fw-bold mb-3">Choose Your Plan</h1>
+            <p class="lead text-muted mb-0">
+                {% if eligibility.can_start_trial %}
+                Start with a 7-day free trial or subscribe immediately.
+                {% else %}
+                Select a plan to continue using premium features.
+                {% endif %}
+            </p>
+        </div>
+
+        <!-- Eligibility Notice -->
+        {% if eligibility.has_expired_trial %}
+        <div class="alert alert-warning mb-4">
+            <i class="bi bi-info-circle me-2"></i>
+            You have already used your free trial. Please select a paid plan to continue using premium features.
+        </div>
+        {% endif %}
+
+        <!-- Plan Selection Form -->
+        <div class="plan-selection-card animate-scale-in">
+            <form method="post" id="subscriptionForm">
+                {% csrf_token %}
+                
+                <!-- Plan Selection -->
+                <div class="plan-cards-grid">
+                    {% for plan_key, plan_data in plan_details.items %}
+                        
+                        <div class="plan-card-modern {% if plan_key == 'premium' %}popular{% endif %}">
+                            <div class="plan-radio-modern">
+                                <input type="radio" 
+                                    name="plan" 
+                                    value="{{ plan_key }}" 
+                                    id="plan_{{ plan_key }}"
+                                    class="plan-radio-input"
+                                    {% if plan_key == 'premium' or forloop.first %}checked{% endif %}>
+                                <label for="plan_{{ plan_key }}">
+                                    <i class="bi bi-check-circle text-success"></i>
+                                    <div>
+                                        <h6 class="fw-bold mb-0">{{ plan_data.name }} Plan</h6>
+                                        {% if plan_data.current %}
+                                        <small class="text-success">Current Plan</small>
+                                        {% endif %}
+                                    </div>
+                                </label>
+                            </div>
+                            
+                            <div class="plan-header-modern">
+                                <i class="bi 
+                                    {% if plan_key == 'basic' %}bi-star-fill plan-icon
+                                    {% elif plan_key == 'premium' %}bi-award-fill plan-icon
+                                    {% else %}bi-building-fill plan-icon{% endif %}">
+                                </i>
+                                <div class="flex-grow-1">
+                                    <h4 class="fw-bold mb-1">{{ plan_data.name }}</h4>
+                                    <div class="plan-price-modern">
+                                        KSh {{ plan_data.price|intcomma }}
+                                        <small class="text-muted">/{{ plan_data.period }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <ul class="plan-features-modern">
+                                {% for feature in plan_data.features %}
+                                <li>
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>{{ feature }}</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Payment Information -->
+                <div class="payment-info-card">
+                    <div class="payment-info-header">
+                        <i class="bi bi-phone payment-info-icon"></i>
+                        <h5 class="fw-bold mb-0">Enter Your M-Pesa Phone Number</h5>
+                    </div>
+                    
+                    <div class="row justify-content-center">
+                        <div class="col-md-8">
+                            <!-- Phone Input -->
+                            <div class="phone-input-group">
+                                <label class="form-label fw-bold mb-2">M-Pesa Registered Number</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light">+254</span>
+                                    <input type="tel" 
+                                           name="phone_number" 
+                                           class="form-control {% if phone_form.phone_number.errors %}is-invalid{% endif %}" 
+                                           placeholder="712345678"
+                                           pattern="[0-9]{9}"
+                                           maxlength="9"
+                                           required
+                                           value="{{ phone_form.phone_number.value|default:'' }}">
+                                </div>
+                                <small class="form-text text-muted">
+                                    Enter the phone number registered with M-Pesa (without +254)
+                                </small>
+                                {% if phone_form.phone_number.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ phone_form.phone_number.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Trial Option (only if eligible) -->
+                            {% if eligibility.can_start_trial %}
+                            <div class="form-check mb-4">
+                                <input type="checkbox" 
+                                       name="start_trial" 
+                                       class="form-check-input" 
+                                       id="start_trial" 
+                                       checked>
+                                <label class="form-check-label" for="start_trial">
+                                    <strong>Start 7-day free trial</strong> (no payment now)
+                                </label>
+                                <small class="form-text text-muted d-block">
+                                    Enjoy full premium features for 7 days. Subscribe anytime before the trial ends.
+                                </small>
+                            </div>
+                            {% endif %}
+
+                            <!-- Terms Agreement -->
+                            <div class="terms-checkbox">
+                                <div class="form-check">
+                                    <input type="checkbox" 
+                                           name="terms" 
+                                           class="form-check-input" 
+                                           id="terms" 
+                                           required>
+                                    <label class="form-check-label" for="terms">
+                                        I agree to the subscription terms
+                                        {% if eligibility.can_start_trial %}
+                                        and understand that I will be charged after the 7-day trial if I don't cancel.
+                                        {% else %}
+                                        and authorize monthly billing.
+                                        {% endif %}
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <div class="action-buttons">
+                                <button type="submit" class="btn-gradient-primary" id="submitBtn">
+                                    <i class="bi bi-rocket-takeoff me-2"></i>
+                                    {% if eligibility.can_start_trial %}
+                                    Start Free Trial
+                                    {% else %}
+                                    Subscribe Now
+                                    {% endif %}
+                                </button>
+                                <a href="{% url 'storefront:seller_dashboard' %}" class="btn-outline-modern">
+                                    <i class="bi bi-arrow-left me-2"></i>
+                                    Cancel
+                                </a>
+                            </div>
+
+                            <!-- Security Note -->
+                            <div class="text-center mt-4 pt-3 border-top">
+                                <small class="text-muted">
+                                    <i class="bi bi-shield-check text-success me-1"></i>
+                                    Secure payment. We never store your M-Pesa PIN.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- FAQ Section -->
+        <div class="faq-section">
+            <h5 class="fw-bold mb-4 text-center">Frequently Asked Questions</h5>
+            <div class="accordion accordion-modern" id="subscriptionFAQ">
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                            Can I get another free trial?
+                        </button>
+                    </h2>
+                    <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#subscriptionFAQ">
+                        <div class="accordion-body">
+                            No, each user is eligible for only one 7-day free trial. Once your trial ends or you cancel it, you cannot start another free trial.
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                            What happens after the trial?
+                        </button>
+                    </h2>
+                    <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#subscriptionFAQ">
+                        <div class="accordion-body">
+                            After 7 days, if you haven't subscribed, your store will revert to the free plan. Premium features will be disabled automatically.
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                            Can I cancel anytime?
+                        </button>
+                    </h2>
+                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#subscriptionFAQ">
+                        <div class="accordion-body">
+                            Yes! You can cancel your subscription at any time. If you cancel during trial, premium features remain until the trial ends. If you cancel a paid subscription, you keep premium features until the end of the billing period.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const phoneInput = document.querySelector('input[name="phone_number"]');
+        const termsCheck = document.getElementById('terms');
+        const submitBtn = document.getElementById('submitBtn');
+        
+        // Phone number validation
+        if (phoneInput) {
+            phoneInput.addEventListener('input', function() {
+                // Remove non-digits
+                this.value = this.value.replace(/\D/g, '');
+                
+                // Limit to 9 digits
+                if (this.value.length > 9) {
+                    this.value = this.value.slice(0, 9);
+                }
+                
+                validateForm();
+            });
+        }
+        
+        // Terms validation
+        if (termsCheck) {
+            termsCheck.addEventListener('change', validateForm);
+        }
+        
+        // Form validation
+        function validateForm() {
+            let isValid = true;
+            
+            // Check phone number
+            if (phoneInput && (!phoneInput.value || !/^\d{9}$/.test(phoneInput.value))) {
+                isValid = false;
+                phoneInput.classList.add('is-invalid');
+            } else if (phoneInput) {
+                phoneInput.classList.remove('is-invalid');
+            }
+            
+            // Check terms
+            if (!termsCheck || !termsCheck.checked) {
+                isValid = false;
+            }
+            
+            // Update submit button
+            if (submitBtn) {
+                submitBtn.disabled = !isValid;
+            }
+            
+            return isValid;
+        }
+        
+        // Update submit button label based on trial checkbox
+        const startTrialCheck = document.getElementById('start_trial');
+        function updateSubmitLabel(){
+            if(!submitBtn) return;
+            if(startTrialCheck && startTrialCheck.checked){
+                submitBtn.innerHTML = '<i class="bi bi-rocket-takeoff me-2"></i> Start Free Trial';
+            } else {
+                submitBtn.innerHTML = '<i class="bi bi-rocket-takeoff me-2"></i> Subscribe Now';
+            }
+        }
+        if(startTrialCheck){
+            startTrialCheck.addEventListener('change', function(){
+                updateSubmitLabel();
+                validateForm();
+            });
+        }
+
+        // Form submission
+        document.getElementById('subscriptionForm').addEventListener('submit', function(e) {
+            if (!validateForm()) {
+                e.preventDefault();
+                
+                if (!termsCheck.checked) {
+                    alert('Please agree to the terms to continue');
+                } else if (!/^\d{9}$/.test(phoneInput.value)) {
+                    alert('Please enter a valid 9-digit phone number');
+                    phoneInput.focus();
+                }
+                
+                return false;
+            }
+            
+            // Show loading state
+            if (submitBtn) {
+                // Use a consistent submitting label
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Submitting...';
+                submitBtn.disabled = true;
+            }
+            
+            return true;
+        });
+        
+        // Initialize validation
+        updateSubmitLabel();
+        validateForm();
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,1114 @@
+{% extends 'base.html' %}
+{% load static humanize %}
+
+{% block title %}Subscription Settings - {{ store.name }} - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Settings Styling */
+    .settings-container {
+        min-height: 80vh;
+        padding: var(--spacing-xl) 0;
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(66, 133, 244, 0.05) 50%, 
+            rgba(118, 92, 255, 0.05) 100%);
+    }
+
+    .settings-header {
+        text-align: center;
+        margin-bottom: var(--spacing-xl);
+        max-width: 800px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .settings-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(66, 133, 244, 0.1);
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        margin-bottom: 1rem;
+        border: 1px solid rgba(66, 133, 244, 0.2);
+    }
+
+    .settings-badge i {
+        color: var(--info);
+    }
+
+    .settings-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        box-shadow: var(--shadow-lg);
+        border: 2px solid var(--border-color);
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    /* Navigation Tabs */
+    .settings-tabs {
+        display: flex;
+        border-bottom: 2px solid var(--border-color);
+        margin-bottom: var(--spacing-lg);
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .tab-btn {
+        padding: 1rem 1.5rem;
+        background: none;
+        border: none;
+        border-bottom: 3px solid transparent;
+        font-weight: 600;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        white-space: nowrap;
+    }
+
+    .tab-btn:hover {
+        color: var(--text-primary);
+    }
+
+    .tab-btn.active {
+        color: var(--primary);
+        border-bottom-color: var(--primary);
+        background: rgba(255, 107, 53, 0.05);
+    }
+
+    /* Tab Content */
+    .tab-content {
+        display: none;
+        animation: fadeIn 0.3s ease-out;
+    }
+
+    .tab-content.active {
+        display: block;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Payment Method Section */
+    .payment-method-section {
+        background: var(--bg-secondary);
+        padding: 1.5rem;
+        border-radius: var(--radius-md);
+        margin-bottom: var(--spacing-lg);
+        border: 1px solid var(--border-color);
+    }
+
+    .current-method {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .method-icon {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, #006600 0%, #00A300 100%);
+        border-radius: var(--radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+    }
+
+    .method-details h4 {
+        margin-bottom: 0.25rem;
+        color: var(--text-primary);
+    }
+
+    .method-details p {
+        color: var(--text-secondary);
+        margin: 0;
+        font-size: 0.9rem;
+    }
+
+    .update-form {
+        background: var(--bg-primary);
+        padding: 1.5rem;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+    }
+
+    .form-group-modern {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-label-modern {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        font-size: 0.95rem;
+    }
+
+    .input-modern {
+        width: 100%;
+        padding: 1rem 1.25rem;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 1rem;
+        transition: var(--transition);
+        outline: none;
+    }
+
+    .input-modern:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(6, 214, 160, 0.1);
+    }
+
+    .input-modern.error {
+        border-color: var(--danger);
+    }
+
+    .phone-input-group {
+        position: relative;
+    }
+
+    .phone-prefix {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-secondary);
+        font-weight: 500;
+        z-index: 2;
+    }
+
+    .phone-input {
+        padding-left: 4rem !important;
+    }
+
+    .save-btn {
+        padding: 1rem 2rem;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        color: white;
+        border: none;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+    }
+
+    .save-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(255, 107, 53, 0.3);
+    }
+
+    .save-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    /* Billing History Section */
+    .billing-history {
+        background: var(--bg-secondary);
+        padding: 1.5rem;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+    }
+
+    .history-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .history-table th {
+        text-align: left;
+        padding: 1rem;
+        border-bottom: 2px solid var(--border-color);
+        color: var(--text-secondary);
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+
+    .history-table td {
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        color: var(--text-primary);
+    }
+
+    .history-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .history-table tr:hover {
+        background: rgba(0, 0, 0, 0.02);
+    }
+
+    .status-badge {
+        display: inline-flex;
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.85rem;
+        font-weight: 700;
+    }
+
+    .status-completed {
+        background: rgba(6, 214, 160, 0.1);
+        color: var(--success);
+        border: 1px solid rgba(6, 214, 160, 0.2);
+    }
+
+    .status-pending {
+        background: rgba(255, 158, 31, 0.1);
+        color: var(--warning);
+        border: 1px solid rgba(255, 158, 31, 0.2);
+    }
+
+    .status-failed {
+        background: rgba(239, 71, 111, 0.1);
+        color: var(--danger);
+        border: 1px solid rgba(239, 71, 111, 0.2);
+    }
+
+    .invoice-btn {
+        padding: 0.5rem 1rem;
+        background: rgba(6, 214, 160, 0.1);
+        color: var(--accent);
+        border: 1px solid rgba(6, 214, 160, 0.2);
+        border-radius: var(--radius-sm);
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: var(--transition);
+    }
+
+    .invoice-btn:hover {
+        background: var(--accent);
+        color: white;
+    }
+
+    /* Notifications Section */
+    .notifications-section {
+        background: var(--bg-secondary);
+        padding: 1.5rem;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+    }
+
+    .notification-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem;
+        background: var(--bg-primary);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        margin-bottom: 1rem;
+    }
+
+    .notification-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .notification-content h4 {
+        margin-bottom: 0.25rem;
+        color: var(--text-primary);
+    }
+
+    .notification-content p {
+        color: var(--text-secondary);
+        margin: 0;
+        font-size: 0.9rem;
+    }
+
+    .toggle-switch {
+        position: relative;
+        width: 60px;
+        height: 30px;
+    }
+
+    .toggle-checkbox {
+        opacity: 0;
+        width: 0;
+        height: 0;
+        position: absolute;
+    }
+
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: var(--border-color);
+        transition: var(--transition);
+        border-radius: 34px;
+    }
+
+    .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 22px;
+        width: 22px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: var(--transition);
+        border-radius: 50%;
+    }
+
+    .toggle-checkbox:checked + .toggle-slider {
+        background-color: var(--accent);
+    }
+
+    .toggle-checkbox:checked + .toggle-slider:before {
+        transform: translateX(30px);
+    }
+
+    /* Security Section */
+    .security-section {
+        background: var(--bg-secondary);
+        padding: 1.5rem;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+    }
+
+    .security-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem;
+        background: var(--bg-primary);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        margin-bottom: 1rem;
+    }
+
+    .security-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .security-content {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .security-icon {
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+        border-radius: var(--radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.25rem;
+    }
+
+    .security-details h4 {
+        margin-bottom: 0.25rem;
+        color: var(--text-primary);
+    }
+
+    .security-details p {
+        color: var(--text-secondary);
+        margin: 0;
+        font-size: 0.9rem;
+    }
+
+    .security-status {
+        font-size: 0.85rem;
+        font-weight: 600;
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+    }
+
+    .status-active {
+        background: rgba(6, 214, 160, 0.1);
+        color: var(--success);
+        border: 1px solid rgba(6, 214, 160, 0.2);
+    }
+
+    .status-inactive {
+        background: rgba(239, 71, 111, 0.1);
+        color: var(--danger);
+        border: 1px solid rgba(239, 71, 111, 0.2);
+    }
+
+    /* Information Cards */
+    .info-card {
+        background: linear-gradient(135deg, rgba(6, 214, 160, 0.05) 0%, rgba(66, 133, 244, 0.05) 100%);
+        padding: 1.5rem;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(6, 214, 160, 0.2);
+        margin-top: var(--spacing-lg);
+    }
+
+    .info-card-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .info-card-header i {
+        color: var(--accent);
+        font-size: 1.25rem;
+    }
+
+    .info-card-header h4 {
+        margin: 0;
+        color: var(--text-primary);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .settings-card {
+            padding: var(--spacing-md);
+        }
+        
+        .settings-tabs {
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        
+        .tab-btn {
+            padding: 0.75rem 1rem;
+            justify-content: center;
+        }
+        
+        .history-table {
+            display: block;
+            overflow-x: auto;
+        }
+        
+        .notification-item,
+        .security-item {
+            flex-direction: column;
+            gap: 1rem;
+            text-align: center;
+        }
+        
+        .toggle-switch {
+            align-self: center;
+        }
+    }
+
+    /* Toast Styling */
+    .toast-success {
+        background: linear-gradient(135deg, var(--success) 0%, var(--accent-dark) 100%);
+    }
+
+    .toast-error {
+        background: linear-gradient(135deg, var(--danger) 0%, #d12a4e 100%);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+    <div class="container-custom">
+        <!-- Header -->
+        <div class="settings-header animate-slide-up">
+            <div class="settings-badge">
+                <i class="bi bi-gear-fill"></i>
+                <span>Subscription Settings</span>
+            </div>
+            <h1 class="display-6 fw-bold mb-3">Manage Your Subscription</h1>
+            <p class="lead text-muted mb-0">
+                Update payment methods, view billing history, and configure your subscription preferences.
+            </p>
+        </div>
+
+        <!-- Settings Card -->
+        <div class="settings-card animate-scale-in">
+            <!-- Navigation Tabs -->
+            <div class="settings-tabs">
+                <button class="tab-btn active" data-tab="payment-method">
+                    <i class="bi bi-credit-card"></i>
+                    Payment Method
+                </button>
+                <button class="tab-btn" data-tab="billing-history">
+                    <i class="bi bi-receipt"></i>
+                    Billing History
+                </button>
+                <button class="tab-btn" data-tab="notifications">
+                    <i class="bi bi-bell"></i>
+                    Notifications
+                </button>
+                <button class="tab-btn" data-tab="security">
+                    <i class="bi bi-shield-check"></i>
+                    Security
+                </button>
+            </div>
+
+            <!-- Payment Method Tab -->
+            <div class="tab-content active" id="payment-method-tab">
+                <div class="payment-method-section">
+                    <!-- Current Payment Method -->
+                    <div class="current-method">
+                        <div class="method-icon">
+                            <i class="bi bi-phone-fill"></i>
+                        </div>
+                        <div class="method-details">
+                            <h4>M-Pesa Payment</h4>
+                            <p>
+                                {% if subscription.mpesa_phone %}
+                                    Current: {{ subscription.mpesa_phone }}
+                                {% else %}
+                                    No payment method saved
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Update Payment Method Form -->
+                    <div class="update-form">
+                        <form method="post" id="paymentMethodForm">
+                            {% csrf_token %}
+                            
+                            <div class="form-group-modern">
+                                <label class="form-label-modern" for="id_phone_number">
+                                    Update M-Pesa Phone Number
+                                </label>
+                                <div class="phone-input-group">
+                                    <span class="phone-prefix">+254</span>
+                                    <input type="tel" 
+                                           name="phone_number" 
+                                           class="input-modern phone-input" 
+                                           id="id_phone_number" 
+                                           placeholder="712345678"
+                                           pattern="[0-9]{9}"
+                                           value="{{ subscription.mpesa_phone|cut:'+254'|default:'' }}">
+                                </div>
+                                <small class="form-text text-muted">
+                                    Enter your M-Pesa registered phone number (without +254)
+                                </small>
+                            </div>
+
+                            <button type="submit" class="save-btn" id="savePaymentBtn">
+                                <i class="bi bi-save"></i>
+                                Update Payment Method
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Payment Method Info Card -->
+                <div class="info-card">
+                    <div class="info-card-header">
+                        <i class="bi bi-info-circle-fill"></i>
+                        <h4>About Payment Methods</h4>
+                    </div>
+                    <p class="mb-0 text-muted">
+                        Your payment method is used for automatic monthly billing. 
+                        We'll send M-Pesa payment requests to this number 2 days before your billing date. 
+                        You can update this at any time.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Billing History Tab -->
+            <div class="tab-content" id="billing-history-tab">
+                <div class="billing-history">
+                    {% if payments %}
+                    <div class="table-responsive">
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Phone Number</th>
+                                    <th>Receipt</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in payments %}
+                                <tr>
+                                    <td>
+                                        {% if payment.transaction_date %}
+                                            {{ payment.transaction_date|date:"M d, Y" }}
+                                        {% else %}
+                                            {{ payment.created_at|date:"M d, Y" }}
+                                        {% endif %}
+                                    </td>
+                                    <td>KSh {{ payment.amount|floatformat:0|intcomma }}</td>
+                                    <td>
+                                        {% if payment.status == 'completed' %}
+                                            <span class="status-badge status-completed">Completed</span>
+                                        {% elif payment.status == 'pending' %}
+                                            <span class="status-badge status-pending">Pending</span>
+                                        {% else %}
+                                            <span class="status-badge status-failed">Failed</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ payment.phone_number|default:"N/A" }}</td>
+                                    <td>
+                                        <a href="{% url 'storefront:subscription_invoice' store.slug payment.id %}" 
+                                           class="invoice-btn">
+                                            <i class="bi bi-download"></i>
+                                            Invoice
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-receipt text-muted fs-1 mb-3"></i>
+                        <h5 class="fw-bold mb-2">No Billing History</h5>
+                        <p class="text-muted mb-0">You haven't made any payments yet.</p>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Billing History Info Card -->
+                <div class="info-card">
+                    <div class="info-card-header">
+                        <i class="bi bi-clock-history"></i>
+                        <h4>Billing Cycle</h4>
+                    </div>
+                    <p class="mb-0 text-muted">
+                        Your subscription renews automatically on 
+                        {% if subscription.current_period_end %}
+                            {{ subscription.current_period_end|date:"F d, Y" }}.
+                        {% elif subscription.trial_ends_at %}
+                            {{ subscription.trial_ends_at|date:"F d, Y" }}.
+                        {% else %}
+                            the same day each month.
+                        {% endif %}
+                        You'll receive a payment request 2 days before renewal.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Notifications Tab -->
+            <div class="tab-content" id="notifications-tab">
+                <div class="notifications-section">
+                    <!-- Notification Items -->
+                    <div class="notification-item">
+                        <div class="notification-content">
+                            <h4>Payment Reminders</h4>
+                            <p>Get notified 2 days before your subscription renews</p>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" class="toggle-checkbox" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="notification-item">
+                        <div class="notification-content">
+                            <h4>Payment Success</h4>
+                            <p>Receive confirmation when payments are completed</p>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" class="toggle-checkbox" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="notification-item">
+                        <div class="notification-content">
+                            <h4>Payment Failed</h4>
+                            <p>Get alerts when payments fail or are declined</p>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" class="toggle-checkbox" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="notification-item">
+                        <div class="notification-content">
+                            <h4>Subscription Updates</h4>
+                            <p>Important updates about your subscription plan</p>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" class="toggle-checkbox" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="notification-item">
+                        <div class="notification-content">
+                            <h4>Promotional Offers</h4>
+                            <p>Special offers and discounts for premium subscribers</p>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" class="toggle-checkbox">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Notifications Info Card -->
+                <div class="info-card">
+                    <div class="info-card-header">
+                        <i class="bi bi-envelope"></i>
+                        <h4>Notification Preferences</h4>
+                    </div>
+                    <p class="mb-0 text-muted">
+                        You'll receive notifications via email and SMS based on your preferences.
+                        Critical notifications (payment failures, subscription changes) are always sent.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Security Tab -->
+            <div class="tab-content" id="security-tab">
+                <div class="security-section">
+                    <!-- Security Items -->
+                    <div class="security-item">
+                        <div class="security-content">
+                            <div class="security-icon">
+                                <i class="bi bi-lock-fill"></i>
+                            </div>
+                            <div class="security-details">
+                                <h4>Two-Factor Authentication</h4>
+                                <p>Add an extra layer of security to your account</p>
+                            </div>
+                        </div>
+                        <span class="security-status status-inactive">Inactive</span>
+                    </div>
+
+                    <div class="security-item">
+                        <div class="security-content">
+                            <div class="security-icon">
+                                <i class="bi bi-shield-check"></i>
+                            </div>
+                            <div class="security-details">
+                                <h4>Payment Security</h4>
+                                <p>All payments are encrypted and secure</p>
+                            </div>
+                        </div>
+                        <span class="security-status status-active">Active</span>
+                    </div>
+
+                    <div class="security-item">
+                        <div class="security-content">
+                            <div class="security-icon">
+                                <i class="bi bi-bell-fill"></i>
+                            </div>
+                            <div class="security-details">
+                                <h4>Login Alerts</h4>
+                                <p>Get notified of new login attempts</p>
+                            </div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" class="toggle-checkbox">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="security-item">
+                        <div class="security-content">
+                            <div class="security-icon">
+                                <i class="bi bi-key-fill"></i>
+                            </div>
+                            <div class="security-details">
+                                <h4>Session Management</h4>
+                                <p>View and manage active sessions</p>
+                            </div>
+                        </div>
+                        <a href="#" class="btn-custom btn-ghost btn-sm">Manage</a>
+                    </div>
+                </div>
+
+                <!-- Security Info Card -->
+                <div class="info-card">
+                    <div class="info-card-header">
+                        <i class="bi bi-shield-lock"></i>
+                        <h4>Security Features</h4>
+                    </div>
+                    <p class="mb-0 text-muted">
+                        We use industry-standard encryption to protect your payment information.
+                        Your M-Pesa PIN is never stored on our servers and all transactions
+                        are processed through secure payment gateways.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Subscription Status Card -->
+        <div class="row g-4 mt-4">
+            <div class="col-md-4">
+                <div class="card-custom h-100">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="me-3 bg-primary bg-opacity-10 p-2 rounded">
+                            <i class="bi bi-award fs-4 text-primary"></i>
+                        </div>
+                        <div>
+                            <h5 class="fw-bold mb-0">Current Plan</h5>
+                            <p class="text-muted mb-0">
+                                {% if subscription %}
+                                    {{ subscription.get_plan_display }}
+                                {% else %}
+                                    Free Plan
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card-custom h-100">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="me-3 bg-success bg-opacity-10 p-2 rounded">
+                            <i class="bi bi-calendar-check fs-4 text-success"></i>
+                        </div>
+                        <div>
+                            <h5 class="fw-bold mb-0">Next Billing</h5>
+                            <p class="text-muted mb-0">
+                                {% if subscription.trial_ends_at %}
+                                    {{ subscription.trial_ends_at|date:"M d, Y" }}
+                                {% elif subscription.current_period_end %}
+                                    {{ subscription.current_period_end|date:"M d, Y" }}
+                                {% else %}
+                                    Not scheduled
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card-custom h-100">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="me-3 bg-info bg-opacity-10 p-2 rounded">
+                            <i class="bi bi-shield-check fs-4 text-info"></i>
+                        </div>
+                        <div>
+                            <h5 class="fw-bold mb-0">Status</h5>
+                            <p class="text-muted mb-0">
+                                {% if subscription %}
+                                    {% if subscription.is_active %}
+                                        <span class="text-success">Active</span>
+                                    {% elif subscription.status == 'trialing' %}
+                                        <span class="text-info">Trial Period</span>
+                                    {% else %}
+                                        <span class="text-warning">{{ subscription.get_status_display }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-secondary">Inactive</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card-custom mt-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center">
+                <div>
+                    <h5 class="fw-bold mb-1">Need Help?</h5>
+                    <p class="text-muted mb-0">Manage your subscription settings or get support</p>
+                </div>
+                <div class="d-flex gap-2 mt-2 mt-md-0">
+                    <a href="{% url 'storefront:subscription_manage' store.slug %}" class="btn-custom btn-ghost">
+                        <i class="bi bi-speedometer2 me-2"></i>
+                        Manage Subscription
+                    </a>
+                    <a href="#" class="btn-custom btn-primary">
+                        <i class="bi bi-question-circle me-2"></i>
+                        Contact Support
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Tab Navigation
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+        
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const tabId = this.getAttribute('data-tab');
+                
+                // Remove active class from all tabs
+                tabBtns.forEach(tab => tab.classList.remove('active'));
+                tabContents.forEach(content => content.classList.remove('active'));
+                
+                // Add active class to current tab
+                this.classList.add('active');
+                document.getElementById(`${tabId}-tab`).classList.add('active');
+            });
+        });
+        
+        // Phone number input validation
+        const phoneInput = document.getElementById('id_phone_number');
+        if (phoneInput) {
+            phoneInput.addEventListener('input', function() {
+                // Remove non-digits
+                this.value = this.value.replace(/\D/g, '');
+                
+                // Limit to 9 digits
+                if (this.value.length > 9) {
+                    this.value = this.value.slice(0, 9);
+                }
+                
+                validatePhoneNumber();
+            });
+        }
+        
+        // Validate phone number format
+        function validatePhoneNumber() {
+            const phoneInput = document.getElementById('id_phone_number');
+            const saveBtn = document.getElementById('savePaymentBtn');
+            
+            if (!phoneInput) return;
+            
+            const isValid = phoneInput.value.length === 9 && /^7\d{8}$/.test(phoneInput.value);
+            
+            if (phoneInput.value && !isValid) {
+                phoneInput.classList.add('error');
+                if (saveBtn) saveBtn.disabled = true;
+                return false;
+            } else {
+                phoneInput.classList.remove('error');
+                if (saveBtn) saveBtn.disabled = false;
+                return true;
+            }
+        }
+        
+        // Payment method form submission
+        const paymentForm = document.getElementById('paymentMethodForm');
+        if (paymentForm) {
+            paymentForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                if (!validatePhoneNumber()) {
+                    showToast('Please enter a valid M-Pesa phone number (e.g., 712345678)', 'error');
+                    phoneInput.focus();
+                    return false;
+                }
+                
+                // Show loading state
+                const saveBtn = document.getElementById('savePaymentBtn');
+                if (saveBtn) {
+                    const originalHTML = saveBtn.innerHTML;
+                    saveBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Saving...';
+                    saveBtn.disabled = true;
+                    
+                    // Submit form after a short delay
+                    setTimeout(() => {
+                        // Show success message
+                        showToast('Payment method updated successfully!', 'success');
+                        
+                        // Reset button
+                        saveBtn.innerHTML = originalHTML;
+                        saveBtn.disabled = false;
+                        
+                        // Actually submit the form
+                        paymentForm.submit();
+                    }, 1000);
+                }
+            });
+        }
+        
+        // Toggle switches
+        const toggleSwitches = document.querySelectorAll('.toggle-checkbox');
+        toggleSwitches.forEach(toggle => {
+            toggle.addEventListener('change', function() {
+                const setting = this.closest('.notification-item')?.querySelector('h4')?.textContent ||
+                               this.closest('.security-item')?.querySelector('h4')?.textContent;
+                
+                showToast(`${setting} ${this.checked ? 'enabled' : 'disabled'}`, 'info');
+                
+                // In a real app, you would send this to the server
+                // const formData = new FormData();
+                // formData.append('setting', setting);
+                // formData.append('enabled', this.checked);
+                // fetch('/api/settings/update/', {
+                //     method: 'POST',
+                //     body: formData,
+                //     headers: {
+                //         'X-CSRFToken': getCookie('csrftoken'),
+                //     }
+                // });
+            });
+        });
+        
+        // Auto-focus phone input if empty
+        {% if not subscription.mpesa_phone %}
+        setTimeout(() => {
+            const phoneInput = document.getElementById('id_phone_number');
+            if (phoneInput) {
+                phoneInput.focus();
+            }
+        }, 500);
+        {% endif %}
+        
+        // Show welcome message if just upgraded
+        {% if messages %}
+            {% for message in messages %}
+                showToast('{{ message }}', '{{ message.tags }}');
+            {% endfor %}
+        {% endif %}
+        
+        // Check URL for tab parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const tabParam = urlParams.get('tab');
+        if (tabParam) {
+            const targetTab = document.querySelector(`[data-tab="${tabParam}"]`);
+            if (targetTab) {
+                targetTab.click();
+            }
+        }
+    });
+
+    // Helper function to get CSRF token
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Toast notification function
+    function showToast(message, type = 'info') {
+        if (window.showToast) {
+            window.showToast(message, type);
+        } else {
+            // Fallback alert
+            alert(message);
+        }
+    }
+</script>
+{% endblock %}

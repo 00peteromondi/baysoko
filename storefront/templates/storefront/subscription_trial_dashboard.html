@@ -1,0 +1,554 @@
+<!-- storefront/templates/storefront/subscription_trial_dashboard.html -->
+{% extends 'base.html' %}
+{% load static humanize math_extras number_filters %}
+
+{% block title %}Trial Usage Dashboard - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== TRIAL DASHBOARD STYLES ===== */
+    .trial-dashboard-container {
+        min-height: 80vh;
+        padding: var(--spacing-xl) 0;
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(66, 133, 244, 0.05) 100%);
+    }
+
+    .trial-dashboard-header {
+        text-align: center;
+        margin-bottom: var(--spacing-xl);
+        max-width: 800px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .trial-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+        box-shadow: var(--shadow-lg);
+        border: 2px solid var(--border-color);
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .trial-card.highlight {
+        border-color: var(--accent);
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.1) 0%, 
+            rgba(255, 209, 102, 0.1) 100%);
+    }
+
+    .trial-progress-container {
+        margin: 1.5rem 0;
+    }
+
+    .trial-progress {
+        height: 20px;
+        border-radius: 10px;
+        background: var(--bg-secondary);
+        overflow: hidden;
+        position: relative;
+    }
+
+    .trial-progress-bar {
+        height: 100%;
+        border-radius: 10px;
+        background: linear-gradient(90deg, var(--accent) 0%, var(--primary) 100%);
+        transition: width 1s ease;
+        position: relative;
+    }
+
+    .trial-progress-text {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-weight: 700;
+        font-size: 0.9rem;
+        color: white;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        z-index: 2;
+    }
+
+    .trial-count-display {
+        text-align: center;
+        padding: 2rem;
+    }
+
+    .trial-count {
+        font-size: 3rem;
+        font-weight: 900;
+        color: var(--primary);
+        line-height: 1;
+        margin-bottom: 0.5rem;
+    }
+
+    .trial-limit {
+        font-size: 1.5rem;
+        color: var(--text-secondary);
+    }
+
+    .analytics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin: 1.5rem 0;
+    }
+
+    .analytics-card {
+        background: var(--bg-secondary);
+        padding: 1.5rem;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+
+    .analytics-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .analytics-value {
+        font-size: 2rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+    }
+
+    .analytics-label {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .trial-history-table {
+        background: var(--card-bg);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        width: 100%;
+    }
+
+    .trial-history-table thead th {
+        background: var(--bg-secondary);
+        padding: 1rem;
+        font-weight: 700;
+        color: var(--text-secondary);
+        border-bottom: 2px solid var(--border-color);
+        font-size: 0.85rem;
+    }
+
+    .trial-history-table tbody td {
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .trial-history-table tbody tr:hover {
+        background: var(--bg-secondary);
+    }
+
+    .trial-history-table tbody tr.active-trial {
+        background: rgba(6, 214, 160, 0.05);
+        border-left: 4px solid var(--accent);
+    }
+
+    .status-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .status-active {
+        background: rgba(6, 214, 160, 0.1);
+        color: var(--success);
+        border: 1px solid rgba(6, 214, 160, 0.3);
+    }
+
+    .status-ended {
+        background: rgba(108, 117, 125, 0.1);
+        color: var(--text-secondary);
+        border: 1px solid rgba(108, 117, 125, 0.3);
+    }
+
+    .status-converted {
+        background: rgba(13, 110, 253, 0.1);
+        color: var(--info);
+        border: 1px solid rgba(13, 110, 253, 0.3);
+    }
+
+    .policy-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+    }
+
+    .policy-card {
+        background: var(--bg-secondary);
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+    }
+
+    .policy-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .policy-icon {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+        color: var(--primary);
+    }
+
+    .store-info-card {
+        background: var(--bg-secondary);
+        padding: 1rem;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+    }
+
+    .store-info-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-sm);
+    }
+
+    @media (max-width: 768px) {
+        .trial-card {
+            padding: var(--spacing-md);
+        }
+        
+        .analytics-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .policy-cards {
+            grid-template-columns: 1fr;
+        }
+        
+        .trial-history-table {
+            display: block;
+            overflow-x: auto;
+        }
+    }
+
+    @media (max-width: 374px) {
+        .trial-card {
+            padding: var(--spacing-sm);
+        }
+        
+        .analytics-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .trial-count {
+            font-size: 2.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="trial-dashboard-container">
+    <div class="container-custom">
+        <!-- Header -->
+        <div class="trial-dashboard-header animate-slide-up">
+            <h1 class="display-6 fw-bold mb-3">Trial Usage Dashboard</h1>
+            <p class="lead text-muted mb-0">
+                Track your free trial usage and limits
+            </p>
+        </div>
+
+        <!-- Trial Limit Overview -->
+        <div class="trial-card highlight animate-scale-in">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <h3 class="fw-bold mb-3">Trial Limit Status</h3>
+                    <p class="text-muted mb-4">
+                        Each user is limited to {{ trial_status.trial_limit }} free trial(s).
+                        Track your usage below.
+                    </p>
+                    
+                    <div class="trial-progress-container">
+                        <div class="trial-progress">
+                            <div class="trial-progress-bar" style="width: {{ trial_progress.percentage }}%">
+                                <div class="trial-progress-text">
+                                    {{ trial_status.trial_count }} / {{ trial_status.trial_limit }}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between mt-2">
+                            <span class="text-muted">0 trials</span>
+                            <span class="text-muted">{{ trial_status.trial_limit }} trials</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="trial-count-display">
+                        <div class="trial-count">{{ trial_status.trial_count }}</div>
+                        <div class="trial-limit mb-4">out of {{ trial_status.trial_limit }} trials used</div>
+                        
+                        <div class="display-6 fw-bold mb-2 text-{% if trial_status.can_start_new_trial %}success{% else %}danger{% endif %}">
+                            {{ trial_status.summary.remaining_trials }} remaining
+                        </div>
+                        
+                        <p class="text-muted">
+                            {% if trial_status.can_start_new_trial %}
+                                <i class="bi bi-check-circle-fill text-success me-1"></i>
+                                You can start a new trial
+                            {% else %}
+                                <i class="bi bi-x-circle-fill text-danger me-1"></i>
+                                Trial limit reached
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Trial (if any) -->
+        {% if trial_status.active_trial %}
+        <div class="trial-card" style="border-color: var(--accent);">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="fw-bold mb-0">Active Trial</h3>
+                <span class="status-badge status-active">
+                    <i class="bi bi-clock"></i>
+                    ACTIVE
+                </span>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <div class="store-info-card">
+                        <div class="card-body">
+                            <h6 class="text-muted mb-2">Store</h6>
+                            <h4 class="fw-bold mb-0">{{ trial_status.active_trial.store.name }}</h4>
+                            <p class="text-muted mb-0 mt-2">
+                                <i class="bi bi-shop me-1"></i>
+                                {{ trial_status.active_trial.store.slug }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <div class="store-info-card">
+                        <div class="card-body">
+                            <h6 class="text-muted mb-2">Days Remaining</h6>
+                            <h4 class="fw-bold mb-0">
+                                {% with days=trial_status.active_trial.trial_ends_at|timeuntil:now %}
+                                    {{ days.split ','.0 }}
+                                {% endwith %}
+                            </h4>
+                            <p class="text-muted mb-0 mt-2">
+                                <i class="bi bi-calendar me-1"></i>
+                                Ends {{ trial_status.active_trial.trial_ends_at|date:"M d, Y" }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <div class="store-info-card">
+                        <div class="card-body">
+                            <h6 class="text-muted mb-2">Action Required</h6>
+                            <a href="{% url 'storefront:subscription_manage' slug=trial_status.active_trial.store.slug %}" 
+                               class="btn btn-primary w-100 mb-2">
+                                <i class="bi bi-rocket-takeoff me-2"></i>
+                                Subscribe Now
+                            </a>
+                            <p class="text-muted mb-0 small text-center">
+                                Subscribe before trial ends to keep premium features
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Trial Analytics -->
+        <div class="trial-card">
+            <h3 class="fw-bold mb-4">Trial Analytics</h3>
+            
+            <div class="analytics-grid">
+                <div class="analytics-card">
+                    <div class="analytics-value text-primary">
+                        {{ analytics.trial_summary.total_trials }}
+                    </div>
+                    <div class="analytics-label">Total Trials</div>
+                </div>
+                
+                <div class="analytics-card">
+                    <div class="analytics-value text-success">
+                        {{ analytics.conversion_rate|floatformat:1 }}%
+                    </div>
+                    <div class="analytics-label">Conversion Rate</div>
+                </div>
+                
+                <div class="analytics-card">
+                    <div class="analytics-value text-info">
+                        {{ analytics.average_trial_days }}
+                    </div>
+                    <div class="analytics-label">Avg. Trial Days</div>
+                </div>
+                
+                <div class="analytics-card">
+                    <div class="analytics-value text-warning">
+                        {{ trial_status.summary.remaining_trials }}
+                    </div>
+                    <div class="analytics-label">Trials Remaining</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trial History -->
+        <div class="trial-card">
+            <h3 class="fw-bold mb-4">Trial History</h3>
+            
+            <div class="table-responsive">
+                {% if trial_history %}
+                    <table class="trial-history-table">
+                        <thead>
+                            <tr>
+                                <th>Trial #</th>
+                                <th>Store</th>
+                                <th>Plan</th>
+                                <th>Started</th>
+                                <th>Ended</th>
+                                <th>Status</th>
+                                <th>Days Used</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for trial in trial_history %}
+                            <tr class="{% if trial.status == 'trialing' %}active-trial{% endif %}">
+                                <td>
+                                    <strong>#{{ forloop.counter }}</strong>
+                                </td>
+                                <td>
+                                    {{ trial.store__name|default:"Unknown Store" }}
+                                </td>
+                                <td>
+                                    <span class="badge bg-primary">{{ trial.plan|title }}</span>
+                                </td>
+                                <td>
+                                    {{ trial.created_at|date:"M d, Y" }}
+                                </td>
+                                <td>
+                                    {% if trial.trial_ends_at %}
+                                        {{ trial.trial_ends_at|date:"M d, Y" }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if trial.status == 'trialing' %}
+                                        <span class="status-badge status-active">
+                                            <i class="bi bi-clock"></i>
+                                            Active
+                                        </span>
+                                    {% elif trial.status == 'canceled' %}
+                                        <span class="status-badge status-ended">
+                                            <i class="bi bi-x-circle"></i>
+                                            Ended
+                                        </span>
+                                    {% elif trial.status == 'active' %}
+                                        <span class="status-badge status-converted">
+                                            <i class="bi bi-check-circle"></i>
+                                            Converted
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if trial.trial_ends_at %}
+                                        {% with days=trial.trial_ends_at|timeuntil:trial.created_at %}
+                                            {% if 'day' in days %}
+                                                7 days
+                                            {% else %}
+                                                {{ days }}
+                                            {% endif %}
+                                        {% endwith %}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if trial.status == 'trialing' %}
+                                        <a href="{% url 'storefront:subscription_manage' slug=trial.store__slug %}" 
+                                           class="btn btn-sm btn-primary">
+                                            Manage
+                                        </a>
+                                    {% elif trial.status == 'active' %}
+                                        <a href="{% url 'storefront:subscription_manage' slug=trial.store__slug %}" 
+                                           class="btn btn-sm btn-success">
+                                            View
+                                        </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-clock-history fs-1 text-muted mb-3"></i>
+                        <h5 class="fw-bold text-muted">No Trial History</h5>
+                        <p class="text-muted mb-0">Your trial history will appear here</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Trial Policy -->
+        <div class="trial-card">
+            <h3 class="fw-bold mb-4">Trial Policy</h3>
+            
+            <div class="policy-cards">
+                <div class="policy-card">
+                    <div class="d-flex align-items-start mb-3">
+                        <i class="bi bi-1-circle-fill text-primary policy-icon"></i>
+                        <div class="ms-3">
+                            <h5 class="fw-bold mb-2">One Trial Per User</h5>
+                            <p class="text-muted mb-0">
+                                Each user account is limited to <strong>one free trial</strong>.
+                                This prevents trial abuse and ensures fair usage.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="policy-card">
+                    <div class="d-flex align-items-start mb-3">
+                        <i class="bi bi-clock-fill text-warning policy-icon"></i>
+                        <div class="ms-3">
+                            <h5 class="fw-bold mb-2">7-Day Duration</h5>
+                            <p class="text-muted mb-0">
+                                Each trial lasts for <strong>7 days</strong>.
+                                After this period, premium features are automatically disabled.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="alert alert-info mt-3">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Note:</strong> If you need additional trial time for testing purposes, 
+                please <a href="#" class="alert-link">contact our support team</a> with your use case.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

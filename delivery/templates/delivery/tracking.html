@@ -1,0 +1,714 @@
+{% extends 'delivery/base.html' %}
+{% load humanize %}
+
+{% block title %}Track Delivery #{{ delivery.tracking_number }} - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Tracking Page Specific Styles */
+    .tracking-container {
+        min-height: calc(100vh - 70px - 3rem);
+        background: linear-gradient(135deg, 
+            rgba(6, 214, 160, 0.05) 0%, 
+            rgba(5, 184, 138, 0.02) 100%);
+        padding: 2rem 0;
+    }
+    
+    .tracking-header {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 2rem;
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+    
+    .tracking-number {
+        font-family: monospace;
+        font-size: 1.5rem;
+        letter-spacing: 2px;
+        background: var(--bg-secondary);
+        padding: 1rem;
+        border-radius: var(--radius-md);
+        margin: 1.5rem 0;
+        display: inline-block;
+    }
+    
+    .tracking-status {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin: 1rem 0;
+    }
+    
+    .tracking-timeline {
+        position: relative;
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    
+    .tracking-step {
+        display: flex;
+        align-items: flex-start;
+        margin-bottom: 2rem;
+        position: relative;
+    }
+    
+    .tracking-step:last-child {
+        margin-bottom: 0;
+    }
+    
+    .step-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: var(--bg-secondary);
+        border: 2px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        z-index: 2;
+        position: relative;
+    }
+    
+    .step-icon.completed {
+        background: var(--success);
+        border-color: var(--success);
+        color: white;
+    }
+    
+    .step-icon.current {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+    }
+    
+    .step-icon.pending {
+        background: var(--bg-secondary);
+        border-color: var(--border-color);
+        color: var(--text-tertiary);
+    }
+    
+    .step-content {
+        margin-left: 1.5rem;
+        padding: 1rem;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        flex: 1;
+    }
+    
+    .step-title {
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 0.5rem;
+    }
+    
+    .step-time {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+    }
+    
+    .step-description {
+        margin-top: 0.5rem;
+        color: var(--text-secondary);
+    }
+    
+    .tracking-connector {
+        position: absolute;
+        left: 24px;
+        top: 50px;
+        bottom: -2rem;
+        width: 2px;
+        background: var(--border-color);
+        z-index: 1;
+    }
+    
+    .tracking-step:last-child .tracking-connector {
+        display: none;
+    }
+    
+    .delivery-map {
+        height: 250px;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        position: relative;
+    }
+    
+    .delivery-actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        margin-top: 2rem;
+    }
+    
+    .contact-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        height: 100%;
+    }
+    
+    .contact-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        margin-bottom: 1rem;
+    }
+    
+    @media (max-width: 768px) {
+        .tracking-step {
+            flex-direction: column;
+        }
+        
+        .step-content {
+            margin-left: 0;
+            margin-top: 1rem;
+        }
+        
+        .tracking-connector {
+            left: 24px;
+            top: 50px;
+            bottom: -2rem;
+        }
+        
+        .delivery-actions {
+            flex-direction: column;
+        }
+        
+        .delivery-actions .btn {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tracking-container">
+    <!-- Tracking Header -->
+    <div class="tracking-header animate-fade-in">
+        <h1 class="page-title mb-2">
+            <i class="bi bi-truck text-primary me-2"></i>Track Your Delivery
+        </h1>
+        <p class="page-subtitle mb-4">Monitor your package in real-time</p>
+        
+        <div class="tracking-number" id="trackingNumber">
+            {{ delivery.tracking_number }}
+        </div>
+        
+        <div class="d-flex justify-content-center align-items-center gap-3 mb-4">
+            <div class="tracking-status">
+                Current Status: 
+                <span class="status-badge status-{{ delivery.status }}">
+                    {{ delivery.get_status_display }}
+                </span>
+            </div>
+            <button class="btn btn-delivery-outline" onclick="copyTracking(event)">
+                <i class="bi bi-clipboard"></i> Copy
+            </button>
+        </div>
+        
+        <div class="row text-start">
+            <div class="col-md-6 mb-3">
+                <strong>Recipient:</strong> {{ delivery.recipient_name }}
+            </div>
+            <div class="col-md-6 mb-3">
+                <strong>Order ID:</strong> {{ delivery.order_id|default:"N/A" }}
+            </div>
+            <div class="col-md-6 mb-3">
+                <strong>Created:</strong> {{ delivery.created_at|date:"M d, Y" }}
+            </div>
+            <div class="col-md-6 mb-3">
+                <strong>Est. Delivery:</strong> 
+                {% if delivery.estimated_delivery_time %}
+                    {{ delivery.estimated_delivery_time|date:"M d, Y" }}
+                {% else %}
+                    Not specified
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Map -->
+    <div class="tracking-header animate-fade-in" style="animation-delay: 0.05s">
+        <h5 class="mb-3"><i class="bi bi-geo-alt"></i> Delivery Map</h5>
+        <div class="delivery-map" id="deliveryTrackingMap"></div>
+        <div class="small text-muted mt-2" id="deliveryEta"></div>
+    </div>
+    
+    <!-- Status Timeline -->
+    <div class="tracking-timeline animate-fade-in" style="animation-delay: 0.1s">
+        <div class="card mb-4">
+            <div class="card-header bg-transparent border-bottom">
+                <h5 class="fw-bold mb-0">
+                    <i class="bi bi-clock-history me-2 text-primary"></i>
+                    Delivery Progress
+                </h5>
+            </div>
+            <div class="card-body">
+                {% for history in status_history %}
+                <div class="tracking-step">
+                    <div class="step-icon {% if forloop.first %}current{% else %}completed{% endif %}">
+                        {% if history.new_status == 'delivered' %}
+                        <i class="bi bi-check-circle"></i>
+                        {% elif history.new_status == 'failed' %}
+                        <i class="bi bi-x-circle"></i>
+                        {% else %}
+                        <i class="bi bi-info-circle"></i>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="step-content">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="step-title">{{ history.get_new_status_display }}</h6>
+                                <div class="step-time">
+                                    {{ history.created_at|date:"M d, Y" }} • {{ history.created_at|time:"H:i" }}
+                                </div>
+                            </div>
+                            <small class="text-muted">
+                                {% if history.changed_by %}{{ history.changed_by.get_full_name|default:history.changed_by.username }}{% else %}System{% endif %}
+                            </small>
+                        </div>
+                        {% if history.notes %}
+                        <div class="step-description">
+                            {{ history.notes }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    {% if not forloop.last %}
+                    <div class="tracking-connector"></div>
+                    {% endif %}
+                </div>
+                {% empty %}
+                <div class="text-center py-4">
+                    <i class="bi bi-clock-history fs-1 text-muted mb-3"></i>
+                    <h5 class="text-muted">No status updates yet</h5>
+                    <p class="text-muted">Check back soon for updates</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Delivery Information -->
+    <div class="row g-4 animate-fade-in" style="animation-delay: 0.2s">
+        <div class="col-md-6">
+            <div class="contact-card">
+                <div class="contact-icon">
+                    <i class="bi bi-box-arrow-up"></i>
+                </div>
+                <h6 class="fw-bold mb-3">Pickup Information</h6>
+                <p class="mb-2">
+                    <strong>{{ delivery.pickup_name }}</strong><br>
+                    {{ delivery.pickup_address|linebreaksbr }}<br>
+                    <i class="bi bi-telephone me-2"></i>{{ delivery.pickup_phone }}
+                </p>
+                {% if delivery.pickup_time %}
+                <div class="alert alert-light mt-3">
+                    <i class="bi bi-clock"></i> 
+                    <strong>Picked Up:</strong><br>
+                    {{ delivery.pickup_time|date:"M d, Y H:i" }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="contact-card">
+                <div class="contact-icon">
+                    <i class="bi bi-box-arrow-down"></i>
+                </div>
+                <h6 class="fw-bold mb-3">Delivery Information</h6>
+                <p class="mb-2">
+                    <strong>{{ delivery.recipient_name }}</strong><br>
+                    {{ delivery.recipient_address|linebreaksbr }}<br>
+                    <i class="bi bi-telephone me-2"></i>{{ delivery.recipient_phone }}
+                </p>
+                {% if estimated_time %}
+                <div class="alert alert-info mt-3">
+                    <i class="bi bi-clock"></i> 
+                    <strong>Estimated Delivery:</strong><br>
+                    {{ estimated_time|date:"M d, Y H:i" }}
+                </div>
+                {% endif %}
+                {% if delivery.actual_delivery_time %}
+                <div class="alert alert-success mt-3">
+                    <i class="bi bi-check-circle"></i> 
+                    <strong>Delivered:</strong><br>
+                    {{ delivery.actual_delivery_time|date:"M d, Y H:i" }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- CONFIRM DELIVERY BUTTON -->
+    {% if can_confirm and delivery.status == 'delivered' %}
+    <div class="text-center my-4 animate-fade-in">
+        <button class="confirm-btn btn btn-success" id="confirmDeliveryBtn">
+            <i class="bi bi-check-circle me-2"></i>Confirm Delivery & Release Payment
+        </button>
+        <p class="text-muted small mt-2">
+            By confirming, you acknowledge that you have received the items. Funds will be released to the seller.
+        </p>
+    </div>
+    {% endif %}
+    
+    <!-- Package Details -->
+    <div class="card mt-4 animate-fade-in" style="animation-delay: 0.3s">
+        <div class="card-header bg-transparent border-bottom">
+            <h5 class="fw-bold mb-0">
+                <i class="bi bi-box-seam me-2 text-primary"></i>
+                Package Details
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <table class="table table-sm">
+                        <tr>
+                            <td class="text-muted">Description</td>
+                            <td>{{ delivery.package_description }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Weight</td>
+                            <td>{{ delivery.package_weight }} kg</td>
+                        </tr>
+                        {% if delivery.package_length %}
+                        <tr>
+                            <td class="text-muted">Dimensions</td>
+                            <td>{{ delivery.package_length }}×{{ delivery.package_width }}×{{ delivery.package_height }} cm</td>
+                        </tr>
+                        {% endif %}
+                        <tr>
+                            <td class="text-muted">Declared Value</td>
+                            <td>KSh {{ delivery.declared_value|intcomma }}</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <div class="package-tags">
+                        {% if delivery.is_fragile %}
+                        <span class="badge bg-warning">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            Fragile
+                        </span>
+                        {% endif %}
+                        {% if delivery.requires_signature %}
+                        <span class="badge bg-info">
+                            <i class="bi bi-pen me-1"></i>
+                            Signature Required
+                        </span>
+                        {% endif %}
+                    </div>
+                    
+                    {% if delivery.delivery_person %}
+                    <div class="mt-4">
+                        <h6 class="fw-bold mb-2">Driver Information</h6>
+                        <p class="mb-1">
+                            <strong>{{ delivery.delivery_person.user.get_full_name|default:delivery.delivery_person.employee_id }}</strong>
+                        </p>
+                        <p class="text-muted mb-0">
+                            {{ delivery.delivery_person.vehicle_type|title }} • 
+                            Rating: {{ delivery.delivery_person.rating|default:"0.0"|floatformat:1 }}/5.0
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% if order_items %}
+            <div class="mt-4">
+                <h6 class="fw-bold mb-3">Items in This Delivery</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th class="text-center">Qty</th>
+                                <th class="text-end">Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in order_items %}
+                            <tr>
+                                <td>{{ item.listing.title }}</td>
+                                <td class="text-center">{{ item.quantity }}</td>
+                                <td class="text-end">KSh {{ item.get_total_price|intcomma }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-muted small">Total items: {{ order_items_total_qty }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Delivery Actions -->
+    <div class="delivery-actions animate-fade-in" style="animation-delay: 0.4s">
+        <a href="{% url 'delivery:dashboard' %}" class="btn btn-delivery-outline">
+            <i class="bi bi-speedometer2 me-2"></i>Back to Dashboard
+        </a>
+        <button class="btn btn-delivery" onclick="trackAnother()">
+            <i class="bi bi-search me-2"></i>Track Another Package
+        </button>
+        {% if delivery.status != 'delivered' and delivery.status != 'cancelled' %}
+        <button class="btn btn-warning" onclick="refreshTracking()">
+            <i class="bi bi-arrow-clockwise me-2"></i>Refresh Status
+        </button>
+        {% endif %}
+    </div>
+    
+    <!-- Track Another Package -->
+    <div class="card mt-4 animate-fade-in" style="animation-delay: 0.5s">
+        <div class="card-body text-center">
+            <h5 class="mb-3">Track Another Package</h5>
+            <form class="row g-2 justify-content-center" onsubmit="trackAnotherForm(event)">
+                <div class="col-md-6 col-lg-4">
+                    <input type="text" class="form-control" id="anotherTracking" 
+                           placeholder="Enter tracking number" required>
+                </div>
+                <div class="col-md-auto">
+                    <button type="submit" class="btn btn-delivery">
+                        <i class="bi bi-search"></i> Track
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    {% if store_markers_json %}
+    {{ store_markers_json|json_script:"store_markers_json" }}
+    {% endif %}
+    // Copy tracking number
+    function copyTracking(e) {
+        const trackingNumber = document.getElementById('trackingNumber').textContent;
+        navigator.clipboard.writeText(trackingNumber)
+            .then(() => {
+                const button = e?.currentTarget || e?.target?.closest('button');
+                if (button) {
+                    const originalHTML = button.innerHTML;
+                    button.innerHTML = '<i class="bi bi-check"></i> Copied!';
+                    button.classList.remove('btn-delivery-outline');
+                    button.classList.add('btn-success');
+                    setTimeout(() => {
+                        button.innerHTML = originalHTML;
+                        button.classList.remove('btn-success');
+                        button.classList.add('btn-delivery-outline');
+                    }, 2000);
+                }
+            })
+            .catch(err => {
+                showToast('Failed to copy tracking number', 'error');
+            });
+    }
+
+    // Track another package
+    function trackAnother() {
+        const trackingNumber = prompt('Enter tracking number:');
+        if (trackingNumber) {
+            window.location.href = `/delivery/track/${trackingNumber}/`;
+        }
+    }
+
+    function trackAnotherForm(event) {
+        event.preventDefault();
+        const trackingNumber = document.getElementById('anotherTracking').value.trim();
+        if (trackingNumber) {
+            window.location.href = `/delivery/track/${trackingNumber}/`;
+        }
+    }
+
+    // Refresh tracking
+    function refreshTracking() {
+        location.reload();
+    }
+
+    // Auto-refresh if not delivered
+    {% if delivery.status != 'delivered' and delivery.status != 'cancelled' %}
+    setTimeout(() => {
+        refreshTracking();
+    }, 30000); // Refresh every 30 seconds
+    {% endif %}
+
+    // Utility functions
+    function showToast(message, type = 'success') {
+        // Create toast container if it doesn't exist
+        let container = document.querySelector('.toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.className = 'toast-container';
+            document.querySelector('.tracking-container').prepend(container);
+        }
+
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+
+        const icon = type === 'success' ? 'check-circle' : 
+                    type === 'error' ? 'exclamation-circle' : 
+                    type === 'warning' ? 'exclamation-triangle' : 'info-circle';
+
+        toast.innerHTML = `
+            <i class="bi bi-${icon} text-${type} fs-5"></i>
+            <div class="flex-grow-1">
+                <strong class="text-${type}">${type.charAt(0).toUpperCase() + type.slice(1)}</strong>
+                <div class="text-muted">${message}</div>
+            </div>
+            <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+        `;
+
+        container.appendChild(toast);
+
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.remove();
+            }
+        }, 5000);
+    }
+
+    // Confirm delivery AJAX
+    document.addEventListener('DOMContentLoaded', function() {
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return null;
+        }
+
+        const btn = document.getElementById('confirmDeliveryBtn');
+        if (!btn) return;
+
+        btn.addEventListener('click', async function() {
+            if (!confirm('Confirm you have received this delivery and release funds?')) return;
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-arrow-repeat spin me-2"></i>Confirming...';
+            btn.disabled = true;
+
+            try {
+                const resp = await fetch('{% url "delivery:confirm_delivery" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': getCookie('csrftoken') || ''
+                    },
+                    body: `tracking_number={{ delivery.tracking_number }}`
+                });
+
+                const data = await resp.json();
+                if (resp.ok && data.success) {
+                    showToast('Delivery confirmed! Payment released.', 'success');
+                    setTimeout(() => location.reload(), 1200);
+                } else {
+                    throw new Error(data.error || 'Confirmation failed');
+                }
+            } catch (err) {
+                console.warn('Confirm delivery error', err);
+                showToast(err.message || 'Confirmation failed', 'error');
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+        });
+    });
+</script>
+<script>
+    const pickupLat = {{ delivery.pickup_latitude|default:"null" }};
+    const pickupLng = {{ delivery.pickup_longitude|default:"null" }};
+    const recipLat = {{ delivery.recipient_latitude|default:"null" }};
+    const recipLng = {{ delivery.recipient_longitude|default:"null" }};
+    const defaultCenter = { lat: -0.5236, lng: 34.4560 }; // Homa Bay Town
+
+    function initDeliveryTrackingMap(userLoc) {
+        const mapEl = document.getElementById('deliveryTrackingMap');
+        if (!mapEl || !window.L) return;
+        if (mapEl.dataset.initialized === '1') return;
+
+        const hasPickup = pickupLat !== null && pickupLng !== null;
+        const hasRecip = recipLat !== null && recipLng !== null;
+        const center = hasRecip
+            ? { lat: recipLat, lng: recipLng }
+            : (hasPickup ? { lat: pickupLat, lng: pickupLng } : (userLoc || defaultCenter));
+
+        const map = L.map(mapEl).setView([center.lat, center.lng], hasPickup && hasRecip ? 12 : 11);
+        addBaseTileLayer(map);
+        setTimeout(() => map.invalidateSize(), 200);
+
+        if (hasPickup) {
+            L.marker([pickupLat, pickupLng]).addTo(map).bindPopup("Pickup");
+        }
+        if (hasRecip) {
+            L.marker([recipLat, recipLng]).addTo(map).bindPopup("Delivery");
+        }
+        try {
+            const storeMarkers = document.getElementById('store_markers_json')
+                ? JSON.parse(document.getElementById('store_markers_json').textContent || '[]')
+                : [];
+            storeMarkers.forEach(s => {
+                if (!s || s.lat == null || s.lng == null) return;
+                L.circleMarker([s.lat, s.lng], {
+                    radius: 5,
+                    color: '#FF9E1F',
+                    weight: 2,
+                    fillColor: '#FF9E1F',
+                    fillOpacity: 0.7
+                }).addTo(map).bindPopup(`${s.name}<br><small>${s.location || ''}</small>`);
+            });
+        } catch (e) {}
+        if (hasPickup && hasRecip) {
+            L.polyline([[pickupLat, pickupLng], [recipLat, recipLng]], { color: '#06D6A0', weight: 4 }).addTo(map);
+
+            const toRad = (deg) => (deg * Math.PI) / 180;
+            const R = 6371;
+            const dLat = toRad(recipLat - pickupLat);
+            const dLng = toRad(recipLng - pickupLng);
+            const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRad(pickupLat)) * Math.cos(toRad(recipLat)) * Math.sin(dLng / 2) ** 2;
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const distanceKm = R * c;
+            const avgSpeedKmh = 30;
+            const etaHours = distanceKm / avgSpeedKmh;
+            const etaMinutes = Math.max(5, Math.round(etaHours * 60));
+            const etaEl = document.getElementById('deliveryEta');
+            if (etaEl) {
+                etaEl.textContent = `Estimated travel time: ${etaMinutes} min`;
+            }
+        }
+        mapEl.dataset.initialized = '1';
+    }
+
+    const whenLeafletReady = (cb) => {
+        if (window.L) return cb();
+        setTimeout(() => whenLeafletReady(cb), 100);
+    };
+    whenLeafletReady(() => {
+        if (window.BaysokoGeo) {
+            window.BaysokoGeo.requestCurrentLocation()
+                .then(loc => initDeliveryTrackingMap({ lat: loc.lat, lng: loc.lng }))
+                .catch(() => initDeliveryTrackingMap(null));
+        } else if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => initDeliveryTrackingMap({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                () => initDeliveryTrackingMap(null),
+                { enableHighAccuracy: true, timeout: 6000 }
+            );
+        } else {
+            initDeliveryTrackingMap(null);
+        }
+    });
+</script>
+{% endblock %}
+

@@ -1,0 +1,1166 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Payment Dashboard - Baysoko{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ===== PAYMENT DASHBOARD STYLES ===== */
+    .payment-header {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 24px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .payment-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--primary), var(--success));
+    }
+
+    .payment-title {
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+
+    .payment-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 0;
+    }
+
+    /* ===== FINANCIAL STATS ===== */
+    .financial-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    @media (min-width: 768px) {
+        .financial-stats {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+
+    .financial-stat-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+        text-align: center;
+    }
+
+    .financial-stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .financial-stat-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: var(--primary);
+        opacity: 0.3;
+    }
+
+    .financial-stat-icon {
+        font-size: 24px;
+        margin-bottom: 12px;
+        color: var(--primary);
+        background: rgba(255, 107, 53, 0.1);
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 16px;
+    }
+
+    .financial-stat-value {
+        font-size: 24px;
+        font-weight: 800;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+    }
+
+    .financial-stat-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* ===== PAYMENT SUMMARY CARDS ===== */
+    .payment-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+
+    .payment-summary-card {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: 16px;
+        text-align: center;
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+    }
+
+    .payment-summary-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-sm);
+        border-color: var(--primary);
+    }
+
+    .payment-summary-value {
+        font-size: 20px;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+
+    .payment-summary-label {
+        font-size: 11px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* ===== PAYMENT TABS ===== */
+    .payment-tabs-container {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
+        margin-bottom: 30px;
+    }
+
+    .payment-tabs-header {
+        background: var(--bg-secondary);
+        padding: 0 24px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .payment-tabs {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+    }
+
+    .payment-tabs::-webkit-scrollbar {
+        height: 3px;
+    }
+
+    .payment-tabs::-webkit-scrollbar-track {
+        background: var(--bg-secondary);
+    }
+
+    .payment-tabs::-webkit-scrollbar-thumb {
+        background: var(--primary);
+    }
+
+    .payment-tab {
+        padding: 16px 24px;
+        font-weight: 600;
+        font-size: 14px;
+        white-space: nowrap;
+        border-bottom: 3px solid transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: block;
+    }
+
+    .payment-tab:hover {
+        color: var(--primary);
+    }
+
+    .payment-tab.active {
+        color: var(--primary);
+        border-bottom-color: var(--primary);
+        background: rgba(255, 107, 53, 0.05);
+    }
+
+    .payment-tab-content {
+        padding: 0;
+    }
+
+    .tab-pane {
+        display: none;
+        animation: fadeIn 0.3s ease;
+    }
+
+    .tab-pane.active {
+        display: block;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    /* ===== PAYMENT TABLE ===== */
+    .payment-table-container {
+        padding: 24px;
+    }
+
+    .payment-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .payment-table th {
+        background: var(--bg-secondary);
+        padding: 12px 16px;
+        text-align: left;
+        font-weight: 700;
+        color: var(--text-primary);
+        border-bottom: 2px solid var(--border-color);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .payment-table td {
+        padding: 16px;
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: middle;
+    }
+
+    .payment-table tbody tr {
+        transition: all 0.2s ease;
+    }
+
+    .payment-table tbody tr:hover {
+        background: var(--bg-secondary);
+    }
+
+    /* ===== BADGE STYLES ===== */
+    .badge-payment {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .badge-completed {
+        background: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+        border: 1px solid rgba(40, 167, 69, 0.3);
+    }
+
+    .badge-pending {
+        background: rgba(255, 193, 7, 0.1);
+        color: #ffc107;
+        border: 1px solid rgba(255, 193, 7, 0.3);
+    }
+
+    .badge-failed {
+        background: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+        border: 1px solid rgba(220, 53, 69, 0.3);
+    }
+
+    .badge-escrow {
+        background: rgba(0, 123, 255, 0.1);
+        color: #007bff;
+        border: 1px solid rgba(0, 123, 255, 0.3);
+    }
+
+    .badge-released {
+        background: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+        border: 1px solid rgba(40, 167, 69, 0.3);
+    }
+
+    /* ===== WITHDRAWAL BANNER ===== */
+    .withdrawal-banner {
+        background: linear-gradient(135deg, var(--success) 0%, #28a745 100%);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        color: white;
+        position: relative;
+        overflow: hidden;
+        margin-bottom: 30px;
+    }
+
+    .withdrawal-banner::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.2) 100%);
+    }
+
+    .withdrawal-content {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+    }
+
+    @media (min-width: 768px) {
+        .withdrawal-content {
+            flex-direction: row;
+            justify-content: space-between;
+        }
+    }
+
+    .withdrawal-text h4 {
+        font-size: 18px;
+        font-weight: 800;
+        margin-bottom: 8px;
+    }
+
+    .withdrawal-text p {
+        margin-bottom: 0;
+        font-size: 14px;
+        opacity: 0.9;
+    }
+
+    /* ===== EMPTY STATES ===== */
+    .empty-payments {
+        padding: 60px 20px;
+        text-align: center;
+    }
+
+    .empty-payments-icon {
+        font-size: 48px;
+        color: var(--text-tertiary);
+        margin-bottom: 16px;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+        .payment-table {
+            display: block;
+            overflow-x: auto;
+        }
+        
+        .financial-stats {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .payment-summary-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 576px) {
+        .financial-stats {
+            grid-template-columns: 1fr;
+        }
+        
+        .payment-summary-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .payment-tabs {
+            padding-bottom: 8px;
+        }
+        
+        .payment-tab {
+            padding: 12px 16px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-custom py-3">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}"><i class="bi bi-house"></i> Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'storefront:seller_dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Payments</li>
+        </ol>
+    </nav>
+    <!-- Header -->
+    <div class="payment-header">
+        <div class="d-flex justify-content-between align-items-start align-items-md-center flex-column flex-md-row gap-3">
+            <div>
+                <h1 class="payment-title">Payment Dashboard</h1>
+                <p class="payment-subtitle">Monitor all your payments and earnings</p>
+            </div>
+            <div>
+                {% include 'storefront/partials/period_selector.html' %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Financial Overview -->
+    <div class="financial-stats">
+        <div class="financial-stat-card">
+            <div class="financial-stat-icon" style="background: rgba(6, 214, 160, 0.1); color: #06d6a0;">
+                <i class="bi bi-cash-stack"></i>
+            </div>
+            <div class="financial-stat-value">KSh {{ total_earnings|intcomma|default:"0" }}</div>
+            <div class="financial-stat-label">Total Earnings</div>
+        </div>
+        <div class="financial-stat-card">
+            <div class="financial-stat-icon" style="background: rgba(17, 138, 178, 0.1); color: #118ab2;">
+                <i class="bi bi-wallet2"></i>
+            </div>
+            <div class="financial-stat-value">KSh {{ available_balance|intcomma|default:"0" }}</div>
+            <div class="financial-stat-label">Available Balance</div>
+        </div>
+        <div class="financial-stat-card">
+            <div class="financial-stat-icon" style="background: rgba(255, 193, 7, 0.1); color: #ffc107;">
+                <i class="bi bi-clock-history"></i>
+            </div>
+            <div class="financial-stat-value">KSh {{ pending_escrow|intcomma|default:"0" }}</div>
+            <div class="financial-stat-label">Pending Escrow</div>
+        </div>
+        <div class="financial-stat-card">
+            <div class="financial-stat-icon" style="background: rgba(239, 71, 111, 0.1); color: #ef476f;">
+                <i class="bi bi-graph-up"></i>
+            </div>
+            <div class="financial-stat-value">KSh {{ subscription_revenue|intcomma|default:"0" }}</div>
+            <div class="financial-stat-label">Subscription Revenue</div>
+        </div>
+    </div>
+
+    <!-- Payment Summary -->
+    <div class="payment-summary-grid">
+        <div class="payment-summary-card">
+            <div class="payment-summary-value">{{ order_count }}</div>
+            <div class="payment-summary-label">Order Payments</div>
+        </div>
+        <div class="payment-summary-card">
+            <div class="payment-summary-value">{{ escrow_count }}</div>
+            <div class="payment-summary-label">Escrow Releases</div>
+        </div>
+        <div class="payment-summary-card">
+            <div class="payment-summary-value">{{ subscription_count }}</div>
+            <div class="payment-summary-label">Subscription Payments</div>
+        </div>
+        <div class="payment-summary-card">
+            <div class="payment-summary-value">{{ failed_count }}</div>
+            <div class="payment-summary-label">Failed Payments</div>
+        </div>
+    </div>
+
+    <!-- Payment Tabs -->
+    <div class="payment-tabs-container">
+        <!-- Tabs Header -->
+        <div class="payment-tabs-header">
+            <ul class="payment-tabs">
+                <li>
+                    <a href="#orders" class="payment-tab active" data-tab="orders">
+                        <i class="bi bi-receipt me-2"></i>Order Payments
+                    </a>
+                </li>
+                <li>
+                    <a href="#customer-purchases" class="payment-tab" data-tab="customer-purchases">
+                        <i class="bi bi-bag me-2"></i>My Purchases
+                    </a>
+                </li>
+                <li>
+                    <a href="#escrow" class="payment-tab" data-tab="escrow">
+                        <i class="bi bi-safe me-2"></i>Escrow Releases
+                    </a>
+                </li>
+                <li>
+                    <a href="#subscriptions" class="payment-tab" data-tab="subscriptions">
+                        <i class="bi bi-credit-card me-2"></i>Subscriptions
+                    </a>
+                </li>
+                <li>
+                    <a href="#withdrawals" class="payment-tab" data-tab="withdrawals">
+                        <i class="bi bi-cash me-2"></i>Withdrawals
+                    </a>
+                </li>
+                <li>
+                    <a href="#failed" class="payment-tab" data-tab="failed">
+                        <i class="bi bi-x-circle me-2"></i>Failed Payments
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Tabs Content -->
+        <div class="payment-tab-content">
+            <!-- Order Payments Tab -->
+            <div id="orders" class="tab-pane active">
+                <div class="payment-table-container">
+                    <div class="table-responsive">
+                        <table class="payment-table">
+                            <thead>
+                                <tr>
+                                    <th>Order #</th>
+                                    <th>Customer</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Items</th>
+                                    <th>Date</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in order_payments %}
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold">#{{ payment.order.id }}</div>
+                                        <small class="text-muted">{{ payment.transaction_id|truncatechars:8 }}</small>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi bi-person-circle text-muted me-2"></i>
+                                            {{ payment.order.user.get_full_name|default:payment.order.user.username }}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold">KSh {{ payment.amount|intcomma }}</span>
+                                    </td>
+                                    <td>
+                                        {% if payment.status == 'completed' %}
+                                            <span class="badge-payment badge-completed">Completed</span>
+                                        {% elif payment.status == 'pending' %}
+                                            <span class="badge-payment badge-pending">Pending</span>
+                                        {% elif payment.status == 'failed' %}
+                                            <span class="badge-payment badge-failed">Failed</span>
+                                        {% else %}
+                                            <span class="badge-payment">{{ payment.status|title }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {% for item in payment.order.order_items.all|slice:":2" %}
+                                                {{ item.listing.title }}{% if not forloop.last %}, {% endif %}
+                                            {% endfor %}
+                                            {% if payment.order.order_items.count > 2 %}...{% endif %}
+                                        </small>
+                                    </td>
+                                    <td>{{ payment.created_at|naturaltime }}</td>
+                                    <td>
+                                        {% if payment.status == 'completed' and payment.is_held_in_escrow and not payment.actual_release_date %}
+                                            <span class="badge-payment badge-escrow">In Escrow</span>
+                                        {% elif payment.status == 'completed' and payment.actual_release_date %}
+                                            <span class="badge-payment badge-released">Released</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="7" class="text-center py-5">
+                                        <div class="empty-payments">
+                                            <div class="empty-payments-icon">
+                                                <i class="bi bi-receipt"></i>
+                                            </div>
+                                            <h5>No order payments found</h5>
+                                            <p class="text-muted">Your order payments will appear here</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Customer Purchases Tab -->
+            <div id="customer-purchases" class="tab-pane">
+                <div class="payment-table-container">
+                    <div class="table-responsive">
+                        <table class="payment-table">
+                            <thead>
+                                <tr>
+                                    <th>Order #</th>
+                                    <th>Seller</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Items</th>
+                                    <th>Date</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in customer_purchases %}
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold">#{{ payment.order.id }}</div>
+                                        <small class="text-muted">{{ payment.transaction_id|truncatechars:8 }}</small>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi bi-shop text-muted me-2"></i>
+                                            {% if payment.order.order_items.first %}
+                                                {{ payment.order.order_items.first.listing.seller.get_full_name|default:payment.order.order_items.first.listing.seller.username }}
+                                            {% else %}
+                                                Unknown Seller
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold">KSh {{ payment.amount|intcomma }}</span>
+                                    </td>
+                                    <td>
+                                        {% if payment.status == 'completed' %}
+                                            <span class="badge-payment badge-completed">Completed</span>
+                                        {% elif payment.status == 'pending' %}
+                                            <span class="badge-payment badge-pending">Pending</span>
+                                        {% elif payment.status == 'failed' %}
+                                            <span class="badge-payment badge-failed">Failed</span>
+                                        {% else %}
+                                            <span class="badge-payment">{{ payment.status|title }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {% for item in payment.order.order_items.all|slice:":2" %}
+                                                {{ item.listing.title }}{% if not forloop.last %}, {% endif %}
+                                            {% endfor %}
+                                            {% if payment.order.order_items.count > 2 %}...{% endif %}
+                                        </small>
+                                    </td>
+                                    <td>{{ payment.created_at|naturaltime }}</td>
+                                    <td>
+                                        <a href="{% url 'order_detail' payment.order.id %}" class="btn-custom btn-primary btn-sm">
+                                            <i class="bi bi-eye"></i> View
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="7" class="text-center py-5">
+                                        <div class="empty-payments">
+                                            <div class="empty-payments-icon">
+                                                <i class="bi bi-bag"></i>
+                                            </div>
+                                            <h5>No purchases found</h5>
+                                            <p class="text-muted">Your purchases will appear here</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Escrow Releases Tab -->
+            <div id="escrow" class="tab-pane">
+                <div class="payment-table-container">
+                    <div class="table-responsive">
+                        <table class="payment-table">
+                            <thead>
+                                <tr>
+                                    <th>Order #</th>
+                                    <th>Customer</th>
+                                    <th>Amount</th>
+                                    <th>Release Date</th>
+                                    <th>Reference</th>
+                                    <th>Items</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in escrow_releases %}
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold">#{{ payment.order.id }}</div>
+                                        <small class="text-muted">{{ payment.transaction_id|truncatechars:8 }}</small>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi bi-person-circle text-muted me-2"></i>
+                                            {{ payment.order.user.get_full_name|default:payment.order.user.username }}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold text-success">KSh {{ payment.amount|intcomma }}</span>
+                                    </td>
+                                    <td>
+                                        {% if payment.actual_release_date %}
+                                            {{ payment.actual_release_date|naturaltime }}
+                                        {% else %}
+                                            <span class="text-muted">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <code class="text-muted small">{{ payment.seller_payout_reference|truncatechars:10 }}</code>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {% for item in payment.order.order_items.all|slice:":2" %}
+                                                {{ item.listing.title }}{% if not forloop.last %}, {% endif %}
+                                            {% endfor %}
+                                            {% if payment.order.order_items.count > 2 %}...{% endif %}
+                                        </small>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-5">
+                                        <div class="empty-payments">
+                                            <div class="empty-payments-icon">
+                                                <i class="bi bi-safe"></i>
+                                            </div>
+                                            <h5>No escrow releases found</h5>
+                                            <p class="text-muted">Your escrow releases will appear here</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Subscription Payments Tab -->
+            <div id="subscriptions" class="tab-pane">
+                <div class="payment-table-container">
+                    <div class="table-responsive">
+                        <table class="payment-table">
+                            <thead>
+                                <tr>
+                                    <th>Store</th>
+                                    <th>Plan</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Phone</th>
+                                    <th>Date</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in subscription_payments %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi bi-shop text-muted me-2"></i>
+                                            {{ payment.subscription.store.name }}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge-payment" style="background: rgba(0, 123, 255, 0.1); color: #007bff;">
+                                            {{ payment.subscription.plan|title }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold">KSh {{ payment.amount|intcomma }}</span>
+                                    </td>
+                                    <td>
+                                        {% if payment.status == 'completed' %}
+                                            <span class="badge-payment badge-completed">Completed</span>
+                                        {% elif payment.status == 'pending' %}
+                                            <span class="badge-payment badge-pending">Pending</span>
+                                        {% elif payment.status == 'failed' %}
+                                            <span class="badge-payment badge-failed">Failed</span>
+                                        {% else %}
+                                            <span class="badge-payment">{{ payment.status|title }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ payment.phone_number }}</td>
+                                    <td>{{ payment.created_at|naturaltime }}</td>
+                                    <td>
+                                        {% if payment.status == 'failed' %}
+                                        <form method="post" action="{% url 'storefront:retry_payment' payment.subscription.store.slug %}" class="d-inline">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn-custom btn-warning btn-sm">
+                                                <i class="bi bi-arrow-repeat"></i> Retry
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="7" class="text-center py-5">
+                                        <div class="empty-payments">
+                                            <div class="empty-payments-icon">
+                                                <i class="bi bi-credit-card"></i>
+                                            </div>
+                                            <h5>No subscription payments found</h5>
+                                            <p class="text-muted">Your subscription payments will appear here</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Withdrawals Tab -->
+            <div id="withdrawals" class="tab-pane">
+                <div class="payment-table-container">
+                    <div class="table-responsive">
+                        <table class="payment-table">
+                            <thead>
+                                <tr>
+                                    <th>Amount</th>
+                                    <th>Status</th>
+                                    <th>Request Date</th>
+                                    <th>Payment Date</th>
+                                    <th>Reference</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for withdrawal in withdrawals %}
+                                <tr>
+                                    <td>
+                                        <span class="fw-bold text-success">KSh {{ withdrawal.amount|intcomma }}</span>
+                                    </td>
+                                    <td>
+                                        {% if withdrawal.status == 'pending' %}
+                                            <span class="badge-payment badge-pending">Pending</span>
+                                        {% elif withdrawal.status == 'completed' %}
+                                            <span class="badge-payment badge-completed">Completed</span>
+                                        {% elif withdrawal.status == 'failed' %}
+                                            <span class="badge-payment badge-failed">Failed</span>
+                                        {% else %}
+                                            <span class="badge-payment">{{ withdrawal.status|title }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ withdrawal.requested_at|naturaltime }}</td>
+                                    <td>
+                                        {% if withdrawal.paid_at %}
+                                            {{ withdrawal.paid_at|naturaltime }}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <code class="text-muted small">{{ withdrawal.mpesa_reference|default:"N/A" }}</code>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ withdrawal.notes|default:"—" }}</small>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-5">
+                                        <div class="empty-payments">
+                                            <div class="empty-payments-icon">
+                                                <i class="bi bi-cash"></i>
+                                            </div>
+                                            <h5>No withdrawal requests yet</h5>
+                                            <p class="text-muted">When you request a withdrawal, it will appear here</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Failed Payments Tab -->
+            <div id="failed" class="tab-pane">
+                <div class="payment-table-container">
+                    <div class="table-responsive">
+                        <table class="payment-table">
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Reference</th>
+                                    <th>Amount</th>
+                                    <th>Reason</th>
+                                    <th>Date</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for payment in failed_payments %}
+                                <tr>
+                                    <td>
+                                        {% if payment.subscription %}
+                                            <span class="badge-payment badge-escrow">Subscription</span>
+                                        {% else %}
+                                            <span class="badge-payment" style="background: rgba(0, 123, 255, 0.1); color: #007bff;">
+                                                Order
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if payment.subscription %}
+                                            <div>{{ payment.subscription.store.name }}</div>
+                                            <small class="text-muted">{{ payment.checkout_request_id|truncatechars:10 }}</small>
+                                        {% else %}
+                                            <div>Order #{{ payment.order.id }}</div>
+                                            <small class="text-muted">{{ payment.transaction_id|truncatechars:10 }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>KSh {{ payment.amount|intcomma }}</td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {% if payment.result_description %}
+                                                {{ payment.result_description|truncatechars:50 }}
+                                            {% else %}
+                                                Unknown error
+                                            {% endif %}
+                                        </small>
+                                    </td>
+                                    <td>{{ payment.created_at|naturaltime }}</td>
+                                    <td>
+                                        {% if payment.subscription %}
+                                        <form method="post" action="{% url 'storefront:retry_payment' payment.subscription.store.slug %}" class="d-inline">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn-custom btn-warning btn-sm">
+                                                <i class="bi bi-arrow-repeat"></i> Retry
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-5">
+                                        <div class="empty-payments">
+                                            <div class="empty-payments-icon">
+                                                <i class="bi bi-check-circle"></i>
+                                            </div>
+                                            <h5>No failed payments found</h5>
+                                            <p class="text-muted">Great! All payments are successful</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Withdrawal Section -->
+    {% if available_balance >= 0 and store %}
+    <div class="withdrawal-banner">
+        <div class="withdrawal-content">
+            <div class="withdrawal-text">
+                <h4>
+                    <i class="bi bi-cash me-2"></i>
+                    Available for Withdrawal
+                </h4>
+                <p>You have <strong>KSh {{ available_balance|intcomma }}</strong> available for withdrawal from completed escrow releases.</p>
+                <small class="opacity-75">Funds are held in escrow for 7 days after delivery confirmation for buyer protection.</small>
+            </div>
+            <div>
+                {% if store.payout_verified and available_balance >= 5000 %}
+                <form method="post" action="{% url 'storefront:request_withdrawal' store.slug %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="amount" value="{{ available_balance }}">
+                    <button type="submit" class="btn btn-light btn-lg" style="font-weight: 600;">
+                        <i class="bi bi-wallet2 me-2"></i>
+                        Withdraw Funds
+                    </button>
+                </form>
+                <small class="d-block mt-2 opacity-75">Scheduled withdrawals are processed on Thursdays.</small>
+                {% else %}
+                <button class="btn btn-light btn-lg" disabled style="font-weight: 600;">
+                    <i class="bi bi-wallet2 me-2"></i>
+                    Withdraw Funds
+                </button>
+                <small class="d-block mt-2 opacity-75">
+                    {% if not store.payout_verified %}
+                        Please add and verify your M-Pesa payout phone in store settings first.
+                    {% else %}
+                        Minimum withdrawal is KSh 5,000. You need KSh {{ 5000|add:available_balance|stringformat:"-.0f" }} more.
+                    {% endif %}
+                </small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% elif store and available_balance > 0 and not store %}
+    <div class="withdrawal-banner" style="background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%);">
+        <div class="withdrawal-content">
+            <div class="withdrawal-text">
+                <h4>
+                    <i class="bi bi-info-circle me-2"></i>
+                    Setup Withdrawal Details
+                </h4>
+                <p>You have <strong>KSh {{ available_balance|intcomma }}</strong> available for withdrawal.</p>
+            </div>
+            <div>
+                <a href="{% url 'storefront:store_edit' user_stores.0.slug %}" class="btn btn-light btn-lg" style="font-weight: 600;">
+                    <i class="bi bi-gear me-2"></i>
+                    Add Payout Phone
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if affiliate_available_balance %}
+    <div class="withdrawal-banner" style="background: linear-gradient(135deg, #1f8a70 0%, #19c37d 100%);">
+        <div class="withdrawal-content">
+            <div class="withdrawal-text">
+                <h4>
+                    <i class="bi bi-people me-2"></i>
+                    Affiliate Earnings Available
+                </h4>
+                <p>You have <strong>KSh {{ affiliate_available_balance|intcomma }}</strong> available from affiliate referrals.</p>
+                <small class="opacity-75">Affiliate withdrawals are processed via M-Pesa once minimum threshold is reached.</small>
+            </div>
+            <div>
+                <form method="post" action="{% url 'affiliates:request_withdrawal' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="amount" value="{{ affiliate_available_balance }}">
+                    <button type="submit" class="btn btn-light btn-lg" style="font-weight: 600;" {% if affiliate_available_balance < affiliate_min_withdrawal %}disabled{% endif %}>
+                        <i class="bi bi-wallet2 me-2"></i>
+                        Withdraw Affiliate Earnings
+                    </button>
+                </form>
+                <small class="d-block mt-2 opacity-75">
+                    {% if affiliate_available_balance < affiliate_min_withdrawal %}
+                        Minimum withdrawal is KSh {{ affiliate_min_withdrawal|intcomma }}.
+                    {% else %}
+                        Your verified payout phone will be used for the transfer.
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Tab functionality
+        const tabs = document.querySelectorAll('.payment-tab');
+        const tabPanes = document.querySelectorAll('.tab-pane');
+        
+        tabs.forEach(tab => {
+            tab.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Remove active class from all tabs
+                tabs.forEach(t => t.classList.remove('active'));
+                tabPanes.forEach(p => p.classList.remove('active'));
+                
+                // Add active class to clicked tab
+                this.classList.add('active');
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.classList.add('active');
+                }
+            });
+        });
+        
+        // Table row hover effects
+        document.querySelectorAll('.payment-table tbody tr').forEach(row => {
+            row.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateX(4px)';
+                this.style.boxShadow = 'var(--shadow-sm)';
+            });
+            
+            row.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateX(0)';
+                this.style.boxShadow = 'none';
+            });
+        });
+        
+        // Stat card animations
+        setTimeout(() => {
+            document.querySelectorAll('.financial-stat-card').forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                
+                setTimeout(() => {
+                    card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 100);
+            });
+            
+            document.querySelectorAll('.payment-summary-card').forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(10px)';
+                
+                setTimeout(() => {
+                    card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 50 + 400);
+            });
+        }, 100);
+        
+        // Export functionality
+        function exportPayments(type) {
+            const params = new URLSearchParams(window.location.search);
+            params.set('export', type);
+            
+            window.location.href = `${window.location.pathname}?${params.toString()}`;
+        }
+        
+        // Add export buttons if needed
+        const exportButtons = `
+            <div class="dropdown d-inline-block ms-2">
+                <button class="btn-custom btn-outline dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-download me-2"></i>Export
+                </button>
+                <div class="dropdown-menu dropdown-menu-end">
+                    <button class="dropdown-item" onclick="exportPayments('csv')">
+                        <i class="bi bi-file-earmark-spreadsheet me-2"></i>CSV
+                    </button>
+                    <button class="dropdown-item" onclick="exportPayments('pdf')">
+                        <i class="bi bi-file-earmark-pdf me-2"></i>PDF
+                    </button>
+                    <button class="dropdown-item" onclick="exportPayments('excel')">
+                        <i class="bi bi-file-earmark-excel me-2"></i>Excel
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        // Insert export buttons after the period selector
+        const btnGroup = document.querySelector('.btn-group');
+        if (btnGroup) {
+            btnGroup.insertAdjacentHTML('afterend', exportButtons);
+        }
+    });
+    
+    // Make exportPayments function global
+    window.exportPayments = function(type) {
+        const params = new URLSearchParams(window.location.search);
+        params.set('export', type);
+        
+        window.location.href = `${window.location.pathname}?${params.toString()}`;
+    };
+</script>
+{% endblock %}
