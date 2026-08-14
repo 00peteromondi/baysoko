@@ -14,6 +14,22 @@ from django.utils import timezone
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
+try:
+    from users.models import Follow
+except Exception:
+    Follow = None
+
+
+def _owner_payload(user):
+    if not user:
+        return None
+    return {
+        'id': user.id,
+        'name': user.get_full_name() or user.username,
+        'username': user.username,
+        'avatar': user.get_profile_picture_url() if hasattr(user, 'get_profile_picture_url') else '',
+    }
+
 
 class ReelListView(ListView):
     model = Reel
@@ -26,13 +42,16 @@ class ReelListView(ListView):
         reel_items = []
 
         try:
-            listing_reels = ListingVideo.objects.select_related('listing', 'listing__store').filter(
+            listing_reels = ListingVideo.objects.select_related(
+                'listing', 'listing__store', 'listing__seller', 'listing__category'
+            ).filter(
                 listing__is_active=True,
                 listing__is_sold=False,
             ).order_by('-created_at')[:80]
             for video in listing_reels:
                 if not video.get_video_url() or not video.listing:
                     continue
+                listing = video.listing
                 reel_items.append({
                     'kind': 'listing',
                     'created_at': video.created_at,
@@ -42,20 +61,25 @@ class ReelListView(ListView):
                     'comments_count': video.comments_count,
                     'shares_count': video.shares_count,
                     'views_count': video.views_count,
-                    'title': video.listing.title,
-                    'price': video.listing.price,
-                    'url': reverse('listing-detail', args=[video.listing.pk]),
+                    'title': listing.title,
+                    'price': listing.price,
+                    'category': listing.category.name if listing.category else '',
+                    'location': listing.get_location_display() if hasattr(listing, 'get_location_display') else listing.location,
+                    'condition': listing.get_condition_display() if hasattr(listing, 'get_condition_display') else listing.condition,
+                    'url': reverse('listing-detail', args=[listing.pk]),
+                    'owner': _owner_payload(listing.seller),
                 })
         except Exception:
             pass
 
         try:
-            store_reels = StoreVideo.objects.select_related('store').filter(
+            store_reels = StoreVideo.objects.select_related('store', 'store__owner').filter(
                 store__is_active=True,
             ).order_by('-created_at')[:80]
             for video in store_reels:
                 if not video.get_video_url() or not video.store:
                     continue
+                store = video.store
                 reel_items.append({
                     'kind': 'store',
                     'created_at': video.created_at,
@@ -65,15 +89,48 @@ class ReelListView(ListView):
                     'comments_count': video.comments_count,
                     'shares_count': video.shares_count,
                     'views_count': video.views_count,
-                    'title': video.store.name,
+                    'title': store.name,
                     'price': None,
-                    'url': reverse('storefront:store_detail', args=[video.store.slug]),
+                    'category': '',
+                    'location': store.location or '',
+                    'condition': '',
+                    'url': reverse('storefront:store_detail', args=[store.slug]),
+                    'owner': _owner_payload(store.owner),
                 })
         except Exception:
             pass
 
         reel_items.sort(key=lambda item: item.get('created_at') or timezone.now(), reverse=True)
+
+        # Batch-resolve which owners the current user already follows, and
+        # attach a stable list of distinct owners for the "creators" filter.
+        following_ids = set()
+        user = self.request.user
+        if Follow is not None and user.is_authenticated:
+            owner_ids = {item['owner']['id'] for item in reel_items if item.get('owner')}
+            if owner_ids:
+                try:
+                    following_ids = set(
+                        Follow.objects.filter(follower=user, followee_id__in=owner_ids)
+                        .values_list('followee_id', flat=True)
+                    )
+                except Exception:
+                    following_ids = set()
+
+        seen_categories = set()
+        seen_locations = set()
+        for item in reel_items:
+            owner = item.get('owner')
+            if owner:
+                item['owner']['is_following'] = owner['id'] in following_ids
+            if item.get('category'):
+                seen_categories.add(item['category'])
+            if item.get('location'):
+                seen_locations.add(item['location'])
+
         context['reel_items'] = reel_items
+        context['reel_categories'] = sorted(seen_categories)
+        context['reel_locations'] = sorted(seen_locations)
         return context
 
 
