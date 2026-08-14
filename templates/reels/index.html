@@ -562,6 +562,11 @@
         align-items: center;
         justify-content: space-between;
         z-index: 5;
+        pointer-events: none;
+    }
+
+    .reels-feed-top button {
+        pointer-events: auto;
     }
 
     .reels-feed-progress-row {
@@ -624,6 +629,18 @@
         bottom: max(22px, env(safe-area-inset-bottom));
         z-index: 5;
         color: #fff;
+        /* Only the actual interactive children (link, follow button) should
+           catch taps. Without this, empty space inside this box (between the
+           title and the button) silently swallows taps meant for the
+           play/pause layer underneath, and on touch devices a delayed
+           "ghost" click can land on the CTA if it renders at the same
+           screen coordinates the user just tapped to open the feed. */
+        pointer-events: none;
+    }
+
+    .reels-feed-info a,
+    .reels-feed-info button {
+        pointer-events: auto;
     }
 
     .reels-feed-title {
@@ -747,6 +764,17 @@
         background: transparent;
         border: none;
         cursor: pointer;
+        touch-action: manipulation;
+    }
+
+    .reels-feed-link,
+    .reels-feed-follow-btn,
+    .reel-follow-btn,
+    .reels-feed-action,
+    .reels-feed-close,
+    .reels-feed-mute,
+    .reel-card {
+        touch-action: manipulation;
     }
 
     .reels-feed-play-indicator {
@@ -1540,6 +1568,22 @@ document.addEventListener('DOMContentLoaded', function () {
             applyMuteState();
         });
 
+        // Guard the "View listing/store" CTA against a stray/ghost click
+        // landing on it in the instant the feed opens (common on touch
+        // devices, where a delayed synthetic click can fire on whatever
+        // now occupies the coordinates the user just tapped). A genuine,
+        // deliberate tap is never this fast, so this never blocks real use.
+        const ctaLink = slide.querySelector('.reels-feed-link');
+        if (ctaLink) {
+            ctaLink.addEventListener('click', function (e) {
+                const activatedAt = Number(slide.dataset.activatedAt || 0);
+                if (!activatedAt || Date.now() - activatedAt < 600) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            });
+        }
+
         slide.querySelector('[data-action="close"]').addEventListener('click', function (e) {
             e.stopPropagation();
             closeFeed();
@@ -1772,6 +1816,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const video = slide.querySelector('video');
                 if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
                     activeSlideIndex = parseInt(slide.dataset.index, 10);
+                    if (!slide.dataset.activatedAt) slide.dataset.activatedAt = String(Date.now());
                     if (!video.src && video.dataset.src) video.src = video.dataset.src;
                     video.muted = muted;
                     video.play().catch(() => {});
