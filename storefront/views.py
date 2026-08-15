@@ -187,6 +187,42 @@ def store_detail(request, slug):
         ]
     except Exception:
         context['store_reel_comments_preview'] = []
+
+    # Reels for this store — shaped for the shared immersive feed engine
+    # (same structure/behaviour as the dedicated /reels/ page).
+    try:
+        from reels.views import _owner_payload as _reel_owner_payload
+        following_ids = set()
+        if request.user.is_authenticated and store.owner_id:
+            try:
+                from users.models import Follow
+                following_ids = set(
+                    Follow.objects.filter(follower=request.user, followee_id=store.owner_id)
+                    .values_list('followee_id', flat=True)
+                )
+            except Exception:
+                following_ids = set()
+        owner_payload = _reel_owner_payload(store.owner)
+        if owner_payload:
+            owner_payload['is_following'] = store.owner_id in following_ids
+        context['store_reel_items'] = [
+            {
+                'kind': 'store',
+                'video_id': video.id,
+                'video_url': video.get_video_url(),
+                'likes_count': video.likes_count,
+                'comments_count': video.comments_count,
+                'shares_count': video.shares_count,
+                'views_count': video.views_count,
+                'title': store.name,
+                'price': None,
+                'owner': owner_payload,
+            }
+            for video in store.videos.all() if video.get_video_url()
+        ]
+    except Exception:
+        logger.exception('Failed to build store_reel_items for store %s', store.pk)
+        context['store_reel_items'] = []
     
     # Add plan-related context for authenticated users
     if request.user.is_authenticated:
@@ -195,6 +231,78 @@ def store_detail(request, slug):
         context['can_create_listing'] = PlanPermissions.can_create_listing(request.user, store)
     
     return render(request, 'storefront/store_detail.html', context)
+
+
+MAX_REELS_PER_STORE = 3
+MAX_STORE_REEL_SIZE_BYTES = 15 * 1024 * 1024
+MAX_STORE_REEL_SECONDS = 45
+
+
+@login_required
+@require_POST
+def add_store_video(request, slug):
+    """Let a store owner post additional reels at any time — not just
+    during store creation/editing."""
+    store = get_object_or_404(Store, slug=slug)
+    if store.owner_id != request.user.id and not request.user.is_staff:
+        return JsonResponse({'success': False, 'error': 'You can only manage reels for your own store.'}, status=403)
+
+    videos = request.FILES.getlist('video') or request.FILES.getlist('videos')
+    if not videos:
+        return JsonResponse({'success': False, 'error': 'No video file was provided.'}, status=400)
+
+    existing_count = store.videos.count()
+    if existing_count + len(videos) > MAX_REELS_PER_STORE:
+        remaining = max(0, MAX_REELS_PER_STORE - existing_count)
+        return JsonResponse({
+            'success': False,
+            'error': f'You can have up to {MAX_REELS_PER_STORE} reels per store. You have {existing_count} already ({remaining} more allowed).',
+        }, status=400)
+
+    created_items = []
+    start_order = existing_count
+    for idx, video_file in enumerate(videos):
+        content_type = getattr(video_file, 'content_type', '') or ''
+        size = getattr(video_file, 'size', 0) or 0
+        if not content_type.startswith('video/'):
+            return JsonResponse({'success': False, 'error': f'{getattr(video_file, "name", "File")} is not a valid video file.'}, status=400)
+        if size > MAX_STORE_REEL_SIZE_BYTES:
+            return JsonResponse({'success': False, 'error': f'{getattr(video_file, "name", "File")} is larger than 15MB.'}, status=400)
+        try:
+            created_video = StoreVideo.objects.create(
+                store=store,
+                video=video_file,
+                order=start_order + idx,
+            )
+            if not _enforce_cloudinary_video_duration(created_video, MAX_STORE_REEL_SECONDS):
+                return JsonResponse({'success': False, 'error': f'A video longer than {MAX_STORE_REEL_SECONDS} seconds was removed.'}, status=400)
+            _broadcast_store_reel_created(created_video)
+            created_items.append({
+                'video_id': created_video.id,
+                'video_url': created_video.get_video_url(),
+                'likes_count': created_video.likes_count,
+                'comments_count': created_video.comments_count,
+                'shares_count': created_video.shares_count,
+                'views_count': created_video.views_count,
+            })
+        except Exception as e:
+            logger.exception('Failed to save store video: %s', e)
+            return JsonResponse({'success': False, 'error': "We couldn't save that video. Please try again."}, status=500)
+
+    return JsonResponse({'success': True, 'videos': created_items, 'total_count': store.videos.count()})
+
+
+@login_required
+@require_POST
+def delete_store_video(request, slug, video_id):
+    store = get_object_or_404(Store, slug=slug)
+    if store.owner_id != request.user.id and not request.user.is_staff:
+        return JsonResponse({'success': False, 'error': 'You can only manage reels for your own store.'}, status=403)
+    video = get_object_or_404(StoreVideo, pk=video_id, store=store)
+    video.delete()
+    return JsonResponse({'success': True, 'total_count': store.videos.count()})
+
+
 
 def product_detail(request, store_slug, slug):
     store = get_object_or_404(Store, slug=store_slug) 

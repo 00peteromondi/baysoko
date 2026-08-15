@@ -1117,6 +1117,42 @@ class ListingDetailView(DetailView):
         else:
             context['is_favorited'] = False
 
+        # Reels for this listing — shaped for the shared immersive feed
+        # engine (same structure/behaviour as the dedicated /reels/ page).
+        try:
+            from reels.views import _owner_payload as _reel_owner_payload
+            following_ids = set()
+            if user.is_authenticated and listing.seller_id:
+                try:
+                    from users.models import Follow
+                    following_ids = set(
+                        Follow.objects.filter(follower=user, followee_id=listing.seller_id)
+                        .values_list('followee_id', flat=True)
+                    )
+                except Exception:
+                    following_ids = set()
+            owner_payload = _reel_owner_payload(listing.seller)
+            if owner_payload:
+                owner_payload['is_following'] = listing.seller_id in following_ids
+            context['listing_reel_items'] = [
+                {
+                    'kind': 'listing',
+                    'video_id': video.id,
+                    'video_url': video.get_video_url(),
+                    'likes_count': video.likes_count,
+                    'comments_count': video.comments_count,
+                    'shares_count': video.shares_count,
+                    'views_count': video.views_count,
+                    'title': listing.title,
+                    'price': listing.price,
+                    'owner': owner_payload,
+                }
+                for video in listing.videos.all() if video.get_video_url()
+            ]
+        except Exception:
+            logger.exception('Failed to build listing_reel_items for listing %s', listing.pk)
+            context['listing_reel_items'] = []
+
         # Get similar listings
         context['similar_listings'] = Listing.objects.filter(
             category=listing.category,
@@ -2479,8 +2515,77 @@ def reel_comments(request, kind, video_id):
 
     return JsonResponse(response_payload)
 
+
+MAX_REELS_PER_LISTING = 3
+MAX_REEL_SIZE_BYTES = 15 * 1024 * 1024
+MAX_REEL_SECONDS = 45
+
+
 @login_required
-def user_favorites(request):
+@require_POST
+def add_listing_video(request, pk):
+    """Let a seller post additional reels to an existing listing at any
+    time — not just during listing creation/editing."""
+    listing = get_object_or_404(Listing, pk=pk)
+    if listing.seller_id != request.user.id and not request.user.is_staff:
+        return JsonResponse({'success': False, 'error': 'You can only manage reels for your own listings.'}, status=403)
+
+    videos = request.FILES.getlist('video') or request.FILES.getlist('videos')
+    if not videos:
+        return JsonResponse({'success': False, 'error': 'No video file was provided.'}, status=400)
+
+    existing_count = listing.videos.count()
+    if existing_count + len(videos) > MAX_REELS_PER_LISTING:
+        remaining = max(0, MAX_REELS_PER_LISTING - existing_count)
+        return JsonResponse({
+            'success': False,
+            'error': f'You can have up to {MAX_REELS_PER_LISTING} reels per listing. You have {existing_count} already ({remaining} more allowed).',
+        }, status=400)
+
+    created_items = []
+    start_order = existing_count
+    for idx, video_file in enumerate(videos):
+        content_type = getattr(video_file, 'content_type', '') or ''
+        size = getattr(video_file, 'size', 0) or 0
+        if not content_type.startswith('video/'):
+            return JsonResponse({'success': False, 'error': f'{getattr(video_file, "name", "File")} is not a valid video file.'}, status=400)
+        if size > MAX_REEL_SIZE_BYTES:
+            return JsonResponse({'success': False, 'error': f'{getattr(video_file, "name", "File")} is larger than 15MB.'}, status=400)
+        try:
+            created_video = ListingVideo.objects.create(
+                listing=listing,
+                video=video_file,
+                order=start_order + idx,
+            )
+            if not _enforce_cloudinary_video_duration(created_video, MAX_REEL_SECONDS):
+                return JsonResponse({'success': False, 'error': f'A video longer than {MAX_REEL_SECONDS} seconds was removed.'}, status=400)
+            _broadcast_reel_created(created_video)
+            created_items.append({
+                'video_id': created_video.id,
+                'video_url': created_video.get_video_url(),
+                'likes_count': created_video.likes_count,
+                'comments_count': created_video.comments_count,
+                'shares_count': created_video.shares_count,
+                'views_count': created_video.views_count,
+            })
+        except Exception as e:
+            logger.exception('Failed to save listing video: %s', e)
+            return JsonResponse({'success': False, 'error': "We couldn't save that video. Please try again."}, status=500)
+
+    return JsonResponse({'success': True, 'videos': created_items, 'total_count': listing.videos.count()})
+
+
+@login_required
+@require_POST
+def delete_listing_video(request, pk, video_id):
+    listing = get_object_or_404(Listing, pk=pk)
+    if listing.seller_id != request.user.id and not request.user.is_staff:
+        return JsonResponse({'success': False, 'error': 'You can only manage reels for your own listings.'}, status=403)
+    video = get_object_or_404(ListingVideo, pk=video_id, listing=listing)
+    video.delete()
+    return JsonResponse({'success': True, 'total_count': listing.videos.count()})
+
+
     favorites = Favorite.objects.filter(user=request.user).select_related('listing')
     
     context = {

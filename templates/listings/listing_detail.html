@@ -330,6 +330,28 @@
         background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.34) 100%);
         pointer-events: none;
     }
+    .video-card-delete {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(220, 53, 69, 0.85);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 3;
+        font-size: 13px;
+    }
+    .video-strip-add {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 10px;
+    }
     .listing-reel-modal {
         position: fixed;
         inset: 0;
@@ -2135,40 +2157,42 @@
                     </div>
                     <div class="video-strip">
                         {% for vid in listing.videos.all %}
-                        <div class="video-card js-listing-reel-card"
-                             data-video-id="{{ vid.id }}"
-                             data-kind="listing"
-                             data-video-url="{{ vid.get_video_url }}"
-                             data-title="{{ listing.title|escape }}"
-                             data-price="KSh {{ listing.price|intcomma }}"
-                             data-link="{% url 'listing-detail' listing.pk %}"
-                             data-likes="{{ vid.likes_count|default:0 }}"
-                             data-comments="{{ vid.comments_count|default:0 }}"
-                             data-shares="{{ vid.shares_count|default:0 }}"
-                             data-views="{{ vid.views_count|default:0 }}">
+                        <div class="video-card js-listing-reel-card" data-index="{{ forloop.counter0 }}">
                             <div class="video-card-overlay"></div>
                             <video src="{{ vid.get_video_url }}" playsinline preload="metadata" muted></video>
                             <span class="video-badge">Video {{ forloop.counter }}</span>
                             <div class="video-card-stats">
-                                <button type="button" class="video-card-stat" data-action="like" title="Likes">
-                                    <i class="bi bi-heart-fill"></i>
-                                    <span>{{ vid.likes_count|default:0 }}</span>
-                                </button>
-                                <button type="button" class="video-card-stat" data-action="comment" title="Comments">
-                                    <i class="bi bi-chat-dots-fill"></i>
-                                    <span>{{ vid.comments_count|default:0 }}</span>
-                                </button>
-                                <button type="button" class="video-card-stat" data-action="share" title="Shares">
-                                    <i class="bi bi-share-fill"></i>
-                                    <span>{{ vid.shares_count|default:0 }}</span>
-                                </button>
+                                <span class="video-card-stat"><i class="bi bi-heart-fill"></i><span>{{ vid.likes_count|default:0 }}</span></span>
+                                <span class="video-card-stat"><i class="bi bi-chat-dots-fill"></i><span>{{ vid.comments_count|default:0 }}</span></span>
                             </div>
                             <div class="video-card-meta">
                                 <span class="video-card-label">Open reel</span>
                                 <button type="button" class="video-card-open">Watch</button>
                             </div>
+                            {% if request.user.is_authenticated and listing.seller_id == request.user.id %}
+                            <button type="button" class="video-card-delete" data-action="delete-reel" data-video-id="{{ vid.id }}" title="Delete this reel" aria-label="Delete this reel">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                            {% endif %}
                         </div>
                         {% endfor %}
+                    </div>
+                    {% if request.user.is_authenticated and listing.seller_id == request.user.id %}
+                    <div class="video-strip-add">
+                        <button type="button" class="btn-custom btn-ghost btn-sm" id="addListingReelBtn" {% if listing.videos.all|length >= 3 %}disabled{% endif %}>
+                            <i class="bi bi-plus-circle"></i> Add reel {% if listing.videos.all|length >= 3 %}(limit reached){% else %}({{ listing.videos.all|length }}/3){% endif %}
+                        </button>
+                        <input type="file" id="addListingReelInput" accept="video/*" style="display:none;">
+                    </div>
+                    {% endif %}
+                </div>
+                {% elif request.user.is_authenticated and listing.seller_id == request.user.id %}
+                <div class="video-section">
+                    <div class="video-strip-add">
+                        <button type="button" class="btn-custom btn-ghost btn-sm" id="addListingReelBtn">
+                            <i class="bi bi-plus-circle"></i> Add a video reel to this listing
+                        </button>
+                        <input type="file" id="addListingReelInput" accept="video/*" style="display:none;">
                     </div>
                 </div>
                 {% endif %}
@@ -2840,57 +2864,8 @@
     </div>
 </div>
 
-{{ reel_comments_preview|json_script:"listingReelCommentsData" }}
-<div class="listing-reel-modal" id="listingReelModal">
-    <div class="listing-reel-shell">
-        <div class="listing-reel-media">
-            <button type="button" class="listing-reel-close" id="listingReelClose" aria-label="Close">
-                <i class="bi bi-x-lg"></i>
-            </button>
-            <video id="listingReelVideo" controls playsinline></video>
-        </div>
-        <div class="listing-reel-panel">
-            <div>
-                <div class="listing-reel-kicker">Baysoko Reel</div>
-                <h3 class="listing-reel-title" id="listingReelTitle"></h3>
-                <div class="listing-reel-price" id="listingReelPrice"></div>
-            </div>
-            <div class="listing-reel-actions">
-                <button type="button" class="listing-reel-action" id="listingReelLikeBtn" data-action="like">
-                    <i class="bi bi-heart-fill"></i>
-                    <span id="listingReelLikes">0</span>
-                    <small>Likes</small>
-                </button>
-                <button type="button" class="listing-reel-action" id="listingReelCommentBtn" data-action="comment">
-                    <i class="bi bi-chat-dots-fill"></i>
-                    <span id="listingReelComments">0</span>
-                    <small>Comments</small>
-                </button>
-                <button type="button" class="listing-reel-action" id="listingReelShareBtn" data-action="share">
-                    <i class="bi bi-share-fill"></i>
-                    <span id="listingReelShares">0</span>
-                    <small>Shares</small>
-                </button>
-                <div class="listing-reel-action">
-                    <i class="bi bi-eye-fill"></i>
-                    <span id="listingReelViews">0</span>
-                    <small>Views</small>
-                </div>
-            </div>
-            <a href="#" class="listing-reel-link" id="listingReelLink">
-                View Listing <i class="bi bi-arrow-right"></i>
-            </a>
-            <div class="listing-reel-comments">
-                <h4>Comments</h4>
-                <form class="listing-reel-comment-form" id="listingReelCommentForm">
-                    <textarea id="listingReelCommentInput" rows="3" maxlength="600" placeholder="Write a comment for this reel..."></textarea>
-                    <button type="submit" class="listing-reel-comment-submit">Post Comment</button>
-                </form>
-                <div class="listing-reel-comment-list" id="listingReelCommentList"></div>
-            </div>
-        </div>
-    </div>
-</div>
+{{ listing_reel_items|json_script:"listingReelsData" }}
+{% include 'reels/_feed_engine.html' %}
 
 <!-- Fullscreen Modal -->
 <div id="fullscreen-modal" class="fullscreen-modal hidden">
@@ -3964,284 +3939,92 @@ document.addEventListener('DOMContentLoaded', function() {
     {% endif %}
 });
 
-document.addEventListener('DOMContentLoaded', function() {
-    const cards = document.querySelectorAll('.js-listing-reel-card');
-    const modal = document.getElementById('listingReelModal');
-    const closeBtn = document.getElementById('listingReelClose');
-    const modalVideo = document.getElementById('listingReelVideo');
-    const modalTitle = document.getElementById('listingReelTitle');
-    const modalPrice = document.getElementById('listingReelPrice');
-    const modalLink = document.getElementById('listingReelLink');
-    const likesEl = document.getElementById('listingReelLikes');
-    const commentsEl = document.getElementById('listingReelComments');
-    const sharesEl = document.getElementById('listingReelShares');
-    const viewsEl = document.getElementById('listingReelViews');
-    const likeBtn = document.getElementById('listingReelLikeBtn');
-    const commentBtn = document.getElementById('listingReelCommentBtn');
-    const shareBtn = document.getElementById('listingReelShareBtn');
-    const commentsList = document.getElementById('listingReelCommentList');
-    const commentForm = document.getElementById('listingReelCommentForm');
-    const commentInput = document.getElementById('listingReelCommentInput');
-    const commentsData = (() => {
-        try {
-            return JSON.parse(document.getElementById('listingReelCommentsData')?.textContent || '[]');
-        } catch (e) {
-            return [];
-        }
-    })();
-    if (!cards.length || !modal || !modalVideo) return;
+document.addEventListener('DOMContentLoaded', function () {
+    const dataEl = document.getElementById('listingReelsData');
+    let listingReelItems = [];
+    try {
+        listingReelItems = dataEl ? JSON.parse(dataEl.textContent || '[]') : [];
+    } catch (e) {
+        listingReelItems = [];
+    }
 
-    const getCookie = (name) => {
+    function getCookie(name) {
         const value = `; ${document.cookie}`;
         const parts = value.split(`; ${name}=`);
         if (parts.length === 2) return parts.pop().split(';').shift();
         return '';
-    };
+    }
     const csrfToken = getCookie('csrftoken');
-    let activeCard = null;
-    let activeVideoId = null;
-    let activeKind = 'listing';
-    const esc = (value) => String(value || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
 
-    function getCard(videoId, kind) {
-        return document.querySelector(`.js-listing-reel-card[data-video-id="${videoId}"][data-kind="${kind || 'listing'}"]`);
-    }
-
-    function renderComments(items = commentsData) {
-        if (!commentsList) return;
-        if (!items.length) {
-            commentsList.innerHTML = '<div class="listing-reel-comments-empty">No written comments yet. Tap View Listing to add the first review.</div>';
-            return;
-        }
-        commentsList.innerHTML = items.map((item) => `
-            <div class="listing-reel-comment">
-                <div class="listing-reel-comment-header">
-                    <strong>${esc(item.author || 'Anonymous')}</strong>
-                    <span>${'★'.repeat(Math.max(0, Number(item.rating || 0)))}</span>
-                </div>
-                <div class="listing-reel-comment-body">${esc(item.comment || '')}</div>
-            </div>
-        `).join('');
-    }
-
-    function commentMarkup(item) {
-        return `
-            <div class="listing-reel-comment">
-                <div class="listing-reel-comment-header">
-                    <strong>${esc(item.author || 'You')}</strong>
-                    <span>${item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Just now'}</span>
-                </div>
-                <div class="listing-reel-comment-body">${esc(item.comment || '')}</div>
-            </div>
-        `;
-    }
-
-    function prependComment(item) {
-        if (!commentsList || !item) return;
-        const empty = commentsList.querySelector('.listing-reel-comments-empty');
-        if (empty) empty.remove();
-        commentsList.insertAdjacentHTML('afterbegin', commentMarkup(item));
-    }
-
-    function fetchComments() {
-        if (!activeVideoId) return Promise.resolve();
-        return fetch(`/listings/reels/${activeKind}/${activeVideoId}/comments/`, {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
-        .then((res) => res.ok ? res.json() : null)
-        .then((data) => {
-            if (!data || !data.success) return;
-            renderComments(data.comments || []);
-            applyCounts(data);
-            if (likeBtn) likeBtn.classList.toggle('active', !!data.liked);
-        })
-        .catch(() => {});
-    }
-
-    function syncCardCounts(card, counts) {
-        if (!card) return;
-        card.dataset.likes = counts.likes_count;
-        card.dataset.comments = counts.comments_count;
-        card.dataset.shares = counts.shares_count;
-        card.dataset.views = counts.views_count;
-        const buttonMap = {
-            like: counts.likes_count,
-            comment: counts.comments_count,
-            share: counts.shares_count
-        };
-        Object.entries(buttonMap).forEach(([action, value]) => {
-            const countEl = card.querySelector(`.video-card-stat[data-action="${action}"] span`);
-            if (countEl && value !== undefined) {
-                countEl.textContent = value;
+    // Open the shared immersive feed at the tapped reel, watching this
+    // listing's own reels start to finish (no CTA needed — already here).
+    document.querySelectorAll('.js-listing-reel-card').forEach(function (card) {
+        card.addEventListener('click', function (e) {
+            if (e.target.closest('[data-action="delete-reel"]')) return;
+            const idx = parseInt(card.dataset.index, 10) || 0;
+            if (window.BaysokoReelsFeed && listingReelItems.length) {
+                window.BaysokoReelsFeed.open(listingReelItems, idx);
             }
-        });
-    }
-
-    function applyCounts(counts) {
-        if (likesEl && counts.likes_count !== undefined) likesEl.textContent = counts.likes_count;
-        if (commentsEl && counts.comments_count !== undefined) commentsEl.textContent = counts.comments_count;
-        if (sharesEl && counts.shares_count !== undefined) sharesEl.textContent = counts.shares_count;
-        if (viewsEl && counts.views_count !== undefined) viewsEl.textContent = counts.views_count;
-        syncCardCounts(activeCard, counts);
-    }
-
-    function sendAction(action) {
-        if (!activeVideoId) return Promise.resolve();
-        return fetch(`/listings/reels/${activeKind}/${activeVideoId}/${action}/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': csrfToken,
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        })
-        .then((res) => res.ok ? res.json() : null)
-        .then((data) => {
-            if (data && data.success) {
-                applyCounts(data);
-            }
-            return data;
-        })
-        .catch(() => null);
-    }
-
-    function openModal(card) {
-        activeCard = card;
-        activeVideoId = card.dataset.videoId;
-        activeKind = card.dataset.kind || 'listing';
-        if (modalTitle) modalTitle.textContent = card.dataset.title || '';
-        if (modalPrice) modalPrice.textContent = card.dataset.price || '';
-        if (modalLink) modalLink.href = card.dataset.link || '#';
-        if (modalVideo) {
-            modalVideo.src = card.dataset.videoUrl || '';
-            modalVideo.play().catch(() => {});
-        }
-        applyCounts({
-            likes_count: card.dataset.likes || 0,
-            comments_count: card.dataset.comments || 0,
-            shares_count: card.dataset.shares || 0,
-            views_count: card.dataset.views || 0
-        });
-        renderComments();
-        modal.classList.add('show');
-        document.body.style.overflow = 'hidden';
-        sendAction('view');
-        fetchComments();
-    }
-
-    function closeModal() {
-        modal.classList.remove('show');
-        document.body.style.overflow = '';
-        if (modalVideo) {
-            modalVideo.pause();
-            modalVideo.removeAttribute('src');
-            modalVideo.load();
-        }
-    }
-
-    cards.forEach((card) => {
-        card.addEventListener('click', (e) => {
-            const statBtn = e.target.closest('.video-card-stat');
-            if (statBtn) {
-                e.preventDefault();
-                const action = statBtn.dataset.action;
-                activeCard = card;
-                activeVideoId = card.dataset.videoId;
-                activeKind = card.dataset.kind || 'listing';
-                if (action === 'comment') {
-                    openModal(card);
-                    fetchComments().then(() => {
-                        const commentsSection = document.querySelector('.listing-reel-comments');
-                        if (commentsSection) commentsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    });
-                    return;
-                }
-                sendAction(action).then((data) => {
-                    if (action === 'like' && likeBtn) {
-                        likeBtn.classList.toggle('active', !!data?.liked);
-                    }
-                    if (action === 'share') {
-                        const shareUrl = card.dataset.link || window.location.href;
-                        if (navigator.share) {
-                            navigator.share({ title: card.dataset.title || 'Baysoko Reel', url: shareUrl }).catch(() => {});
-                        } else if (navigator.clipboard) {
-                            navigator.clipboard.writeText(shareUrl).then(() => showToast('Link copied to clipboard', 'success')).catch(() => {});
-                        }
-                    }
-                });
-                return;
-            }
-            openModal(card);
         });
     });
 
-    if (closeBtn) closeBtn.addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal();
-    });
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modal.classList.contains('show')) closeModal();
-    });
-
-    if (likeBtn) {
-        likeBtn.addEventListener('click', () => {
-            sendAction('like').then((data) => {
-                likeBtn.classList.toggle('active', !!data?.liked);
-            });
-        });
-    }
-    if (commentBtn) {
-        commentBtn.addEventListener('click', () => {
-            fetchComments().then(() => {
-                const commentsSection = document.querySelector('.listing-reel-comments');
-                if (commentsSection) commentsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            });
-        });
-    }
-    if (shareBtn) {
-        shareBtn.addEventListener('click', () => {
-            const shareUrl = modalLink?.href || window.location.href;
-            sendAction('share');
-            if (navigator.share) {
-                navigator.share({ title: modalTitle?.textContent || 'Baysoko Reel', url: shareUrl }).catch(() => {});
-            } else if (navigator.clipboard) {
-                navigator.clipboard.writeText(shareUrl).then(() => showToast('Link copied to clipboard', 'success')).catch(() => {});
-            }
-        });
-    }
-    if (commentForm) {
-        commentForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const comment = (commentInput?.value || '').trim();
-            if (!comment || !activeVideoId) return;
-            fetch(`/listings/reels/${activeKind}/${activeVideoId}/comments/`, {
+    // Owner: delete a reel
+    document.querySelectorAll('[data-action="delete-reel"]').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (!confirm('Delete this reel? This cannot be undone.')) return;
+            const videoId = btn.dataset.videoId;
+            fetch(`/listings/listing/{{ listing.pk }}/videos/${videoId}/delete/`, {
                 method: 'POST',
-                headers: {
-                    'X-CSRFToken': csrfToken,
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-Reel-Comment': comment
-                },
-                body: new URLSearchParams({ comment })
+                headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' }
             })
-            .then((res) => res.ok ? res.json() : res.json().then((data) => Promise.reject(data)))
-            .then((data) => {
-                if (commentInput) commentInput.value = '';
-                applyCounts(data);
-                prependComment((data.comments || [])[0]);
-                if (window.showToast) window.showToast('Comment posted.', 'success');
+            .then(res => res.ok ? res.json() : Promise.reject())
+            .then(data => {
+                if (!data || !data.success) throw new Error();
+                window.location.reload();
             })
-            .catch((error) => {
-                if (window.showToast) window.showToast(error?.error || 'Unable to post comment.', 'error');
+            .catch(() => {
+                if (window.showToast) window.showToast('Could not delete that reel.', 'error');
+            });
+        });
+    });
+
+    // Owner: add a new reel to this listing at any time
+    const addBtn = document.getElementById('addListingReelBtn');
+    const addInput = document.getElementById('addListingReelInput');
+    if (addBtn && addInput) {
+        addBtn.addEventListener('click', function () {
+            addInput.click();
+        });
+        addInput.addEventListener('change', function () {
+            const file = addInput.files && addInput.files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('video', file);
+            addBtn.disabled = true;
+            const originalLabel = addBtn.innerHTML;
+            addBtn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Uploading...';
+            fetch(`/listings/listing/{{ listing.pk }}/videos/add/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
+                body: formData
+            })
+            .then(res => res.json().then(data => ({ ok: res.ok, data })))
+            .then(({ ok, data }) => {
+                if (!ok || !data || !data.success) {
+                    throw new Error((data && data.error) || 'Upload failed');
+                }
+                if (window.showToast) window.showToast('Reel added!', 'success');
+                window.location.reload();
+            })
+            .catch((err) => {
+                addBtn.disabled = false;
+                addBtn.innerHTML = originalLabel;
+                addInput.value = '';
+                if (window.showToast) window.showToast(err.message || 'Could not add that reel.', 'error');
             });
         });
     }
-
-    // Reel counts are updated by the action/comment responses. Avoid opening a
-    // persistent reels socket on listing pages so Redis timeouts do not disrupt browsing.
 });
 </script>
 {% endblock %}

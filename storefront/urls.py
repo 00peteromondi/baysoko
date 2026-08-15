@@ -10,6 +10,8 @@ app_name = 'storefront'
 urlpatterns = [
     path('', views.store_list, name='store_list'),
     path('store/<slug:slug>/', views.store_detail, name='store_detail'),
+    path('store/<slug:slug>/videos/add/', views.add_store_video, name='add_store_video'),
+    path('store/<slug:slug>/videos/<int:video_id>/delete/', views.delete_store_video, name='delete_store_video'),
     path('store/<slug:store_slug>/product/<slug:slug>/', views.product_detail, name='product_detail'),
     
     # seller dashboard
