@@ -2586,6 +2586,8 @@ def delete_listing_video(request, pk, video_id):
     return JsonResponse({'success': True, 'total_count': listing.videos.count()})
 
 
+@login_required
+def user_favorites(request):
     favorites = Favorite.objects.filter(user=request.user).select_related('listing')
     
     context = {
