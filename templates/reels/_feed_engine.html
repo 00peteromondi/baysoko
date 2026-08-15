@@ -800,11 +800,22 @@ same page would be a no-op).
             });
         }
 
-        // The CTA starts dimmed and unclickable ("arming") so a reel can
-        // always be watched before any navigation is possible — it only
-        // becomes tappable a couple seconds after the video actually
-        // starts playing, never on the tap that opened the feed itself.
+        // The CTA starts dimmed and unclickable ("arming") via CSS
+        // pointer-events:none — enforced again here at the JS level for
+        // any click that reaches the handler regardless of source (CSS
+        // pointer-events only blocks real pointer/touch hit-testing, not
+        // a programmatically dispatched click), so a reel can never be
+        // left before it's actually been watched for a few seconds.
         const ctaLink = slide.querySelector('.reels-feed-link[href]');
+        if (ctaLink) {
+            ctaLink.addEventListener('click', function (e) {
+                const activatedAt = Number(slide.dataset.activatedAt || 0);
+                if (!activatedAt || Date.now() - activatedAt < 4000) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            });
+        }
 
         video.addEventListener('timeupdate', function () {
             const fill = slide.querySelector('.reels-feed-progress-fill');
@@ -999,7 +1010,7 @@ same page would be a no-op).
                         slide.dataset.activatedAt = String(Date.now());
                         const ctaLink = slide.querySelector('.reels-feed-link[href]');
                         if (ctaLink) {
-                            setTimeout(() => ctaLink.classList.remove('arming'), 2000);
+                            setTimeout(() => ctaLink.classList.remove('arming'), 4000);
                         }
                     }
                     if (!video.src && video.dataset.src) video.src = video.dataset.src;
