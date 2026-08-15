@@ -188,6 +188,13 @@ same page would be a no-op).
         padding: 9px 16px;
         border-radius: 999px;
         box-shadow: 0 6px 18px rgba(255,107,53,0.4);
+        opacity: 1;
+        transition: opacity 0.3s ease;
+    }
+
+    .reels-feed-link.arming {
+        opacity: 0.45;
+        pointer-events: none;
     }
 
     .reels-feed-owner-row {
@@ -648,7 +655,7 @@ same page would be a no-op).
                 ${showFollow ? `<button type="button" class="reels-feed-follow-btn ${isFollowing ? 'following' : ''}" data-action="follow" data-owner-id="${owner.id}">${isFollowing ? 'Following' : 'Follow'}</button>` : ''}
             </div>` : '';
 
-        const ctaLink = item.url ? `<a href="${item.url}" class="reels-feed-link">${ctaText} <i class="bi bi-arrow-right"></i></a>` : '';
+        const ctaLink = item.url ? `<a href="${item.url}" class="reels-feed-link arming">${ctaText} <i class="bi bi-arrow-right"></i></a>` : '';
 
         return `
         <div class="reels-feed-slide" data-index="${idx}" data-kind="${item.kind}" data-video-id="${item.video_id}">
@@ -793,19 +800,11 @@ same page would be a no-op).
             });
         }
 
-        // Guard the CTA against a stray/ghost click landing on it the
-        // instant the feed opens (common on touch devices). A genuine,
-        // deliberate tap is never this fast, so real use is unaffected.
+        // The CTA starts dimmed and unclickable ("arming") so a reel can
+        // always be watched before any navigation is possible — it only
+        // becomes tappable a couple seconds after the video actually
+        // starts playing, never on the tap that opened the feed itself.
         const ctaLink = slide.querySelector('.reels-feed-link[href]');
-        if (ctaLink) {
-            ctaLink.addEventListener('click', function (e) {
-                const activatedAt = Number(slide.dataset.activatedAt || 0);
-                if (!activatedAt || Date.now() - activatedAt < 600) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
-            });
-        }
 
         video.addEventListener('timeupdate', function () {
             const fill = slide.querySelector('.reels-feed-progress-fill');
@@ -996,7 +995,13 @@ same page would be a no-op).
                 const video = slide.querySelector('video');
                 if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
                     activeSlideIndex = parseInt(slide.dataset.index, 10);
-                    if (!slide.dataset.activatedAt) slide.dataset.activatedAt = String(Date.now());
+                    if (!slide.dataset.activatedAt) {
+                        slide.dataset.activatedAt = String(Date.now());
+                        const ctaLink = slide.querySelector('.reels-feed-link[href]');
+                        if (ctaLink) {
+                            setTimeout(() => ctaLink.classList.remove('arming'), 2000);
+                        }
+                    }
                     if (!video.src && video.dataset.src) video.src = video.dataset.src;
                     video.muted = muted;
                     video.play().catch(() => {});

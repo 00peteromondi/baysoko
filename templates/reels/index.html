@@ -669,6 +669,13 @@
         padding: 9px 16px;
         border-radius: 999px;
         box-shadow: 0 6px 18px rgba(255,107,53,0.4);
+        opacity: 1;
+        transition: opacity 0.3s ease;
+    }
+
+    .reels-feed-link.arming {
+        opacity: 0.45;
+        pointer-events: none;
     }
 
     .reels-feed-sidebar {
@@ -1481,7 +1488,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 ${ownerRow}
                 <h3 class="reels-feed-title">${escapeHtml(item.title || '')}</h3>
                 <div class="reels-feed-price">${priceText}</div>
-                <a href="${item.url}" class="reels-feed-link">${ctaText} <i class="bi bi-arrow-right"></i></a>
+                <a href="${item.url}" class="reels-feed-link arming">${ctaText} <i class="bi bi-arrow-right"></i></a>
             </div>
 
             <div class="reels-feed-sidebar">
@@ -1568,21 +1575,10 @@ document.addEventListener('DOMContentLoaded', function () {
             applyMuteState();
         });
 
-        // Guard the "View listing/store" CTA against a stray/ghost click
-        // landing on it in the instant the feed opens (common on touch
-        // devices, where a delayed synthetic click can fire on whatever
-        // now occupies the coordinates the user just tapped). A genuine,
-        // deliberate tap is never this fast, so this never blocks real use.
-        const ctaLink = slide.querySelector('.reels-feed-link');
-        if (ctaLink) {
-            ctaLink.addEventListener('click', function (e) {
-                const activatedAt = Number(slide.dataset.activatedAt || 0);
-                if (!activatedAt || Date.now() - activatedAt < 600) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
-            });
-        }
+        // The CTA starts dimmed and unclickable ("arming") so a reel can
+        // always be watched before any navigation is possible — it only
+        // becomes tappable a couple seconds after the video actually
+        // starts playing, never on the tap that opened the feed itself.
 
         slide.querySelector('[data-action="close"]').addEventListener('click', function (e) {
             e.stopPropagation();
@@ -1816,7 +1812,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 const video = slide.querySelector('video');
                 if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
                     activeSlideIndex = parseInt(slide.dataset.index, 10);
-                    if (!slide.dataset.activatedAt) slide.dataset.activatedAt = String(Date.now());
+                    if (!slide.dataset.activatedAt) {
+                        slide.dataset.activatedAt = String(Date.now());
+                        const ctaLink = slide.querySelector('.reels-feed-link[href]');
+                        if (ctaLink) {
+                            setTimeout(() => ctaLink.classList.remove('arming'), 2000);
+                        }
+                    }
                     if (!video.src && video.dataset.src) video.src = video.dataset.src;
                     video.muted = muted;
                     video.play().catch(() => {});

@@ -317,19 +317,42 @@ def product_detail(request, store_slug, slug):
         ).values_list('listing_id', flat=True)
 
     context = {'store': store, 'product': product, 'user_favorites': user_favorites}
+
+    # Reels for this product — shaped for the shared immersive feed engine
+    # (same structure/behaviour as listings/listing_detail.html).
     try:
-        reviews = product.reviews.select_related('user').all()
-        context['product_reel_comments_preview'] = [
+        from reels.views import _owner_payload as _reel_owner_payload
+        following_ids = set()
+        if request.user.is_authenticated and product.seller_id:
+            try:
+                from users.models import Follow
+                following_ids = set(
+                    Follow.objects.filter(follower=request.user, followee_id=product.seller_id)
+                    .values_list('followee_id', flat=True)
+                )
+            except Exception:
+                following_ids = set()
+        owner_payload = _reel_owner_payload(product.seller)
+        if owner_payload:
+            owner_payload['is_following'] = product.seller_id in following_ids
+        context['product_reel_items'] = [
             {
-                'author': review.user.get_full_name() or review.user.username,
-                'comment': review.comment,
-                'rating': review.rating,
-                'created_at': review.created_at.isoformat() if review.created_at else '',
+                'kind': 'listing',
+                'video_id': video.id,
+                'video_url': video.get_video_url(),
+                'likes_count': video.likes_count,
+                'comments_count': video.comments_count,
+                'shares_count': video.shares_count,
+                'views_count': video.views_count,
+                'title': product.title,
+                'price': product.price,
+                'owner': owner_payload,
             }
-            for review in reviews if getattr(review, 'comment', None)
+            for video in product.videos.all() if video.get_video_url()
         ]
     except Exception:
-        context['product_reel_comments_preview'] = []
+        logger.exception('Failed to build product_reel_items for product %s', product.pk)
+        context['product_reel_items'] = []
 
     return render(request, 'storefront/product_detail.html', context)
 
