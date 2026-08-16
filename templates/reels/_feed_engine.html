@@ -655,7 +655,7 @@ same page would be a no-op).
                 ${showFollow ? `<button type="button" class="reels-feed-follow-btn ${isFollowing ? 'following' : ''}" data-action="follow" data-owner-id="${owner.id}">${isFollowing ? 'Following' : 'Follow'}</button>` : ''}
             </div>` : '';
 
-        const ctaLink = item.url ? `<a href="${item.url}" class="reels-feed-link arming">${ctaText} <i class="bi bi-arrow-right"></i></a>` : '';
+        const ctaLink = item.url ? `<a class="reels-feed-link arming" data-href="${item.url}">${ctaText} <i class="bi bi-arrow-right"></i></a>` : '';
 
         return `
         <div class="reels-feed-slide" data-index="${idx}" data-kind="${item.kind}" data-video-id="${item.video_id}">
@@ -806,7 +806,7 @@ same page would be a no-op).
         // pointer-events only blocks real pointer/touch hit-testing, not
         // a programmatically dispatched click), so a reel can never be
         // left before it's actually been watched for a few seconds.
-        const ctaLink = slide.querySelector('.reels-feed-link[href]');
+        const ctaLink = slide.querySelector('.reels-feed-link[data-href]');
         if (ctaLink) {
             ctaLink.addEventListener('click', function (e) {
                 const activatedAt = Number(slide.dataset.activatedAt || 0);
@@ -959,8 +959,8 @@ same page would be a no-op).
     }
 
     function handleShare(slide, kind, videoId) {
-        const link = slide.querySelector('.reels-feed-link[href]');
-        const absoluteUrl = link ? new URL(link.getAttribute('href'), window.location.origin).href : window.location.href;
+        const link = slide.querySelector('.reels-feed-link[data-href]');
+        const absoluteUrl = link ? new URL(link.dataset.href, window.location.origin).href : window.location.href;
 
         const recordShare = () => {
             fetch(`/listings/reels/${kind}/${videoId}/share/`, {
@@ -1008,9 +1008,12 @@ same page would be a no-op).
                     activeSlideIndex = parseInt(slide.dataset.index, 10);
                     if (!slide.dataset.activatedAt) {
                         slide.dataset.activatedAt = String(Date.now());
-                        const ctaLink = slide.querySelector('.reels-feed-link[href]');
+                        const ctaLink = slide.querySelector('.reels-feed-link[data-href]');
                         if (ctaLink) {
-                            setTimeout(() => ctaLink.classList.remove('arming'), 4000);
+                            setTimeout(() => {
+                                ctaLink.setAttribute('href', ctaLink.dataset.href);
+                                ctaLink.classList.remove('arming');
+                            }, 4000);
                         }
                     }
                     if (!video.src && video.dataset.src) video.src = video.dataset.src;
