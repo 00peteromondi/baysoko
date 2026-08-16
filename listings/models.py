@@ -628,6 +628,7 @@ class Order(models.Model):
         ('delivered', 'Delivered'),
         ('cancelled', 'Cancelled'),
         ('disputed', 'Disputed'),
+        ('resolved', 'Dispute Resolved'),
     ]
 
     user = models.ForeignKey(

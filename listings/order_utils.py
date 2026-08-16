@@ -129,10 +129,15 @@ class OrderManager:
             raise ValidationError("Only the buyer can confirm delivery")
 
         with transaction.atomic():
-            OrderManager.update_order_status(
-                order,
-                'delivered',
-                actor=confirming_user
+            # The order is already 'delivered' (set by the Delivery app via
+            # set_delivery_status()) — this step is the buyer's own
+            # acknowledgement, not a further status transition, so it does
+            # NOT go through update_order_status()/validate_order_status_transition().
+            # A 'delivered' -> 'delivered' transition isn't a listed valid
+            # move there and would always raise, breaking every confirmation.
+            Activity.objects.create(
+                user=confirming_user,
+                action=f"Buyer confirmed delivery for Order #{order.id}"
             )
 
             # Mark escrow ready for admin approval (do not release immediately)

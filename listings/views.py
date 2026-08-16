@@ -4285,9 +4285,7 @@ def confirm_delivery(request, order_id):
         return redirect('order_detail', order_id=order.id)
 
     # Update order status
-    order.status = 'delivered'
-    order.delivered_at = timezone.now()
-    order.save()
+    order.set_delivery_status('delivered')
 
     # Record delivery confirmation in delivery app (best-effort)
     try:
