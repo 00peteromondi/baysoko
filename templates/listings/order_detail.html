@@ -608,9 +608,13 @@
                     <div class="info-card">
                         <h6><i class="bi bi-info-circle"></i> Order Status</h6>
                         <div class="d-flex align-items-center gap-3">
+                            {% if payment_failed and order.status == 'pending' %}
+                            <span class="status-badge status-cancelled">Payment Failed</span>
+                            {% else %}
                             <span class="status-badge status-{{ order.status }}">
                                 {{ order.get_status_display }}
                             </span>
+                            {% endif %}
                             <span class="text-muted small">
                                 {{ order.created_at|date:"M d, Y H:i" }}
                             </span>
@@ -881,7 +885,9 @@
             </div>
             <div class="sidebar-content">
                 {% if order.status == 'pending' and is_buyer %}
-                    <a href="{% url 'process_payment' order.id %}" class="btn-action">Complete Payment</a>
+                    <a href="{% url 'process_payment' order.id %}" class="btn-action">
+                        {% if payment_failed %}Retry Payment{% else %}Complete Payment{% endif %}
+                    </a>
                 {% endif %}
                 
                 {% if order.status == 'delivered' and is_buyer %}

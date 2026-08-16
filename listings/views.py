@@ -3136,6 +3136,19 @@ def cart_decrement_quantity(request, listing_id):
 def checkout(request):
     cart = get_object_or_404(Cart, user=request.user)
 
+    # Guard against creating an order from an empty cart. Without this, a
+    # duplicate/re-submitted checkout POST (e.g. double-tap "Place Order",
+    # or resubmitting a stale form after a previous successful checkout
+    # already cleared the cart) would silently create an Order with 0
+    # items and a 0 total, since subtotal/total are computed straight
+    # from the cart's current contents at creation time.
+    if not cart.items.exists():
+        if request.method == 'POST':
+            messages.error(request, "Your cart is empty, so there's nothing to check out. Please add items to your cart first.")
+        else:
+            messages.info(request, "Your cart is empty. Add items before checking out.")
+        return redirect('view_cart')
+
     # Latest successful order (used for shipping defaults and delivery fee estimate)
     latest_order = Order.objects.filter(
         user=request.user,
@@ -3189,6 +3202,16 @@ def checkout(request):
             request.session['selected_payment_method'] = selected_pm
             try:
                 with transaction.atomic():
+                    # Re-check under a row lock: closes the race window where
+                    # a duplicate/near-simultaneous submission could pass the
+                    # empty-cart guard above before this transaction commits
+                    # and clears the cart, which would otherwise let a second
+                    # request still create a 0-item order.
+                    locked_cart_items = list(cart.items.select_for_update().all())
+                    if not locked_cart_items:
+                        messages.error(request, "Your cart is empty, so there's nothing to check out.")
+                        return redirect('view_cart')
+
                     # Calculate delivery fee per store based on route logic
                     delivery_fee_total = Decimal('0')
                     delivery_breakdown = []
@@ -3836,6 +3859,15 @@ def order_list(request):
         for item in order_items:
             unique_sellers.add(item.listing.seller)
         
+        # Reflect the real payment outcome even though order.status stays
+        # 'pending' until a webhook/callback moves it forward — without
+        # this, an order whose M-Pesa payment definitively failed looks
+        # identical to one still awaiting a first payment attempt.
+        try:
+            payment_status = order.payment.status
+        except Exception:
+            payment_status = None
+
         orders_data.append({
             'order': order,
             'order_items': order_items,
@@ -3848,6 +3880,8 @@ def order_list(request):
             'unique_sellers': list(unique_sellers),
             'unique_sellers_count': len(unique_sellers),
             'price_breakdown': order.get_price_breakdown(),
+            'payment_status': payment_status,
+            'payment_failed': payment_status == 'failed',
         })
     
     # Paginate the orders_data list
@@ -3907,6 +3941,11 @@ def order_detail(request, order_id):
         order_items = order.order_items.all()
         seller_specific_total = order.total_price
     
+    try:
+        payment_status = order.payment.status
+    except Exception:
+        payment_status = None
+
     context = {
         'order': order,
         'order_items': order_items,
@@ -3918,6 +3957,8 @@ def order_detail(request, order_id):
         'can_confirm': is_buyer and order.status == 'shipped',
         'can_dispute': is_buyer and order.status in ['shipped', 'delivered'],
         'delivery_app_order_url': getattr(settings, 'DELIVERY_APP_ORDER_URL', None),
+        'payment_status': payment_status,
+        'payment_failed': payment_status == 'failed',
     }
     # Attach delivery request information if available (for display of status/proof)
     try:
