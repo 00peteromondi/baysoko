@@ -115,6 +115,75 @@ class OrderManager:
                 )
 
     @staticmethod
+    def cancel_order(order, cancelling_user, reason=None):
+        """
+        Cancel an order — only allowed before any seller has started
+        fulfilment (i.e. before anything has shipped). If the order was
+        already paid, this also refunds the buyer via M-Pesa and restores
+        listing stock.
+
+        Returns a dict: {'refunded': bool} so the caller can tell the user
+        whether a refund was actually issued.
+        """
+        if cancelling_user != order.user and not getattr(cancelling_user, 'is_staff', False):
+            raise ValidationError("Only the buyer can cancel this order")
+
+        if order.status not in ('pending', 'paid'):
+            raise ValidationError(
+                "This order can no longer be cancelled — the seller has already "
+                "started processing it. Please open a dispute instead if there's an issue."
+            )
+
+        # Belt-and-suspenders: even if status is still 'paid', don't allow
+        # cancellation once any item has actually been shipped.
+        if order.order_items.filter(shipped=True).exists():
+            raise ValidationError(
+                "This order can no longer be cancelled — one or more items have "
+                "already shipped. Please open a dispute instead if there's an issue."
+            )
+
+        refunded = False
+        refund_attempted = False
+
+        with transaction.atomic():
+            was_paid = order.status == 'paid'
+
+            if was_paid:
+                # Restore stock for each item, undoing what mark_as_paid() deducted.
+                for order_item in order.order_items.select_related('listing'):
+                    listing = order_item.listing
+                    if not listing:
+                        continue
+                    listing.stock += order_item.quantity
+                    if listing.is_sold and listing.stock > 0:
+                        listing.is_sold = False
+                    listing.save(update_fields=['stock', 'is_sold'])
+
+                # Refund the buyer if a completed payment exists.
+                payment = getattr(order, 'payment', None)
+                if payment and payment.status == 'completed':
+                    refund_attempted = True
+                    refunded = payment.refund_via_mpesa(reason=reason or 'Order cancelled by buyer')
+                    escrow = getattr(order, 'escrow', None)
+                    if refunded and escrow and escrow.status == 'held':
+                        escrow.refund_funds()
+
+            OrderManager.update_order_status(
+                order,
+                'cancelled',
+                actor=cancelling_user,
+                notes={'reason': reason, 'refunded': refunded}
+            )
+
+            Activity.objects.create(
+                user=cancelling_user,
+                action=f"Order #{order.id} cancelled" + (f" — reason: {reason}" if reason else "")
+            )
+
+        return {'refunded': refunded, 'refund_attempted': refund_attempted}
+
+
+    @staticmethod
     def confirm_delivery(order, confirming_user):
         """
         Confirm order delivery and release funds

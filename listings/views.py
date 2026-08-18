@@ -3956,6 +3956,11 @@ def order_detail(request, order_id):
         'can_ship': is_seller and order.status == 'paid',
         'can_confirm': is_buyer and order.status == 'shipped',
         'can_dispute': is_buyer and order.status in ['shipped', 'delivered'],
+        'can_cancel': (
+            is_buyer
+            and order.status in ('pending', 'paid')
+            and not order.order_items.filter(shipped=True).exists()
+        ),
         'delivery_app_order_url': getattr(settings, 'DELIVERY_APP_ORDER_URL', None),
         'payment_status': payment_status,
         'payment_failed': payment_status == 'failed',

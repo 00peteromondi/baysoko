@@ -50,6 +50,7 @@ urlpatterns = [
     path('order/<int:order_id>/ship/', order_views.mark_order_shipped, name='mark_order_shipped'),
     path('order/<int:order_id>/deliver/', order_views.confirm_delivery, name='confirm_delivery'),
     path('order/<int:order_id>/dispute/', order_views.create_dispute, name='create_dispute'),
+    path('order/<int:order_id>/cancel/', order_views.cancel_order, name='cancel_order'),
     path('order/<int:order_id>/update-status/', order_views.update_order_status, name='update_order_status'),
     path('order/<int:order_id>/resolve-dispute/', order_views.resolve_dispute, name='resolve_dispute'),
     path('order/<int:order_id>/mediate-dispute/', order_views.mediate_dispute, name='mediate_dispute'),

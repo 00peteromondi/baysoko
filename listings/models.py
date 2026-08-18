@@ -1041,6 +1041,36 @@ class Payment(models.Model):
             # Best-effort: do not propagate
             pass
 
+    def refund_via_mpesa(self, reason=None):
+        """Send the collected amount back to the buyer's M-Pesa number via
+        the B2C payout API, then record the refund. Returns True if the
+        payout was accepted (or simulated in dev), False otherwise — the
+        caller decides how to surface a failure rather than this silently
+        pretending to succeed.
+        """
+        if self.status == 'refunded':
+            return True
+        if self.status != 'completed':
+            # Nothing was actually collected — there's no money to send back.
+            return False
+        if self.method != 'mpesa' or not self.mpesa_phone_number:
+            return False
+
+        from .mpesa_utils import MpesaGateway
+        gateway = MpesaGateway()
+        resp = gateway.initiate_b2c_payout(
+            self.mpesa_phone_number,
+            self.amount,
+            remarks=f'Refund - Order #{self.order.id}',
+            occasion=f'REFUND-{self.order.id}',
+        )
+        if not resp.get('success'):
+            logger.error('M-Pesa refund payout failed for order %s: %s', self.order.id, resp.get('error'))
+            return False
+
+        self.mark_as_refunded(reason=reason)
+        return True
+
     def mark_as_completed(self, transaction_id=None):
         """Mark the payment completed.
 
@@ -1264,9 +1294,10 @@ class Escrow(models.Model):
         self.status = 'refunded'
         self.released_at = timezone.now()
         self.save()
-        
-        # In a real implementation, you would refund funds to buyer here
-        
+
+        # Actual money movement happens via Payment.refund_via_mpesa();
+        # this just records the escrow-side outcome.
+
         # Create activity log
         Activity.objects.create(
             user=self.order.user,

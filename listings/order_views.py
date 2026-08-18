@@ -86,6 +86,34 @@ def create_dispute(request, order_id):
     return redirect('order_detail', order_id=order.id)
 
 @login_required
+@require_POST
+def cancel_order(request, order_id):
+    """
+    Let a buyer cancel their own order before the seller has started
+    fulfilling it. If the order was already paid, this also refunds the
+    buyer via M-Pesa and restores listing stock.
+    """
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    reason = request.POST.get('reason', '').strip()
+
+    try:
+        result = OrderManager.cancel_order(order, request.user, reason=reason or None)
+        if result.get('refunded'):
+            messages.success(request, f"Order #{order.id} has been cancelled and your payment has been refunded to your M-Pesa number.")
+        elif result.get('refund_attempted'):
+            messages.warning(
+                request,
+                f"Order #{order.id} has been cancelled, but we couldn't process the automatic refund. "
+                "Our team will follow up to complete your refund manually."
+            )
+        else:
+            messages.success(request, f"Order #{order.id} has been cancelled.")
+    except Exception as e:
+        messages.error(request, str(e))
+
+    return redirect('order_detail', order_id=order.id)
+
+@login_required
 def update_order_status(request, order_id):
     """
     Admin/Staff only view to update order status

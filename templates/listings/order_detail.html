@@ -889,6 +889,12 @@
                         {% if payment_failed %}Retry Payment{% else %}Complete Payment{% endif %}
                     </a>
                 {% endif %}
+
+                {% if can_cancel %}
+                    <button type="button" class="btn-action btn-outline-danger" data-bs-toggle="modal" data-bs-target="#cancelOrderModal">
+                        <i class="bi bi-x-circle me-2"></i>Cancel Order
+                    </button>
+                {% endif %}
                 
                 {% if order.status == 'delivered' and is_buyer %}
                     <form method="post" action="{% url 'confirm_delivery' order.id %}">
@@ -974,7 +980,7 @@
                 <h5><i class="bi bi-shield-check"></i> Escrow Status</h5>
             </div>
             <div class="sidebar-content">
-                {% if order.escrow %}
+                {% if order.escrow and order.status != 'pending' %}
                     <div class="info-card">
                         <h6>Status</h6>
                         <span class="status-badge status-{{ order.escrow.status }}">
@@ -997,6 +1003,16 @@
                         <p class="small">{{ order.escrow.released_at|date:"M d, Y H:i" }}</p>
                     </div>
                     {% endif %}
+                {% elif payment_failed %}
+                    <p class="text-muted small">
+                        <i class="bi bi-x-circle me-1"></i>
+                        Payment failed — no funds were collected, so nothing is held in escrow.
+                    </p>
+                {% elif order.status == 'pending' %}
+                    <p class="text-muted small">
+                        <i class="bi bi-hourglass-split me-1"></i>
+                        Awaiting payment — funds will be held in escrow once payment is confirmed.
+                    </p>
                 {% else %}
                     <p class="text-muted small">Escrow not set up yet.</p>
                 {% endif %}
@@ -1062,6 +1078,41 @@
         </div>
     </div>
 </div>
+
+{% if can_cancel %}
+<div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-labelledby="cancelOrderModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'cancel_order' order.id %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="cancelOrderModalLabel">
+                        <i class="bi bi-x-circle me-2"></i>Cancel Order
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% if order.status == 'paid' %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <p class="mb-0">Your payment will be refunded to your M-Pesa number automatically once you cancel.</p>
+                    </div>
+                    {% endif %}
+                    <p>Are you sure you want to cancel Order #{{ order.id }}? This cannot be undone.</p>
+                    <div class="mb-1">
+                        <label for="cancelReason" class="form-label">Reason (optional)</label>
+                        <textarea class="form-control" id="cancelReason" name="reason" rows="2" maxlength="500" placeholder="Let us know why you're cancelling..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-primary" data-bs-dismiss="modal">Keep Order</button>
+                    <button type="submit" class="btn-action btn-outline-danger">Yes, Cancel Order</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <script>
 function refreshDeliveryStatus(trackingNumber) {
