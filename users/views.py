@@ -468,6 +468,7 @@ def register(request):
                     form.add_error('phone_number', 'A user with that phone number already exists.')
                     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                         return JsonResponse({'success': False, 'errors': form.errors.get_json_data()})
+                    messages.error(request, 'A user with that phone number already exists.')
                     return render(request, 'users/register.html', {'form': form})
 
                 user = form.save(commit=False)
@@ -563,6 +564,20 @@ def register(request):
         else:
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse({'success': False, 'errors': form.errors.get_json_data()})
+            # form.is_valid() was False (weak/mismatched password, invalid
+            # email, missing required field, etc.) — the template doesn't
+            # render form errors inline, so surface the first concrete
+            # error as a toast rather than letting the page silently reload.
+            error_text = None
+            non_field = form.non_field_errors()
+            if non_field:
+                error_text = ' '.join(str(e) for e in non_field)
+            else:
+                for field in form:
+                    if field.errors:
+                        error_text = f"{field.label}: " + ' '.join(str(e) for e in field.errors)
+                        break
+            messages.error(request, error_text or 'Please fix the highlighted fields and try again.')
             return render(request, 'users/register.html', {'form': form})
 
     else:
@@ -1854,10 +1869,26 @@ class CustomLoginView(LoginView):
         return response
 
     def form_invalid(self, form):
+        # Surface the actual reason (wrong credentials, inactive account,
+        # etc.) as a toast — the login template doesn't render form errors
+        # inline, so without this the page just silently reloads with no
+        # feedback at all.
+        error_text = None
+        non_field = form.non_field_errors()
+        if non_field:
+            error_text = ' '.join(str(e) for e in non_field)
+        else:
+            for field in form:
+                if field.errors:
+                    error_text = ' '.join(str(e) for e in field.errors)
+                    break
+        messages.error(self.request, error_text or 'Please check your username and password and try again.')
+
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({
                 'success': False,
-                'errors': form.errors.get_json_data()
+                'errors': form.errors.get_json_data(),
+                'message': error_text or 'Please check your username and password and try again.',
             })
         return super().form_invalid(form)
 
