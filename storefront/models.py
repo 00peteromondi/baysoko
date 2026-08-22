@@ -494,6 +494,11 @@ class Subscription(models.Model):
     trial_ends_at = models.DateTimeField(null=True, blank=True)
     current_period_end = models.DateTimeField(null=True, blank=True)
     canceled_at = models.DateTimeField(null=True, blank=True)
+    cancel_at_period_end = models.BooleanField(
+        default=False,
+        help_text="If set, the subscription stays active until current_period_end, "
+                   "then the periodic expiration check finalizes the cancellation."
+    )
     
     # Payment method
     mpesa_phone = models.CharField(max_length=15, null=True, blank=True)
@@ -506,12 +511,7 @@ class Subscription(models.Model):
     trial_number = models.PositiveIntegerField(default=0, help_text="Which trial number this is for the user")
     trial_started_at = models.DateTimeField(null=True, blank=True)
     trial_ended_at = models.DateTimeField(null=True, blank=True)
-    
-    # Additional metadata for trial tracking
-    metadata = models.JSONField(default=dict, blank=True)
-    
-    
-    
+
     class Meta:
         ordering = ['-created_at']
     
@@ -531,15 +531,6 @@ class Subscription(models.Model):
     def is_first_trial(self):
         """Check if this is the user's first trial"""
         return self.trial_number == 1
-    
-    @property
-    def has_exceeded_trial_limit(self):
-        """Check if user has exceeded trial limit"""
-        user_trial_count = Subscription.objects.filter(
-            store__owner=self.store.owner,
-            trial_ends_at__isnull=False
-        ).count()
-        return user_trial_count > settings.TRIAL_LIMIT_PER_USER
     
     def save(self, *args, **kwargs):
         # Auto-set trial number if this is a trial

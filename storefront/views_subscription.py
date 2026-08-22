@@ -9,7 +9,6 @@ from .models import Store, Subscription, MpesaPayment
 from .mpesa import MpesaGateway
 from .forms import SubscriptionPlanForm, UpgradeForm
 from .subscription_service import SubscriptionService
-from .utils.subscription_states import SubscriptionStateManager
 from .decorators import store_owner_required
 from django.db.models import Q
 import logging
