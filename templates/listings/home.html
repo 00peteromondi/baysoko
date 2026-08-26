@@ -3614,7 +3614,7 @@
         </div>
         <div class="listings-grid">
             {% for listing in flash_sale_listings|slice:":4" %}
-            <article class="listing-card scroll-animate">
+            <article class="listing-card scroll-animate" data-listing-id="{{ listing.id }}" data-listing-price="{{ listing.price }}" data-listing-stock="{{ listing.stock }}" data-listing-title="{{ listing.title|escapejs }}">
                 <div class="listing-image">
                     <img src="{{ listing.get_image_url }}" alt="{{ listing.title }}" loading="lazy">
                     <div class="listing-title-overlay"><h3 class="listing-title">{{ listing.title }}</h3></div>
@@ -3649,13 +3649,44 @@
                         {% if listing.stock > 10 %}In Stock{% elif listing.stock > 0 %}Low Stock{% else %}Out of Stock{% endif %}
                     </div>
                     <div class="listing-actions">
-                        <a href="{% url 'listing-detail' listing.pk %}" class="action-button action-view">View</a>
-                        <!-- cart button omitted for brevity; copy from existing pattern if needed -->
+                        <a href="{% url 'listing-detail' listing.pk %}" class="action-button action-view">
+                            <i class="bi bi-eye"></i>
+                            View
+                        </a>
+                        <div class="d-flex align-items-center gap-2">
+                            {% if user.is_authenticated and not listing.is_sold and listing.stock > 0 and listing.seller != user %}
+                            {% with cart_item=cart_items|get_item:listing.id %}
+                            <button type="button"
+                                    class="action-button action-cart {% if cart_item %}in-cart{% endif %}"
+                                    id="cart-btn-{{ listing.id }}"
+                                    data-listing-id="{{ listing.id }}"
+                                    data-cart-quantity="{{ cart_item|default:0 }}"
+                                    onclick="handleListingCartClick(this, {{ listing.id }})">
+                                <i class="bi {% if cart_item %}bi-cart-check{% else %}bi-cart-plus{% endif %}"></i>
+                                <span class="cart-btn-text">
+                                    {% if cart_item %}
+                                        {{ cart_item }} in cart
+                                    {% else %}
+                                        Grab it
+                                    {% endif %}
+                                </span>
+                            </button>
+                            {% endwith %}
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </article>
             {% endfor %}
         </div>
+        {% if flash_sale_listings|length > 4 %}
+        <div class="text-center mt-5">
+            <a href="{% url 'all-listings' %}?sort=deals" class="btn-custom btn-accent">
+                Shop All Flash Deals
+                <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
+        {% endif %}
     </div>
 </section>
 {% endif %}

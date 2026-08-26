@@ -847,6 +847,7 @@ class ListingListView(ListView):
                         'title': vid.listing.title if vid.listing else 'Listing',
                         'price': vid.listing.price if vid.listing else None,
                         'url': reverse('listing-detail', args=[vid.listing.pk]) if vid.listing else '#',
+                        'owner_id': vid.listing.seller_id if vid.listing else None,
                     })
                 except Exception:
                     continue
@@ -864,12 +865,48 @@ class ListingListView(ListView):
                         'title': vid.store.name if vid.store else 'Store',
                         'price': None,
                         'url': reverse('storefront:store_detail', args=[vid.store.slug]) if vid.store else '#',
+                        'owner_id': vid.store.owner_id if vid.store else None,
                     })
                 except Exception:
                     continue
 
             reel_items.sort(key=lambda x: x.get('created_at') or timezone.now(), reverse=True)
-            context['reel_items'] = reel_items[:20]
+            reel_items = reel_items[:20]
+
+            # Attach owner payload + follow state, same shape the shared
+            # immersive feed engine uses on every other reels entry point.
+            try:
+                from reels.views import _owner_payload as _reel_owner_payload
+                owner_ids = {item['owner_id'] for item in reel_items if item.get('owner_id')}
+                following_ids = set()
+                if self.request.user.is_authenticated and owner_ids:
+                    try:
+                        from users.models import Follow
+                        following_ids = set(
+                            Follow.objects.filter(follower=self.request.user, followee_id__in=owner_ids)
+                            .values_list('followee_id', flat=True)
+                        )
+                    except Exception:
+                        following_ids = set()
+                owner_cache = {}
+                for item in reel_items:
+                    owner_id = item.pop('owner_id', None)
+                    if not owner_id:
+                        item['owner'] = None
+                        continue
+                    if owner_id not in owner_cache:
+                        owner_user = User.objects.filter(id=owner_id).first()
+                        owner_cache[owner_id] = _reel_owner_payload(owner_user) if owner_user else None
+                    owner_payload = dict(owner_cache[owner_id]) if owner_cache[owner_id] else None
+                    if owner_payload:
+                        owner_payload['is_following'] = owner_id in following_ids
+                    item['owner'] = owner_payload
+            except Exception:
+                for item in reel_items:
+                    item.pop('owner_id', None)
+                    item['owner'] = None
+
+            context['reel_items'] = reel_items
         except Exception:
             context['reel_items'] = []
         
