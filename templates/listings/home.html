@@ -6463,14 +6463,18 @@
     const campaignTimer = document.getElementById('campaignCountdown');
     if (campaignTimer) {
         const campaignBgUrl = `{% static 'images/campaign_bg.jpg' %}`;
+        const now = new Date();
         function getSeasonCampaignForMonth(monthIndex) {
-            // monthIndex: 0-Jan .. 11-Dec
+            // monthIndex: 0-Jan .. 11-Dec. endMonth is the last calendar
+            // month (0-indexed) of the season, so the countdown always
+            // targets a fixed date (end of that month) rather than a
+            // rolling "N days from whenever you loaded the page" offset.
             if (monthIndex >= 0 && monthIndex <= 2) {
                 return {
                     slug: 'backtoschool',
                     title: 'Back to School Sale',
                     subtitle: 'Save on stationery, backpacks & electronics for the new term',
-                    endOffsetDays: 90,
+                    endMonth: 2,
                     background: `linear-gradient(135deg, rgba(12, 68, 114, 0.9), rgba(16, 113, 194, 0.85)), url("${campaignBgUrl}")`
                 };
             }
@@ -6479,7 +6483,7 @@
                     slug: 'midyear',
                     title: 'Mid Year Savings',
                     subtitle: 'Refresh your home, tech and lifestyle with seasonal offers',
-                    endOffsetDays: 60,
+                    endMonth: 5,
                     background: `linear-gradient(135deg, rgba(3, 83, 11, 0.9), rgba(40, 180, 99, 0.8)), url("${campaignBgUrl}")`
                 };
             }
@@ -6488,7 +6492,7 @@
                     slug: 'backtoschool',
                     title: 'Back to School Sale',
                     subtitle: 'Study essentials, gadgets, and everyday essentials on sale',
-                    endOffsetDays: 60,
+                    endMonth: 7,
                     background: `linear-gradient(135deg, rgba(80, 16, 77, 0.9), rgba(143, 50, 142, 0.8)), url("${campaignBgUrl}")`
                 };
             }
@@ -6497,7 +6501,7 @@
                     slug: 'spring',
                     title: 'Spring Deals',
                     subtitle: 'Fresh offers for the season — home, fashion and more',
-                    endOffsetDays: 45,
+                    endMonth: 9,
                     background: `linear-gradient(135deg, rgba(194, 89, 0, 0.9), rgba(236, 156, 44, 0.8)), url("${campaignBgUrl}")`
                 };
             }
@@ -6505,12 +6509,11 @@
                 slug: 'holiday',
                 title: 'Holiday Specials',
                 subtitle: 'Celebrate with gifts, deals and festive discounts across categories',
-                endOffsetDays: 60,
+                endMonth: 11,
                 background: `linear-gradient(135deg, rgba(78, 11, 107, 0.9), rgba(143, 65, 192, 0.8)), url("${campaignBgUrl}")`
             };
         }
 
-        const now = new Date();
         const campaign = getSeasonCampaignForMonth(now.getMonth());
         const banner = document.querySelector('.campaign-banner');
         const titleEl = document.querySelector('.campaign-title');
@@ -6521,8 +6524,11 @@
         if (subtitleEl) subtitleEl.textContent = campaign.subtitle;
         if (btn) btn.href = `{% url 'all-listings' %}?campaign=${campaign.slug}`;
 
-        // Compute end date as now + endOffsetDays
-        const end = new Date(now.getTime() + (campaign.endOffsetDays || 30) * 24 * 60 * 60 * 1000);
+        // Count down to the real end of the season (last moment of
+        // endMonth), the same fixed-calendar-date approach the flash
+        // sale countdown above already uses — never a rolling offset
+        // from page-load time, so it actually reaches zero.
+        const end = new Date(now.getFullYear(), campaign.endMonth + 1, 0, 23, 59, 59);
         initCountdown('campaign', end.toISOString());
     }
 
