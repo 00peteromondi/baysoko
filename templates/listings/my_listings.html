@@ -250,6 +250,7 @@
     .status-sold { background-color: #fee2e2; color: #991b1b; }
     .status-inactive { background-color: #f3f4f6; color: #374151; }
     .status-featured { background-color: #fef3c7; color: #92400e; }
+    .status-campaign { background-color: #ede9fe; color: #5b21b6; }
     .stock-low { background-color: #fef3c7; color: #92400e; }
     .stock-out { background-color: #fee2e2; color: #991b1b; }
     
@@ -657,6 +658,10 @@
                     {% elif listing.stock < 5 %}
                     <span class="status-badge stock-low">Low Stock</span>
                     {% endif %}
+
+                    {% if listing.campaign %}
+                    <span class="status-badge status-campaign"><i class="bi bi-megaphone"></i> {{ listing.get_campaign_display }}</span>
+                    {% endif %}
                 </div>
             </div>
 
@@ -708,6 +713,19 @@
                         <i class="bi bi-trash"></i> Delete
                     </a>
                 </div>
+                {% if listing.campaign == active_campaign_slug %}
+                <div class="listing-actions mt-2">
+                    <button type="button" class="action-btn btn-edit js-withdraw-campaign" data-listing-id="{{ listing.pk }}" style="width:100%;">
+                        <i class="bi bi-x-circle"></i> Remove from {{ active_campaign_label }}
+                    </button>
+                </div>
+                {% elif active_campaign_slug and listing.is_active and not listing.is_sold %}
+                <div class="listing-actions mt-2">
+                    <button type="button" class="action-btn btn-edit js-enroll-campaign" data-listing-id="{{ listing.pk }}" data-campaign="{{ active_campaign_slug }}" style="width:100%;">
+                        <i class="bi bi-megaphone"></i> Add to {{ active_campaign_label }}
+                    </button>
+                </div>
+                {% endif %}
             </div>
         </div>
         {% endfor %}
@@ -799,6 +817,59 @@ document.addEventListener('DOMContentLoaded', function() {
         
         card.addEventListener('mouseleave', function() {
             this.style.transform = 'translateY(0)';
+        });
+    });
+
+    // Seasonal campaign enrollment
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return '';
+    }
+    const csrfToken = getCookie('csrftoken');
+
+    document.querySelectorAll('.js-enroll-campaign').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const listingId = btn.dataset.listingId;
+            const campaign = btn.dataset.campaign;
+            btn.disabled = true;
+            fetch(`/listings/listing/${listingId}/campaign/enroll/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
+                body: new URLSearchParams({ campaign: campaign })
+            })
+            .then(res => res.json().then(data => ({ ok: res.ok, data })))
+            .then(({ ok, data }) => {
+                if (!ok || !data.success) throw new Error((data && data.error) || 'Could not enroll this listing.');
+                if (window.showToast) window.showToast(data.campaign_label ? `Added to ${data.campaign_label}!` : 'Added to campaign!', 'success');
+                window.location.reload();
+            })
+            .catch((err) => {
+                btn.disabled = false;
+                if (window.showToast) window.showToast(err.message, 'error');
+            });
+        });
+    });
+
+    document.querySelectorAll('.js-withdraw-campaign').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const listingId = btn.dataset.listingId;
+            btn.disabled = true;
+            fetch(`/listings/listing/${listingId}/campaign/withdraw/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(res => res.json().then(data => ({ ok: res.ok, data })))
+            .then(({ ok, data }) => {
+                if (!ok || !data.success) throw new Error((data && data.error) || 'Could not remove this listing from the campaign.');
+                if (window.showToast) window.showToast('Removed from campaign', 'success');
+                window.location.reload();
+            })
+            .catch((err) => {
+                btn.disabled = false;
+                if (window.showToast) window.showToast(err.message, 'error');
+            });
         });
     });
     

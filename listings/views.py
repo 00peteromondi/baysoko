@@ -8,6 +8,7 @@ from django.db import utils as db_utils
 from django.db import IntegrityError, OperationalError
 from django.conf import settings
 from .models import Listing, Category, Favorite, Activity, RecentlyViewed, Review, Order, OrderItem, Cart, CartItem, Payment, Escrow, ListingImage, ListingVideo, ListingVideoLike, ListingVideoComment
+from .campaigns import CAMPAIGN_CHOICES, CAMPAIGN_LABELS, get_active_campaign_choice, get_current_campaign, is_campaign_active
 from chats.models import Message
 from .forms import ListingForm, AIListingForm
 from storefront.models import Store, StoreVideo, StoreVideoLike, StoreVideoComment
@@ -1918,6 +1919,10 @@ def all_listings(request):
     
     if instock == 'true':
         listings = listings.filter(stock__gt=0)
+
+    campaign_filter = request.GET.get('campaign')
+    if campaign_filter and campaign_filter in CAMPAIGN_LABELS:
+        listings = listings.filter(campaign=campaign_filter)
     
     # Apply sorting
     if sort_by == 'price_low':
@@ -2044,7 +2049,7 @@ def all_listings(request):
                 'url': listing.get_absolute_url(),
                 'cart_quantity': cart_quantity,
                 'is_favorited': is_favorited,
-                'favorite_count': listing.total_favorites,
+                'total_favorites': listing.total_favorites,
                 'user_favorite_count': user_favorite_count,
                 'seller_id': listing.seller.id if listing.seller else None,
                 'seller_name': listing.seller.get_full_name() if listing.seller else '',
@@ -2102,6 +2107,10 @@ def all_listings(request):
         'cart_items': cart_items,
         'cart_total': cart_total,
         'cart_item_count': cart_item_count,
+        'campaign_filter': campaign_filter,
+        'campaign_label': CAMPAIGN_LABELS.get(campaign_filter) if campaign_filter else None,
+        'active_campaign_slug': get_current_campaign(),
+        'active_campaign_label': CAMPAIGN_LABELS.get(get_current_campaign()),
     }
     
     # Add featured listings for carousel
@@ -2179,6 +2188,10 @@ def all_listings_json(request):
     
     if instock == 'true':
         listings = listings.filter(stock__gt=0)
+
+    campaign_filter = request.GET.get('campaign')
+    if campaign_filter and campaign_filter in CAMPAIGN_LABELS:
+        listings = listings.filter(campaign=campaign_filter)
     
     # Apply sorting
     if sort_by == 'price_low':
@@ -2624,6 +2637,48 @@ def delete_listing_video(request, pk, video_id):
 
 
 @login_required
+@require_POST
+def enroll_listing_campaign(request, pk):
+    """Let a seller enter their listing into the currently active seasonal
+    campaign. Only the campaign that's actually active right now is a
+    valid choice — enforced here, not just hidden in the UI, so a stale
+    or forged request can't tag a listing into a season that's already
+    over or hasn't started."""
+    listing = get_object_or_404(Listing, pk=pk)
+    if listing.seller_id != request.user.id and not request.user.is_staff:
+        return JsonResponse({'success': False, 'error': 'You can only manage your own listings.'}, status=403)
+
+    requested = request.POST.get('campaign', '').strip()
+    active_slug, active_label = get_active_campaign_choice()
+
+    if not requested:
+        return JsonResponse({'success': False, 'error': 'No campaign was selected.'}, status=400)
+    if requested != active_slug:
+        return JsonResponse({
+            'success': False,
+            'error': f'"{CAMPAIGN_LABELS.get(requested, requested)}" is not the active campaign right now. '
+                     f'You can currently only enroll in "{active_label}".',
+        }, status=400)
+
+    listing.campaign = active_slug
+    listing.campaign_added_at = timezone.now()
+    listing.save(update_fields=['campaign', 'campaign_added_at'])
+    return JsonResponse({'success': True, 'campaign': active_slug, 'campaign_label': active_label})
+
+
+@login_required
+@require_POST
+def withdraw_listing_campaign(request, pk):
+    listing = get_object_or_404(Listing, pk=pk)
+    if listing.seller_id != request.user.id and not request.user.is_staff:
+        return JsonResponse({'success': False, 'error': 'You can only manage your own listings.'}, status=403)
+    listing.campaign = None
+    listing.campaign_added_at = None
+    listing.save(update_fields=['campaign', 'campaign_added_at'])
+    return JsonResponse({'success': True})
+
+
+@login_required
 def user_favorites(request):
     favorites = Favorite.objects.filter(user=request.user).select_related('listing')
     
@@ -2650,12 +2705,16 @@ def my_listings(request):
     sold_listings = listings.filter(is_sold=True).count()
     featured_listings = listings.filter(is_featured=True, is_active=True).count()
     
+    active_campaign_slug, active_campaign_label = get_active_campaign_choice()
+
     context = {
         'listings': listings,
         'total_listings': total_listings,
         'active_listings': active_listings,
         'sold_listings': sold_listings,
         'featured_listings': featured_listings,
+        'active_campaign_slug': active_campaign_slug,
+        'active_campaign_label': active_campaign_label,
     }
     
     return render(request, 'listings/my_listings.html', context)

@@ -6514,7 +6514,41 @@
             };
         }
 
-        const campaign = getSeasonCampaignForMonth(now.getMonth());
+        function getBlackFridayWindow(year) {
+            // Black Friday = day after the 4th Thursday of November.
+            // Mirrors listings/campaigns.py::get_black_friday_window exactly.
+            const nov1 = new Date(year, 10, 1);
+            const daysToFirstThursday = (4 - nov1.getDay() + 7) % 7;
+            const firstThursday = new Date(year, 10, 1 + daysToFirstThursday);
+            const fourthThursday = new Date(firstThursday);
+            fourthThursday.setDate(firstThursday.getDate() + 21);
+            const blackFriday = new Date(fourthThursday);
+            blackFriday.setDate(fourthThursday.getDate() + 1);
+            const cyberMonday = new Date(blackFriday);
+            cyberMonday.setDate(blackFriday.getDate() + 3);
+            blackFriday.setHours(0, 0, 0, 0);
+            cyberMonday.setHours(23, 59, 59, 999);
+            return { start: blackFriday, end: cyberMonday };
+        }
+
+        function getActiveCampaign(today) {
+            const bfWindow = getBlackFridayWindow(today.getFullYear());
+            if (today >= bfWindow.start && today <= bfWindow.end) {
+                return {
+                    slug: 'blackfriday',
+                    title: 'Black Friday Blowout',
+                    subtitle: 'The biggest discounts of the year — while stocks last',
+                    endDate: bfWindow.end,
+                    background: `linear-gradient(135deg, rgba(10, 10, 10, 0.92), rgba(191, 27, 27, 0.85)), url("${campaignBgUrl}")`
+                };
+            }
+            const seasonal = getSeasonCampaignForMonth(today.getMonth());
+            return Object.assign({}, seasonal, {
+                endDate: new Date(today.getFullYear(), seasonal.endMonth + 1, 0, 23, 59, 59)
+            });
+        }
+
+        const campaign = getActiveCampaign(now);
         const banner = document.querySelector('.campaign-banner');
         const titleEl = document.querySelector('.campaign-title');
         const subtitleEl = document.querySelector('.campaign-subtitle');
@@ -6524,11 +6558,11 @@
         if (subtitleEl) subtitleEl.textContent = campaign.subtitle;
         if (btn) btn.href = `{% url 'all-listings' %}?campaign=${campaign.slug}`;
 
-        // Count down to the real end of the season (last moment of
-        // endMonth), the same fixed-calendar-date approach the flash
-        // sale countdown above already uses — never a rolling offset
-        // from page-load time, so it actually reaches zero.
-        const end = new Date(now.getFullYear(), campaign.endMonth + 1, 0, 23, 59, 59);
+        // Count down to the real end of the campaign (Black Friday's
+        // window through Cyber Monday, or the last moment of the
+        // season's endMonth) — never a rolling offset from page-load
+        // time, so it actually reaches zero.
+        const end = campaign.endDate;
         initCountdown('campaign', end.toISOString());
     }
 

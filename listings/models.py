@@ -14,6 +14,7 @@ from django.template.loader import render_to_string
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 import logging
+from .campaigns import CAMPAIGN_CHOICES
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +193,13 @@ class Listing(models.Model):
     is_sold = models.BooleanField(default=False)
     is_featured = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
-    
+
+    # Seasonal marketing campaign enrollment (see listings/campaigns.py).
+    # A seller can only enroll while the chosen campaign is the currently
+    # active one — enforced in the enrollment view, not just the UI.
+    campaign = models.CharField(max_length=20, choices=CAMPAIGN_CHOICES, blank=True, null=True)
+    campaign_added_at = models.DateTimeField(null=True, blank=True)
+
     
     # Product specifications
     brand = models.CharField(max_length=100, blank=True)
