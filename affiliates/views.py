@@ -40,8 +40,7 @@ def _affiliate_totals(profile):
 @login_required
 def affiliate_dashboard(request):
     profile, _ = AffiliateProfile.objects.get_or_create(user=request.user)
-    link_base = getattr(settings, 'SITE_URL', '').rstrip('/')
-    affiliate_link = f"{link_base}/?{getattr(settings, 'AFFILIATE_QUERY_PARAM', 'aid')}={profile.code}" if link_base else f"/?aid={profile.code}"
+    affiliate_link = profile.get_referral_link()
 
     clicks = AffiliateClick.objects.filter(affiliate=profile)
     attributions = AffiliateAttribution.objects.filter(affiliate=profile)

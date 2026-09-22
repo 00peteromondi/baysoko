@@ -61,6 +61,21 @@
     .affiliate-copy-btn.success .affiliate-copy-icon {
         transform: scale(1.2) rotate(-8deg);
     }
+    .affiliate-share-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #fff;
+        text-decoration: none;
+    }
+    .affiliate-share-whatsapp { background: #25D366; }
+    .affiliate-share-facebook { background: #1877F2; }
+    .affiliate-share-twitter { background: #000; }
+    .affiliate-share-btn:hover { opacity: 0.9; color: #fff; }
     .affiliate-stat-card {
         border: 1px solid rgba(255,107,53,0.15);
     }
@@ -109,6 +124,17 @@
                                     </button>
                                 </div>
                                 <div class="text-muted small mt-2">Share this link to earn commissions when new customers purchase.</div>
+                                <div class="d-flex flex-wrap gap-2 mt-3">
+                                    <a class="affiliate-share-btn affiliate-share-whatsapp" target="_blank" rel="noopener" data-affiliate-share="whatsapp" href="#">
+                                        <i class="bi bi-whatsapp"></i> WhatsApp
+                                    </a>
+                                    <a class="affiliate-share-btn affiliate-share-facebook" target="_blank" rel="noopener" data-affiliate-share="facebook" href="#">
+                                        <i class="bi bi-facebook"></i> Facebook
+                                    </a>
+                                    <a class="affiliate-share-btn affiliate-share-twitter" target="_blank" rel="noopener" data-affiliate-share="twitter" href="#">
+                                        <i class="bi bi-twitter-x"></i> X
+                                    </a>
+                                </div>
                             </div>
                         </div>
                         <div class="col-lg-6">
@@ -202,19 +228,32 @@
 <script>
     (function() {
         const btn = document.querySelector('[data-affiliate-copy]');
-        if (!btn) return;
-        btn.addEventListener('click', async () => {
-            try {
-                const input = btn.closest('.affiliate-link-box')?.querySelector('input');
-                if (input && input.value) await navigator.clipboard.writeText(input.value);
-                btn.classList.add('success');
-                const icon = btn.querySelector('.affiliate-copy-icon');
-                if (icon) icon.className = 'bi bi-check2-circle affiliate-copy-icon';
-                setTimeout(() => {
-                    btn.classList.remove('success');
-                    if (icon) icon.className = 'bi bi-copy affiliate-copy-icon';
-                }, 1400);
-            } catch (e) {}
+        if (btn) {
+            btn.addEventListener('click', async () => {
+                try {
+                    const input = btn.closest('.affiliate-link-box')?.querySelector('input');
+                    if (input && input.value) await navigator.clipboard.writeText(input.value);
+                    btn.classList.add('success');
+                    const icon = btn.querySelector('.affiliate-copy-icon');
+                    if (icon) icon.className = 'bi bi-check2-circle affiliate-copy-icon';
+                    setTimeout(() => {
+                        btn.classList.remove('success');
+                        if (icon) icon.className = 'bi bi-copy affiliate-copy-icon';
+                    }, 1400);
+                } catch (e) {}
+            });
+        }
+
+        const affiliateLink = "{{ affiliate_link|default:''|escapejs }}";
+        const shareText = "Check out Baysoko — Homabay's local marketplace! Shop or sell easily:";
+        const shareUrls = {
+            whatsapp: `https://wa.me/?text=${encodeURIComponent(shareText + ' ' + affiliateLink)}`,
+            facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(affiliateLink)}`,
+            twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(affiliateLink)}`,
+        };
+        document.querySelectorAll('[data-affiliate-share]').forEach((link) => {
+            const platform = link.dataset.affiliateShare;
+            if (shareUrls[platform]) link.href = shareUrls[platform];
         });
     })();
 </script>

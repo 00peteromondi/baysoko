@@ -21,6 +21,19 @@ class AffiliateProfile(models.Model):
         base = base[:10] if base else 'aff'
         self.code = f"{base}-{get_random_string(6)}"
 
+    def get_referral_link(self):
+        """The single canonical way to build this affiliate's shareable
+        link — used by the dashboard and the AI assistant, so both always
+        agree on the format. Always returns a full absolute URL, even if
+        SITE_URL somehow ends up unset, since a relative path is useless
+        once shared outside the site (WhatsApp, social posts, etc.)."""
+        from django.conf import settings as dj_settings
+        query_param = getattr(dj_settings, 'AFFILIATE_QUERY_PARAM', 'aid')
+        link_base = (getattr(dj_settings, 'SITE_URL', '') or '').rstrip('/')
+        if not link_base:
+            link_base = 'https://baysoko.up.railway.app'
+        return f"{link_base}/?{query_param}={self.code}"
+
 
 class AffiliateClick(models.Model):
     affiliate = models.ForeignKey(AffiliateProfile, on_delete=models.CASCADE, related_name='clicks')

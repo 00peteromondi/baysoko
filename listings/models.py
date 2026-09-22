@@ -1048,12 +1048,13 @@ class Payment(models.Model):
             # Best-effort: do not propagate
             pass
 
-    def refund_via_mpesa(self, reason=None):
-        """Send the collected amount back to the buyer's M-Pesa number via
-        the B2C payout API, then record the refund. Returns True if the
-        payout was accepted (or simulated in dev), False otherwise — the
-        caller decides how to surface a failure rather than this silently
-        pretending to succeed.
+    def refund_via_mpesa(self, reason=None, amount=None):
+        """Send money back to the buyer's M-Pesa number via the B2C payout
+        API, then record the refund. Pass `amount` for a partial refund
+        (e.g. dispute resolution); defaults to the full payment amount.
+        Returns True if the payout was accepted (or simulated in dev),
+        False otherwise — the caller decides how to surface a failure
+        rather than this silently pretending to succeed.
         """
         if self.status == 'refunded':
             return True
@@ -1063,11 +1064,15 @@ class Payment(models.Model):
         if self.method != 'mpesa' or not self.mpesa_phone_number:
             return False
 
+        refund_amount = amount if amount is not None else self.amount
+        if refund_amount <= 0:
+            return False
+
         from .mpesa_utils import MpesaGateway
         gateway = MpesaGateway()
         resp = gateway.initiate_b2c_payout(
             self.mpesa_phone_number,
-            self.amount,
+            refund_amount,
             remarks=f'Refund - Order #{self.order.id}',
             occasion=f'REFUND-{self.order.id}',
         )
@@ -1075,6 +1080,9 @@ class Payment(models.Model):
             logger.error('M-Pesa refund payout failed for order %s: %s', self.order.id, resp.get('error'))
             return False
 
+        # A partial refund still counts the payment as "refunded" for
+        # display purposes — the exact amount actually sent is in the
+        # M-Pesa gateway log/Activity trail, not duplicated on this field.
         self.mark_as_refunded(reason=reason)
         return True
 
@@ -1310,6 +1318,34 @@ class Escrow(models.Model):
             user=self.order.user,
             action=f"Escrow refunded for Order #{self.order.id}"
         )
+
+
+class SellerPenalty(models.Model):
+    """A monetary penalty applied to a seller during dispute resolution,
+    deducted from their available withdrawal balance going forward. Not
+    an immediate charge — it just permanently reduces how much of their
+    future released escrow they can withdraw."""
+    seller = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='seller_penalties'
+    )
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='seller_penalties'
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"KSh {self.amount} penalty for {self.seller} (Order #{self.order_id})"
 
 # Add this to models.py after the Review model
 

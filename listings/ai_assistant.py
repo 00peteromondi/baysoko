@@ -1294,9 +1294,7 @@ def assistant_reply(prompt: str, context=None, user_id=None):
                     from affiliates.models import AffiliateProfile, AffiliateClick, AffiliateAttribution, AffiliateCommission, AffiliatePayout
                     affiliate_profile = AffiliateProfile.objects.filter(user=user).first()
                     if affiliate_profile:
-                        link_base = getattr(settings, 'SITE_URL', '').rstrip('/')
-                        query_key = getattr(settings, 'AFFILIATE_QUERY_PARAM', 'aid')
-                        affiliate_link = f"{link_base}/?{query_key}={affiliate_profile.code}" if link_base else f"/?{query_key}={affiliate_profile.code}"
+                        affiliate_link = affiliate_profile.get_referral_link()
                         clicks = AffiliateClick.objects.filter(affiliate=affiliate_profile).count()
                         referrals = AffiliateAttribution.objects.filter(affiliate=affiliate_profile).count()
                         commissions = AffiliateCommission.objects.filter(affiliate=affiliate_profile)
@@ -2719,11 +2717,9 @@ def _handle_affiliate_intent(prompt: str, user_id=None):
             return ('Please sign in to view your affiliate profile and commissions.', [])
         from affiliates.models import AffiliateProfile, AffiliateClick, AffiliateAttribution, AffiliateCommission, AffiliatePayout
         profile = AffiliateProfile.objects.filter(user_id=user_id).first()
-        link_base = getattr(settings, 'SITE_URL', '').rstrip('/')
-        query_key = getattr(settings, 'AFFILIATE_QUERY_PARAM', 'aid')
         affiliate_link = None
         if profile:
-            affiliate_link = f"{link_base}/?{query_key}={profile.code}" if link_base else f"/?{query_key}={profile.code}"
+            affiliate_link = profile.get_referral_link()
         items = []
         if not profile:
             text = (

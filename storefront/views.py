@@ -1073,6 +1073,14 @@ def payment_monitor(request):
         actual_release_date__isnull=False
     ).aggregate(total=Sum('amount'))['total'] or 0
 
+    # Dispute-resolution penalties reduce what's actually available to
+    # withdraw, even though the underlying escrow was released.
+    from listings.models import SellerPenalty
+    total_penalties = SellerPenalty.objects.filter(
+        seller=request.user
+    ).aggregate(total=Sum('amount'))['total'] or 0
+    available_balance = max(Decimal(released_escrow) - Decimal(total_penalties), Decimal('0'))
+
     # Subscription revenue
     subscription_revenue = MpesaPayment.objects.filter(
         subscription__store__in=user_stores,
@@ -1150,7 +1158,7 @@ def payment_monitor(request):
         'pending_escrow': pending_escrow,
         'released_escrow': released_escrow,
         'subscription_revenue': subscription_revenue,
-        'available_balance': released_escrow,  # Funds available for withdrawal
+        'available_balance': available_balance,  # Funds available for withdrawal, net of any dispute penalties
         'affiliate_available_balance': affiliate_available_balance,
         'affiliate_min_withdrawal': affiliate_min_withdrawal,
 

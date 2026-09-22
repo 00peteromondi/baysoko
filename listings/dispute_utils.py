@@ -131,16 +131,40 @@ class DisputeManager:
 
     @staticmethod
     def _process_refund(order, amount):
-        """
-        Process refund to buyer
-        """
-        # Implementation would depend on your payment gateway
-        pass
+        """Refund the buyer via M-Pesa B2C for the given amount (may be a
+        partial refund). Returns True/False; the caller decides whether to
+        surface a failure rather than silently pretending it worked."""
+        payment = getattr(order, 'payment', None)
+        if not payment or payment.status != 'completed':
+            return False
+        return payment.refund_via_mpesa(reason='Dispute resolution', amount=amount)
 
     @staticmethod
     def _apply_seller_penalty(order, penalty):
-        """
-        Apply penalties to seller account
-        """
-        # Implementation would depend on your seller management system
-        pass
+        """Record a penalty against every seller involved in this order,
+        deducted from their available withdrawal balance going forward
+        (see the available_balance calculation in storefront's financial
+        dashboard, which subtracts unwithdrawn SellerPenalty totals)."""
+        from .models import SellerPenalty
+
+        sellers = {item.listing.seller for item in order.order_items.all() if item.listing and item.listing.seller}
+        if not sellers:
+            return
+        # Split the penalty evenly across sellers involved in a
+        # multi-seller order rather than charging each one the full amount.
+        per_seller_amount = penalty / len(sellers)
+        for seller in sellers:
+            SellerPenalty.objects.create(
+                seller=seller,
+                order=order,
+                amount=per_seller_amount,
+                reason=f'Dispute resolution penalty for Order #{order.id}',
+            )
+            create_notification(
+                recipient=seller,
+                notification_type='dispute_resolved',
+                title='Penalty Applied',
+                message=f'A penalty of KSh {per_seller_amount:.2f} was applied to your account following the dispute on Order #{order.id}.',
+                related_object_id=order.id,
+                related_content_type='order'
+            )
